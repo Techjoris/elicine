@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -76,7 +76,7 @@ body {
   }
 }
 
-/* PayPal Hosted Buttons Container Protection against vertical text collapse */
+/* PayPal Hosted Buttons Container Protection */
 #paypal-container-F5HDRFLUH7YJN {
   width: 100% !important;
   max-width: 320px !important;
@@ -84,17 +84,8 @@ body {
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  text-align: center !important;
   margin-left: auto !important;
   margin-right: auto !important;
-}
-
-#paypal-container-F5HDRFLUH7YJN * {
-  max-width: 100% !important;
-  white-space: normal !important;
-  word-break: break-word !important;
-  overflow-wrap: break-word !important;
-  text-align: center !important;
 }
 
 #paypal-container-F5HDRFLUH7YJN iframe {

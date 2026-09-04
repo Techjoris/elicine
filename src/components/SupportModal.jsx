@@ -4,6 +4,7 @@ import { ElicineLogo } from './ElicineLogo';
 export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
   const [activeTab, setActiveTab] = useState('paypal');
   const [cfaZone, setCfaZone] = useState('XAF');
+  const [paypalAmount, setPaypalAmount] = useState('5');
   const [freeAmount, setFreeAmount] = useState('500');
   const [loadingPayPal, setLoadingPayPal] = useState(false);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -86,6 +87,19 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
       clearTimeout(timeout);
     };
   }, [isOpen, activeTab]);
+
+  // Synchronisation du montant avec les inputs internes éventuels du SDK PayPal
+  useEffect(() => {
+    const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
+    if (container) {
+      const input = container.querySelector('input');
+      if (input && input.value !== paypalAmount) {
+        input.value = paypalAmount;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  }, [paypalAmount, paypalLoaded]);
 
   const handleMobileMoneySubmit = (e) => {
     e.preventDefault();
@@ -176,28 +190,55 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
 
         {/* ONGLET 1 : PAYPAL (Bouton SDK & Fallback Direct) */}
         {activeTab === 'paypal' && (
-          <div className="w-full flex flex-col items-center text-center space-y-4 px-2 py-4 animate-in fade-in duration-150">
-            {/* Titre et description explicites avec largeur garantie */}
-            <div className="w-full flex flex-col items-center text-center space-y-1">
-              <h4 className="w-full break-words text-center text-sm sm:text-base font-bold text-white">
-                Soutien au projet Éliciné
-              </h4>
-              <p className="w-full break-words text-center text-xs text-slate-400">
-                Votre contribution permet de financer les requêtes IA et l'hébergement du moteur indépendant.
-              </p>
+          <div className="w-full flex flex-col items-center text-center space-y-4 px-2 py-3 animate-in fade-in duration-150">
+            {/* Saisie du montant PayPal */}
+            <div className="w-full flex flex-col items-center gap-2">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
+                Montant de votre don
+              </label>
+              <div className="relative flex items-center justify-center max-w-[200px] w-full mx-auto bg-slate-800/80 rounded-xl border border-white/10 px-4 py-2 focus-within:border-sky-500/50 transition-colors">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={paypalAmount}
+                  onChange={(e) => setPaypalAmount(e.target.value)}
+                  placeholder="5"
+                  className="w-full bg-transparent text-center font-bold text-2xl text-white outline-none pr-2"
+                />
+                <span className="text-gray-400 font-semibold text-lg select-none flex-shrink-0">USD</span>
+              </div>
+
+              {/* Boutons de montants rapides (3$, 5$, 10$, 25$) */}
+              <div className="flex items-center justify-center gap-1.5 w-full max-w-[200px]">
+                {[3, 5, 10, 25].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setPaypalAmount(amt.toString())}
+                    className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      paypalAmount === amt.toString()
+                        ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    ${amt}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {loadingPayPal && (
-              <div className="w-full flex flex-col items-center justify-center gap-2 text-slate-400 text-xs py-3">
-                <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-full flex flex-col items-center justify-center gap-2 text-slate-400 text-xs py-2">
+                <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="w-full break-words text-center">Connexion sécurisée à PayPal...</span>
               </div>
             )}
 
-            {/* Conteneur hébergé PayPal officiel avec contrainte responsive */}
+            {/* Conteneur hébergé PayPal officiel */}
             <div 
               id="paypal-container-F5HDRFLUH7YJN" 
-              className={`w-full max-w-xs mx-auto flex flex-col items-center justify-center min-h-[48px] [&_*]:max-w-full [&_*]:w-full [&_iframe]:w-full [&_div]:w-full [&_p]:w-full [&_p]:break-words [&_p]:text-center ${loadingPayPal ? 'hidden' : 'flex'}`}
+              className={`w-full max-w-xs mx-auto flex flex-col items-center justify-center min-h-[48px] ${loadingPayPal ? 'hidden' : 'flex'}`}
             />
 
             {/* Bouton d'action directe PayPal de secours */}
@@ -210,7 +251,7 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
               >
                 <span>Faire un don avec</span>
                 <span className="italic font-black text-base">PayPal</span>
-                <span className="text-xs font-semibold text-slate-800">(ou Carte) →</span>
+                <span className="text-xs font-semibold text-slate-800">({paypalAmount || 5} USD) →</span>
               </a>
               <p className="w-full break-words text-center text-[10px] text-slate-400">
                 Paiement sécurisé crypté SSL via les serveurs certifiés PayPal.
