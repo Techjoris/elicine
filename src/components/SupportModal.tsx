@@ -48,9 +48,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   }, [isOpen, onClose]);
 
   const handlePayPalCheckout = () => {
-    const finalAmount = paypalAmount && Number(paypalAmount) > 0 ? Number(paypalAmount) : 5;
-    const businessEmail = DEFAULT_PAYPAL_BUSINESS;
-    const url = `https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=${encodeURIComponent(businessEmail)}&currency_code=USD&amount=${finalAmount}&item_name=Soutien+au+projet+Elicine`;
+    const finalAmount = paypalAmount && Number(paypalAmount) > 0 ? paypalAmount : '5';
+    const url = `https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN?amount=${encodeURIComponent(finalAmount)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
