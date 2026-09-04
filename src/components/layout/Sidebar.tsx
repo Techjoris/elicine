@@ -16,6 +16,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
+import { InstallAppButton } from '../InstallAppButton';
 
 export interface SidebarProps {
   onGoHome?: () => void;
@@ -190,6 +191,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
             ⚡ {user?.isPro ? 'Illimité' : `${quota.remaining}/3 recherches`}
           </span>
         </div>
+
+        {/* Bouton Installer l'application (PWA) */}
+        <InstallAppButton className="w-full justify-between py-2" />
 
         {/* Bouton Soutenir le projet (PayPal) */}
         <button

@@ -11,6 +11,7 @@ import {
   ActiveView,
   PricingBillingCycle
 } from '../types';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 
 interface AppContextType {
@@ -227,9 +228,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // 9. PWA Deferred Prompt
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [canInstallPwa, setCanInstallPwa] = useState(false);
+  // 9. PWA Deferred Prompt & Hook
+  const { isInstallable: canInstallPwa, handleInstallClick: installPwa } = usePWAInstall();
 
   // Toast trigger
   const showToast = (msg: string) => {
@@ -293,32 +293,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(`🎉 Bienvenue via le lien de parrainage de ${ref} !`);
     }
   }, []);
-
-  // Handle PWA beforeinstallprompt
-  useEffect(() => {
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setCanInstallPwa(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-  }, []);
-
-  const installPwa = async () => {
-    if (!deferredPrompt) {
-      showToast('Pour installer : menu du navigateur > "Ajouter à l\'écran d\'accueil"');
-      return;
-    }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      showToast('✨ Merci d\'avoir installé CinéIA !');
-      setCanInstallPwa(false);
-    }
-    setDeferredPrompt(null);
-  };
 
   // Quota Management
   const useAiQuota = (): boolean => {
