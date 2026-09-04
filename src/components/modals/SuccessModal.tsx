@@ -63,11 +63,11 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, typ
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white font-['Outfit'] tracking-tight">
-            Merci infiniment pour votre soutien !
+            Merci pour votre soutien au cinéma d'exception !
           </h2>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-            Votre contribution aide directement à maintenir les serveurs IA d'Éliciné et à faire vivre le cinéma d'exception.
+            Votre contribution aide directement à maintenir les serveurs IA, à financer les requêtes en temps réel et à préserver l'indépendance du projet Éliciné.
           </p>
         </div>
 
@@ -85,19 +85,29 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, typ
           </div>
         )}
 
-        {/* Bouton d'action principal */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-[0_0_30px_rgba(245,158,11,0.35)] flex items-center justify-center gap-2 uppercase tracking-wide transition-all cursor-pointer"
-        >
-          <span>Continuer mes découvertes</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        {/* Boutons d'action */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-[0_0_30px_rgba(245,158,11,0.35)] flex items-center justify-center gap-2 uppercase tracking-wide transition-all cursor-pointer"
+          >
+            <span>Continuer à explorer</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-sm font-semibold transition-all cursor-pointer"
+          >
+            Fermer
+          </button>
+        </div>
 
       </div>
     </div>
   );
 };
 
+export const ThankYouModal = SuccessModal;
 export default SuccessModal;

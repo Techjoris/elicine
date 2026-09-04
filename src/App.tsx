@@ -51,6 +51,7 @@ export const AppContent: React.FC = () => {
   } | null>(null);
 
   // Success Thank-you modal state
+  const [showThankYouModal, setShowThankYouModal] = useState(false);
   const [successModal, setSuccessModal] = useState<{
     isOpen: boolean;
     type: 'pro' | 'tip';
@@ -64,21 +65,20 @@ export const AppContent: React.FC = () => {
 
   // Intercept ?payment_status=success callback from Notch Pay
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get('payment_status') || urlParams.get('payment');
-    const paymentType = (urlParams.get('type') || 'tip') as 'pro' | 'tip';
-
-    if (paymentStatus === 'success') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_status') === 'success' || params.get('payment') === 'success') {
+      const paymentType = (params.get('type') || 'tip') as 'pro' | 'tip';
       if (paymentType === 'pro') {
         upgradeToPro('yearly');
       }
+      // Nettoyer l'URL proprement sans recharger la page
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Déclencher l'affichage de la modale de remerciement
+      setShowThankYouModal(true);
       setSuccessModal({
         isOpen: true,
         type: paymentType
       });
-
-      // Nettoyer immédiatement l'URL sans recharger la page pour éviter qu'un rafraîchissement ne réaffiche le message
-      window.history.replaceState({}, '', '/');
     }
   }, [upgradeToPro]);
 
@@ -244,8 +244,11 @@ export const AppContent: React.FC = () => {
         onOpenNotchPay={handleSupportNotchPay}
       />
       <SuccessModal
-        isOpen={successModal.isOpen}
-        onClose={() => setSuccessModal(prev => ({ ...prev, isOpen: false }))}
+        isOpen={showThankYouModal || successModal.isOpen}
+        onClose={() => {
+          setShowThankYouModal(false);
+          setSuccessModal(prev => ({ ...prev, isOpen: false }));
+        }}
         type={successModal.type}
       />
 

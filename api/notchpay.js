@@ -123,13 +123,11 @@ export default async function handler(req, res) {
     const formattedCurrency = currency === 'XOF' || currency === 'XAF' ? 'XAF' : currency;
     const finalAmount = (formattedCurrency === 'XAF') ? Math.round(numAmount) : numAmount;
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app');
-    const defaultCallback = `${baseUrl}/?payment_status=success&reference=elc_notch`;
-    const callbackTarget = callback || callbackUrl || defaultCallback;
+    const callbackTarget = callback || callbackUrl || 'https://elicine.vercel.app/?payment_status=success';
 
     const payload = {
-      amount: finalAmount,
-      currency: formattedCurrency,
+      amount: Math.round(Number(amount)),
+      currency: formattedCurrency || 'XAF',
       email: email || 'contact@elicine.com',
       description: description || 'Soutien au projet Éliciné',
       reference: reference || ('elc_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
@@ -137,11 +135,13 @@ export default async function handler(req, res) {
       return_url: callbackTarget
     };
 
+    const authHeader = (process.env.NOTCHPAY_PUBLIC_KEY?.trim()) || notchKey.trim() || '';
+
     try {
       const response = await fetch('https://api.notchpay.co/payments', {
         method: 'POST',
         headers: {
-          'Authorization': notchKey.trim(),
+          'Authorization': authHeader,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },

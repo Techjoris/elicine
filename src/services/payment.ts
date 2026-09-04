@@ -174,10 +174,7 @@ export async function processNotchPayCheckout(params: {
   onSuccessRedirect?: () => void;
 }): Promise<{ success: boolean; message: string; paymentUrl?: string }> {
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
-  const baseUrl = typeof window !== 'undefined' && window.location.origin
-    ? window.location.origin
-    : (((import.meta as any).env?.NEXT_PUBLIC_SITE_URL) || 'https://elicine.vercel.app');
-  const successCallbackUrl = `${baseUrl}/?payment_status=success&reference=elc_notch&type=${type}`;
+  const successCallbackUrl = 'https://elicine.vercel.app/?payment_status=success';
 
   // Priorité absolue aux variables d'environnement Live de production
   const envPubKey = (
