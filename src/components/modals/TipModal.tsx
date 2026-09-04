@@ -116,7 +116,7 @@ export const TipModal: React.FC = () => {
         currency: paymentCurrency,
         paymentType: 'tip',
         paymentMethod: channelMode,
-        email: user?.email || 'supporter@cineia.com',
+        email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile',
         description: `Pourboire Soutien CinéIA (${activeAmountFcfa} FCFA - ${channelMode === 'card' ? 'Carte Bancaire' : 'Mobile Money'})`,
         publicKey: apiSettings.notchPayPublicKey,
@@ -126,9 +126,11 @@ export const TipModal: React.FC = () => {
 
       if (res.paymentUrl) {
         showToast('Redirection vers la page de soutien sécurisée Notch Pay...');
+        if (typeof window !== 'undefined') {
+          window.location.href = res.paymentUrl;
+        }
       } else {
-        setIsTipModalOpen(false);
-        showToast('💖 Un immense MERCI pour votre soutien précieux à CinéIA !');
+        showToast(res.message);
       }
     } catch (err) {
       console.error(err);

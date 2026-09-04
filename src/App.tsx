@@ -117,7 +117,7 @@ export const AppContent: React.FC = () => {
         currency: (currency as any) || 'XAF',
         paymentType: 'tip',
         paymentMethod: 'mobile',
-        email: user?.email || 'user@cineia.com',
+        email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description,
         publicKey: apiSettings.notchPayPublicKey,
@@ -130,12 +130,15 @@ export const AppContent: React.FC = () => {
 
       if (result.paymentUrl) {
         showToast('Redirection vers Notch Pay...');
+        if (typeof window !== 'undefined') {
+          window.location.href = result.paymentUrl;
+        }
       } else {
         showToast(result.message);
       }
     } catch (e) {
       console.error(e);
-      showToast('Erreur de connexion avec Notch Pay.');
+      showToast("Échec de l'initialisation du paiement Notch Pay");
     }
   };
 

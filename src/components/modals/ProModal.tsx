@@ -28,7 +28,7 @@ export const ProModal: React.FC = () => {
         paymentType: 'pro',
         paymentMethod: 'mobile',
         billingCycle: plan as PricingBillingCycle,
-        email: user?.email || 'user@cineia.com',
+        email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile',
         description: `Éliciné Pass Pro — Formule ${plan === 'yearly' ? 'Annuelle' : 'Mensuelle'} (Mobile Money NotchPay)`,
         publicKey: apiSettings.notchPayPublicKey,
@@ -39,8 +39,10 @@ export const ProModal: React.FC = () => {
 
       if (result.paymentUrl) {
         showToast('Redirection sécurisée vers Notch Pay...');
+        if (typeof window !== 'undefined') {
+          window.location.href = result.paymentUrl;
+        }
       } else {
-        upgradeToPro(plan as PricingBillingCycle);
         showToast(result.message);
       }
     } catch (err) {

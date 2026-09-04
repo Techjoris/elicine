@@ -9,22 +9,29 @@ export default async function handler(req, res) {
     return trimmed;
   };
 
-  const secretKey = filterLiveKey(process.env.NOTCHPAY_SECRET_KEY) ||
-                    filterLiveKey(process.env.NOTCHPAY_PRIVATE_KEY) ||
-                    filterLiveKey(process.env.NOTCHPAY_PUBLIC_KEY) ||
-                    filterLiveKey(process.env.VITE_NOTCHPAY_SECRET_KEY) ||
-                    filterLiveKey(process.env.VITE_NOTCHPAY_PUBLIC_KEY) ||
-                    filterLiveKey(req.headers['x-public-key']) ||
-                    process.env.NOTCHPAY_SECRET_KEY ||
-                    process.env.NOTCHPAY_PRIVATE_KEY ||
-                    process.env.NOTCHPAY_PUBLIC_KEY ||
-                    process.env.VITE_NOTCHPAY_PUBLIC_KEY;
+  const notchKey = (
+    filterLiveKey(process.env.NOTCHPAY_PUBLIC_KEY) ||
+    filterLiveKey(process.env.NOTCH_PAY_PUBLIC_KEY) ||
+    filterLiveKey(process.env.NEXT_PUBLIC_NOTCHPAY_PUBLIC_KEY) ||
+    filterLiveKey(process.env.VITE_NOTCHPAY_PUBLIC_KEY) ||
+    filterLiveKey(process.env.NOTCHPAY_SECRET_KEY) ||
+    filterLiveKey(process.env.NOTCHPAY_PRIVATE_KEY) ||
+    filterLiveKey(req.headers['x-public-key']) ||
+    filterLiveKey(req.headers['x-notch-key']) ||
+    process.env.NOTCHPAY_PUBLIC_KEY ||
+    process.env.NOTCH_PAY_PUBLIC_KEY ||
+    process.env.NEXT_PUBLIC_NOTCHPAY_PUBLIC_KEY ||
+    process.env.VITE_NOTCHPAY_PUBLIC_KEY ||
+    process.env.NOTCHPAY_SECRET_KEY ||
+    process.env.NOTCHPAY_PRIVATE_KEY ||
+    ''
+  ).trim();
 
   const hashKey = process.env.NOTCHPAY_HASH_KEY;
 
   if (process.env.NODE_ENV !== 'production') {
-    const keyPrefix = secretKey ? `${secretKey.slice(0, 8)}...` : '(non configurée)';
-    console.log(`[API NotchPay LIVE] Mode PRODUCTION forcé - Clé chargée : ${keyPrefix} | Base URL: https://api.notchpay.co/`);
+    const keyPrefix = notchKey ? `${notchKey.slice(0, 8)}...` : '(non configurée)';
+    console.log(`[API NotchPay LIVE] Mode PRODUCTION forcé - Clé chargée : ${keyPrefix} | Base URL: https://api.notchpay.co/payments`);
   }
 
   // 1. GET : Vérification sécurisée du statut d'une transaction
@@ -34,15 +41,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Référence de transaction manquante' });
     }
 
-    if (!secretKey) {
-      return res.status(500).json({ error: 'Clé serveur NotchPay non configurée' });
+    if (!notchKey) {
+      return res.status(500).json({ error: 'Clé NotchPay manquante sur le serveur Vercel' });
     }
 
     try {
       const response = await fetch(`https://api.notchpay.co/payments/${encodeURIComponent(reference)}`, {
         method: 'GET',
         headers: {
-          'Authorization': secretKey,
+          'Authorization': notchKey.trim(),
           'Accept': 'application/json',
         },
       });
@@ -78,22 +85,24 @@ export default async function handler(req, res) {
     }
 
     // B. Initialisation sécurisée de paiement
+    const body = req.body || {};
     const {
       amount,
       currency = 'XAF',
-      email = 'client@elicine.app',
-      name = 'Abonné Éliciné',
-      description = 'Paiement Éliciné',
+      email,
+      name,
+      description,
       callback,
+      callbackUrl,
       reference,
-      action = 'initialize',
-    } = req.body || {};
+      action,
+    } = body;
 
     if (action === 'verify' && reference) {
-      if (!secretKey) return res.status(500).json({ error: 'Clé serveur NotchPay manquante' });
+      if (!notchKey) return res.status(500).json({ error: 'Clé NotchPay manquante sur le serveur Vercel' });
       try {
         const response = await fetch(`https://api.notchpay.co/payments/${encodeURIComponent(reference)}`, {
-          headers: { 'Authorization': secretKey, 'Accept': 'application/json' },
+          headers: { 'Authorization': notchKey.trim(), 'Accept': 'application/json' },
         });
         const data = await response.json();
         return res.status(response.status).json(data);
@@ -102,37 +111,64 @@ export default async function handler(req, res) {
       }
     }
 
-    if (!amount || Number(amount) <= 0) {
+    if (!notchKey) {
+      return res.status(500).json({ error: 'Clé NotchPay manquante sur le serveur Vercel' });
+    }
+
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
       return res.status(400).json({ error: 'Montant invalide' });
     }
 
-    if (!secretKey) {
-      return res.status(500).json({ error: 'Clé serveur NotchPay manquante' });
-    }
+    const formattedCurrency = currency === 'XOF' || currency === 'XAF' ? 'XAF' : currency;
+    const finalAmount = (formattedCurrency === 'XAF') ? Math.round(numAmount) : numAmount;
+
+    const payload = {
+      amount: finalAmount,
+      currency: formattedCurrency,
+      email: email || 'contact@elicine.com',
+      description: description || 'Soutien au projet Éliciné',
+      reference: reference || ('elc_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
+      callback: callback || callbackUrl || `${process.env.NEXT_PUBLIC_SITE_URL || 'https://elicine.vercel.app'}/`
+    };
 
     try {
-      const payload = {
-        amount: Number(amount),
-        currency: currency === 'XOF' || currency === 'XAF' ? 'XAF' : currency,
-        email,
-        name,
-        description,
-        ...(callback ? { callback } : {}),
-      };
-
-      const response = await fetch('https://api.notchpay.co/payments/initialize', {
+      const response = await fetch('https://api.notchpay.co/payments', {
         method: 'POST',
         headers: {
-          'Authorization': secretKey,
-          'Accept': 'application/json',
+          'Authorization': notchKey.trim(),
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(payload),
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Détails rejet NotchPay:", errText);
+        let parsedErr = {};
+        try {
+          parsedErr = JSON.parse(errText);
+        } catch {
+          parsedErr = { message: errText };
+        }
+        return res.status(response.status).json({
+          error: parsedErr.message || `Erreur NotchPay (${response.status})`,
+          details: errText
+        });
+      }
+
       const data = await response.json();
-      return res.status(response.status).json(data);
+      const authUrl = data.authorization_url || 
+                      data.transaction?.authorization_url || 
+                      data.data?.authorization_url;
+
+      return res.status(200).json({
+        ...data,
+        authorization_url: authUrl
+      });
     } catch (err) {
+      console.error("Détails rejet NotchPay:", err.message);
       return res.status(500).json({ error: err.message });
     }
   }

@@ -205,13 +205,17 @@ export async function processNotchPayCheckout(params: {
   }
 
   try {
+    const formattedCurrency = params.currency === 'XAF' || params.currency === 'XOF' ? 'XAF' : params.currency;
+    const finalAmount = formattedCurrency === 'XAF' ? Math.round(Number(params.amount)) : Number(params.amount);
+
     const payload: any = {
-      amount: Number(params.amount),
-      currency: params.currency === 'XAF' || params.currency === 'XOF' ? 'XAF' : params.currency,
-      email: params.email || 'client@elicine.app',
+      amount: finalAmount,
+      currency: formattedCurrency,
+      email: params.email || 'contact@elicine.com',
       name: params.name || 'Cinéphile',
-      description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Pourboire Éliciné'),
-      callback: successCallbackUrl
+      description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
+      callback: successCallbackUrl,
+      callbackUrl: successCallbackUrl
     };
 
     const res = await fetch('/api/notchpay', {
@@ -232,11 +236,7 @@ export async function processNotchPayCheckout(params: {
           console.log('[NotchPay LIVE] Redirection vers authorization_url :', authUrl);
         }
         if (typeof window !== 'undefined') {
-          if (window.top) {
-            window.top.location.href = authUrl;
-          } else {
-            window.location.href = authUrl;
-          }
+          window.location.href = authUrl;
           return { 
             success: true, 
             message: 'Redirection sécurisée vers Notch Pay...', 
@@ -248,9 +248,16 @@ export async function processNotchPayCheckout(params: {
     } else {
       const errData = await res.text();
       console.error('[NotchPay LIVE] Réponse API erreur :', res.status, errData);
+      let errMsg = "Échec de l'initialisation du paiement NotchPay.";
+      try {
+        const parsed = JSON.parse(errData);
+        if (parsed.error || parsed.message) {
+          errMsg = parsed.error || parsed.message;
+        }
+      } catch {}
       return {
         success: false,
-        message: "Échec de l'initialisation du paiement sécurisé NotchPay. Veuillez réessayer."
+        message: errMsg
       };
     }
   } catch (e: any) {
