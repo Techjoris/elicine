@@ -15,11 +15,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 );
 
-if ('serviceWorker' in navigator && (import.meta as any).env?.PROD) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('SW registration failed: ', err);
-    });
+    navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration failed:', err));
   });
 }
 

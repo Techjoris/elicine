@@ -20,6 +20,13 @@
       crossorigin="anonymous" 
       async>
     </script>
+    <script>
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration failed:', err));
+        });
+      }
+    </script>
   </head>
   <body class="bg-[#07090e] text-slate-100 antialiased selection:bg-sky-500 selection:text-white overflow-x-hidden min-h-screen font-['Outfit',_'Plus_Jakarta_Sans',_sans-serif]">
     <div id="root"></div>

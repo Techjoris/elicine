@@ -1,20 +1,53 @@
 {
+  "id": "/?source=pwa",
   "name": "Éliciné - Cinéma & IA",
   "short_name": "Éliciné",
-  "start_url": "/",
+  "description": "Découvrez des chefs-d'œuvre cinématographiques propulsés par l'intelligence artificielle.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0a0a0c",
   "theme_color": "#0a0a0c",
+  "lang": "fr-FR",
+  "categories": ["entertainment", "movies", "lifestyle"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Rechercher un film",
+      "short_name": "Recherche",
+      "description": "Recherche IA de films",
+      "url": "/?action=search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Écran principal Éliciné"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Interface cinéma Éliciné"
     }
   ]
 }
