@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // Stockage global du prompt au niveau du module pour persister avant/après le montage
 let globalDeferredPrompt: any = null;
@@ -24,62 +24,57 @@ if (typeof window !== 'undefined') {
   });
 }
 
+function checkIsStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const hasMatchMedia = typeof window.matchMedia === 'function';
+    const isStandaloneMql = hasMatchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    const isIosStandalone = (window.navigator as any)?.standalone === true;
+    const isAndroidApp = typeof document !== 'undefined' && document.referrer?.includes('android-app://');
+    return Boolean(isStandaloneMql || isIosStandalone || isAndroidApp);
+  } catch {
+    return false;
+  }
+}
+
 export function usePWAInstall() {
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => checkIsStandalone());
+
   const [isInstallable, setIsInstallable] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    const isStandaloneMode = 
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true;
-    return !isStandaloneMode && (globalIsInstallable || Boolean(globalDeferredPrompt));
-  });
-
-  const [isStandalone, setIsStandalone] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true
-    );
+    return !checkIsStandalone() && (globalIsInstallable || Boolean(globalDeferredPrompt));
   });
 
   const [showManualInstallGuide, setShowManualInstallGuide] = useState<boolean>(false);
 
   useEffect(() => {
-    // Vérifier si l'application tourne déjà en mode autonome (standalone)
-    const checkStandalone = () => {
-      const isStandaloneMode = 
-        window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true ||
-        document.referrer.includes('android-app://');
-      setIsStandalone(Boolean(isStandaloneMode));
-    };
-
-    checkStandalone();
+    setIsStandalone(checkIsStandalone());
 
     const updateInstallable = (val: boolean) => {
-      setIsInstallable(val);
+      setIsInstallable(val && !checkIsStandalone());
     };
 
     listeners.add(updateInstallable);
 
     // Écouter les changements d'affichage (ex: passage en PWA standalone)
-    const mql = window.matchMedia('(display-mode: standalone)');
-    const handleMqlChange = (e: MediaQueryListEvent) => {
-      setIsStandalone(e.matches);
-    };
-
-    try {
-      mql.addEventListener('change', handleMqlChange);
-    } catch {
-      mql.addListener(handleMqlChange);
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      try {
+        const mql = window.matchMedia('(display-mode: standalone)');
+        const handleMqlChange = (e: MediaQueryListEvent) => {
+          setIsStandalone(e.matches);
+        };
+        mql.addEventListener?.('change', handleMqlChange);
+        return () => {
+          listeners.delete(updateInstallable);
+          mql.removeEventListener?.('change', handleMqlChange);
+        };
+      } catch {
+        // Fallback silently if matchMedia listener fails
+      }
     }
 
     return () => {
       listeners.delete(updateInstallable);
-      try {
-        mql.removeEventListener('change', handleMqlChange);
-      } catch {
-        mql.removeListener(handleMqlChange);
-      }
     };
   }, []);
 

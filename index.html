@@ -18,15 +18,7 @@
     <script 
       src="https://www.paypal.com/sdk/js?client-id=BAAACUlHb7uF5qnWN81SZn4OFL1S5uXB0s_LMKmjsWaXIQj4AlOfdamkXtc1bNMb9SvcWgXFEF8iVJtdv0&components=hosted-buttons&disable-funding=venmo&currency=USD" 
       crossorigin="anonymous" 
-      async>
-    </script>
-    <script>
-      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration failed:', err));
-        });
-      }
-    </script>
+      async></script>
   </head>
   <body class="bg-[#07090e] text-slate-100 antialiased selection:bg-sky-500 selection:text-white overflow-x-hidden min-h-screen font-['Outfit',_'Plus_Jakarta_Sans',_sans-serif]">
     <div id="root"></div>
