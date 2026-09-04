@@ -1,12 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 
-const DEFAULT_PAYPAL_BUSINESS = (import.meta && import.meta.env && import.meta.env.VITE_PAYPAL_BUSINESS_ID) || 'ivanjoris959@gmail.com';
-
 export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
   const [activeTab, setActiveTab] = useState('paypal');
   const [cfaZone, setCfaZone] = useState('XAF');
-  const [paypalAmount, setPaypalAmount] = useState('5');
   const [freeAmount, setFreeAmount] = useState('500');
 
   // 1. Gestion de la fermeture par touche Échap (Escape) et verrouillage du défilement
@@ -30,18 +27,7 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
   }, [isOpen, onClose]);
 
   const handlePayPalCheckout = () => {
-    const amountValue = paypalAmount && Number(paypalAmount) > 0 ? Number(paypalAmount) : 5;
-    const businessEmail = DEFAULT_PAYPAL_BUSINESS || 'ivanjoris959@gmail.com';
-    const params = new URLSearchParams({
-      cmd: '_xclick',
-      business: businessEmail,
-      item_name: 'Soutien au projet Elicine',
-      amount: amountValue.toFixed(2),
-      currency_code: 'USD',
-      no_shipping: '1',
-      no_note: '0',
-    });
-    window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank', 'noopener,noreferrer');
+    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
   };
 
   const handleMobileMoneySubmit = (e) => {
@@ -131,71 +117,47 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
           </button>
         </div>
 
-        {/* ONGLET 1 : PAYPAL (Bouton SDK & Fallback Direct) */}
+        {/* ONGLET 1 : PAYPAL & CARTE (Page officielle hébergée) */}
         {activeTab === 'paypal' && (
-          <div className="w-full flex flex-col items-center text-center animate-in fade-in duration-150">
-            {/* Saisie du montant PayPal */}
-            <div className="w-full flex flex-col items-center gap-2">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
-                Montant de votre don
-              </label>
-              <div className="relative flex items-center justify-center max-w-[200px] w-full mx-auto bg-slate-800/80 rounded-xl border border-white/10 px-4 py-2.5 focus-within:border-sky-500 transition-colors">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={paypalAmount}
-                  onChange={(e) => setPaypalAmount(e.target.value.replace(/\D/g, ''))}
-                  onBlur={() => {
-                    if (!paypalAmount || Number(paypalAmount) <= 0) {
-                      setPaypalAmount('5');
-                    }
-                  }}
-                  placeholder="5"
-                  className="w-full bg-transparent text-center font-black text-2xl text-white outline-none pr-2"
-                />
-                <span className="text-gray-400 font-bold text-lg select-none flex-shrink-0">USD</span>
-              </div>
-
-              {/* Boutons de montants rapides (3$, 5$, 10$, 25$) */}
-              <div className="flex items-center justify-center gap-1.5 w-full max-w-[200px]">
-                {[3, 5, 10, 25].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setPaypalAmount(amt.toString())}
-                    className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      paypalAmount === amt.toString()
-                        ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-                    }`}
-                  >
-                    ${amt}
-                  </button>
-                ))}
-              </div>
+          <div className="w-full flex flex-col items-center text-center animate-in fade-in duration-150 py-1">
+            {/* Badges des moyens de paiement acceptés */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+              <span className="px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <span>💳</span>
+                <span>Carte bancaire (Visa, Mastercard, etc.)</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-xl bg-[#ffc439]/10 border border-[#ffc439]/30 text-[#ffc439] text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <span className="italic font-black">P</span>
+                <span>PayPal</span>
+              </span>
             </div>
 
-            {/* Texte explicatif */}
-            <p className="w-full text-center text-xs text-gray-400 my-4 px-2 leading-relaxed break-normal whitespace-normal">
-              Votre contribution libre permet de financer les requêtes d'intelligence artificielle et l'hébergement.
-            </p>
+            {/* Explication claire pour le donateur */}
+            <div className="w-full bg-slate-800/60 border border-white/10 rounded-2xl p-4 sm:p-5 mb-4 text-center">
+              <p className="text-sm sm:text-base font-semibold text-white mb-2 leading-snug">
+                Paiement direct et sécurisé sur la page officielle PayPal d'Éliciné
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                Sur la page suivante, vous pourrez <strong>choisir librement votre montant</strong> de soutien et régler au choix par <strong>Carte bancaire</strong> (sans obligation de créer un compte) ou via <strong>PayPal</strong>.
+              </p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Votre contribution permet de financer directement les coûts des serveurs et les requêtes des modèles d'intelligence artificielle.
+              </p>
+            </div>
 
-            {/* Section d'action PayPal */}
-            <div className="w-full flex flex-col items-center gap-3 mt-4">
-              {/* Bouton direct PayPal - Largeur complète, padding optimisé, action directe */}
+            {/* Bouton d'action principal */}
+            <div className="w-full flex flex-col items-center gap-3">
               <button
                 type="button"
                 onClick={handlePayPalCheckout}
-                className="w-full max-w-sm py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 transition-all cursor-pointer select-none"
+                className="w-full max-w-md py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-black text-sm sm:text-base rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/15 transition-all cursor-pointer select-none"
               >
-                <span>Faire un don avec</span>
-                <span className="italic font-black text-lg">PayPal</span>
-                <span className="text-sm font-bold text-slate-900">({paypalAmount || '5'} USD) →</span>
+                <span>Continuer vers le paiement sécurisé (PayPal ou Carte) →</span>
               </button>
 
-              <p className="w-full text-center text-[10px] text-slate-400">
-                Paiement sécurisé crypté SSL via les serveurs certifiés PayPal.
+              <p className="w-full text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+                <span>🔒</span>
+                <span>Paiement sécurisé et crypté SSL via les serveurs officiels certifiés PayPal.</span>
               </p>
             </div>
           </div>
