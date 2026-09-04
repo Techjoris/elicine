@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 
 export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
@@ -176,22 +176,32 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
 
         {/* ONGLET 1 : PAYPAL (Bouton SDK & Fallback Direct) */}
         {activeTab === 'paypal' && (
-          <div className="flex flex-col items-center justify-center min-h-[160px] w-full gap-3 animate-in fade-in duration-150">
+          <div className="w-full flex flex-col items-center text-center space-y-4 px-2 py-4 animate-in fade-in duration-150">
+            {/* Titre et description explicites avec largeur garantie */}
+            <div className="w-full flex flex-col items-center text-center space-y-1">
+              <h4 className="w-full break-words text-center text-sm sm:text-base font-bold text-white">
+                Soutien au projet Éliciné
+              </h4>
+              <p className="w-full break-words text-center text-xs text-slate-400">
+                Votre contribution permet de financer les requêtes IA et l'hébergement du moteur indépendant.
+              </p>
+            </div>
+
             {loadingPayPal && (
-              <div className="flex flex-col items-center gap-2 text-slate-400 text-xs py-4">
+              <div className="w-full flex flex-col items-center justify-center gap-2 text-slate-400 text-xs py-3">
                 <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                <span>Connexion sécurisée à PayPal...</span>
+                <span className="w-full break-words text-center">Connexion sécurisée à PayPal...</span>
               </div>
             )}
 
-            {/* Conteneur hébergé PayPal officiel */}
+            {/* Conteneur hébergé PayPal officiel avec contrainte responsive */}
             <div 
               id="paypal-container-F5HDRFLUH7YJN" 
-              className={`w-full flex justify-center items-center min-h-[48px] ${loadingPayPal ? 'hidden' : 'block'}`}
+              className={`w-full max-w-xs mx-auto flex flex-col items-center justify-center min-h-[48px] [&_*]:max-w-full [&_*]:w-full [&_iframe]:w-full [&_div]:w-full [&_p]:w-full [&_p]:break-words [&_p]:text-center ${loadingPayPal ? 'hidden' : 'flex'}`}
             />
 
-            {/* Bouton d'action directe PayPal (toujours opérationnel en cas de blocage de script) */}
-            <div className="w-full flex flex-col gap-2 pt-1">
+            {/* Bouton d'action directe PayPal de secours */}
+            <div className="w-full max-w-xs mx-auto flex flex-col items-center text-center space-y-2 pt-1">
               <a
                 href="https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN"
                 target="_blank"
@@ -200,9 +210,9 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
               >
                 <span>Faire un don avec</span>
                 <span className="italic font-black text-base">PayPal</span>
-                <span className="text-xs font-normal text-slate-700">(ou Carte) →</span>
+                <span className="text-xs font-semibold text-slate-800">(ou Carte) →</span>
               </a>
-              <p className="text-[10px] text-slate-400 text-center">
+              <p className="w-full break-words text-center text-[10px] text-slate-400">
                 Paiement sécurisé crypté SSL via les serveurs certifiés PayPal.
               </p>
             </div>
