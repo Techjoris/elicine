@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { executeCinoraSearch, getGroqKey, AIRecommendationResult } from '../../services/aiEngine';
+import { executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
 import { ElicineLogo } from '../ElicineLogo';
 import { Movie } from '../../types';
 
@@ -187,13 +187,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       return;
     }
 
-    const groqKey = getGroqKey(apiSettings);
-
-    if (!groqKey) {
-      showToast("⚠️ Clé API Groq introuvable. Veuillez la renseigner dans les Paramètres.");
-      setIsApiSettingsModalOpen(true);
-      return;
-    }
 
     const permitted = useAiQuota();
     if (!permitted) return;

@@ -76,7 +76,7 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
  */
 export async function queryGroq(
   userQuery: string, 
-  apiKey: string,
+  apiKey?: string,
   aiPromptLang?: string
 ): Promise<RawAiMovieItem[]> {
   const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
@@ -364,11 +364,8 @@ export async function executeCinoraSearch(
     };
   }
 
-  // Clé Groq
+  // Clé Groq optionnelle (le proxy /api/ai exploite directement process.env.GROQ_API_KEY côté serveur)
   const groqKey = getGroqKey(apiSettings);
-  if (!groqKey) {
-    throw new Error("Clé API Groq introuvable. Veuillez la renseigner dans les paramètres.");
-  }
 
   // 1. Appel direct IA Groq avec prompt d'intention contextuelle et langue active
   console.log(`[Éliciné AI] Exécution recherche sémantique Groq pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
