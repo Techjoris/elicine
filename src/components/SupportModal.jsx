@@ -30,9 +30,18 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
   }, [isOpen, onClose]);
 
   const handlePayPalCheckout = () => {
-    const finalAmount = paypalAmount && Number(paypalAmount) > 0 ? paypalAmount : '5';
-    const url = `https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN?amount=${encodeURIComponent(finalAmount)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const amountValue = paypalAmount && Number(paypalAmount) > 0 ? Number(paypalAmount) : 5;
+    const businessEmail = DEFAULT_PAYPAL_BUSINESS || 'ivanjoris959@gmail.com';
+    const params = new URLSearchParams({
+      cmd: '_xclick',
+      business: businessEmail,
+      item_name: 'Soutien au projet Elicine',
+      amount: amountValue.toFixed(2),
+      currency_code: 'USD',
+      no_shipping: '1',
+      no_note: '0',
+    });
+    window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleMobileMoneySubmit = (e) => {
