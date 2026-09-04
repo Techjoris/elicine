@@ -171,8 +171,9 @@ export async function processNotchPayCheckout(params: {
   publicKey?: string;
   hashKey?: string;
   isTestMode?: boolean;
+  openInNewTab?: boolean;
   onSuccessRedirect?: () => void;
-}): Promise<{ success: boolean; message: string; paymentUrl?: string }> {
+}): Promise<{ success: boolean; message: string; paymentUrl?: string; reference?: string }> {
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
   const successCallbackUrl = 'https://elicine.vercel.app/?payment_status=success';
 
@@ -204,7 +205,7 @@ export async function processNotchPayCheckout(params: {
   }
 
   try {
-    const formattedCurrency = params.currency === 'XAF' || params.currency === 'XOF' ? 'XAF' : params.currency;
+    const formattedCurrency = params.currency === 'XOF' || params.currency === 'XAF' ? 'XAF' : params.currency;
     const finalAmount = formattedCurrency === 'XAF' ? Math.round(Number(params.amount)) : Number(params.amount);
 
     const payload: any = {
@@ -231,18 +232,21 @@ export async function processNotchPayCheckout(params: {
     if (res.ok) {
       const data = await res.json();
       const authUrl = data.authorization_url || data.data?.authorization_url || data.transaction?.authorization_url;
+      const ref = data.reference || data.transaction?.reference || payload.reference;
+
       if (authUrl) {
         if (import.meta.env?.DEV) {
-          console.log('[NotchPay LIVE] Redirection vers authorization_url :', authUrl);
+          console.log('[NotchPay LIVE] URL de paiement :', authUrl, '| Référence :', ref);
         }
-        if (typeof window !== 'undefined') {
-          window.location.href = authUrl;
-          return { 
-            success: true, 
-            message: 'Redirection sécurisée vers Notch Pay...', 
-            paymentUrl: authUrl 
-          };
+        if (params.openInNewTab && typeof window !== 'undefined') {
+          window.open(authUrl, '_blank');
         }
+        return { 
+          success: true, 
+          message: 'Lien de paiement généré.', 
+          paymentUrl: authUrl,
+          reference: ref
+        };
       }
       throw new Error("L'URL de paiement NotchPay n'a pas été reçue.");
     } else {
@@ -266,5 +270,49 @@ export async function processNotchPayCheckout(params: {
       success: false,
       message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé NotchPay."
     };
+  }
+}
+
+/**
+ * Polling de vérification du statut d'une transaction NotchPay
+ */
+export async function verifyNotchPayPayment(reference: string): Promise<{ 
+  status: 'complete' | 'pending' | 'failed'; 
+  rawStatus?: string;
+  transaction?: any 
+}> {
+  if (!reference) return { status: 'pending' };
+
+  try {
+    const res = await fetch(`/api/notchpay/verify?reference=${encodeURIComponent(reference)}`, {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        status: data.status === 'complete' ? 'complete' : (data.status === 'failed' ? 'failed' : 'pending'),
+        rawStatus: data.rawStatus || data.status,
+        transaction: data.transaction
+      };
+    }
+
+    // Fallback vers /api/notchpay?reference=
+    const fallbackRes = await fetch(`/api/notchpay?reference=${encodeURIComponent(reference)}`);
+    if (fallbackRes.ok) {
+      const fbData = await fallbackRes.json();
+      return {
+        status: fbData.status === 'complete' ? 'complete' : (fbData.status === 'failed' ? 'failed' : 'pending'),
+        rawStatus: fbData.rawStatus || fbData.status,
+        transaction: fbData.transaction
+      };
+    }
+
+    return { status: 'pending' };
+  } catch (err) {
+    console.error('[NotchPay Polling] Erreur vérification statut :', err);
+    return { status: 'pending' };
   }
 }

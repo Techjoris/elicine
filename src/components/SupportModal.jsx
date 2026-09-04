@@ -1,18 +1,43 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
+import { useApp } from '../context/AppContext';
+import { processNotchPayCheckout, verifyNotchPayPayment } from '../services/payment';
 
 export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
+  const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState('paypal');
   const [cfaZone, setCfaZone] = useState('XAF');
   const [freeAmount, setFreeAmount] = useState('500');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
+  const pollingIntervalRef = useRef(null);
 
-  // 1. Gestion de la fermeture par touche Échap (Escape) et verrouillage du défilement
+  // 1. Nettoyage du timer à la fermeture ou démontage
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleClose = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    setIsWaitingConfirmation(false);
+    onClose();
+  };
+
+  // 2. Gestion de la fermeture par touche Échap (Escape) et verrouillage du défilement
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
 
@@ -24,13 +49,13 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalOverflow;
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const handlePayPalCheckout = () => {
     window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
   };
 
-  const handleMobileMoneySubmit = (e) => {
+  const handleMobileMoneySubmit = async (e) => {
     e.preventDefault();
     const amount = Math.max(1, Math.round(Number(freeAmount)));
 
@@ -39,13 +64,65 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
       return;
     }
 
-    if (onOpenNotchPay) {
-      onOpenNotchPay({
+    setIsProcessing(true);
+    try {
+      const res = await processNotchPayCheckout({
         amount,
         currency: cfaZone,
+        paymentType: 'tip',
+        paymentMethod: 'mobile',
+        email: user?.email || 'contact@elicine.com',
+        name: user?.name || 'Cinéphile Bienfaiteur',
         description: `Soutien Éliciné (${amount} FCFA)`,
+        publicKey: apiSettings.notchPayPublicKey,
+        hashKey: apiSettings.notchPayHashKey,
+        isTestMode: false,
+        openInNewTab: true
       });
-      onClose();
+
+      if (res.paymentUrl) {
+        if (typeof window !== 'undefined') {
+          window.open(res.paymentUrl, '_blank');
+        }
+
+        if (res.reference) {
+          setIsWaitingConfirmation(true);
+          const ref = res.reference;
+          const startTime = Date.now();
+
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+          pollingIntervalRef.current = setInterval(async () => {
+            if (Date.now() - startTime > 90000) {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              showToast("Délai d'attente dépassé. Si vous avez validé le code, il sera confirmé sous peu.");
+              return;
+            }
+
+            const check = await verifyNotchPayPayment(ref);
+            if (check.status === 'complete') {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              onClose();
+              setIsThankYouModalOpen(true);
+            } else if (check.status === 'failed') {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              showToast("Le paiement n'a pas pu être validé ou a été annulé.");
+            }
+          }, 3000);
+        } else {
+          showToast('Redirection vers Notch Pay...');
+        }
+      } else {
+        showToast(res.message);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Échec de l'initialisation du paiement.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -56,7 +133,7 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose();
+          handleClose();
         }
       }}
     >
@@ -70,12 +147,49 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
         {/* Bouton de fermeture ✕ accessible et visible */}
         <button 
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           aria-label="Fermer la boîte de dialogue"
           className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white border border-white/10 hover:border-white/25 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
           <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
+
+        {isWaitingConfirmation ? (
+          <div className="flex flex-col items-center justify-center text-center py-6 px-2 space-y-6 animate-fade-in w-full">
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl">📱</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">
+                Paiement en cours de validation
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-sm leading-relaxed">
+                Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money)...
+              </p>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>Vérification automatique en cours...</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                setIsWaitingConfirmation(false);
+              }}
+              className="text-xs text-slate-400 hover:text-white underline transition-colors cursor-pointer pt-2"
+            >
+              Annuler ou modifier le don
+            </button>
+          </div>
+        ) : (
+          <>
 
         {/* En-tête : Titre et Description avec largeur protégée */}
         <div className="flex flex-col items-center text-center gap-2 pt-1 w-full">
@@ -257,6 +371,9 @@ export function SupportModal({ isOpen, onClose, onOpenNotchPay }) {
             <span>🔒</span> Transaction chiffrée SSL • Éliciné 100% Indépendant
           </p>
         </div>
+
+          </>
+        )}
       </div>
     </div>
   );

@@ -38,7 +38,9 @@ export const AppContent: React.FC = () => {
     toastMessage, 
     showToast,
     upgradeToPro,
-    user 
+    user,
+    isThankYouModalOpen,
+    setIsThankYouModalOpen
   } = useApp();
 
   const { t } = useTranslation();

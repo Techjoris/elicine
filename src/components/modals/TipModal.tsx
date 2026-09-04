@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Coffee, 
@@ -8,10 +8,11 @@ import {
   ShieldCheck, 
   Loader2,
   Info,
-  MapPin
+  MapPin,
+  Sparkles
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CURRENCY_CONFIGS, processNotchPayCheckout, PAYMENT_METHODS, isAfricanCurrency, CARD_MIN_FCFA } from '../../services/payment';
+import { CURRENCY_CONFIGS, processNotchPayCheckout, verifyNotchPayPayment, PAYMENT_METHODS, isAfricanCurrency, CARD_MIN_FCFA } from '../../services/payment';
 import { getUserGeoData, isMobileMoneyAvailable, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -23,16 +24,28 @@ export const TipModal: React.FC = () => {
     setCurrency, 
     apiSettings, 
     user, 
-    showToast 
+    showToast,
+    setIsThankYouModalOpen
   } = useApp();
 
   const [selectedPresetFcfa, setSelectedPresetFcfa] = useState<number>(1000);
   const [customAmountFcfa, setCustomAmountFcfa] = useState<string>('');
   const [selectedMethod, setSelectedMethod] = useState<string>('card');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
+  const pollingIntervalRef = useRef<any>(null);
   const [geoCountry, setGeoCountry] = useState<string>('');
   const [geoLoading, setGeoLoading] = useState(true);
   const [mobileMoneyEnabled, setMobileMoneyEnabled] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   // Auto-detect user country on open
   useEffect(() => {
@@ -118,16 +131,47 @@ export const TipModal: React.FC = () => {
         paymentMethod: channelMode,
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile',
-        description: `Pourboire Soutien CinéIA (${activeAmountFcfa} FCFA - ${channelMode === 'card' ? 'Carte Bancaire' : 'Mobile Money'})`,
+        description: `Pourboire Soutien Éliciné (${activeAmountFcfa} FCFA - ${channelMode === 'card' ? 'Carte Bancaire' : 'Mobile Money'})`,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false
+        isTestMode: false,
+        openInNewTab: true
       });
 
       if (res.paymentUrl) {
-        showToast('Redirection vers la page de soutien sécurisée Notch Pay...');
         if (typeof window !== 'undefined') {
-          window.location.href = res.paymentUrl;
+          window.open(res.paymentUrl, '_blank');
+        }
+
+        if (channelMode === 'mobile' && res.reference) {
+          setIsWaitingConfirmation(true);
+          const ref = res.reference;
+          const startTime = Date.now();
+
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+          pollingIntervalRef.current = setInterval(async () => {
+            if (Date.now() - startTime > 90000) {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              showToast("Délai d'attente dépassé. Si vous avez validé le code, il sera confirmé sous peu.");
+              return;
+            }
+
+            const check = await verifyNotchPayPayment(ref);
+            if (check.status === 'complete') {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              setIsTipModalOpen(false);
+              setIsThankYouModalOpen(true);
+            } else if (check.status === 'failed') {
+              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+              setIsWaitingConfirmation(false);
+              showToast("Le paiement n'a pas pu être validé ou a été annulé.");
+            }
+          }, 3000);
+        } else {
+          showToast('Redirection vers la page de soutien sécurisée Notch Pay...');
         }
       } else {
         showToast(res.message);
@@ -145,6 +189,8 @@ export const TipModal: React.FC = () => {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          setIsWaitingConfirmation(false);
           setIsTipModalOpen(false);
         }
       }}
@@ -157,12 +203,53 @@ export const TipModal: React.FC = () => {
       >
         <button
           type="button"
-          onClick={() => setIsTipModalOpen(false)}
+          onClick={() => {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            setIsWaitingConfirmation(false);
+            setIsTipModalOpen(false);
+          }}
           aria-label="Fermer"
           className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white border border-white/10 hover:border-white/25 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
           <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
+
+        {isWaitingConfirmation ? (
+          <div className="flex flex-col items-center justify-center text-center py-6 px-2 space-y-6 animate-fade-in w-full">
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl">📱</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">
+                Paiement en cours de validation
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-sm leading-relaxed">
+                Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money)...
+              </p>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>Vérification automatique en cours...</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                setIsWaitingConfirmation(false);
+              }}
+              className="text-xs text-slate-400 hover:text-white underline transition-colors cursor-pointer pt-2"
+            >
+              Annuler ou modifier le don
+            </button>
+          </div>
+        ) : (
+          <>
 
         {/* Title */}
         <div className="text-center space-y-2 w-full">
@@ -333,6 +420,9 @@ export const TipModal: React.FC = () => {
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
           <span>Paiement crypté SSL — certifié Notch Pay</span>
         </div>
+
+          </>
+        )}
 
       </div>
 

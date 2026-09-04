@@ -46,16 +46,28 @@ export default async function handler(req, res) {
     }
 
     try {
+      const authHeader = (process.env.NOTCHPAY_PUBLIC_KEY?.trim()) || notchKey.trim();
       const response = await fetch(`https://api.notchpay.co/payments/${encodeURIComponent(reference)}`, {
         method: 'GET',
         headers: {
-          'Authorization': notchKey.trim(),
+          'Authorization': authHeader,
           'Accept': 'application/json',
         },
       });
 
       const data = await response.json();
-      return res.status(response.status).json(data);
+      const rawStatus = data.transaction?.status || data.payment?.status || data.status || 'pending';
+      const status = (rawStatus === 'successful' || rawStatus === 'complete' || rawStatus === 'completed') 
+        ? 'complete' 
+        : (rawStatus === 'failed' || rawStatus === 'rejected' || rawStatus === 'canceled' || rawStatus === 'cancelled')
+        ? 'failed'
+        : 'pending';
+
+      return res.status(response.status).json({
+        status,
+        rawStatus,
+        ...data
+      });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -162,10 +174,14 @@ export default async function handler(req, res) {
       const authUrl = data.authorization_url || 
                       data.transaction?.authorization_url || 
                       data.data?.authorization_url;
+      const ref = data.transaction?.reference || 
+                  data.reference || 
+                  payload.reference;
 
       return res.status(200).json({
         ...data,
-        authorization_url: authUrl
+        authorization_url: authUrl,
+        reference: ref
       });
     } catch (err) {
       console.error("Détails rejet NotchPay:", err.message);
