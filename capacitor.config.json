@@ -1,0 +1,9 @@
+{
+  "appId": "com.elicine.app",
+  "appName": "Éliciné",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

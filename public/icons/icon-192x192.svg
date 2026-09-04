@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="cineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="7.68" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <rect width="192" height="192" rx="42.24" fill="#0b0f19" stroke="#1f293d" stroke-width="3.84"/>
+  <path d="M48 61.44C48 53.760000000000005 53.760000000000005 48 61.44 48H130.56C138.24 48 144 53.760000000000005 144 61.44V130.56C144 138.24 138.24 144 130.56 144H61.44C53.760000000000005 144 48 138.24 48 130.56V61.44Z" fill="#121826" stroke="url(#cineGrad)" stroke-width="5.76"/>
+  <polygon points="80.64,72.96000000000001 124.80000000000001,96 80.64,119.03999999999999" fill="url(#cineGrad)" filter="url(#glow)"/>
+  <circle cx="134.39999999999998" cy="57.599999999999994" r="6.720000000000001" fill="#f59e0b" filter="url(#glow)"/>
+  <circle cx="57.599999999999994" cy="134.39999999999998" r="5.76" fill="#3b82f6" filter="url(#glow)"/>
+</svg>

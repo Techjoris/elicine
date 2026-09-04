@@ -1,0 +1,55 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="logoAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#FBBF24" />
+    </linearGradient>
+    <radialGradient id="logoAura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.5" />
+      <stop offset="60%" stop-color="#0284C7" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#0284C7" stop-opacity="0" />
+    </radialGradient>
+    <filter id="logoGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base / Film Reel Case -->
+  <rect x="4" y="4" width="92" height="92" rx="26" fill="#030712" stroke="url(#logoCyan)" stroke-width="2.5" stroke-opacity="0.9" />
+  
+  <!-- Subtle Outer Optical Ring -->
+  <circle cx="50" cy="50" r="39" stroke="#1E293B" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.6" />
+  
+  <!-- Optical ticks (Cinema 35mm marks) -->
+  <circle cx="50" cy="11" r="1.5" fill="#38BDF8" opacity="0.9" />
+  <circle cx="89" cy="50" r="1.5" fill="#38BDF8" opacity="0.9" />
+  <circle cx="50" cy="89" r="1.5" fill="#38BDF8" opacity="0.9" />
+  <circle cx="11" cy="50" r="1.5" fill="#38BDF8" opacity="0.9" />
+
+  <!-- Diaphragm Aperture Blades (6 rotating petals) -->
+  <g stroke="url(#logoCyan)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" />
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" transform="rotate(60, 50, 50)" />
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" transform="rotate(120, 50, 50)" />
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" transform="rotate(180, 50, 50)" />
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" transform="rotate(240, 50, 50)" />
+    <path d="M 50 16 C 63 16 74 24 79 36 L 59 47 C 56 38 52 35 50 34 Z" fill="#0A1120" fill-opacity="0.9" transform="rotate(300, 50, 50)" />
+  </g>
+
+  <!-- Central Radial Core Glow -->
+  <circle cx="50" cy="50" r="22" fill="url(#logoAura)" />
+
+  <!-- 4-pointed AI Sparkle (Étincelle centrale IA) -->
+  <path d="M 50 28 Q 50 50 72 50 Q 50 50 50 72 Q 50 50 28 50 Q 50 50 50 28 Z" fill="url(#logoAmber)" filter="url(#logoGlow)" />
+  
+  <!-- High-precision Inner Diamond Core -->
+  <path d="M 50 39 Q 50 50 61 50 Q 50 50 50 61 Q 50 50 39 50 Q 50 50 50 39 Z" fill="#FFFDF2" />
+
+  <!-- Center Focal Sparkle Point -->
+  <circle cx="50" cy="50" r="2.2" fill="#FFFFFF" />
+</svg>
