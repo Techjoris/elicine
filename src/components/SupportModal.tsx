@@ -50,10 +50,10 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = Number(freeAmount);
+    const amount = Math.max(1, Math.round(Number(freeAmount)));
 
-    if (!amount || amount < 200) {
-      alert("Le montant minimum pour le Mobile Money est de 200 FCFA.");
+    if (!amount || amount < 1) {
+      alert("Veuillez entrer un montant valide.");
       return;
     }
 
@@ -224,13 +224,13 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   Montant de votre don libre
                 </label>
-                <span className="text-[10px] text-amber-400">Min. 200 FCFA</span>
+                <span className="text-[10px] text-amber-400">Montant libre dès 1 FCFA</span>
               </div>
               <div className="relative flex items-center w-full">
                 <input
                   type="number"
-                  min="200"
-                  step="50"
+                  min="1"
+                  step="1"
                   required
                   value={freeAmount}
                   onChange={(e) => setFreeAmount(e.target.value)}
@@ -245,7 +245,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
             {/* Suggestions rapides de montants */}
             <div className="flex items-center justify-between gap-1.5 w-full">
-              {[500, 1000, 2500, 5000].map((preset) => (
+              {[100, 250, 500, 1000].map((preset) => (
                 <button
                   key={preset}
                   type="button"

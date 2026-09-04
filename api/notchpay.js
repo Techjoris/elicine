@@ -116,23 +116,18 @@ export default async function handler(req, res) {
     }
 
     const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ error: 'Montant invalide' });
+    if (!numAmount || numAmount < 1) {
+      return res.status(400).json({ error: 'Montant invalide (minimum 1 FCFA)' });
     }
-
-    const formattedCurrency = currency === 'XOF' || currency === 'XAF' ? 'XAF' : currency;
-    const finalAmount = (formattedCurrency === 'XAF') ? Math.round(numAmount) : numAmount;
-
-    const callbackTarget = callback || callbackUrl || 'https://elicine.vercel.app/?payment_status=success';
 
     const payload = {
       amount: Math.round(Number(amount)),
-      currency: formattedCurrency || 'XAF',
+      currency: 'XAF',
       email: email || 'contact@elicine.com',
       description: description || 'Soutien au projet Éliciné',
       reference: reference || ('elc_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
-      callback: callbackTarget,
-      return_url: callbackTarget
+      callback: 'https://elicine.vercel.app/?payment_status=success',
+      return_url: 'https://elicine.vercel.app/?payment_status=success'
     };
 
     const authHeader = (process.env.NOTCHPAY_PUBLIC_KEY?.trim()) || notchKey.trim() || '';
