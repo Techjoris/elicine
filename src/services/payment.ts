@@ -174,8 +174,10 @@ export async function processNotchPayCheckout(params: {
   onSuccessRedirect?: () => void;
 }): Promise<{ success: boolean; message: string; paymentUrl?: string }> {
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const successCallbackUrl = `${origin}/?payment=success&type=${type}`;
+  const baseUrl = typeof window !== 'undefined' && window.location.origin
+    ? window.location.origin
+    : (((import.meta as any).env?.NEXT_PUBLIC_SITE_URL) || 'https://elicine.vercel.app');
+  const successCallbackUrl = `${baseUrl}/?payment_status=success&reference=elc_notch&type=${type}`;
 
   // Priorité absolue aux variables d'environnement Live de production
   const envPubKey = (
@@ -215,7 +217,8 @@ export async function processNotchPayCheckout(params: {
       name: params.name || 'Cinéphile',
       description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
       callback: successCallbackUrl,
-      callbackUrl: successCallbackUrl
+      callbackUrl: successCallbackUrl,
+      return_url: successCallbackUrl
     };
 
     const res = await fetch('/api/notchpay', {

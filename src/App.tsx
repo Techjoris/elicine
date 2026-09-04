@@ -62,11 +62,11 @@ export const AppContent: React.FC = () => {
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
 
-  // Intercept ?payment=success callback from Notch Pay
+  // Intercept ?payment_status=success callback from Notch Pay
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get('payment');
-    const paymentType = (urlParams.get('type') || 'pro') as 'pro' | 'tip';
+    const paymentStatus = urlParams.get('payment_status') || urlParams.get('payment');
+    const paymentType = (urlParams.get('type') || 'tip') as 'pro' | 'tip';
 
     if (paymentStatus === 'success') {
       if (paymentType === 'pro') {
@@ -77,10 +77,10 @@ export const AppContent: React.FC = () => {
         type: paymentType
       });
 
-      // Clean the URL without page reload
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Nettoyer immédiatement l'URL sans recharger la page pour éviter qu'un rafraîchissement ne réaffiche le message
+      window.history.replaceState({}, '', '/');
     }
-  }, []);
+  }, [upgradeToPro]);
 
   const key = apiSettings.tmdbApiKey;
   const fetchTrendingFn = React.useCallback(

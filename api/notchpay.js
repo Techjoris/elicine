@@ -123,13 +123,18 @@ export default async function handler(req, res) {
     const formattedCurrency = currency === 'XOF' || currency === 'XAF' ? 'XAF' : currency;
     const finalAmount = (formattedCurrency === 'XAF') ? Math.round(numAmount) : numAmount;
 
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app');
+    const defaultCallback = `${baseUrl}/?payment_status=success&reference=elc_notch`;
+    const callbackTarget = callback || callbackUrl || defaultCallback;
+
     const payload = {
       amount: finalAmount,
       currency: formattedCurrency,
       email: email || 'contact@elicine.com',
       description: description || 'Soutien au projet Éliciné',
       reference: reference || ('elc_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
-      callback: callback || callbackUrl || `${process.env.NEXT_PUBLIC_SITE_URL || 'https://elicine.vercel.app'}/`
+      callback: callbackTarget,
+      return_url: callbackTarget
     };
 
     try {
