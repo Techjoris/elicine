@@ -58,63 +58,12 @@ Note : "match_rate" doit être un nombre entier compris entre 75 et 99 reflétan
 /**
  * Auto-détection dynamique des modèles actifs sur le compte Groq
  */
-export async function getAvailableGroqModel(apiKey: string): Promise<string> {
+export async function getAvailableGroqModel(apiKey?: string): Promise<string> {
   const cached = sessionStorage.getItem('cineia_active_groq_model');
   if (cached && cached.trim().length > 2) {
     return cached.trim();
   }
-
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/models', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey.trim()}`
-      }
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const models: Array<{ id: string }> = data.data || [];
-      const modelIds = models.map(m => m.id);
-
-      const chatModels = modelIds.filter(id => 
-        !id.includes('whisper') && 
-        !id.includes('guard') && 
-        !id.includes('tts') && 
-        !id.includes('embedding')
-      );
-
-      // 1) Priorité 70B
-      const m70b = chatModels.find(id => id.includes('70b'));
-      if (m70b) {
-        sessionStorage.setItem('cineia_active_groq_model', m70b);
-        return m70b;
-      }
-
-      // 2) Priorité 8B Instant
-      const m8b = chatModels.find(id => id.includes('8b-instant') || id.includes('8b'));
-      if (m8b) {
-        sessionStorage.setItem('cineia_active_groq_model', m8b);
-        return m8b;
-      }
-
-      // 3) Priorité Gemma
-      const mGemma = chatModels.find(id => id.includes('gemma'));
-      if (mGemma) {
-        sessionStorage.setItem('cineia_active_groq_model', mGemma);
-        return mGemma;
-      }
-
-      if (chatModels.length > 0) {
-        sessionStorage.setItem('cineia_active_groq_model', chatModels[0]);
-        return chatModels[0];
-      }
-    }
-  } catch (err) {
-    console.warn('[CinéIA Groq] Erreur lors du listing des modèles :', err);
-  }
-
-  return 'llama-3.1-8b-instant';
+  return 'llama-3.3-70b-versatile';
 }
 
 /**
@@ -138,11 +87,11 @@ async function callGroqApi(
   apiKey: string,
   model: string
 ): Promise<{ provider_used: string; movies: RawAiMovieItem[] }> {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetch('/api/groq', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey.trim()}`
+      ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
     },
     body: JSON.stringify({
       model,

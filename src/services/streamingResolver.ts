@@ -1,7 +1,5 @@
 import { detectProviderKey } from './tmdb';
 
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-
 export interface SvodProviderItem {
   name: string;
   logo: string | null;
@@ -93,18 +91,16 @@ export async function getMediaProviders(
     localStorage.getItem('cinora_tmdb_key') || 
     localStorage.getItem('cinéia_tmdb_key') || 
     localStorage.getItem('cineia_tmdb_key') || 
-    (import.meta as any).env?.VITE_TMDB_API_KEY || 
     ''
   ).trim();
 
-  if (!key || !id) {
+  if (!id) {
     return { svod: { status: 'none', providers: [] }, vod: [] };
   }
 
   try {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/${endpoint}/${id}/watch/providers?api_key=${key}`
-    );
+    const tmdbUrl = `/api/tmdb?endpoint=${encodeURIComponent(`${endpoint}/${id}/watch/providers`)}${key ? `&api_key=${encodeURIComponent(key)}` : ''}`;
+    const res = await fetch(tmdbUrl);
     if (!res.ok) {
       return { svod: { status: 'none', providers: [] }, vod: [] };
     }

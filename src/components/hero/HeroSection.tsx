@@ -130,13 +130,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       localStorage.getItem('cineia_tmdb_key') || 
       localStorage.getItem('tmdb_api_key') ||
       apiSettings?.tmdbApiKey || 
-      (import.meta as any).env?.VITE_TMDB_API_KEY || 
       ''
     ).trim();
 
-    if (!key) return;
+    const tmdbUrl = `/api/tmdb?endpoint=${encodeURIComponent('trending/movie/week')}&language=${encodeURIComponent(t.tmdbLang)}${key ? `&api_key=${encodeURIComponent(key)}` : ''}`;
 
-    fetch(`https://api.themoviedb.org/3/trending/movie/week?api_key=${key}&language=${t.tmdbLang}`)
+    fetch(tmdbUrl)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.results && Array.isArray(data.results) && data.results.length > 0) {

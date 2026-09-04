@@ -104,13 +104,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. API Settings loaded from localStorage keys with env fallbacks
   const [apiSettings, setApiSettings] = useState<ApiSettings>(() => {
-    const tmdb = localStorage.getItem('cinéia_tmdb_key') || localStorage.getItem('cineia_tmdb_key') || (import.meta as any).env?.VITE_TMDB_API_KEY || '';
+    const tmdb = localStorage.getItem('cinéia_tmdb_key') || localStorage.getItem('cineia_tmdb_key') || '';
     const omdb = localStorage.getItem('cinéia_omdb_key') || (import.meta as any).env?.VITE_OMDB_API_KEY || '';
     const trakt = localStorage.getItem('cinéia_trakt_id') || (import.meta as any).env?.VITE_TRAKT_ID || '';
     const openai = localStorage.getItem('cinéia_openai_key') || (import.meta as any).env?.VITE_OPENAI_API_KEY || '';
     const anthropic = localStorage.getItem('cinéia_anthropic_key') || (import.meta as any).env?.VITE_ANTHROPIC_API_KEY || '';
     const xai = localStorage.getItem('cinéia_xai_key') || (import.meta as any).env?.VITE_XAI_API_KEY || '';
-    const groq = localStorage.getItem('cinéia_groq_key') || (import.meta as any).env?.VITE_GROQ_API_KEY || '';
+    const groq = localStorage.getItem('cinéia_groq_key') || '';
     const qwen = localStorage.getItem('cinéia_qwen_api_key') || localStorage.getItem('cinéia_qwen_key') || (import.meta as any).env?.VITE_QWEN_API_KEY || DEFAULT_QWEN_KEY;
     const preferredAi = (localStorage.getItem('cinéia_preferred_ai_provider') || 'qwen') as 'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai';
     const notchPk = localStorage.getItem('cinéia_notch_pk') || localStorage.getItem('cinéia_notch_key') || (import.meta as any).env?.VITE_NOTCHPAY_KEY || '';
@@ -134,14 +134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  const hasApiKeysConfigured = Boolean(
-    apiSettings.tmdbApiKey.trim() || 
-    apiSettings.qwenApiKey?.trim() ||
-    apiSettings.groqApiKey.trim() || 
-    apiSettings.openaiApiKey.trim() || 
-    apiSettings.anthropicApiKey.trim() || 
-    apiSettings.xaiApiKey.trim()
-  );
+  const hasApiKeysConfigured = true;
 
   // 2. Quota IA
   const [quota, setQuota] = useState<AIQuota>(() => {

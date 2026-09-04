@@ -1,6 +1,5 @@
 import { Movie, StreamingProvider } from '../types';
 
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
 export const PLATFORM_PROVIDER_IDS = {
@@ -47,17 +46,39 @@ export function getTmdbApiKey(explicitKey?: string): string {
       localStorage.getItem('cinéia_tmdb_key') ||
       localStorage.getItem('cineia_tmdb_key')
     ) : '') ||
-    (import.meta as any).env?.VITE_TMDB_API_KEY ||
     ''
   ).trim();
 }
 
+/**
+ * Proxy universel vers l'endpoint serveur /api/tmdb
+ */
+export async function fetchTmdbEndpoint(
+  endpoint: string,
+  params: Record<string, string | number | boolean | undefined> = {},
+  apiKey?: string
+): Promise<Response> {
+  const key = apiKey || getTmdbApiKey();
+  const searchParams = new URLSearchParams();
+  searchParams.set('endpoint', endpoint);
+
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') {
+      searchParams.set(k, String(v));
+    }
+  }
+
+  if (key) {
+    searchParams.set('api_key', key);
+  }
+
+  return fetch(`/api/tmdb?${searchParams.toString()}`);
+}
+
 export async function fetchTrendingMovies(apiKey?: string, language?: string): Promise<Movie[]> {
-  const key = getTmdbApiKey(apiKey);
-  if (!key) return FALLBACK_MOVIES;
   try {
     const lang = getActiveTmdbLanguage(language);
-    const res = await fetch(`${TMDB_BASE_URL}/trending/all/week?api_key=${key}&language=${lang}`);
+    const res = await fetchTmdbEndpoint('trending/all/week', { language: lang }, apiKey);
     if (!res.ok) throw new Error('TMDB error');
     const data = await res.json();
     return formatTmdbResults(data.results);
@@ -72,13 +93,9 @@ export async function fetchTrendingPage(
   apiKey?: string,
   language?: string
 ): Promise<{ results: Movie[]; total_pages: number }> {
-  const key = getTmdbApiKey(apiKey);
-  if (!key) return { results: FALLBACK_MOVIES, total_pages: 1 };
   try {
     const lang = getActiveTmdbLanguage(language);
-    const res = await fetch(
-      `${TMDB_BASE_URL}/trending/all/week?api_key=${key}&page=${page}&language=${lang}`
-    );
+    const res = await fetchTmdbEndpoint('trending/all/week', { page, language: lang }, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
     return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
@@ -94,13 +111,9 @@ export async function fetchTopRatedPage(
   apiKey?: string,
   language?: string
 ): Promise<{ results: Movie[]; total_pages: number }> {
-  const key = getTmdbApiKey(apiKey);
-  if (!key) return { results: FALLBACK_MOVIES, total_pages: 1 };
   try {
     const lang = getActiveTmdbLanguage(language);
-    const res = await fetch(
-      `${TMDB_BASE_URL}/${mediaType}/top_rated?api_key=${key}&page=${page}&language=${lang}`
-    );
+    const res = await fetchTmdbEndpoint(`${mediaType}/top_rated`, { page, language: lang }, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
     return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
@@ -115,14 +128,17 @@ export async function fetchDiscoverPage(
   options: { mediaType?: 'movie' | 'tv'; genreId?: number; sortBy?: string; apiKey?: string; language?: string } = {}
 ): Promise<{ results: Movie[]; total_pages: number }> {
   const { mediaType = 'movie', genreId, sortBy = 'popularity.desc', apiKey, language } = options;
-  const key = getTmdbApiKey(apiKey);
-  if (!key) return { results: FALLBACK_MOVIES, total_pages: 1 };
   try {
     const lang = getActiveTmdbLanguage(language);
-    const genreParam = genreId ? `&with_genres=${genreId}` : '';
-    const res = await fetch(
-      `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${key}&sort_by=${sortBy}${genreParam}&page=${page}&language=${lang}&include_adult=false&vote_count.gte=50`
-    );
+    const params: Record<string, any> = {
+      sort_by: sortBy,
+      page,
+      language: lang,
+      include_adult: false,
+      'vote_count.gte': 50
+    };
+    if (genreId) params.with_genres = genreId;
+    const res = await fetchTmdbEndpoint(`discover/${mediaType}`, params, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
     return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
@@ -138,13 +154,15 @@ export async function fetchSearchPage(
   apiKey?: string,
   language?: string
 ): Promise<{ results: Movie[]; total_pages: number }> {
-  const key = getTmdbApiKey(apiKey);
-  if (!key || !query.trim()) return { results: [], total_pages: 0 };
+  if (!query.trim()) return { results: [], total_pages: 0 };
   try {
     const lang = getActiveTmdbLanguage(language);
-    const res = await fetch(
-      `${TMDB_BASE_URL}/search/multi?api_key=${key}&query=${encodeURIComponent(query)}&page=${page}&language=${lang}&include_adult=false`
-    );
+    const res = await fetchTmdbEndpoint('search/multi', {
+      query: query.trim(),
+      page,
+      language: lang,
+      include_adult: false
+    }, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
     const filtered = (data.results || []).filter(
@@ -195,9 +213,16 @@ export async function fetchMoviesByPlatform({
     const fetchEndpoints: Array<Promise<any>> = [];
 
     if (mediaType === 'all' || mediaType === 'movie') {
-      const movieUrl = `${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&with_watch_providers=${providerId}&watch_region=FR&sort_by=${sortBy}&vote_count.gte=${voteCountThreshold}&page=${page}&language=fr-FR&include_adult=false`;
       fetchEndpoints.push(
-        fetch(movieUrl)
+        fetchTmdbEndpoint('discover/movie', {
+          with_watch_providers: providerId,
+          watch_region: 'FR',
+          sort_by: sortBy,
+          'vote_count.gte': voteCountThreshold,
+          page,
+          language: 'fr-FR',
+          include_adult: false
+        }, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })
           .then(d => ({ ...d, results: (d.results || []).map((m: any) => ({ ...m, media_type: 'movie' })) }))
       );
@@ -205,9 +230,16 @@ export async function fetchMoviesByPlatform({
 
     if (mediaType === 'all' || mediaType === 'tv') {
       const tvSortBy = sortBy === 'primary_release_date.desc' ? 'first_air_date.desc' : sortBy;
-      const tvUrl = `${TMDB_BASE_URL}/discover/tv?api_key=${apiKey}&with_watch_providers=${providerId}&watch_region=FR&sort_by=${tvSortBy}&vote_count.gte=${voteCountThreshold}&page=${page}&language=fr-FR&include_adult=false`;
       fetchEndpoints.push(
-        fetch(tvUrl)
+        fetchTmdbEndpoint('discover/tv', {
+          with_watch_providers: providerId,
+          watch_region: 'FR',
+          sort_by: tvSortBy,
+          'vote_count.gte': voteCountThreshold,
+          page,
+          language: 'fr-FR',
+          include_adult: false
+        }, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })
           .then(d => ({ ...d, results: (d.results || []).map((m: any) => ({ ...m, media_type: 'tv' })) }))
       );
@@ -253,31 +285,26 @@ export async function getMovieTrailer(
     return KNOWN_TRAILERS[movieId];
   }
 
-  if (!apiKey) {
-    const foundFallback = FALLBACK_MOVIES.find(m => m.id === movieId);
-    return foundFallback?.trailer_key || null;
-  }
-
   const isTv = mediaType === 'SÉRIE' || mediaType === 'tv';
   const typeEndpoint = isTv ? 'tv' : 'movie';
 
   try {
     // 1. Try French first
-    let res = await fetch(`${TMDB_BASE_URL}/${typeEndpoint}/${movieId}/videos?api_key=${apiKey}&language=fr-FR`);
+    let res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}/videos`, { language: 'fr-FR' }, apiKey);
     let data = res.ok ? await res.json() : null;
 
     let youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
 
     // 2. If no French trailer, fallback to English (US)
     if (!youtubeVideos || youtubeVideos.length === 0) {
-      res = await fetch(`${TMDB_BASE_URL}/${typeEndpoint}/${movieId}/videos?api_key=${apiKey}&language=en-US`);
+      res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}/videos`, { language: 'en-US' }, apiKey);
       data = res.ok ? await res.json() : null;
       youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
     }
 
     // 3. Fallback across types if needed
     if ((!youtubeVideos || youtubeVideos.length === 0) && !isTv) {
-      res = await fetch(`${TMDB_BASE_URL}/tv/${movieId}/videos?api_key=${apiKey}&language=en-US`);
+      res = await fetchTmdbEndpoint(`tv/${movieId}/videos`, { language: 'en-US' }, apiKey);
       data = res.ok ? await res.json() : null;
       youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
     }
@@ -341,17 +368,13 @@ export async function getWatchProviders(
   country: string = 'FR',
   apiKey?: string
 ): Promise<StreamingProvider[]> {
-  const key = getTmdbApiKey(apiKey);
-
-  if (!key || !id) {
+  if (!id) {
     return [];
   }
 
   try {
     const endpoint = mediaType === 'tv' ? 'tv' : 'movie';
-    const res = await fetch(
-      `${TMDB_BASE_URL}/${endpoint}/${id}/watch/providers?api_key=${key}`
-    );
+    const res = await fetchTmdbEndpoint(`${endpoint}/${id}/watch/providers`, {}, apiKey);
     if (!res.ok) return [];
     const data = await res.json();
     const override = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_region_override') : null;
@@ -403,16 +426,18 @@ export async function searchMovieExactByTitleAndYear(
   apiKey?: string
 ): Promise<Movie | null> {
   const cleanTitle = title.trim();
-  if (!cleanTitle || !apiKey) {
+  if (!cleanTitle) {
     return null;
   }
 
   try {
-    const yearParam = year ? `&year=${year}` : '';
-    
     // 1. Search in French first
-    let url = `${TMDB_BASE_URL}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(cleanTitle)}${yearParam}&language=fr-FR&include_adult=false`;
-    let res = await fetch(url);
+    let res = await fetchTmdbEndpoint('search/movie', {
+      query: cleanTitle,
+      year: year || undefined,
+      language: 'fr-FR',
+      include_adult: false
+    }, apiKey);
     let data = res.ok ? await res.json() : null;
 
     if (data?.results && data.results.length > 0) {
@@ -421,8 +446,12 @@ export async function searchMovieExactByTitleAndYear(
     }
 
     // 2. Fallback in English (US)
-    url = `${TMDB_BASE_URL}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(cleanTitle)}${yearParam}&language=en-US&include_adult=false`;
-    res = await fetch(url);
+    res = await fetchTmdbEndpoint('search/movie', {
+      query: cleanTitle,
+      year: year || undefined,
+      language: 'en-US',
+      include_adult: false
+    }, apiKey);
     data = res.ok ? await res.json() : null;
 
     if (data?.results && data.results.length > 0) {
@@ -432,8 +461,11 @@ export async function searchMovieExactByTitleAndYear(
 
     // 3. Fallback without year if year was restrictive
     if (year) {
-      url = `${TMDB_BASE_URL}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(cleanTitle)}&language=fr-FR&include_adult=false`;
-      res = await fetch(url);
+      res = await fetchTmdbEndpoint('search/movie', {
+        query: cleanTitle,
+        language: 'fr-FR',
+        include_adult: false
+      }, apiKey);
       data = res.ok ? await res.json() : null;
       if (data?.results && data.results.length > 0) {
         const formatted = formatTmdbResults([data.results[0]]);
@@ -442,8 +474,11 @@ export async function searchMovieExactByTitleAndYear(
     }
 
     // 4. Multi-search fallback (movies, tv, actors)
-    url = `${TMDB_BASE_URL}/search/multi?api_key=${apiKey}&query=${encodeURIComponent(cleanTitle)}&language=en-US&include_adult=false`;
-    res = await fetch(url);
+    res = await fetchTmdbEndpoint('search/multi', {
+      query: cleanTitle,
+      language: 'en-US',
+      include_adult: false
+    }, apiKey);
     data = res.ok ? await res.json() : null;
     if (data?.results && data.results.length > 0) {
       const validMedia = data.results.find((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
@@ -461,13 +496,17 @@ export async function searchMovieExactByTitleAndYear(
 }
 
 export async function searchMoviesTmdb(query: string, apiKey?: string, language?: string): Promise<Movie[]> {
-  if (!apiKey || !query.trim()) {
+  if (!query.trim()) {
     return [];
   }
 
   try {
     const lang = getActiveTmdbLanguage(language);
-    const res = await fetch(`${TMDB_BASE_URL}/search/multi?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=${lang}&include_adult=false`);
+    const res = await fetchTmdbEndpoint('search/multi', {
+      query,
+      language: lang,
+      include_adult: false
+    }, apiKey);
     if (!res.ok) throw new Error('TMDB search error');
     const data = await res.json();
     return formatTmdbResults(data.results || []);
@@ -477,12 +516,9 @@ export async function searchMoviesTmdb(query: string, apiKey?: string, language?
   }
 }
 
-export async function testTmdbApiKey(key: string): Promise<{ valid: boolean; message: string }> {
-  if (!key || key.trim().length < 8) {
-    return { valid: false, message: 'Clé vide ou trop courte' };
-  }
+export async function testTmdbApiKey(key?: string): Promise<{ valid: boolean; message: string }> {
   try {
-    const res = await fetch(`${TMDB_BASE_URL}/authentication?api_key=${key.trim()}`);
+    const res = await fetchTmdbEndpoint('authentication', {}, key);
     const data = await res.json();
     if (res.ok && data.success) {
       return { valid: true, message: 'Clé TMDB valide et active !' };
@@ -493,17 +529,37 @@ export async function testTmdbApiKey(key: string): Promise<{ valid: boolean; mes
   }
 }
 
-export async function testAiApiKey(provider: 'groq' | 'openai', key: string): Promise<{ valid: boolean; message: string }> {
+export async function testAiApiKey(provider: 'groq' | 'openai', key?: string): Promise<{ valid: boolean; message: string }> {
+  if (provider === 'groq') {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (key && key.trim()) {
+        headers['Authorization'] = `Bearer ${key.trim()}`;
+      }
+      const res = await fetch('/api/groq', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 5
+        })
+      });
+      if (res.ok) {
+        return { valid: true, message: 'Clé Groq validée avec succès !' };
+      }
+      return { valid: false, message: `Erreur Groq (${res.status})` };
+    } catch (e: any) {
+      return { valid: false, message: 'Erreur de connexion API' };
+    }
+  }
+
   if (!key || key.trim().length < 8) {
     return { valid: false, message: 'Clé vide ou trop courte' };
   }
 
-  const endpoint = provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/models'
-    : 'https://api.openai.com/v1/models';
-
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch('https://api.openai.com/v1/models', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${key.trim()}`

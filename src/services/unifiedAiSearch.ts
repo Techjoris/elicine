@@ -44,7 +44,6 @@ export const getGroqKey = (apiSettings?: ApiSettings): string => {
     localStorage.getItem('cinéia_groq_key') ||
     localStorage.getItem('cinéia_ai_key') ||
     apiSettings?.groqApiKey ||
-    (import.meta as any).env?.VITE_GROQ_API_KEY ||
     ""
   ).trim();
 };
@@ -59,7 +58,6 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
       localStorage.getItem('cinéia_tmdb_key') ||
       localStorage.getItem('cineia_tmdb_key') ||
       apiSettings?.tmdbApiKey ||
-      (import.meta as any).env?.VITE_TMDB_API_KEY ||
       ''
     ).trim();
   }
@@ -135,12 +133,12 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
 
   for (const model of ACTIVE_GROQ_MODELS) {
     try {
-      console.log(`[Éliciné] Tentative avec le modèle Groq : ${model}`);
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      console.log(`[Éliciné] Requête Groq via proxy serveur : ${model}`);
+      const response = await fetch('/api/groq', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey.trim()}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
         },
         body: JSON.stringify({
           model: model,
@@ -217,11 +215,11 @@ export async function fetchTmdbDetails(
     const endpoint = isTv ? 'tv' : 'movie';
     let match: any = null;
 
-    if (tmdbKey) {
-      // 1. Recherche ciblée sur l'endpoint dédié
-      const res = await fetch(
-        `https://api.themoviedb.org/3/search/${endpoint}?api_key=${tmdbKey}&query=${encodeURIComponent(item.title)}&language=${resolvedTmdbLang}`
-      );
+    // 1. Recherche ciblée sur l'endpoint dédié via proxy serveur /api/tmdb
+    try {
+      const searchEndpoint = `search/${endpoint}`;
+      const searchUrl = `/api/tmdb?endpoint=${encodeURIComponent(searchEndpoint)}&query=${encodeURIComponent(item.title)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+      const res = await fetch(searchUrl);
       if (res.ok) {
         const data = await res.json();
         match = data.results?.[0] || null;
@@ -229,14 +227,15 @@ export async function fetchTmdbDetails(
 
       // 2. Fallback multi au cas où le titre original est en anglais ou typé différemment
       if (!match) {
-        const fallbackRes = await fetch(
-          `https://api.themoviedb.org/3/search/multi?api_key=${tmdbKey}&query=${encodeURIComponent(item.title)}&language=${resolvedTmdbLang}`
-        );
+        const fallbackUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(item.title)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+        const fallbackRes = await fetch(fallbackUrl);
         if (fallbackRes.ok) {
           const fallbackData = await fallbackRes.json();
           match = fallbackData.results?.[0] || null;
         }
       }
+    } catch (e) {
+      console.warn('[Éliciné] Erreur enrichissement TMDB :', e);
     }
 
     const mediaType: 'FILM' | 'SÉRIE' = (match?.media_type === 'tv' || isTv) ? 'SÉRIE' : 'FILM';
@@ -419,7 +418,7 @@ export const AI_PROVIDERS = [
   {
     name: 'Llama 3.3 70B (Groq)',
     type: 'groq' as const,
-    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    endpoint: '/api/groq',
     model: 'llama-3.3-70b-versatile',
     keyStorage: 'elicine_groq_api_key'
   }
