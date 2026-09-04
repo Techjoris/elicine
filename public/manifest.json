@@ -6,11 +6,16 @@
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "fr-FR",
   "background_color": "#0a0a0c",
   "theme_color": "#0a0a0c",
-  "lang": "fr-FR",
   "categories": ["entertainment", "movies", "lifestyle"],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ec4e53d7",
   "icons": [
     {
       "src": "/icon-192.png",
