@@ -19,8 +19,7 @@ declare global {
   }
 }
 
-const DEFAULT_PAYPAL_BUSINESS = (import.meta as any).env?.VITE_PAYPAL_BUSINESS_ID || 'contact@elicine.com';
-const PAYPAL_ME_USERNAME = (import.meta as any).env?.VITE_PAYPAL_ME_USERNAME || '';
+const DEFAULT_PAYPAL_BUSINESS = (import.meta as any).env?.VITE_PAYPAL_BUSINESS_ID || 'ivanjoris959@gmail.com';
 
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenNotchPay }) => {
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
@@ -50,15 +49,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
   const handlePayPalCheckout = () => {
     const finalAmount = paypalAmount && Number(paypalAmount) > 0 ? Number(paypalAmount) : 5;
-
-    if (PAYPAL_ME_USERNAME) {
-      window.open(`https://paypal.me/${PAYPAL_ME_USERNAME}/${finalAmount}USD`, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    // URL standard de don PayPal avec montant dynamique
-    const donateUrl = `https://www.paypal.com/donate/?business=${encodeURIComponent(DEFAULT_PAYPAL_BUSINESS)}&amount=${finalAmount}&currency_code=USD`;
-    window.open(donateUrl, '_blank', 'noopener,noreferrer');
+    const businessEmail = DEFAULT_PAYPAL_BUSINESS;
+    const url = `https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=${encodeURIComponent(businessEmail)}&currency_code=USD&amount=${finalAmount}&item_name=Soutien+au+projet+Elicine`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
