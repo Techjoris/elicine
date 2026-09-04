@@ -22,12 +22,8 @@ declare global {
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenNotchPay }) => {
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
   const [cfaZone, setCfaZone] = useState<'XAF' | 'XOF'>('XAF');
-  const [paypalAmount, setPaypalAmount] = useState('5');
+  const [paypalAmount, setPaypalAmount] = useState<string>('5');
   const [freeAmount, setFreeAmount] = useState('500');
-  const [loadingPayPal, setLoadingPayPal] = useState(false);
-  const [paypalLoaded, setPaypalLoaded] = useState(false);
-  const [paypalError, setPaypalError] = useState(false);
-  const hasRenderedPayPal = useRef(false);
 
   // 1. Gestion de la fermeture par touche Échap (Escape) et verrouillage du défilement
   useEffect(() => {
@@ -49,106 +45,10 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
     };
   }, [isOpen, onClose]);
 
-  // 2. Cycle de vie et initialisation du SDK PayPal Hosted Buttons
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'paypal') {
-      hasRenderedPayPal.current = false;
-      return;
-    }
-
-    setLoadingPayPal(true);
-    setPaypalLoaded(false);
-    setPaypalError(false);
-
-    const tryRenderPayPal = () => {
-      const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
-      if (!container) return false;
-
-      if (window.paypal && window.paypal.HostedButtons) {
-        try {
-          container.innerHTML = "";
-          window.paypal.HostedButtons({
-            hostedButtonId: "F5HDRFLUH7YJN",
-          }).render("#paypal-container-F5HDRFLUH7YJN");
-          hasRenderedPayPal.current = true;
-          setPaypalLoaded(true);
-          setLoadingPayPal(false);
-          return true;
-        } catch (e) {
-          console.error("Erreur d'initialisation PayPal :", e);
-          setPaypalError(true);
-          setLoadingPayPal(false);
-          return true;
-        }
-      }
-      return false;
-    };
-
-    if (tryRenderPayPal()) return;
-
-    const interval = setInterval(() => {
-      if (tryRenderPayPal()) {
-        clearInterval(interval);
-      }
-    }, 250);
-
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      if (!hasRenderedPayPal.current) {
-        setLoadingPayPal(false);
-        setPaypalError(true);
-      }
-    }, 4000);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-    };
-  }, [isOpen, activeTab]);
-
-  // Synchronisation du montant avec les inputs internes éventuels du SDK PayPal
-  useEffect(() => {
-    const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
-    if (container) {
-      const input = container.querySelector('input');
-      if (input && input.value !== paypalAmount) {
-        input.value = paypalAmount;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    }
-  }, [paypalAmount, paypalLoaded]);
-
-  // Nettoyage actif de tout texte redondant ou compressé verticalement injecté par PayPal
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'paypal') return;
-
-    const cleanup = () => {
-      const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
-      if (container) {
-        const textElements = container.querySelectorAll('h1, h2, h3, h4, p, span, div');
-        textElements.forEach((el) => {
-          if (el.tagName !== 'IFRAME' && el.children.length === 0) {
-            const txt = el.textContent?.trim().toLowerCase() || '';
-            if (txt.includes('soutien') || txt.includes('éliciné')) {
-              (el as HTMLElement).style.display = 'none';
-            }
-          }
-        });
-      }
-    };
-
-    cleanup();
-    const observer = new MutationObserver(cleanup);
-    const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
-    if (container) {
-      observer.observe(container, { childList: true, subtree: true });
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [isOpen, activeTab, paypalLoaded]);
+  const handlePayPalCheckout = () => {
+    const amt = paypalAmount && Number(paypalAmount) > 0 ? paypalAmount : '5';
+    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+  };
 
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,17 +145,22 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
                 Montant de votre don
               </label>
-              <div className="relative flex items-center justify-center max-w-[200px] w-full mx-auto bg-slate-800/80 rounded-xl border border-white/10 px-4 py-2 focus-within:border-sky-500/50 transition-colors">
+              <div className="relative flex items-center justify-center max-w-[200px] w-full mx-auto bg-slate-800/80 rounded-xl border border-white/10 px-4 py-2.5 focus-within:border-sky-500 transition-colors">
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={paypalAmount}
-                  onChange={(e) => setPaypalAmount(e.target.value)}
+                  onChange={(e) => setPaypalAmount(e.target.value.replace(/\D/g, ''))}
+                  onBlur={() => {
+                    if (!paypalAmount || Number(paypalAmount) <= 0) {
+                      setPaypalAmount('5');
+                    }
+                  }}
                   placeholder="5"
-                  className="w-full bg-transparent text-center font-bold text-2xl text-white outline-none pr-2"
+                  className="w-full bg-transparent text-center font-black text-2xl text-white outline-none pr-2"
                 />
-                <span className="text-gray-400 font-semibold text-lg select-none flex-shrink-0">USD</span>
+                <span className="text-gray-400 font-bold text-lg select-none flex-shrink-0">USD</span>
               </div>
 
               {/* Boutons de montants rapides (3$, 5$, 10$, 25$) */}
@@ -277,7 +182,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               </div>
             </div>
 
-            {/* Texte explicatif avec conteneur garanti non-compressé */}
+            {/* Texte explicatif */}
             <p className="w-full text-center text-xs text-gray-400 my-4 px-2 leading-relaxed break-normal whitespace-normal">
               Votre contribution libre permet de financer les requêtes d'intelligence artificielle et l'hébergement.
             </p>
@@ -285,22 +190,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             {/* Section d'action PayPal */}
             <div className="w-full flex flex-col items-center gap-3 mt-4">
               {/* Bouton direct PayPal - Largeur complète, padding optimisé, action directe */}
-              <a
-                href="https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full max-w-sm py-3 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer select-none"
+              <button
+                type="button"
+                onClick={handlePayPalCheckout}
+                className="w-full max-w-sm py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 transition-all cursor-pointer select-none"
               >
                 <span>Faire un don avec</span>
-                <span className="italic font-black text-base">PayPal</span>
-                <span className="text-xs font-bold text-slate-800">({paypalAmount || 5} USD) →</span>
-              </a>
-
-              {/* Conteneur hébergé PayPal SDK (smart buttons) */}
-              <div 
-                id="paypal-container-F5HDRFLUH7YJN" 
-                className="w-full max-w-sm mx-auto flex flex-col items-center justify-center min-h-0"
-              />
+                <span className="italic font-black text-lg">PayPal</span>
+                <span className="text-sm font-bold text-slate-900">({paypalAmount || '5'} USD) →</span>
+              </button>
 
               <p className="w-full text-center text-[10px] text-slate-400">
                 Paiement sécurisé crypté SSL via les serveurs certifiés PayPal.
