@@ -51,6 +51,21 @@ export const TipModal: React.FC = () => {
       }
       setGeoLoading(false);
     });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsTipModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
   }, [isTipModalOpen]);
 
   if (!isTipModalOpen) return null;
@@ -124,27 +139,39 @@ export const TipModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
-      
-      <div className="relative w-full max-w-md rounded-3xl bg-[#0d1220] border border-orange-500/30 shadow-2xl overflow-hidden text-slate-100 p-6 sm:p-8 space-y-5">
-        
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setIsTipModalOpen(false);
+        }
+      }}
+    >
+      <div 
+        className="relative w-full max-w-md min-w-[320px] mx-4 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden text-slate-100 p-6 sm:p-7 space-y-5 z-50 my-auto"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <button
+          type="button"
           onClick={() => setIsTipModalOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all"
+          aria-label="Fermer"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white border border-white/10 hover:border-white/25 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
-          <X className="w-5 h-5" />
+          <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
 
         {/* Title */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 w-full">
           <div className="w-12 h-12 rounded-2xl bg-orange-600/20 text-orange-400 border border-orange-500/30 flex items-center justify-center mx-auto">
             <Coffee className="w-6 h-6" />
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">
             Soutenir <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">Éliciné</span>
           </h2>
-          <p className="text-xs text-slate-300">
-            Offrez un café aux développeurs pour financer les serveurs et requêtes IA haute précision.
+          <p className="text-xs text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
+            Offrez un café aux développeurs pour financer le développement indépendant et les serveurs IA d'Éliciné.
           </p>
           {/* Geo Badge */}
           {!geoLoading && geoCountry && (
