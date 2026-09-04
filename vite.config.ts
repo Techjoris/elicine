@@ -1,6 +1,7 @@
-import { defineConfig, loadEnv } from 'vite'
+﻿import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { pathToFileURL } from 'url'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -13,78 +14,91 @@ export default defineConfig(({ mode }) => {
         name: 'local-api-handlers',
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            if (req.url?.startsWith('/api/groq') && req.method === 'POST') {
-              let body = '';
-              req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-              req.on('end', async () => {
-                const apiKey = env.GROQ_API_KEY || env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
-                if (!apiKey) {
-                  res.statusCode = 500;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: 'Clé serveur GROQ manquante' }));
-                  return;
-                }
+            const url = new URL(req.url || '', 'http://localhost');
+            const pathname = url.pathname;
 
-                try {
-                  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${apiKey}`,
-                    },
-                    body,
-                  });
-                  const data = await groqRes.text();
-                  res.statusCode = groqRes.status;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(data);
-                } catch (err: any) {
-                  res.statusCode = 500;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: err.message }));
-                }
+            // Helper pour adapter req et res aux handlers Vercel
+            const adaptResponse = () => {
+              (res as any).status = (code: number) => {
+                res.statusCode = code;
+                return res;
+              };
+              (res as any).json = (data: any) => {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(data));
+              };
+            };
+
+            const getBody = (): Promise<any> => {
+              return new Promise((resolve) => {
+                let data = '';
+                req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+                req.on('end', () => {
+                  try {
+                    resolve(data ? JSON.parse(data) : {});
+                  } catch {
+                    resolve({});
+                  }
+                });
               });
-              return;
-            }
+            };
 
-            if (req.url?.startsWith('/api/tmdb')) {
-              const urlObj = new URL(req.url, 'http://localhost');
-              const endpoint = urlObj.searchParams.get('endpoint');
-              const apiKey = urlObj.searchParams.get('api_key') || env.TMDB_API_KEY || env.VITE_TMDB_API_KEY || process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
-
-              if (!apiKey) {
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: 'Clé serveur TMDB manquante' }));
-                return;
-              }
-
-              if (!endpoint) {
-                res.statusCode = 400;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: 'Paramètre endpoint manquant' }));
-                return;
-              }
-
-              urlObj.searchParams.delete('endpoint');
-              urlObj.searchParams.set('api_key', apiKey);
-              if (!urlObj.searchParams.has('language')) {
-                urlObj.searchParams.set('language', 'fr-FR');
-              }
-
+            // 1. ROUTE /api/ai ET /api/groq
+            if ((pathname === '/api/ai' || pathname === '/api/groq') && req.method === 'POST') {
+              adaptResponse();
+              (req as any).body = await getBody();
               try {
-                const tmdbUrl = `https://api.themoviedb.org/3/${endpoint}?${urlObj.searchParams.toString()}`;
-                const tmdbRes = await fetch(tmdbUrl);
-                const data = await tmdbRes.text();
-                res.statusCode = tmdbRes.status;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(data);
+                process.env.GROQ_API_KEY = env.GROQ_API_KEY || process.env.GROQ_API_KEY;
+                process.env.QWEN_API_KEY = env.QWEN_API_KEY || process.env.QWEN_API_KEY;
+                const fileUrl = pathToFileURL(path.resolve('./api/ai.js')).href;
+                const aiHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await aiHandler(req, res);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: err.message }));
+                return res.end(JSON.stringify({ error: err.message }));
               }
-              return;
+            }
+
+            // 2. ROUTE /api/tmdb
+            if (pathname === '/api/tmdb' && req.method === 'GET') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              try {
+                process.env.TMDB_API_KEY = env.TMDB_API_KEY || process.env.TMDB_API_KEY;
+                const fileUrl = pathToFileURL(path.resolve('./api/tmdb.js')).href;
+                const tmdbHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await tmdbHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
+            // 3. ROUTE /api/notchpay
+            if (pathname === '/api/notchpay') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                process.env.NOTCHPAY_SECRET_KEY = env.NOTCHPAY_SECRET_KEY || process.env.NOTCHPAY_SECRET_KEY;
+                process.env.NOTCHPAY_HASH_KEY = env.NOTCHPAY_HASH_KEY || process.env.NOTCHPAY_HASH_KEY;
+                process.env.VITE_NOTCHPAY_PUBLIC_KEY = env.VITE_NOTCHPAY_PUBLIC_KEY || process.env.VITE_NOTCHPAY_PUBLIC_KEY;
+                const fileUrl = pathToFileURL(path.resolve('./api/notchpay.js')).href;
+                const notchHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await notchHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
             }
 
             next();
@@ -107,4 +121,3 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
-

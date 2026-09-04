@@ -17,6 +17,7 @@ import {
   buildStreamingUrl 
 } from '../../services/streamingResolver';
 import { getCachedCountryCode } from '../../services/geoService';
+import { getVpnAffiliateUrl } from '../../config/affiliates';
 
 interface MovieCardProps {
   movie: Movie;
@@ -217,7 +218,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
                 <span className="text-xs">{streamingAction.marketFlag || '🇺🇸'}</span> {t.vpnNeededTitle} ({streamingAction.marketLabel || 'USA'})
               </span>
               <a
-                href={streamingAction.vpnUrl || 'https://nordvpn.com'}
+                href={streamingAction.vpnUrl || getVpnAffiliateUrl('nordvpn')}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
@@ -235,7 +236,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
                 return (
                   <a
                     key={p.id || idx}
-                    href={p.vpnUrl || streamingAction.vpnUrl || 'https://nordvpn.com'}
+                    href={p.vpnUrl || streamingAction.vpnUrl || getVpnAffiliateUrl('nordvpn')}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}

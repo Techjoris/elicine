@@ -5,7 +5,6 @@ import {
   FALLBACK_MOVIES 
 } from './tmdb';
 import { analyzeSearchIntent } from './searchRouterService';
-import { DEFAULT_QWEN_KEY } from './qwenService';
 import { unifiedAiSearch } from './unifiedAiSearch';
 
 export interface AIRecommendationResult {
@@ -84,17 +83,19 @@ export const askCinora = askCineIA;
  */
 async function callGroqApi(
   query: string,
-  apiKey: string,
-  model: string
+  apiKey?: string,
+  model?: string
 ): Promise<{ provider_used: string; movies: RawAiMovieItem[] }> {
-  const response = await fetch('/api/groq', {
+  const selectedModel = model || 'llama-3.3-70b-versatile';
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
     },
     body: JSON.stringify({
-      model,
+      provider: 'groq',
+      model: selectedModel,
       temperature: 0.2,
       messages: [
         { role: 'system', content: UNIFIED_SYSTEM_PROMPT },
@@ -106,63 +107,53 @@ async function callGroqApi(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Groq ${model} (${response.status}) : ${errText}`);
+    throw new Error(`Groq ${selectedModel} (${response.status}) : ${errText}`);
   }
 
   const data = await response.json();
   const rawText = data.choices?.[0]?.message?.content || '';
-  return parseUnifiedJsonResponse(rawText, `Llama 3.1 (Groq)`);
+  return parseUnifiedJsonResponse(rawText, `Llama 3.3 (Groq)`);
 }
 
 /**
- * Appel API Qwen (DashScope / Alibaba Cloud)
+ * Appel API Qwen sécurisé via le proxy serveur /api/ai
  */
 async function callQwenApi(
   query: string,
-  apiKey: string,
-  model: 'qwen-turbo' | 'qwen-plus'
+  apiKey?: string,
+  model: 'qwen-turbo' | 'qwen-plus' = 'qwen-plus'
 ): Promise<{ provider_used: string; movies: RawAiMovieItem[] }> {
-  const endpoints = [
-    'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
-    'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
-  ];
+  try {
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
+      },
+      body: JSON.stringify({
+        provider: 'qwen',
+        model,
+        messages: [
+          { role: 'system', content: UNIFIED_SYSTEM_PROMPT },
+          { role: 'user', content: query }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2
+      })
+    });
 
-  let lastError: Error | null = null;
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: UNIFIED_SYSTEM_PROMPT },
-            { role: 'user', content: query }
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.2
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        lastError = new Error(`Qwen ${model} (${response.status}): ${errText}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const rawText = data.choices?.[0]?.message?.content || '';
-      return parseUnifiedJsonResponse(rawText, model === 'qwen-turbo' ? 'Qwen Turbo (Alibaba)' : 'Qwen Plus (Alibaba)');
-    } catch (err: any) {
-      lastError = err;
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Qwen ${model} (${response.status}): ${errText}`);
     }
-  }
 
-  throw lastError || new Error(`Qwen ${model} indisponible`);
+    const data = await response.json();
+    const rawText = data.choices?.[0]?.message?.content || '';
+    return parseUnifiedJsonResponse(rawText, model === 'qwen-turbo' ? 'Qwen Turbo (Alibaba)' : 'Qwen Plus (Alibaba)');
+  } catch (err: any) {
+    console.warn('[Éliciné Qwen] Erreur proxy /api/ai :', err?.message || err);
+    throw err;
+  }
 }
 
 /**

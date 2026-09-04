@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ApiSettings } from '../../types';
-import { DEFAULT_QWEN_KEY } from '../../services/qwenService';
 
 export const APIKeysModal: React.FC = () => {
   const { 
@@ -24,8 +23,8 @@ export const APIKeysModal: React.FC = () => {
 
   const [formData, setFormData] = useState<ApiSettings>({
     ...apiSettings,
-    qwenApiKey: apiSettings.qwenApiKey || DEFAULT_QWEN_KEY,
-    preferredAiProvider: apiSettings.preferredAiProvider || 'qwen'
+    qwenApiKey: apiSettings.qwenApiKey || '',
+    preferredAiProvider: apiSettings.preferredAiProvider || 'groq'
   });
 
   // Sync state whenever modal opens or context changes
@@ -33,8 +32,8 @@ export const APIKeysModal: React.FC = () => {
     if (isApiSettingsModalOpen) {
       setFormData({
         ...apiSettings,
-        qwenApiKey: apiSettings.qwenApiKey || DEFAULT_QWEN_KEY,
-        preferredAiProvider: apiSettings.preferredAiProvider || 'qwen'
+        qwenApiKey: apiSettings.qwenApiKey || '',
+        preferredAiProvider: apiSettings.preferredAiProvider || 'groq'
       });
     }
   }, [isApiSettingsModalOpen, apiSettings]);

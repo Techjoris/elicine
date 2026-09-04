@@ -21,6 +21,7 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
 import { getMovieTrailer } from '../../services/tmdb';
+import { getVpnAffiliateUrl } from '../../config/affiliates';
 import { 
   getMediaProviders, 
   MediaProvidersResult 
@@ -404,7 +405,7 @@ export const MovieDetailModal: React.FC = () => {
                       </div>
                     </div>
                     <a
-                      href="https://nordvpn.com"
+                      href={getVpnAffiliateUrl('nordvpn')}
                       target="_blank"
                       rel="noreferrer"
                       className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold whitespace-nowrap shadow-md shadow-sky-500/20 text-center transition-all hover:scale-105 flex-shrink-0"

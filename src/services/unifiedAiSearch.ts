@@ -67,7 +67,6 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
     localStorage.getItem('cinéia_qwen_api_key') ||
     localStorage.getItem('qwen_api_key') ||
     apiSettings?.qwenApiKey ||
-    (import.meta as any).env?.VITE_QWEN_API_KEY ||
     ''
   ).trim();
 };
@@ -133,14 +132,15 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
 
   for (const model of ACTIVE_GROQ_MODELS) {
     try {
-      console.log(`[Éliciné] Requête Groq via proxy serveur : ${model}`);
-      const response = await fetch('/api/groq', {
+      console.log(`[Éliciné] Requête IA via proxy serveur /api/ai : ${model}`);
+      const response = await fetch('/api/ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
         },
         body: JSON.stringify({
+          provider: 'groq',
           model: model,
           messages: [
             { role: 'system', content: systemPrompt },
@@ -418,7 +418,7 @@ export const AI_PROVIDERS = [
   {
     name: 'Llama 3.3 70B (Groq)',
     type: 'groq' as const,
-    endpoint: '/api/groq',
+    endpoint: '/api/ai',
     model: 'llama-3.3-70b-versatile',
     keyStorage: 'elicine_groq_api_key'
   }

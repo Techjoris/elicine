@@ -181,59 +181,56 @@ export async function processNotchPayCheckout(params: {
     params.publicKey || 
     localStorage.getItem('cinéia_notch_pk') || 
     localStorage.getItem('cinéia_notch_key') || 
-    (import.meta as any).env?.VITE_NOTCHPAY_KEY || 
+    (import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || 
     ''
   ).trim();
 
-  if (resolvedPubKey && (resolvedPubKey.startsWith('pk.') || resolvedPubKey.startsWith('pk_'))) {
-    try {
-      // Build complete payload — no 'channels' field: let Notch Pay show all active payment methods
-      const payload: any = {
-        amount: Number(params.amount),
-        currency: params.currency === 'XAF' || params.currency === 'XOF' ? 'XAF' : params.currency,
-        email: params.email || 'client@cineai.app',
-        name: params.name || 'Cinéphile',
-        description: params.description || (type === 'pro' ? 'Abonnement Pass Pro CinéIA' : 'Pourboire CinéIA'),
-        callback: successCallbackUrl
-      };
+  try {
+    const payload: any = {
+      amount: Number(params.amount),
+      currency: params.currency === 'XAF' || params.currency === 'XOF' ? 'XAF' : params.currency,
+      email: params.email || 'client@elicine.app',
+      name: params.name || 'Cinéphile',
+      description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Pourboire Éliciné'),
+      callback: successCallbackUrl
+    };
 
-      console.log('[Notch Pay] Envoi du payload d\'initialisation :', payload);
+    console.log('[Notch Pay] Initialisation via proxy serveur /api/notchpay :', payload);
 
-      const res = await fetch('https://api.notchpay.co/payments/initialize', {
-        method: 'POST',
-        headers: {
-          'Authorization': resolvedPubKey,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+    const res = await fetch('/api/notchpay', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...(resolvedPubKey ? { 'x-public-key': resolvedPubKey } : {})
+      },
+      body: JSON.stringify(payload)
+    });
 
-      if (res.ok) {
-        const data = await res.json();
-        const authUrl = data.authorization_url || data.data?.authorization_url;
-        if (authUrl) {
-          console.log('[Notch Pay] Redirection vers authorization_url :', authUrl);
-          if (typeof window !== 'undefined') {
-            if (window.top) {
-              window.top.location.href = authUrl;
-            } else {
-              window.location.href = authUrl;
-            }
-            return { 
-              success: true, 
-              message: 'Redirection sécurisée vers Notch Pay...', 
-              paymentUrl: authUrl 
-            };
+    if (res.ok) {
+      const data = await res.json();
+      const authUrl = data.authorization_url || data.data?.authorization_url;
+      if (authUrl) {
+        console.log('[Notch Pay] Redirection vers authorization_url :', authUrl);
+        if (typeof window !== 'undefined') {
+          if (window.top) {
+            window.top.location.href = authUrl;
+          } else {
+            window.location.href = authUrl;
           }
+          return { 
+            success: true, 
+            message: 'Redirection sécurisée vers Notch Pay...', 
+            paymentUrl: authUrl 
+          };
         }
-      } else {
-        const errData = await res.text();
-        console.warn('[Notch Pay] Réponse API erreur :', res.status, errData);
       }
-    } catch (e) {
-      console.warn('[Notch Pay] Erreur d\'appel direct :', e);
+    } else {
+      const errData = await res.text();
+      console.warn('[Notch Pay] Réponse API erreur :', res.status, errData);
     }
+  } catch (e) {
+    console.warn('[Notch Pay] Erreur proxy paiement :', e);
   }
 
   // Simulation Sandbox / Démo

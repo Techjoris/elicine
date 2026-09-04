@@ -1,4 +1,5 @@
 import { detectProviderKey } from './tmdb';
+import { getVpnAffiliateUrl } from '../config/affiliates';
 
 export interface SvodProviderItem {
   name: string;
@@ -226,18 +227,19 @@ export const resolveStreamingAction = async (
     };
   }
   if (res.svod.status === 'vpn_needed') {
+    const affiliateVpnUrl = getVpnAffiliateUrl('nordvpn');
     return {
       type: 'VPN_REQUIRED' as const,
       marketLabel: res.svod.targetCountry || 'USA',
       marketFlag: res.svod.flag || '🇺🇸',
       marketCode: 'US',
-      vpnUrl: 'https://nordvpn.com',
+      vpnUrl: affiliateVpnUrl,
       providers: res.svod.providers.map((p, idx) => ({
         id: idx + 1,
         name: p.name,
         logo: p.logo,
         providerKey: detectProviderKey(p.name),
-        vpnUrl: 'https://nordvpn.com'
+        vpnUrl: affiliateVpnUrl
       }))
     };
   }
