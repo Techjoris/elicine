@@ -1,4 +1,4 @@
-﻿export default async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
@@ -21,7 +21,7 @@
   }
 
   searchParams.set('api_key', apiKey);
-  if (!searchParams.has('language')) {
+  if (!searchParams.has('language') && !searchParams.has('include_video_language')) {
     searchParams.set('language', params.language || 'fr-FR');
   }
 

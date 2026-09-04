@@ -275,59 +275,125 @@ export async function fetchMoviesByPlatform({
   }
 }
 
+/**
+ * Sélectionne le meilleur trailer YouTube selon la priorité linguistique et qualitative
+ */
+export function extractBestTrailer(videos: any[], userLang: string = 'fr'): string | null {
+  if (!Array.isArray(videos) || videos.length === 0) return null;
+
+  // Filtrer uniquement les vidéos hébergées sur YouTube avec une clé valide
+  const youtubeVideos = videos.filter((v: any) => v && (v.site === 'YouTube' || !v.site) && Boolean(v.key));
+  if (youtubeVideos.length === 0) return null;
+
+  const targetLang = (userLang || 'fr').toLowerCase().slice(0, 2);
+
+  // 1. Chercher un élément de type "Trailer" avec iso_639_1 === userLang (ex: 'fr')
+  const localizedTrailers = youtubeVideos.filter(
+    (v: any) => v.type === 'Trailer' && v.iso_639_1?.toLowerCase() === targetLang
+  );
+  if (localizedTrailers.length > 0) {
+    const bestOfficial = localizedTrailers.find((v: any) => v.official === true) || localizedTrailers[0];
+    if (bestOfficial?.key) return bestOfficial.key;
+  }
+
+  // 2. Si non trouvé, chercher un élément de type "Teaser" ou "Clip" avec iso_639_1 === userLang
+  const localizedTeasersOrClips = youtubeVideos.filter(
+    (v: any) => (v.type === 'Teaser' || v.type === 'Clip') && v.iso_639_1?.toLowerCase() === targetLang
+  );
+  if (localizedTeasersOrClips.length > 0) {
+    const bestTeaser = localizedTeasersOrClips.find((v: any) => v.official === true) || localizedTeasersOrClips[0];
+    if (bestTeaser?.key) return bestTeaser.key;
+  }
+
+  // 3. Si non trouvé, chercher un élément officiel de type "Trailer" avec iso_639_1 === 'en' (ou official === true)
+  const englishOfficialTrailer = youtubeVideos.find(
+    (v: any) => v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || !v.iso_639_1) && v.official === true
+  );
+  if (englishOfficialTrailer?.key) return englishOfficialTrailer.key;
+
+  const englishTrailer = youtubeVideos.find(
+    (v: any) => v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
+  );
+  if (englishTrailer?.key) return englishTrailer.key;
+
+  const anyTrailer = youtubeVideos.find((v: any) => v.type === 'Trailer');
+  if (anyTrailer?.key) return anyTrailer.key;
+
+  // 4. Si non trouvé, chercher un élément de type "Teaser" avec iso_639_1 === 'en'
+  const englishTeaser = youtubeVideos.find(
+    (v: any) => v.type === 'Teaser' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
+  );
+  if (englishTeaser?.key) return englishTeaser.key;
+
+  const anyTeaser = youtubeVideos.find((v: any) => v.type === 'Teaser');
+  if (anyTeaser?.key) return anyTeaser.key;
+
+  // 5. En dernier recours, prendre la première vidéo YouTube disponible dans le tableau
+  return youtubeVideos[0]?.key || null;
+}
+
 export async function getMovieTrailer(
   movieId: number,
   apiKey?: string,
-  mediaType?: 'FILM' | 'SÉRIE' | 'movie' | 'tv' | string
+  mediaType?: 'FILM' | 'SÉRIE' | 'movie' | 'tv' | string,
+  language?: string
 ): Promise<string | null> {
-  // Check known dictionary first
-  if (KNOWN_TRAILERS[movieId]) {
-    return KNOWN_TRAILERS[movieId];
-  }
+  const currentLang = language || (typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : null) || 'fr';
+  const targetLang = currentLang.toLowerCase().slice(0, 2);
 
   const isTv = mediaType === 'SÉRIE' || mediaType === 'tv';
   const typeEndpoint = isTv ? 'tv' : 'movie';
+  const includeLang = targetLang === 'en' ? 'en,null' : `${targetLang},en,null`;
 
   try {
-    // 1. Try French first
-    let res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}/videos`, { language: 'fr-FR' }, apiKey);
+    // 1. Requête vers l'endpoint TMDB avec include_video_language
+    let res = await fetchTmdbEndpoint(
+      `${typeEndpoint}/${movieId}/videos`, 
+      { include_video_language: includeLang }, 
+      apiKey
+    );
     let data = res.ok ? await res.json() : null;
+    let results = data?.results || [];
 
-    let youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
+    let key = extractBestTrailer(results, targetLang);
+    if (key) return key;
 
-    // 2. If no French trailer, fallback to English (US)
-    if (!youtubeVideos || youtubeVideos.length === 0) {
+    // 2. Fallback direct par langue si include_video_language n'a renvoyé aucune vidéo
+    if (results.length === 0) {
+      res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}/videos`, { language: `${targetLang}-${targetLang.toUpperCase()}` }, apiKey);
+      data = res.ok ? await res.json() : null;
+      results = data?.results || [];
+      key = extractBestTrailer(results, targetLang);
+      if (key) return key;
+
       res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}/videos`, { language: 'en-US' }, apiKey);
       data = res.ok ? await res.json() : null;
-      youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
+      results = data?.results || [];
+      key = extractBestTrailer(results, targetLang);
+      if (key) return key;
     }
 
-    // 3. Fallback across types if needed
-    if ((!youtubeVideos || youtubeVideos.length === 0) && !isTv) {
-      res = await fetchTmdbEndpoint(`tv/${movieId}/videos`, { language: 'en-US' }, apiKey);
-      data = res.ok ? await res.json() : null;
-      youtubeVideos = (data?.results || []).filter((v: any) => v.site === 'YouTube');
-    }
+    // 3. Fallback croisé movie vs tv
+    const altEndpoint = isTv ? 'movie' : 'tv';
+    res = await fetchTmdbEndpoint(
+      `${altEndpoint}/${movieId}/videos`, 
+      { include_video_language: includeLang }, 
+      apiKey
+    );
+    data = res.ok ? await res.json() : null;
+    results = data?.results || [];
+    key = extractBestTrailer(results, targetLang);
+    if (key) return key;
 
-    if (youtubeVideos && youtubeVideos.length > 0) {
-      const officialTrailer = youtubeVideos.find((v: any) => 
-        v.type === 'Trailer' && (v.official === true || /official|bande-annonce|trailer/i.test(v.name))
-      );
-      if (officialTrailer?.key) return officialTrailer.key;
-
-      const anyTrailer = youtubeVideos.find((v: any) => v.type === 'Trailer');
-      if (anyTrailer?.key) return anyTrailer.key;
-
-      const anyTeaser = youtubeVideos.find((v: any) => v.type === 'Teaser');
-      if (anyTeaser?.key) return anyTeaser.key;
-
-      return youtubeVideos[0]?.key || null;
+    // 4. Dictionnaire de secours si aucune vidéo n'est trouvée
+    if (KNOWN_TRAILERS[movieId]) {
+      return KNOWN_TRAILERS[movieId];
     }
 
     return null;
   } catch (error) {
     console.warn(`Error fetching trailer for movie ID ${movieId}:`, error);
-    return null;
+    return KNOWN_TRAILERS[movieId] || null;
   }
 }
 

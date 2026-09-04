@@ -40,7 +40,7 @@ export const MovieDetailModal: React.FC = () => {
     showToast 
   } = useApp();
 
-  const { t } = useTranslation();
+  const { lang, t } = useTranslation();
 
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export const MovieDetailModal: React.FC = () => {
   });
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
 
-  // Fetch dynamic trailer and watch providers whenever selectedMovie changes
+  // Fetch dynamic trailer and watch providers whenever selectedMovie or language changes
   useEffect(() => {
     if (!selectedMovie) {
       setTrailerKey(null);
@@ -72,7 +72,7 @@ export const MovieDetailModal: React.FC = () => {
     );
     const mediaTypeEndpoint = isTv ? 'tv' : 'movie';
 
-    getMovieTrailer(selectedMovie.id, apiSettings.tmdbApiKey, selectedMovie.media_type)
+    getMovieTrailer(selectedMovie.id, apiSettings.tmdbApiKey, selectedMovie.media_type, lang)
       .then((key) => {
         if (isMounted) {
           setTrailerKey(key);
@@ -110,7 +110,7 @@ export const MovieDetailModal: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedMovie?.id, selectedMovie?.media_type, selectedMovie?.title, apiSettings.tmdbApiKey]);
+  }, [selectedMovie?.id, selectedMovie?.media_type, selectedMovie?.title, apiSettings.tmdbApiKey, lang]);
 
   if (!selectedMovie) return null;
 
