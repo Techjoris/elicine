@@ -19,6 +19,9 @@ declare global {
   }
 }
 
+const DEFAULT_PAYPAL_BUSINESS = (import.meta as any).env?.VITE_PAYPAL_BUSINESS_ID || 'contact@elicine.com';
+const PAYPAL_ME_USERNAME = (import.meta as any).env?.VITE_PAYPAL_ME_USERNAME || '';
+
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenNotchPay }) => {
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
   const [cfaZone, setCfaZone] = useState<'XAF' | 'XOF'>('XAF');
@@ -46,8 +49,16 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   }, [isOpen, onClose]);
 
   const handlePayPalCheckout = () => {
-    const amt = paypalAmount && Number(paypalAmount) > 0 ? paypalAmount : '5';
-    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+    const finalAmount = paypalAmount && Number(paypalAmount) > 0 ? Number(paypalAmount) : 5;
+
+    if (PAYPAL_ME_USERNAME) {
+      window.open(`https://paypal.me/${PAYPAL_ME_USERNAME}/${finalAmount}USD`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // URL standard de don PayPal avec montant dynamique
+    const donateUrl = `https://www.paypal.com/donate/?business=${encodeURIComponent(DEFAULT_PAYPAL_BUSINESS)}&amount=${finalAmount}&currency_code=USD`;
+    window.open(donateUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
