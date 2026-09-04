@@ -122,7 +122,7 @@ export const AppContent: React.FC = () => {
         description,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
-        isTestMode: apiSettings.apiMode === 'test',
+        isTestMode: false,
         onSuccessRedirect: () => {
           showToast('Merci infiniment pour votre soutien ! ☕');
         }

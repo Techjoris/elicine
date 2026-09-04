@@ -112,7 +112,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const groq = localStorage.getItem('cinéia_groq_key') || '';
     const qwen = localStorage.getItem('cinéia_qwen_api_key') || localStorage.getItem('cinéia_qwen_key') || '';
     const preferredAi = (localStorage.getItem('cinéia_preferred_ai_provider') || 'groq') as 'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai';
-    const notchPk = localStorage.getItem('cinéia_notch_pk') || localStorage.getItem('cinéia_notch_key') || (import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || '';
+    const envNotchPk = ((import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || '').trim();
+    const storedNotchPk = (localStorage.getItem('cinéia_notch_pk') || localStorage.getItem('cinéia_notch_key') || '').trim();
+    const cleanStoredNotchPk = (storedNotchPk.startsWith('pk_test_') || storedNotchPk.startsWith('test_')) ? '' : storedNotchPk;
+    const notchPk = envNotchPk || cleanStoredNotchPk;
     const notchSk = localStorage.getItem('cinéia_notch_sk') || '';
     const notchHash = localStorage.getItem('cinéia_notch_hash') || localStorage.getItem('cinéia_notch_hash_key') || '';
 

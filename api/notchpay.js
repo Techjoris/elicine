@@ -1,8 +1,31 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
-  const secretKey = process.env.NOTCHPAY_SECRET_KEY || process.env.VITE_NOTCHPAY_PUBLIC_KEY;
+  // Priorité absolue aux variables d'environnement Live / Production NotchPay
+  const filterLiveKey = (key) => {
+    if (!key || typeof key !== 'string') return '';
+    const trimmed = key.trim();
+    if (trimmed.startsWith('pk_test_') || trimmed.startsWith('test_') || trimmed.startsWith('sk_test_')) return '';
+    return trimmed;
+  };
+
+  const secretKey = filterLiveKey(process.env.NOTCHPAY_SECRET_KEY) ||
+                    filterLiveKey(process.env.NOTCHPAY_PRIVATE_KEY) ||
+                    filterLiveKey(process.env.NOTCHPAY_PUBLIC_KEY) ||
+                    filterLiveKey(process.env.VITE_NOTCHPAY_SECRET_KEY) ||
+                    filterLiveKey(process.env.VITE_NOTCHPAY_PUBLIC_KEY) ||
+                    filterLiveKey(req.headers['x-public-key']) ||
+                    process.env.NOTCHPAY_SECRET_KEY ||
+                    process.env.NOTCHPAY_PRIVATE_KEY ||
+                    process.env.NOTCHPAY_PUBLIC_KEY ||
+                    process.env.VITE_NOTCHPAY_PUBLIC_KEY;
+
   const hashKey = process.env.NOTCHPAY_HASH_KEY;
+
+  if (process.env.NODE_ENV !== 'production') {
+    const keyPrefix = secretKey ? `${secretKey.slice(0, 8)}...` : '(non configurée)';
+    console.log(`[API NotchPay LIVE] Mode PRODUCTION forcé - Clé chargée : ${keyPrefix} | Base URL: https://api.notchpay.co/`);
+  }
 
   // 1. GET : Vérification sécurisée du statut d'une transaction
   if (req.method === 'GET') {

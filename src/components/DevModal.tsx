@@ -81,8 +81,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
         apiSettings.notchPayHashKey || 
         ''
       );
-      const savedMode = (localStorage.getItem('notch_mode') || localStorage.getItem('cinéia_api_mode') || apiSettings.apiMode || 'production');
-      setApiMode(savedMode === 'sandbox' || savedMode === 'test' ? 'test' : 'production');
+      setApiMode('production');
 
       setNordvpnUrl(
         localStorage.getItem('elicine_nordvpn_url') || 
@@ -139,9 +138,11 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
 
     localStorage.setItem('cinéia_preferred_ai_provider', preferredAi);
 
-    // 4. Sauvegarde NotchPay
-    const cleanNotchPk = notchPk.trim();
-    const cleanNotchSk = notchSk.trim();
+    // 4. Sauvegarde NotchPay (Mode Live obligatoire)
+    const rawNotchPk = notchPk.trim();
+    const rawNotchSk = notchSk.trim();
+    const cleanNotchPk = (rawNotchPk.startsWith('pk_test_') || rawNotchPk.startsWith('test_')) ? '' : rawNotchPk;
+    const cleanNotchSk = (rawNotchSk.startsWith('sk_test_') || rawNotchSk.startsWith('test_')) ? '' : rawNotchSk;
     const cleanNotchHash = notchHash.trim();
 
     if (cleanNotchPk) {
@@ -164,8 +165,8 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       localStorage.removeItem('cinéia_notch_hash');
     }
 
-    localStorage.setItem('notch_mode', apiMode);
-    localStorage.setItem('cinéia_api_mode', apiMode);
+    localStorage.setItem('notch_mode', 'production');
+    localStorage.setItem('cinéia_api_mode', 'production');
 
     // 5. Sauvegarde Liens Affiliation VPN
     if (nordvpnUrl.trim()) {
@@ -185,7 +186,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       notchPayPublicKey: cleanNotchPk,
       notchPaySecretKey: cleanNotchSk,
       notchPayHashKey: cleanNotchHash,
-      apiMode
+      apiMode: 'production'
     });
 
     setSavedToast(true);
@@ -360,52 +361,36 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
               2. Passerelle de Paiement NotchPay
             </h3>
 
-            {/* Mode Sandbox / Prod */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
-              <button
-                type="button"
-                onClick={() => setApiMode('production')}
-                className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
-                  apiMode === 'production' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
-                }`}
-              >
-                Production
-              </button>
-              <button
-                type="button"
-                onClick={() => setApiMode('test')}
-                className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
-                  apiMode === 'test' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-500'
-                }`}
-              >
-                Sandbox
-              </button>
+            {/* Mode Live forcé */}
+            <div className="flex items-center gap-1.5 bg-emerald-500/15 px-2.5 py-1 rounded-xl border border-emerald-500/30 text-[11px] font-bold text-emerald-400 select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE / PRODUCTION</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-[11px] font-semibold text-slate-400">
-                Clé Publique NotchPay (pk....)
+                Clé Publique NotchPay Live (pk.live....)
               </label>
               <input
                 type={showKeys ? 'text' : 'password'}
                 value={notchPk}
                 onChange={(e) => setNotchPk(e.target.value)}
-                placeholder="pk.live.... ou pk.test...."
+                placeholder="pk.live...."
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
               />
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-400">
-                Clé Secrète NotchPay (sk....)
+                Clé Secrète NotchPay Live (sk.live....)
               </label>
               <input
                 type={showKeys ? 'text' : 'password'}
                 value={notchSk}
                 onChange={(e) => setNotchSk(e.target.value)}
-                placeholder="sk.live.... ou sk.test...."
+                placeholder="sk.live...."
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
               />
             </div>

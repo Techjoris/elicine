@@ -1,4 +1,4 @@
-﻿import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { pathToFileURL } from 'url'
@@ -89,6 +89,8 @@ export default defineConfig(({ mode }) => {
               }
               try {
                 process.env.NOTCHPAY_SECRET_KEY = env.NOTCHPAY_SECRET_KEY || process.env.NOTCHPAY_SECRET_KEY;
+                process.env.NOTCHPAY_PRIVATE_KEY = env.NOTCHPAY_PRIVATE_KEY || process.env.NOTCHPAY_PRIVATE_KEY;
+                process.env.NOTCHPAY_PUBLIC_KEY = env.NOTCHPAY_PUBLIC_KEY || process.env.NOTCHPAY_PUBLIC_KEY;
                 process.env.NOTCHPAY_HASH_KEY = env.NOTCHPAY_HASH_KEY || process.env.NOTCHPAY_HASH_KEY;
                 process.env.VITE_NOTCHPAY_PUBLIC_KEY = env.VITE_NOTCHPAY_PUBLIC_KEY || process.env.VITE_NOTCHPAY_PUBLIC_KEY;
                 const fileUrl = pathToFileURL(path.resolve('./api/notchpay.js')).href;

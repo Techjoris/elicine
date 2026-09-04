@@ -33,7 +33,7 @@ export const ProModal: React.FC = () => {
         description: `Éliciné Pass Pro — Formule ${plan === 'yearly' ? 'Annuelle' : 'Mensuelle'} (Mobile Money NotchPay)`,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
-        isTestMode: apiSettings.apiMode === 'test',
+        isTestMode: false,
         onSuccessRedirect: () => upgradeToPro(plan as PricingBillingCycle)
       });
 

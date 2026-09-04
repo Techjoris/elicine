@@ -177,13 +177,32 @@ export async function processNotchPayCheckout(params: {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const successCallbackUrl = `${origin}/?payment=success&type=${type}`;
 
-  const resolvedPubKey = (
+  // Priorité absolue aux variables d'environnement Live de production
+  const envPubKey = (
+    (import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || 
+    (import.meta as any).env?.NEXT_PUBLIC_NOTCHPAY_PUBLIC_KEY || 
+    (import.meta as any).env?.NOTCHPAY_PUBLIC_KEY || 
+    ''
+  ).trim();
+
+  let resolvedPubKey = (
+    envPubKey ||
     params.publicKey || 
     localStorage.getItem('cinéia_notch_pk') || 
     localStorage.getItem('cinéia_notch_key') || 
-    (import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || 
     ''
   ).trim();
+
+  // Élimination stricte de toute clé de test / sandbox résiduelle
+  if (resolvedPubKey.startsWith('pk_test_') || resolvedPubKey.startsWith('test_')) {
+    resolvedPubKey = envPubKey;
+  }
+
+  // Log clair dans la console (mode DEV uniquement) confirmant le préfixe de la clé Live
+  if (import.meta.env?.DEV) {
+    const keyPrefix = resolvedPubKey ? `${resolvedPubKey.slice(0, 8)}...` : '(gérée par le serveur /api/notchpay)';
+    console.log(`[NotchPay LIVE] Mode PRODUCTION actif — Clé chargée : ${keyPrefix} | Sandbox : DÉSACTIVÉE`);
+  }
 
   try {
     const payload: any = {
@@ -194,8 +213,6 @@ export async function processNotchPayCheckout(params: {
       description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Pourboire Éliciné'),
       callback: successCallbackUrl
     };
-
-    console.log('[Notch Pay] Initialisation via proxy serveur /api/notchpay :', payload);
 
     const res = await fetch('/api/notchpay', {
       method: 'POST',
@@ -209,9 +226,11 @@ export async function processNotchPayCheckout(params: {
 
     if (res.ok) {
       const data = await res.json();
-      const authUrl = data.authorization_url || data.data?.authorization_url;
+      const authUrl = data.authorization_url || data.data?.authorization_url || data.transaction?.authorization_url;
       if (authUrl) {
-        console.log('[Notch Pay] Redirection vers authorization_url :', authUrl);
+        if (import.meta.env?.DEV) {
+          console.log('[NotchPay LIVE] Redirection vers authorization_url :', authUrl);
+        }
         if (typeof window !== 'undefined') {
           if (window.top) {
             window.top.location.href = authUrl;
@@ -225,23 +244,20 @@ export async function processNotchPayCheckout(params: {
           };
         }
       }
+      throw new Error("L'URL de paiement NotchPay n'a pas été reçue.");
     } else {
       const errData = await res.text();
-      console.warn('[Notch Pay] Réponse API erreur :', res.status, errData);
+      console.error('[NotchPay LIVE] Réponse API erreur :', res.status, errData);
+      return {
+        success: false,
+        message: "Échec de l'initialisation du paiement sécurisé NotchPay. Veuillez réessayer."
+      };
     }
-  } catch (e) {
-    console.warn('[Notch Pay] Erreur proxy paiement :', e);
+  } catch (e: any) {
+    console.error('[NotchPay LIVE] Erreur proxy paiement :', e?.message || e);
+    return {
+      success: false,
+      message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé NotchPay."
+    };
   }
-
-  // Simulation Sandbox / Démo
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        success: true,
-        message: params.paymentType === 'tip'
-          ? 'Merci infiniment pour votre pourboire (Mode Démo) !'
-          : `Paiement ${params.billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'} validé avec succès en Mode Démo !`
-      });
-    }, 1200);
-  });
 }

@@ -121,7 +121,7 @@ export const TipModal: React.FC = () => {
         description: `Pourboire Soutien CinéIA (${activeAmountFcfa} FCFA - ${channelMode === 'card' ? 'Carte Bancaire' : 'Mobile Money'})`,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
-        isTestMode: apiSettings.apiMode === 'test'
+        isTestMode: false
       });
 
       if (res.paymentUrl) {
