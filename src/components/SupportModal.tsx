@@ -119,6 +119,37 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
     }
   }, [paypalAmount, paypalLoaded]);
 
+  // Nettoyage actif de tout texte redondant ou compressé verticalement injecté par PayPal
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'paypal') return;
+
+    const cleanup = () => {
+      const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
+      if (container) {
+        const textElements = container.querySelectorAll('h1, h2, h3, h4, p, span, div');
+        textElements.forEach((el) => {
+          if (el.tagName !== 'IFRAME' && el.children.length === 0) {
+            const txt = el.textContent?.trim().toLowerCase() || '';
+            if (txt.includes('soutien') || txt.includes('éliciné')) {
+              (el as HTMLElement).style.display = 'none';
+            }
+          }
+        });
+      }
+    };
+
+    cleanup();
+    const observer = new MutationObserver(cleanup);
+    const container = document.getElementById("paypal-container-F5HDRFLUH7YJN");
+    if (container) {
+      observer.observe(container, { childList: true, subtree: true });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isOpen, activeTab, paypalLoaded]);
+
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(freeAmount);
@@ -150,7 +181,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       }}
     >
       <div 
-        className="relative w-full max-w-md min-w-[320px] mx-4 bg-slate-900 text-white rounded-2xl p-6 shadow-2xl border border-white/10 z-50 my-auto flex flex-col gap-5"
+        className="relative w-full max-w-md min-w-[320px] max-h-[90vh] overflow-y-auto mx-4 bg-slate-900 text-white rounded-2xl p-6 shadow-2xl border border-white/10 z-50 my-auto flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -208,7 +239,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
         {/* ONGLET 1 : PAYPAL (Bouton SDK & Fallback Direct) */}
         {activeTab === 'paypal' && (
-          <div className="w-full flex flex-col items-center text-center space-y-4 px-2 py-3 animate-in fade-in duration-150">
+          <div className="w-full flex flex-col items-center text-center animate-in fade-in duration-150">
             {/* Saisie du montant PayPal */}
             <div className="w-full flex flex-col items-center gap-2">
               <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
@@ -246,32 +277,32 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               </div>
             </div>
 
-            {loadingPayPal && (
-              <div className="w-full flex flex-col items-center justify-center gap-2 text-slate-400 text-xs py-2">
-                <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="w-full break-words text-center">Connexion sécurisée à PayPal...</span>
-              </div>
-            )}
+            {/* Texte explicatif avec conteneur garanti non-compressé */}
+            <p className="w-full text-center text-xs text-gray-400 my-4 px-2 leading-relaxed break-normal whitespace-normal">
+              Votre contribution libre permet de financer les requêtes d'intelligence artificielle et l'hébergement.
+            </p>
 
-            {/* Conteneur hébergé PayPal officiel */}
-            <div 
-              id="paypal-container-F5HDRFLUH7YJN" 
-              className={`w-full max-w-xs mx-auto flex flex-col items-center justify-center min-h-[48px] ${loadingPayPal ? 'hidden' : 'flex'}`}
-            />
-
-            {/* Bouton d'action directe PayPal de secours */}
-            <div className="w-full max-w-xs mx-auto flex flex-col items-center text-center space-y-2 pt-1">
+            {/* Section d'action PayPal */}
+            <div className="w-full flex flex-col items-center gap-3 mt-4">
+              {/* Bouton direct PayPal - Largeur complète, padding optimisé, action directe */}
               <a
                 href="https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 px-4 bg-[#ffc439] hover:bg-[#f2ba32] text-[#003087] font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                className="w-full max-w-sm py-3 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer select-none"
               >
                 <span>Faire un don avec</span>
                 <span className="italic font-black text-base">PayPal</span>
-                <span className="text-xs font-semibold text-slate-800">({paypalAmount || 5} USD) →</span>
+                <span className="text-xs font-bold text-slate-800">({paypalAmount || 5} USD) →</span>
               </a>
-              <p className="w-full break-words text-center text-[10px] text-slate-400">
+
+              {/* Conteneur hébergé PayPal SDK (smart buttons) */}
+              <div 
+                id="paypal-container-F5HDRFLUH7YJN" 
+                className="w-full max-w-sm mx-auto flex flex-col items-center justify-center min-h-0"
+              />
+
+              <p className="w-full text-center text-[10px] text-slate-400">
                 Paiement sécurisé crypté SSL via les serveurs certifiés PayPal.
               </p>
             </div>
