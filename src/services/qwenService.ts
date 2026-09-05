@@ -15,6 +15,7 @@ export async function fetchMoviesFromQwen(
 ): Promise<QwenRawMovie[]> {
   const customKey = (
     apiKey || 
+    localStorage.getItem('dashscope_api_key') ||
     localStorage.getItem('cinéia_qwen_api_key') || 
     localStorage.getItem('cinéia_qwen_key') || 
     localStorage.getItem('elicine_qwen_key') || 

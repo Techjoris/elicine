@@ -70,6 +70,7 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
     ).trim();
   }
   return (
+    localStorage.getItem('dashscope_api_key') ||
     localStorage.getItem('elicine_qwen_api_key') ||
     localStorage.getItem('cinora_qwen_api_key') ||
     localStorage.getItem('cinéia_qwen_api_key') ||

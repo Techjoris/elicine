@@ -15,14 +15,16 @@ export default async function handler(req, res) {
 
   // ─── Clés API ────────────────────────────────────────────────────────────────
   // Priorité : variable d'environnement générique AI_API_KEY,
-  // puis clé spécifique au provider, puis header Authorization du client.
+  // puis clés spécifiques au provider, puis header Authorization du client.
   const authHeader = req.headers.authorization || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
   // Qwen / DashScope (Alibaba Cloud)
   const qwenKey = (
-    process.env.AI_API_KEY        ||   // clé générique recommandée
-    process.env.QWEN_API_KEY      ||   // clé spécifique Qwen
+    process.env.AI_API_KEY          || 
+    process.env.DASHSCOPE_API_KEY   ||
+    process.env.QWEN_API_KEY        ||
+    process.env.VITE_DASHSCOPE_API_KEY ||
     (bearerToken.startsWith('sk-') ? bearerToken : '')
   ).trim();
 
