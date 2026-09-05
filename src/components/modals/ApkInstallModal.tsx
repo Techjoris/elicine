@@ -9,6 +9,7 @@ export const ApkInstallModal: React.FC = () => {
     setIsApkModalOpen, 
     canInstallPwa, 
     installPwa, 
+    triggerApkDownload,
     showToast 
   } = useApp();
 
@@ -19,14 +20,17 @@ export const ApkInstallModal: React.FC = () => {
 
     // Si ouvert sur Android, déclencher directement le téléchargement APK et fermer sans modal
     if (isAndroid) {
-      const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
-      const link = document.createElement('a');
-      link.href = apkUrl;
-      link.download = 'elicine.apk';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast("Téléchargement de l'application en cours...");
+      if (triggerApkDownload) {
+        triggerApkDownload();
+      } else {
+        const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
+        const link = document.createElement('a');
+        link.href = apkUrl;
+        link.setAttribute('download', 'elicine.apk');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
       setIsApkModalOpen(false);
       return;
     }

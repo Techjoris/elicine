@@ -53,18 +53,19 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
       }
     }
 
-    // CAS 2 : Android fallback (téléchargement direct APK sans modale)
+    // CAS 2 : Android fallback (téléchargement direct APK + bannière d'ouverture immédiate)
     if (isAndroid) {
-      if (appContext?.showToast) {
-        appContext.showToast("Téléchargement de l'application en cours...");
+      if (appContext?.triggerApkDownload) {
+        appContext.triggerApkDownload();
+      } else {
+        const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
+        const link = document.createElement('a');
+        link.href = apkUrl;
+        link.setAttribute('download', 'elicine.apk');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
-      const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
-      const link = document.createElement('a');
-      link.href = apkUrl;
-      link.download = 'elicine.apk';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
       return;
     }
 

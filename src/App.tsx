@@ -17,6 +17,7 @@ import { APIKeysModal } from './components/modals/APIKeysModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
+import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { DevModal } from './components/DevModal';
 import { SupportModal } from './components/SupportModal';
 import { processNotchPayCheckout } from './services/payment';
@@ -236,6 +237,7 @@ export const AppContent: React.FC = () => {
       <APIKeysModal />
       <AuthModal />
       <ApkInstallModal />
+      <ApkDownloadBanner />
       <DevModal
         isOpen={isDevModalOpen}
         onClose={() => setIsDevModalOpen(false)}

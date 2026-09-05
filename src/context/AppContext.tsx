@@ -84,6 +84,11 @@ interface AppContextType {
   // Toast / Feedback
   toastMessage: string | null;
   showToast: (msg: string) => void;
+
+  // APK Download Toast / Banner
+  showOpenInstallerToast: boolean;
+  setShowOpenInstallerToast: (show: boolean) => void;
+  triggerApkDownload: () => void;
 }
 
 const DEFAULT_USER: UserProfile = {
@@ -251,6 +256,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
+  };
+
+  // 10. APK Direct Download & Open Installer Toast
+  const [showOpenInstallerToast, setShowOpenInstallerToast] = useState(false);
+
+  const triggerApkDownload = () => {
+    const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
+    const link = document.createElement('a');
+    link.href = apkUrl;
+    link.setAttribute('download', 'elicine.apk');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setShowOpenInstallerToast(true);
   };
 
   // Sync to localStorage
@@ -595,7 +615,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         canInstallPwa,
         installPwa,
         toastMessage,
-        showToast
+        showToast,
+        showOpenInstallerToast,
+        setShowOpenInstallerToast,
+        triggerApkDownload
       }}
     >
       {children}
