@@ -116,6 +116,29 @@ export const MovieDetailModal: React.FC = () => {
     };
   }, [selectedMovie?.id, selectedMovie?.media_type, selectedMovie?.title, apiSettings.tmdbApiKey, lang, selectedMovie]);
 
+  // Handle hardware back button (Android) or swipe back to close modal
+  useEffect(() => {
+    if (!selectedMovie) return;
+
+    // Push a dummy state to intercept the next back navigation
+    window.history.pushState({ modal: 'MovieDetailModal' }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      // The user pressed Back. Close the modal instead of going back in history.
+      setSelectedMovie(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      // Clean up the dummy state we pushed, if the modal closes by other means
+      if (window.history.state?.modal === 'MovieDetailModal') {
+        window.history.back();
+      }
+    };
+  }, [selectedMovie, setSelectedMovie]);
+
   if (!selectedMovie) return null;
 
   const inWatchlist = isInWatchlist(selectedMovie.id);
@@ -158,15 +181,28 @@ export const MovieDetailModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto bg-black/80 backdrop-blur-md animate-fade-in">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 overflow-y-auto bg-black/80 backdrop-blur-md animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setSelectedMovie(null);
+        }
+      }}
+    >
       
       {/* Modal Card */}
-      <div className="relative w-full max-w-4xl rounded-3xl bg-[#0e1424] border border-white/15 shadow-2xl overflow-hidden text-slate-100 max-h-[92vh] flex flex-col">
+      <div 
+        className="relative w-full max-w-4xl min-h-screen sm:min-h-0 sm:max-h-[92vh] rounded-none sm:rounded-3xl bg-[#0e1424] border-0 sm:border border-white/15 shadow-2xl overflow-hidden text-slate-100 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Close Button */}
         <button
-          onClick={() => setSelectedMovie(null)}
-          className="absolute top-4 right-4 z-20 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 transition-all hover:scale-105"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedMovie(null);
+          }}
+          className="absolute top-3 right-3 z-50 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 shadow-lg active:scale-95 transition-all"
           title="Fermer"
         >
           <X className="w-5 h-5" />
