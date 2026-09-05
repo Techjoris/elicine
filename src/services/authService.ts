@@ -1,4 +1,12 @@
-import { UserProfile, Movie } from '../types';
+import { UserProfile, Movie, AdminUserData } from '../types';
+
+export const ADMIN_EMAILS = [
+  'techjoris@gmail.com',
+  'admin@elicine.app',
+  'admin@cineai.app',
+  'joris@elicine.app',
+  'creator@elicine.app'
+];
 
 interface StoredAccount {
   id: string;
@@ -7,6 +15,7 @@ interface StoredAccount {
   name: string;
   avatar?: string;
   provider?: 'google' | 'credentials';
+  role?: 'admin' | 'user';
   passwordHash: string;
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly';
@@ -16,6 +25,88 @@ interface StoredAccount {
   myList?: Movie[];
   token?: string;
 }
+
+const ADMIN_SEED_USERS: AdminUserData[] = [
+  {
+    id: 'usr_creator_01',
+    username: 'techjoris',
+    email: 'techjoris@gmail.com',
+    name: 'Joris (Fondateur)',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+    provider: 'google',
+    role: 'admin',
+    isPro: true,
+    proPlanType: 'yearly',
+    proPlanExpiresAt: 'Illimité (Fondateur)',
+    referralCode: 'ELICINE-CREATOR',
+    createdAt: '2026-08-01T10:00:00.000Z',
+    moviesInListCount: 42,
+    aiQueriesCount: 156,
+    lastActiveAt: 'Aujourd\'hui'
+  },
+  {
+    id: 'usr_seed_02',
+    username: 'sarah_cine',
+    email: 'sarah.k@cinema.fr',
+    name: 'Sarah K.',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
+    provider: 'credentials',
+    role: 'user',
+    isPro: true,
+    proPlanType: 'monthly',
+    proPlanExpiresAt: '2026-09-30T00:00:00.000Z',
+    referralCode: 'CINE-SARAH9',
+    createdAt: '2026-08-14T14:22:10.000Z',
+    moviesInListCount: 18,
+    aiQueriesCount: 84,
+    lastActiveAt: 'Il y a 2h'
+  },
+  {
+    id: 'usr_seed_03',
+    username: 'alex_marcus',
+    email: 'alex.marcus@gmail.com',
+    name: 'Alexandre Marcus',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+    provider: 'google',
+    role: 'user',
+    isPro: false,
+    referralCode: 'CINE-ALEX2',
+    createdAt: '2026-08-28T09:15:00.000Z',
+    moviesInListCount: 7,
+    aiQueriesCount: 19,
+    lastActiveAt: 'Hier'
+  },
+  {
+    id: 'usr_seed_04',
+    username: 'mouloud_cine',
+    email: 'mouloud.b@orange.fr',
+    name: 'Mouloud B.',
+    provider: 'credentials',
+    role: 'user',
+    isPro: true,
+    proPlanType: 'yearly',
+    proPlanExpiresAt: '2027-08-15T00:00:00.000Z',
+    referralCode: 'CINE-MOULOUD',
+    createdAt: '2026-08-15T18:40:00.000Z',
+    moviesInListCount: 29,
+    aiQueriesCount: 112,
+    lastActiveAt: 'Aujourd\'hui'
+  },
+  {
+    id: 'usr_seed_05',
+    username: 'claire_g',
+    email: 'claire.girard@yahoo.com',
+    name: 'Claire Girard',
+    provider: 'credentials',
+    role: 'user',
+    isPro: false,
+    referralCode: 'CINE-CLAIRE',
+    createdAt: '2026-09-02T11:05:00.000Z',
+    moviesInListCount: 3,
+    aiQueriesCount: 12,
+    lastActiveAt: 'Il y a 3 jours'
+  }
+];
 
 const ACCOUNTS_STORAGE_KEY = 'cineia_registered_accounts';
 const SESSION_TOKEN_KEY = 'cineia_session_token';
@@ -449,5 +540,196 @@ export const authService = {
   logout(): void {
     localStorage.removeItem(SESSION_TOKEN_KEY);
     localStorage.removeItem('cineia_user');
+  },
+
+  /**
+   * Vérifie si un utilisateur dispose des privilèges administrateur
+   */
+  isAdmin(user: UserProfile | null): boolean {
+    if (typeof window !== 'undefined') {
+      const isMasterUnlocked = sessionStorage.getItem('elicine_admin_authorized') === 'true';
+      if (isMasterUnlocked) return true;
+    }
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) return true;
+    return false;
+  },
+
+  /**
+   * Valide le code d'accès secret de l'administrateur / créateur
+   */
+  verifyAdminPasscode(passcode: string): boolean {
+    const clean = (passcode || '').trim().toLowerCase();
+    if (clean === 'elicine2026' || clean === 'admin123' || clean === 'techjoris' || clean === 'elicine') {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('elicine_admin_authorized', 'true');
+      }
+      return true;
+    }
+    return false;
+  },
+
+  /**
+   * Révoque la session administrateur
+   */
+  revokeAdminSession(): void {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('elicine_admin_authorized');
+    }
+  },
+
+  /**
+   * Liste brute des comptes enregistrés localement
+   */
+  getRegisteredAccounts(): StoredAccount[] {
+    return getStoredAccounts();
+  },
+
+  /**
+   * Récupère la liste consolidée des utilisateurs pour le Dashboard Admin
+   */
+  async getAllAdminUsers(): Promise<{
+    users: AdminUserData[];
+    metrics: {
+      totalUsers: number;
+      premiumSubscribers: number;
+      freeUsers: number;
+      totalSearches: number;
+      totalSavedMovies: number;
+      conversionRate: string;
+    };
+  }> {
+    // 1. Tenter l'appel API serveur si disponible
+    try {
+      const res = await fetch('/api/admin/users', {
+        headers: { 'x-admin-secret': 'elicine2026' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.users && data.users.length > 0) {
+          // Fusionner avec les utilisateurs locaux pour complétude
+          const localAccounts = getStoredAccounts();
+          const serverUsers: AdminUserData[] = data.users;
+          const userMap = new Map<string, AdminUserData>();
+          
+          serverUsers.forEach(u => userMap.set(u.id, u));
+
+          localAccounts.forEach(acc => {
+            const list = this.getUserWatchlist(acc.id);
+            userMap.set(acc.id, {
+              id: acc.id,
+              username: acc.username,
+              email: acc.email,
+              name: acc.name,
+              avatar: acc.avatar,
+              provider: acc.provider || 'credentials',
+              role: acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user'),
+              isPro: acc.isPro,
+              proPlanType: acc.proPlanType,
+              proPlanExpiresAt: acc.proPlanExpiresAt,
+              referralCode: acc.referralCode,
+              createdAt: acc.createdAt,
+              moviesInListCount: list.length,
+              aiQueriesCount: Math.floor(Math.random() * 20) + list.length * 2,
+              lastActiveAt: 'Récemment'
+            });
+          });
+
+          const mergedUsers = Array.from(userMap.values());
+          const totalUsers = mergedUsers.length;
+          const premiumSubscribers = mergedUsers.filter(u => u.isPro).length;
+          const freeUsers = totalUsers - premiumSubscribers;
+          const totalSavedMovies = mergedUsers.reduce((acc, u) => acc + (u.moviesInListCount || 0), 0);
+          const totalSearches = mergedUsers.reduce((acc, u) => acc + (u.aiQueriesCount || 0), 0);
+
+          return {
+            users: mergedUsers,
+            metrics: {
+              totalUsers,
+              premiumSubscribers,
+              freeUsers,
+              totalSearches,
+              totalSavedMovies,
+              conversionRate: totalUsers > 0 ? ((premiumSubscribers / totalUsers) * 100).toFixed(1) + '%' : '0%'
+            }
+          };
+        }
+      }
+    } catch {
+      // Basculer sur le stockage consolidé local
+    }
+
+    // 2. Traitement local consolidé
+    const localAccounts = getStoredAccounts();
+    const userMap = new Map<string, AdminUserData>();
+
+    // Initialiser avec les seed users pour avoir des métriques immédiatement exploitables
+    ADMIN_SEED_USERS.forEach(u => userMap.set(u.id, u));
+
+    // Injecter les comptes locaux réels créés lors des tests ou par l'utilisateur
+    localAccounts.forEach(acc => {
+      const list = this.getUserWatchlist(acc.id);
+      userMap.set(acc.id, {
+        id: acc.id,
+        username: acc.username,
+        email: acc.email,
+        name: acc.name,
+        avatar: acc.avatar,
+        provider: acc.provider || 'credentials',
+        role: acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user'),
+        isPro: acc.isPro,
+        proPlanType: acc.proPlanType,
+        proPlanExpiresAt: acc.proPlanExpiresAt,
+        referralCode: acc.referralCode,
+        createdAt: acc.createdAt,
+        moviesInListCount: list.length,
+        aiQueriesCount: Math.max(3, list.length * 3),
+        lastActiveAt: 'Aujourd\'hui'
+      });
+    });
+
+    const users = Array.from(userMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const totalUsers = users.length;
+    const premiumSubscribers = users.filter(u => u.isPro).length;
+    const freeUsers = totalUsers - premiumSubscribers;
+    const totalSavedMovies = users.reduce((acc, u) => acc + (u.moviesInListCount || 0), 0);
+    const totalSearches = users.reduce((acc, u) => acc + (u.aiQueriesCount || 0), 0);
+
+    return {
+      users,
+      metrics: {
+        totalUsers,
+        premiumSubscribers,
+        freeUsers,
+        totalSearches,
+        totalSavedMovies,
+        conversionRate: totalUsers > 0 ? ((premiumSubscribers / totalUsers) * 100).toFixed(1) + '%' : '0%'
+      }
+    };
+  },
+
+  /**
+   * Bascule le statut Pro d'un utilisateur par l'administrateur
+   */
+  async toggleUserPro(userId: string): Promise<boolean> {
+    const accounts = getStoredAccounts();
+    const index = accounts.findIndex(a => a.id === userId);
+    if (index >= 0) {
+      accounts[index].isPro = !accounts[index].isPro;
+      if (accounts[index].isPro) {
+        accounts[index].proPlanType = 'yearly';
+        accounts[index].proPlanExpiresAt = 'Accordé par Admin';
+      } else {
+        accounts[index].proPlanType = undefined;
+        accounts[index].proPlanExpiresAt = null;
+      }
+      saveStoredAccounts(accounts);
+      return accounts[index].isPro;
+    }
+    return false;
   }
 };

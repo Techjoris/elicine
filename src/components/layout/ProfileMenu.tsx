@@ -7,9 +7,11 @@ import {
   LogIn, 
   ChevronDown,
   User,
-  Heart
+  Heart,
+  Shield
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { authService } from '../../services/authService';
 
 interface ProfileMenuProps {
   onOpenSettings: () => void;
@@ -127,6 +129,21 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               >
                 <User className="w-3.5 h-3.5 text-cyan-400" />
                 <span className="font-semibold">Mon Profil</span>
+              </button>
+            )}
+
+            {/* 🛡️ Console Administrateur (Visible pour créateur/admin) */}
+            {authService.isAdmin(user) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setActiveView('admin');
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 transition-colors text-left cursor-pointer font-bold border border-cyan-500/20"
+              >
+                <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Console Admin</span>
               </button>
             )}
 

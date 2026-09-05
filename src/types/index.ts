@@ -54,6 +54,7 @@ export interface UserProfile {
   username?: string;
   avatar?: string;
   provider?: 'google' | 'credentials';
+  role?: 'admin' | 'user';
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly';
   proPlanExpiresAt?: string | null;
@@ -62,6 +63,24 @@ export interface UserProfile {
   createdAt: string;
   myList?: Movie[];
   token?: string;
+}
+
+export interface AdminUserData {
+  id: string;
+  username?: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  provider?: 'google' | 'credentials';
+  role?: 'admin' | 'user';
+  isPro: boolean;
+  proPlanType?: 'monthly' | 'yearly';
+  proPlanExpiresAt?: string | null;
+  referralCode: string;
+  createdAt: string;
+  moviesInListCount: number;
+  aiQueriesCount: number;
+  lastActiveAt?: string;
 }
 
 export interface ApiSettings {
@@ -130,4 +149,4 @@ export interface SearchHistoryItem {
   mood?: string;
 }
 
-export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist';
+export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin';

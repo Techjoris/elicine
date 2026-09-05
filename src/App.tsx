@@ -8,6 +8,7 @@ import { CatalogView } from './components/views/CatalogView';
 import { PlatformsView } from './components/views/PlatformsView';
 import { WatchlistView } from './components/views/WatchlistView';
 import { AlertsView } from './components/views/AlertsView';
+import { AdminView } from './components/views/AdminView';
 
 // Modals
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
@@ -113,6 +114,28 @@ export const AppContent: React.FC = () => {
     }
   }, [activeView, setSelectedMovie, setActiveView, showToast]);
 
+  // Interception de l'URL /admin, #admin ou ?view=admin
+  useEffect(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const search = window.location.search.toLowerCase();
+
+    if (path === '/admin' || hash === '#admin' || search.includes('view=admin')) {
+      setActiveView('admin');
+    }
+  }, [setActiveView]);
+
+  // Synchronisation de l'URL avec activeView
+  useEffect(() => {
+    if (activeView === 'admin') {
+      if (window.location.pathname !== '/admin') {
+        window.history.pushState(null, '', '/admin');
+      }
+    } else if (window.location.pathname === '/admin') {
+      window.history.pushState(null, '', '/');
+    }
+  }, [activeView]);
+
   const handleSupportNotchPay = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
       const result = await processNotchPayCheckout({
@@ -216,6 +239,7 @@ export const AppContent: React.FC = () => {
           {activeView === 'platforms' && <PlatformsView />}
           {activeView === 'watchlist' && <WatchlistView />}
           {activeView === 'alerts' && <AlertsView />}
+          {activeView === 'admin' && <AdminView />}
 
         </main>
       </div>
