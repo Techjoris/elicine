@@ -18,8 +18,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
     setIsAuthModalOpen,
     setIsProModalOpen,
     setIsTipModalOpen,
-    setIsApiSettingsModalOpen,
-    hasApiKeysConfigured,
     setActiveView,
     isMobileMenuOpen,
     setIsMobileMenuOpen
@@ -30,17 +28,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
 
   return (
     <div className="sticky top-0 z-40 w-full flex flex-col">
-      {/* ⚠️ Discreet API Keys Missing Banner */}
-      {!hasApiKeysConfigured && (
-        <div 
-          onClick={() => setIsApiSettingsModalOpen(true)}
-          className="w-full bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-center text-xs font-semibold text-amber-300 hover:bg-amber-500/20 cursor-pointer transition-all flex items-center justify-center gap-2 select-none"
-        >
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 animate-pulse" />
-          <span>⚠️ Clés API non configurées : Cliquez pour activer la recherche TMDB et IA en direct</span>
-        </div>
-      )}
-
       {/* Main Top Navbar - Ultra Épurée */}
       <header className="h-16 w-full flex items-center justify-between md:justify-end px-4 sm:px-6 lg:px-8 bg-transparent backdrop-blur-md relative z-30 transition-all">
         {/* Mobile-only Controls (Hamburger + Logo when sidebar is hidden) */}
@@ -87,7 +74,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
               onOpenSettings={handleOpenSettings}
               onOpenPro={() => setIsProModalOpen(true)}
               onOpenTip={() => setIsTipModalOpen(true)}
-              onOpenApiKeys={() => setIsApiSettingsModalOpen(true)}
             />
           ) : (
             <button

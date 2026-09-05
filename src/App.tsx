@@ -14,7 +14,6 @@ import { AdminView } from './components/views/AdminView';
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
 import { ProModal } from './components/modals/ProModal';
 import { TipModal } from './components/modals/TipModal';
-import { APIKeysModal } from './components/modals/APIKeysModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
@@ -258,7 +257,6 @@ export const AppContent: React.FC = () => {
       <MovieDetailModal />
       <ProModal />
       <TipModal />
-      <APIKeysModal />
       <AuthModal />
       <ApkInstallModal />
       <ApkDownloadBanner />

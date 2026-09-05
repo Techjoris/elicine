@@ -108,8 +108,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
     useAiQuota,
     apiSettings,
     addHistoryItem,
-    showToast,
-    setIsApiSettingsModalOpen
+    showToast
   } = useApp();
 
   const { t } = useTranslation();
@@ -338,10 +337,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
               <span className="line-clamp-1">{errorMessage}</span>
             </div>
             <button
-              onClick={() => setIsApiSettingsModalOpen(true)}
-              className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer"
+              onClick={() => setErrorMessage(null)}
+              className="px-2.5 py-1 rounded-lg bg-red-900/60 hover:bg-red-800 text-white text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer"
             >
-              ⚙️ Clés API
+              Fermer
             </button>
           </div>
         )}

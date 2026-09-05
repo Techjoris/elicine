@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Crown, 
   Coffee, 
-  Key, 
   LogOut, 
   LogIn, 
   ChevronDown,
@@ -17,16 +16,15 @@ interface ProfileMenuProps {
   onOpenSettings: () => void;
   onOpenPro: () => void;
   onOpenTip: () => void;
-  onOpenApiKeys: () => void;
+  onOpenApiKeys?: () => void;
 }
 
 export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenSettings,
   onOpenPro,
-  onOpenTip,
-  onOpenApiKeys
+  onOpenTip
 }) => {
-  const { user, quota, logout, setIsAuthModalOpen, hasApiKeysConfigured, setActiveView, watchlist } = useApp();
+  const { user, quota, logout, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -206,23 +204,6 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               <span className="font-medium">Soutenir le projet</span>
             </button>
 
-            {/* 🔑 Clés API */}
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onOpenApiKeys();
-              }}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 transition-colors text-left cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5">
-                <Key className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-medium">Configuration Clés API</span>
-              </div>
-              {!hasApiKeysConfigured && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              )}
-            </button>
 
             <div className="my-1 border-t border-slate-800/80" />
 
