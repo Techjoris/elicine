@@ -665,7 +665,7 @@ export async function testAiApiKey(provider: 'groq' | 'openai', key?: string): P
   }
 }
 
-function formatTmdbResults(results: any[]): Movie[] {
+export function formatTmdbResults(results: any[]): Movie[] {
   if (!results || !Array.isArray(results)) return [];
 
   return results.map((item) => ({

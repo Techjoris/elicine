@@ -1,5 +1,5 @@
 import { Movie, ApiSettings } from '../types';
-import { searchMoviesTmdb, getWatchProviders, GENRE_MAP } from './tmdb';
+import { searchMoviesTmdb, formatTmdbResults } from './tmdb';
 import { analyzeSearchIntent } from './searchRouterService';
 
 export interface RawAiMovieItem {
@@ -28,7 +28,6 @@ export const ACTIVE_GROQ_MODELS = [
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
 ];
-
 export const GROQ_MODELS = ACTIVE_GROQ_MODELS;
 
 /**
@@ -39,9 +38,6 @@ export const ACTIVE_QWEN_MODELS = [
   'qwen2.5-72b-instruct',
 ];
 
-/**
- * RÉCUPÉRATION SÉCURISÉE DE LA CLÉ GROQ
- */
 export const getGroqKey = (apiSettings?: ApiSettings): string => {
   return (
     localStorage.getItem('groq_api_key') ||
@@ -81,45 +77,15 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
 };
 
 /**
- * 1. NOUVEAU SYSTEM PROMPT AVEC DÉTECTION D'INTENTION (Films vs Séries)
+ * 1. QUERY AI (Groq first, fallback Qwen)
+ * Prompt épuré : "Liste 5 films pour: [query]. Réponds UNIQUEMENT avec les titres séparés par des virgules."
  */
-export async function queryGroq(
-  userQuery: string, 
-  apiKey?: string,
-  aiPromptLang?: string
-): Promise<RawAiMovieItem[]> {
-  const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
-  const resolvedAiPromptLang = aiPromptLang || (
-    currentLang === 'en' 
-      ? 'Respond STRICTLY in English for movie summaries and reasons.' 
-      : currentLang === 'es' 
-        ? 'Responde ESTRICTAMENTE en español para los resúmenes y motivos.' 
-        : 'Réponds STRICTEMENT en français pour les descriptions et raisons.'
-  );
+export async function queryAiTitles(query: string, apiKey?: string): Promise<{ titles: string[]; provider: string }> {
+  const prompt = `Liste 5 films pour: ${query}. Réponds UNIQUEMENT avec les titres séparés par des virgules.`;
 
-  const aiTone = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_ai_curation') : null;
-  let curationInstruction = '';
-  if (aiTone === 'popular') {
-    curationInstruction = '\nDIRECTIVE DE CURATION :\nPrivilégie les films et séries acclamés par le grand public et très connus.';
-  } else if (aiTone === 'auteur') {
-    curationInstruction = "\nDIRECTIVE DE CURATION :\nPrivilégie les pépites méconnues, le cinéma d'auteur et les œuvres cultes indépendantes.";
-  }
-
-  const safeSearch = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_safe_search') === 'true' : false;
-  const safeInstruction = safeSearch ? '\nCONTRÔLE PARENTAL ACTIF :\nExclus impérativement tout contenu classé pour adultes, explicite ou ultra-violent.' : '';
-
-  const systemPrompt = `Tu es le moteur de recommandation de films d'Éliciné.
-Pour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 5 à 8 titres de films ou séries exacts et pertinents.
-Exemple de format attendu :
-{
-  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]
-}`;
-
-  let lastError: Error | null = null;
-
+  // TENTATIVE 1 : GROQ (Llama 3.3 70B / 8B Instant)
   for (const model of ACTIVE_GROQ_MODELS) {
     try {
-      console.log(`[Éliciné] Requête IA via proxy serveur /api/ai : ${model}`);
       const response = await fetch('/api/ai', {
         method: 'POST',
         headers: {
@@ -130,164 +96,29 @@ Exemple de format attendu :
           provider: 'groq',
           model: model,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userQuery }
+            { role: 'user', content: prompt }
           ],
-          response_format: { type: "json_object" },
           temperature: 0.2,
-          max_tokens: 600
+          max_tokens: 200
         })
       });
 
-      // Si le modèle est obsolète (400) ou introuvable (404), passer au suivant
-      if (response.status === 400 || response.status === 404) {
-        const warnText = await response.text();
-        console.warn(`[Éliciné] Modèle ${model} indisponible (${response.status}), passage au suivant...`, warnText);
-        continue;
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data.choices?.[0]?.message?.content || '';
+        const titles = extractTitlesFromText(rawText);
+        if (titles.length > 0) {
+          return { titles, provider: `Groq (${model})` };
+        }
       }
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errText}`);
-      }
-
-      const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content || '';
-      const movies = extractRawMovieItems(rawContent, userQuery);
-      if (movies.length > 0) {
-        return movies;
-      }
-
-    } catch (err: any) {
-      console.warn(`[Éliciné] Échec sur ${model} :`, err.message);
-      lastError = err;
+    } catch (err) {
+      console.warn(`[Éliciné AI] Échec Groq (${model}) :`, err);
     }
   }
 
-  throw lastError || new Error("Échec de connexion à Groq.");
-}
-
-/**
- * Extraction universelle et ultra-résiliente des titres retournés par l'IA
- * Supporte : parsed.movies, parsed.titles, parsed.results, regex fallback sur guillemets, et mots-clés utilisateur
- */
-export function extractRawMovieItems(aiText: string, userQuery?: string): RawAiMovieItem[] {
-  let titles: any[] = [];
-
-  try {
-    const cleanContent = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const jsonMatch = cleanContent.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleanContent);
-
-    if (Array.isArray(parsed)) {
-      titles = parsed;
-    } else if (parsed && typeof parsed === 'object') {
-      titles = parsed.movies || parsed.titles || parsed.results || parsed.films || parsed.recommendations || [];
-    }
-  } catch (e) {
-    // Regex fallback if JSON was malformed: extract lines or quoted strings
-    const matches = aiText.match(/"([^"]+)"/g);
-    if (matches && matches.length > 0) {
-      titles = matches.map(m => m.replace(/"/g, ''));
-    }
-  }
-
-  // Fallback si le tableau est vide mais que le texte contient des lignes ordonnées
-  if (!Array.isArray(titles) || titles.length === 0) {
-    const lines = aiText.split('\n');
-    for (const line of lines) {
-      const match = line.match(/^[\s\*\-\d\.\)]+["']?([^"'\n\r\(\)]+)["']?/);
-      if (match && match[1] && match[1].trim().length > 1) {
-        titles.push(match[1].trim());
-      }
-    }
-  }
-
-  // If still empty, extract core keywords from user query for TMDB direct search:
-  if ((!titles || titles.length === 0) && userQuery) {
-    const coreKeyword = userQuery.replace(/(film|film de|films|série|séries|avec|une fin twist|recommande|recommande-moi|moi|cherche|trouve|un|une|des)/gi, '').trim();
-    if (coreKeyword.length > 1) {
-      titles = [coreKeyword];
-    }
-  }
-
-  return titles.map((item: any, index: number): RawAiMovieItem | null => {
-    if (typeof item === 'string') {
-      const clean = item.replace(/^[\d\.\-\s\*\#]+/, '').replace(/^["']|["']$/g, '').trim();
-      const yearMatch = clean.match(/\((\d{4})\)$/);
-      const title = yearMatch ? clean.replace(/\s*\(\d{4}\)$/, '').trim() : clean;
-      const year = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
-      return {
-        title,
-        year,
-        match_rate: Math.max(78, 98 - index * 3),
-        reason: 'Recommandé par Éliciné AI'
-      };
-    } else if (item && typeof item === 'object') {
-      const rawTitle = String(item.title || item.titre || item.name || '').trim();
-      const clean = rawTitle.replace(/^[\d\.\-\s\*\#]+/, '').replace(/^["']|["']$/g, '').trim();
-      const yearMatch = clean.match(/\((\d{4})\)$/);
-      const title = yearMatch ? clean.replace(/\s*\(\d{4}\)$/, '').trim() : clean;
-      const year = item.year ? Number(item.year) : (yearMatch ? parseInt(yearMatch[1], 10) : undefined);
-      return {
-        title,
-        french_title: item.french_title ? String(item.french_title).trim() : undefined,
-        year,
-        type: (item.type === 'serie' || item.type === 'series' || item.type === 'tv') ? 'serie' : 'film',
-        match_rate: Number(item.match_rate) || Math.max(78, 98 - index * 3),
-        synopsis: String(item.synopsis || item.overview || item.summary || '').trim(),
-        reason: String(item.reason || item.justification || item.pitch || '').trim()
-      };
-    }
-    return null;
-  }).filter((m): m is RawAiMovieItem => Boolean(m && m.title && m.title.length > 0));
-}
-
-export function parseAIResponse(rawText: string): RawAiMovieItem[] {
-  return extractRawMovieItems(rawText);
-}
-
-/**
- * 2. MOTEUR QWEN — Requête principale (qwen2.5-72b-instruct avec fallback qwen-plus)
- * Itère sur ACTIVE_QWEN_MODELS et transmet via le proxy /api/ai (provider='qwen').
- */
-export async function queryQwen(
-  userQuery: string,
-  apiKey?: string,
-  aiPromptLang?: string
-): Promise<RawAiMovieItem[]> {
-  const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
-  const resolvedAiPromptLang = aiPromptLang || (
-    currentLang === 'en'
-      ? 'Respond STRICTLY in English for movie summaries and reasons.'
-      : currentLang === 'es'
-        ? 'Responde ESTRICTAMENTE en español para los resúmenes y motivos.'
-        : 'Réponds STRICTEMENT en français pour les descriptions et raisons.'
-  );
-
-  const aiTone = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_ai_curation') : null;
-  let curationInstruction = '';
-  if (aiTone === 'popular') {
-    curationInstruction = '\nDIRECTIVE DE CURATION :\nPrivilégie les films et séries acclamés par le grand public et très connus.';
-  } else if (aiTone === 'auteur') {
-    curationInstruction = "\nDIRECTIVE DE CURATION :\nPrivilégie les pépites méconnues, le cinéma d'auteur et les œuvres cultes indépendantes.";
-  }
-
-  const safeSearch = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_safe_search') === 'true' : false;
-  const safeInstruction = safeSearch ? '\nCONTRÔLE PARENTAL ACTIF :\nExclus impérativement tout contenu classé pour adultes, explicite ou ultra-violent.' : '';
-
-  const systemPrompt = `Tu es le moteur de recommandation de films d'Éliciné.
-Pour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 5 à 8 titres de films ou séries exacts et pertinents.
-Exemple de format attendu :
-{
-  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]
-}`;
-
-  let lastError: Error | null = null;
-
+  // TENTATIVE 2 : FALLBACK QWEN
   for (const model of ACTIVE_QWEN_MODELS) {
     try {
-      console.log(`[Éliciné] Requête IA Qwen via proxy /api/ai : ${model}`);
       const response = await fetch('/api/ai', {
         method: 'POST',
         headers: {
@@ -296,212 +127,141 @@ Exemple de format attendu :
         },
         body: JSON.stringify({
           provider: 'qwen',
-          model,
+          model: model,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userQuery }
+            { role: 'user', content: prompt }
           ],
-          response_format: { type: 'json_object' },
           temperature: 0.2,
-          max_tokens: 600
+          max_tokens: 200
         })
       });
 
-      if (response.status === 400 || response.status === 404) {
-        const warnText = await response.text();
-        console.warn(`[Éliciné] Modèle Qwen ${model} indisponible (${response.status}), passage au suivant...`, warnText);
-        continue;
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data.choices?.[0]?.message?.content || '';
+        const titles = extractTitlesFromText(rawText);
+        if (titles.length > 0) {
+          return { titles, provider: `Qwen (${model})` };
+        }
       }
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errText}`);
-      }
-
-      const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content || '';
-      const movies = extractRawMovieItems(rawContent, userQuery);
-      if (movies.length > 0) {
-        return movies;
-      }
-
-    } catch (err: any) {
-      console.warn(`[Éliciné] Échec sur Qwen ${model} :`, err.message);
-      lastError = err;
+    } catch (err) {
+      console.warn(`[Éliciné AI] Échec Qwen (${model}) :`, err);
     }
   }
 
-  throw lastError || new Error('Échec de connexion à Qwen.');
+  return { titles: [], provider: 'Fallback' };
 }
 
 /**
- * 2. CIBLAGE PRÉCIS DANS L'ENRICHISSEMENT TMDB (/tv ou /movie)
- * Interroge l'endpoint spécifique en fonction du type retourné par l'IA.
+ * 2. EXTRACT TITLES SAFELY
+ * Sépare par virgules ou retours à la ligne et nettoie les puces/chiffres/guillemets
  */
-export async function fetchTmdbDetails(
-  item: RawAiMovieItem, 
-  tmdbKey: string,
-  fallbackIndex = 0,
-  tmdbLang?: string
-): Promise<Movie | null> {
+export function extractTitlesFromText(rawText: string): string[] {
+  if (!rawText) return [];
+
+  // Si l'IA a répondu en JSON par réflexe
   try {
-    const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
-    const resolvedTmdbLang = tmdbLang || (currentLang === 'en' ? 'en-US' : currentLang === 'es' ? 'es-ES' : 'fr-FR');
-    const isTv = item.type === 'serie';
-    // Si l'IA indique une série -> endpoint /tv, sinon -> endpoint /movie
-    const endpoint = isTv ? 'tv' : 'movie';
-    let match: any = null;
-
-    // Nettoyage précis du titre pour TMDB (retire guillemets, chiffres initiaux, tirets)
-    const cleanTitle = item.title
-      .replace(/^[\d\.\-\s\*\#]+/, '')
-      .replace(/^["']|["']$/g, '')
-      .trim();
-
-    if (!cleanTitle) return null;
-
-    // 1. Recherche ciblée sur l'endpoint dédié via proxy serveur /api/tmdb
-    try {
-      const searchEndpoint = `search/${endpoint}`;
-      const searchUrl = `/api/tmdb?endpoint=${encodeURIComponent(searchEndpoint)}&query=${encodeURIComponent(cleanTitle)}&language=${resolvedTmdbLang}${item.year ? `&year=${item.year}` : ''}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-      const res = await fetch(searchUrl);
-      if (res.ok) {
-        const data = await res.json();
-        match = data.results?.[0] || null;
+    const cleanContent = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    if (cleanContent.startsWith('{') || cleanContent.startsWith('[')) {
+      const parsed = JSON.parse(cleanContent);
+      const arr = Array.isArray(parsed) ? parsed : (parsed.movies || parsed.titles || parsed.results || []);
+      if (Array.isArray(arr) && arr.length > 0) {
+        return arr
+          .map(t => typeof t === 'string' ? t.trim() : String(t.title || t.titre || t.name || '').trim())
+          .filter(t => t.length > 1);
       }
-
-      // 2. Fallback sans l'année si l'année était trop restrictive
-      if (!match && item.year) {
-        const fallbackNoYear = `/api/tmdb?endpoint=${encodeURIComponent(searchEndpoint)}&query=${encodeURIComponent(cleanTitle)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const res2 = await fetch(fallbackNoYear);
-        if (res2.ok) {
-          const data2 = await res2.json();
-          match = data2.results?.[0] || null;
-        }
-      }
-
-      // 3. Fallback multi au cas où le titre original est en anglais ou typé différemment
-      if (!match) {
-        const fallbackUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(cleanTitle)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const fallbackRes = await fetch(fallbackUrl);
-        if (fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json();
-          const validResults = (fallbackData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
-          match = validResults.find((r: any) => Boolean(r.poster_path)) || validResults[0] || null;
-        }
-      }
-
-      // 4. Fallback search/multi en anglais si le titre est international
-      if (!match && resolvedTmdbLang !== 'en-US') {
-        const fallbackEnUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(cleanTitle)}&language=en-US${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const fallbackEnRes = await fetch(fallbackEnUrl);
-        if (fallbackEnRes.ok) {
-          const fallbackEnData = await fallbackEnRes.json();
-          const validResults = (fallbackEnData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
-          match = validResults.find((r: any) => Boolean(r.poster_path)) || validResults[0] || null;
-        }
-      }
-
-      // 5. Fallback sur le titre français si fourni par l'IA
-      if (!match && item.french_title) {
-        const cleanFr = item.french_title.replace(/^[\d\.\-\s\*\#]+/, '').replace(/^["']|["']$/g, '').trim();
-        const frenchUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(cleanFr)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const frenchRes = await fetch(frenchUrl);
-        if (frenchRes.ok) {
-          const frenchData = await frenchRes.json();
-          const validResults = (frenchData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
-          match = validResults.find((r: any) => Boolean(r.poster_path)) || validResults[0] || null;
-        }
-      }
-    } catch (e) {
-      console.warn('[Éliciné] Erreur enrichissement TMDB :', e);
     }
+  } catch (e) {
+    // Continue sur le découpage standard
+  }
 
-    const mediaType: 'FILM' | 'SÉRIE' = (match?.media_type === 'tv' || isTv) ? 'SÉRIE' : 'FILM';
-    const computedMatchRate = item.match_rate || Math.max(78, 98 - fallbackIndex * 3);
+  return rawText
+    .split(/,|\n/)
+    .map(t => t.trim().replace(/^[-*•\d.]\s*/, '').replace(/^["']|["']$/g, '').trim())
+    .filter(t => t.length > 1);
+}
 
-    const defaultPoster = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80';
+export function extractRawMovieItems(rawText: string, userQuery?: string): RawAiMovieItem[] {
+  let titles = extractTitlesFromText(rawText);
+  if ((!titles || titles.length === 0) && userQuery) {
+    const clean = userQuery.replace(/(film|film de|avec|une fin twist|recommande|moi)/gi, '').trim();
+    if (clean.length > 1) titles = [clean];
+  }
 
-    if (!match) {
-      return null;
+  return titles.map((t, idx) => ({
+    title: t,
+    match_rate: Math.max(78, 98 - idx * 3),
+    reason: 'Recommandé par Éliciné'
+  }));
+}
+
+export function parseAIResponse(rawText: string): RawAiMovieItem[] {
+  return extractRawMovieItems(rawText);
+}
+
+export async function queryGroq(userQuery: string, apiKey?: string): Promise<RawAiMovieItem[]> {
+  const { titles } = await queryAiTitles(userQuery, apiKey);
+  return titles.map((t, idx) => ({
+    title: t,
+    match_rate: Math.max(78, 98 - idx * 3),
+    reason: 'Recommandé par Éliciné'
+  }));
+}
+
+export async function queryQwen(userQuery: string, apiKey?: string): Promise<RawAiMovieItem[]> {
+  const { titles } = await queryAiTitles(userQuery, apiKey);
+  return titles.map((t, idx) => ({
+    title: t,
+    match_rate: Math.max(78, 98 - idx * 3),
+    reason: 'Recommandé par Éliciné'
+  }));
+}
+
+export async function fetchTmdbDetails(
+  item: RawAiMovieItem,
+  tmdbKey: string,
+  _fallbackIndex = 0,
+  _tmdbLang?: string
+): Promise<Movie | null> {
+  const cleanTitle = item.title.trim();
+  if (!cleanTitle) return null;
+
+  try {
+    const url = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(cleanTitle)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const formatted = formatTmdbResults([data.results[0]]);
+      return formatted[0] || null;
     }
-
-    const title = match.title || match.name || cleanTitle;
-    const originalTitle = match.original_title || match.original_name || title;
-    const releaseDate = match.release_date || match.first_air_date || (item.year ? `${item.year}-01-01` : '2024-01-01');
-    const poster = match.poster_path ? `https://image.tmdb.org/t/p/w500${match.poster_path}` : defaultPoster;
-    const backdrop = match.backdrop_path ? `https://image.tmdb.org/t/p/original${match.backdrop_path}` : poster;
-
-    // Récupération de TOUTES les plateformes de streaming disponibles (sans restriction / .slice)
-    const providers = match.id 
-      ? await getWatchProviders(match.id, isTv ? 'tv' : 'movie', 'FR', tmdbKey)
-      : [];
-
-    // B. Enrichissement automatique des synopsis trop courts ou absents via l'IA
-    const finalOverview = (match.overview && match.overview.trim().length > 60)
-      ? match.overview.trim()
-      : (item.synopsis || item.reason || "Synopsis en cours de synchronisation...");
-
-    const isAiOverview = !match.overview || match.overview.trim().length <= 60;
-
-    return {
-      id: match.id,
-      media_type: mediaType,
-      title: title,
-      original_title: originalTitle,
-      release_date: releaseDate,
-      poster_path: poster,
-      backdrop_path: backdrop,
-      vote_average: Number(match.vote_average ? match.vote_average.toFixed(1) : 8.0),
-      vote_count: match.vote_count || 500,
-      overview: finalOverview,
-      synopsis: item.synopsis,
-      is_ai_overview: isAiOverview,
-      match_rate: computedMatchRate,
-      ai_match_reason: item.reason,
-      genres: (match.genre_ids && match.genre_ids.length > 0)
-        ? match.genre_ids.map((gid: number) => ({ id: gid, name: GENRE_MAP[gid] || (mediaType === 'SÉRIE' ? 'Drame' : 'Cinéma') }))
-        : [{ id: 18, name: mediaType === 'SÉRIE' ? 'Drame' : 'Cinéma' }],
-      providers: providers,
-      primary_platform: 'Cinéma / VOD'
-    };
+    return null;
   } catch (err) {
-    console.warn("[Éliciné TMDB] Erreur enrichissement :", item.title, err);
     return null;
   }
 }
 
 /**
- * 3. ROUTEUR ET EXÉCUTION DE RECHERCHE PRINCIPALE
+ * 3. & 4. PIPELINE END-TO-END :
+ * - Query AI (Groq first, fallback Qwen)
+ * - Extract Titles Safely
+ * - Fetch from TMDB
+ * - Return Hydrated Movies (Jamais de résultat vide si TMDB match)
  */
 export async function executeCinoraSearch(
-  query: string, 
+  query: string,
   apiSettings?: ApiSettings,
-  tmdbLang?: string,
-  aiPromptLang?: string
+  _tmdbLang?: string,
+  _aiPromptLang?: string
 ): Promise<AIRecommendationResult> {
   const cleanQuery = query.trim();
-  if (!cleanQuery) {
-    throw new Error("Veuillez saisir une recherche.");
-  }
-
-  const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
-  const resolvedTmdbLang = tmdbLang || (currentLang === 'en' ? 'en-US' : currentLang === 'es' ? 'es-ES' : 'fr-FR');
-  const resolvedAiPromptLang = aiPromptLang || (
-    currentLang === 'en' 
-      ? 'Respond STRICTLY in English for movie summaries and reasons.' 
-      : currentLang === 'es' 
-        ? 'Responde ESTRICTAMENTE en español para los resúmenes y motivos.' 
-        : 'Réponds STRICTEMENT en français pour les descriptions et raisons.'
-  );
-
   const tmdbKey = getApiKey('tmdb', apiSettings);
+  const groqKey = getGroqKey(apiSettings);
 
-  // Vérifier si c'est un Titre Direct court (1 à 3 mots sans description sémantique)
+  // Recherche directe TMDB si titre direct évident
   const route = analyzeSearchIntent(cleanQuery);
   if (route.intent === 'direct_tmdb') {
-    console.log(`[Éliciné AI] Recherche directe TMDB pour "${cleanQuery}".`);
-    const results = await searchMoviesTmdb(cleanQuery, tmdbKey, resolvedTmdbLang);
+    const results = await searchMoviesTmdb(cleanQuery, tmdbKey, 'fr-FR');
     const movies = (results || []).slice(0, 8).map((m, idx) => ({
       ...m,
       match_rate: Math.max(78, 98 - idx * 3),
@@ -523,123 +283,86 @@ export async function executeCinoraSearch(
     };
   }
 
-  // Clés API client (le proxy /api/ai utilise les env vars côté serveur en priorité)
-  const groqKey = getGroqKey(apiSettings);
-  const qwenKey = getApiKey('qwen', apiSettings);
+  // 1 & 2. Interrogation de l'IA et extraction des titres
+  let { titles, provider } = await queryAiTitles(cleanQuery, groqKey);
+  console.log(`[Éliciné AI] Titres extraits (${provider}) :`, titles);
 
-  // 1. TENTATIVE PRINCIPALE : GROQ (llama-3.3-70b-versatile / 8b-instant — Ultra-rapide & Fiable)
-  console.log(`[Éliciné AI] Exécution recherche principale Groq pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
-  let aiMovies: RawAiMovieItem[] = [];
-  let providerLabel = 'Llama 3.3 70B (Groq)';
-
-  try {
-    aiMovies = await queryGroq(cleanQuery, groqKey, resolvedAiPromptLang);
-    providerLabel = 'Llama 3.3 70B (Groq)';
-  } catch (groqErr: any) {
-    console.warn(`[Éliciné AI] Groq indisponible (${groqErr?.message || groqErr}), tentative Fallback 1: Qwen...`);
-    // 2. FALLBACK 1 : QWEN (Alibaba DashScope)
-    try {
-      aiMovies = await queryQwen(cleanQuery, qwenKey, resolvedAiPromptLang);
-      providerLabel = 'Qwen (DashScope)';
-    } catch (qwenErr: any) {
-      console.warn('[Éliciné AI] Qwen indisponible également, activation Fallback 2: Recherche sémantique TMDB...', qwenErr?.message || qwenErr);
-    }
-  }
-
-  // 3. FALLBACK 2 : RECHERCHE DIRECTE TMDB (GARANTIE 0% ÉCHEC / 0% BLOQUANT)
-  if (!aiMovies || aiMovies.length === 0) {
-    console.log(`[Éliciné AI] Repli absolu TMDB direct pour : "${cleanQuery}"`);
-    try {
-      const tmdbDirectResults = await searchMoviesTmdb(cleanQuery, tmdbKey, resolvedTmdbLang);
-      if (tmdbDirectResults && tmdbDirectResults.length > 0) {
-        const fallbackMovies = tmdbDirectResults.slice(0, 8).map((m, idx) => ({
-          ...m,
-          match_rate: Math.max(75, 95 - idx * 3),
-          ai_match_reason: `Recommandation thématique TMDB pour "${cleanQuery}"`
-        }));
-
-        return {
-          thought: `🎬 Recherche TMDB en direct : ${fallbackMovies.length} œuvres trouvées`,
-          moodDetected: cleanQuery,
-          recommendedMovies: fallbackMovies,
-          isFallbackMode: true,
-          providerUsed: 'TMDB Direct (Fallback)',
-          suggestedPrompts: [
-            'Un film de braquage drôle et haletant',
-            'Une série policière sombre et addictive',
-            'Une fresque spatiale émouvante',
-            'Un film néo-noir avec ambiance pluvieuse'
-          ]
-        };
+  // 3. Hydratation depuis TMDB
+  let resolvedMovies: Movie[] = [];
+  if (titles.length > 0) {
+    const moviePromises = titles.slice(0, 8).map(async (title) => {
+      try {
+        const url = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return (data.results && data.results.length > 0) ? data.results[0] : null;
+      } catch (err) {
+        return null;
       }
-    } catch (tmdbErr) {
-      console.error('[Éliciné AI] Échec du fallback TMDB direct :', tmdbErr);
-    }
+    });
 
-    return {
-      thought: "Aucune œuvre correspondante trouvée pour cette recherche.",
-      moodDetected: cleanQuery,
-      recommendedMovies: [],
-      isFallbackMode: true,
-      providerUsed: providerLabel,
-      suggestedPrompts: [
-        'Un film de braquage drôle et haletant',
-        "Une série d'enquête sombre sous la pluie",
-        'Une fresque spatiale émouvante'
-      ]
-    };
+    const rawTmdbList = (await Promise.all(moviePromises)).filter(Boolean);
+    if (rawTmdbList.length > 0) {
+      resolvedMovies = formatTmdbResults(rawTmdbList).map((m, idx) => ({
+        ...m,
+        match_rate: Math.max(78, 98 - idx * 3),
+        ai_match_reason: `Sélection cinématographique pour "${cleanQuery}"`
+      }));
+    }
   }
 
-  // 4. Mappage ciblé sur l'endpoint TMDB (/tv ou /movie) pour chaque résultat
-  const enrichedResults = (
-    await Promise.all(
-      aiMovies.map((item, idx) => fetchTmdbDetails(item, tmdbKey, idx, resolvedTmdbLang))
-    )
-  ).filter((m): m is Movie => m !== null);
-
-  // 5. Filet de sécurité anti-0 résultat : Si l'enrichissement a donné 0 film, repli immédiat sur TMDB direct
-  if (enrichedResults.length === 0) {
-    console.warn(`[Éliciné AI] 0 film enrichi depuis les titres IA, repli immédiat sur TMDB direct pour "${cleanQuery}"...`);
+  // Si l'IA a échoué ou aucun titre n'a été trouvé dans TMDB :
+  // Recherche directe de la requête utilisateur sur TMDB comme fallback ultime
+  if (resolvedMovies.length === 0) {
+    console.log(`[Éliciné AI] Fallback direct TMDB avec "${cleanQuery}"`);
     try {
-      const tmdbDirectResults = await searchMoviesTmdb(cleanQuery, tmdbKey, resolvedTmdbLang);
-      if (tmdbDirectResults && tmdbDirectResults.length > 0) {
-        const fallbackMovies = tmdbDirectResults.slice(0, 8).map((m, idx) => ({
-          ...m,
-          match_rate: Math.max(75, 95 - idx * 3),
-          ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
-        }));
-
-        return {
-          thought: `🎬 Recherche TMDB en direct : ${fallbackMovies.length} œuvres trouvées`,
-          moodDetected: cleanQuery,
-          recommendedMovies: fallbackMovies,
-          isFallbackMode: true,
-          providerUsed: 'TMDB Direct (Fallback)',
-          suggestedPrompts: [
-            'Un film de braquage drôle et haletant',
-            'Une série policière sombre et addictive',
-            'Une fresque spatiale émouvante',
-            'Un film néo-noir avec ambiance pluvieuse'
-          ]
-        };
+      const fallbackUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(cleanQuery)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+      const fallbackRes = await fetch(fallbackUrl);
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.results && fallbackData.results.length > 0) {
+          resolvedMovies = formatTmdbResults(fallbackData.results.slice(0, 8)).map((m, idx) => ({
+            ...m,
+            match_rate: Math.max(75, 95 - idx * 3),
+            ai_match_reason: `Correspondance TMDB pour "${cleanQuery}"`
+          }));
+        }
       }
-    } catch (tmdbErr) {
-      console.error('[Éliciné AI] Échec du repli direct TMDB :', tmdbErr);
+
+      // Si search/movie n'a rien retourné, essayer search/multi
+      if (resolvedMovies.length === 0) {
+        const multiUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(cleanQuery)}&language=fr-FR${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+        const multiRes = await fetch(multiUrl);
+        if (multiRes.ok) {
+          const multiData = await multiRes.json();
+          const valid = (multiData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 8);
+          if (valid.length > 0) {
+            resolvedMovies = formatTmdbResults(valid).map((m, idx) => ({
+              ...m,
+              match_rate: Math.max(75, 95 - idx * 3),
+              ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
+            }));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Éliciné AI] Échec du fallback direct TMDB :', e);
     }
   }
 
-  // 6. Compteur dynamique exact reflétant l'ensemble des résultats
+  // 4. Retour des films hydratés directement à l'UI
   return {
-    thought: `✨ Analyse Éliciné AI en direct : ${enrichedResults.length} résultats trouvés`,
+    thought: `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`,
     moodDetected: cleanQuery,
-    recommendedMovies: enrichedResults,
-    isFallbackMode: false,
-    providerUsed: providerLabel,
+    recommendedMovies: resolvedMovies,
+    isFallbackMode: titles.length === 0 || resolvedMovies.length === 0,
+    providerUsed: provider,
     suggestedPrompts: [
       'Un film de braquage haletant avec twist',
-      'Une série policière scandinave sous la neige',
+      'Une série policière sombre sous la pluie',
       "Un chef-d'œuvre de science-fiction dystopique",
-      'Une comédie française feel-good et touchante'
+      'Une comédie feel-good et touchante'
     ]
   };
 }
@@ -664,4 +387,3 @@ export const AI_PROVIDERS = [
 ];
 
 export default executeCinoraSearch;
-
