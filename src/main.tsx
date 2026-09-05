@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppProvider } from './context/AppContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './index.css';
 
@@ -24,11 +25,13 @@ if (typeof window !== 'undefined') {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <LanguageProvider>
-        <AppProvider>
-          <App />
-        </AppProvider>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AppProvider>
+            <App />
+          </AppProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

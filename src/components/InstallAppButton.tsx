@@ -88,14 +88,14 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
       <button
         onClick={handleDirectInstall}
         type="button"
-        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900/60 transition-colors cursor-pointer select-none group ${className}`}
+        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60 transition-colors cursor-pointer select-none group ${className}`}
         title="Installer l'application sur cet appareil"
       >
         <div className="flex items-center gap-2">
-          <Download className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+          <Download className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400 group-hover:scale-110 transition-transform" />
           <span>Installer l'application</span>
         </div>
-        <span className="text-[10px] text-slate-500 group-hover:text-slate-400 font-mono">
+        <span className="text-[10px] text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 font-mono">
           {isAndroid ? 'APK' : isIOS ? 'iOS' : 'PWA'}
         </span>
       </button>
@@ -107,10 +107,10 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
     <button
       onClick={handleDirectInstall}
       type="button"
-      className={`text-xs font-medium px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none ${className}`}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm ${className}`}
       title="Installer l'application"
     >
-      <Download className="w-3.5 h-3.5 text-white/90" />
+      <Download className="w-3.5 h-3.5 text-slate-700 dark:text-white/90" />
       <span>Installer</span>
     </button>
   );
