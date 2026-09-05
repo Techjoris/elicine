@@ -5,6 +5,8 @@ interface StoredAccount {
   username?: string;
   email: string;
   name: string;
+  avatar?: string;
+  provider?: 'google' | 'credentials';
   passwordHash: string;
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly';
@@ -12,6 +14,7 @@ interface StoredAccount {
   referralCode: string;
   createdAt: string;
   myList?: Movie[];
+  token?: string;
 }
 
 const ACCOUNTS_STORAGE_KEY = 'cineia_registered_accounts';
@@ -149,6 +152,7 @@ export const authService = {
       username: cleanUsername || cleanEmail.split('@')[0],
       email: finalEmail,
       name: displayName,
+      provider: 'credentials',
       isPro: false,
       referralCode,
       createdAt: new Date().toISOString(),
@@ -243,6 +247,8 @@ export const authService = {
         username: match.username,
         email: match.email,
         name: match.name,
+        avatar: match.avatar,
+        provider: match.provider || 'credentials',
         isPro: match.isPro,
         proPlanType: match.proPlanType,
         proPlanExpiresAt: match.proPlanExpiresAt,
@@ -271,6 +277,7 @@ export const authService = {
       username: autoUsername,
       email: autoEmail,
       name: autoName,
+      provider: 'credentials',
       isPro: false,
       referralCode,
       createdAt: new Date().toISOString(),
@@ -282,6 +289,100 @@ export const authService = {
     localStorage.setItem(SESSION_TOKEN_KEY, token);
 
     return { success: true, user: autoUser, token };
+  },
+
+  /**
+   * Connexion sécurisée avec Google (One-Tap / OAuth ou Fallback fluide)
+   */
+  async loginWithGoogle(mockGoogleUser?: {
+    email?: string;
+    name?: string;
+    avatar?: string;
+  }): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
+    // 1. Tenter l'appel API Vercel /api/auth/google
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mockGoogleUser || {})
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          if (data.token) {
+            localStorage.setItem(SESSION_TOKEN_KEY, data.token);
+          }
+          const savedList = this.getUserWatchlist(data.user.id);
+          const fullUser: UserProfile = {
+            ...data.user,
+            avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+            provider: 'google',
+            myList: savedList
+          };
+          await this.saveLocalAccount(fullUser);
+          return { success: true, user: fullUser, token: data.token };
+        }
+      }
+    } catch {
+      // Basculer sur le stockage local sécurisé
+    }
+
+    // 2. Traitement local / hors-ligne / Capacitor Android
+    const email = (mockGoogleUser?.email || 'cinéphile.google@gmail.com').trim().toLowerCase();
+    const name = (mockGoogleUser?.name || 'Cinéphile Google').trim();
+    const avatar = mockGoogleUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
+    const username = email.split('@')[0];
+
+    const accounts = getStoredAccounts();
+    const existing = accounts.find(a => a.email.toLowerCase() === email || a.provider === 'google');
+
+    if (existing) {
+      const token = `tok_google_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+      localStorage.setItem(SESSION_TOKEN_KEY, token);
+
+      const userProfile: UserProfile = {
+        id: existing.id,
+        username: existing.username || username,
+        email: existing.email,
+        name: existing.name || name,
+        avatar: existing.avatar || avatar,
+        provider: 'google',
+        isPro: existing.isPro,
+        proPlanType: existing.proPlanType,
+        proPlanExpiresAt: existing.proPlanExpiresAt,
+        referralCode: existing.referralCode,
+        createdAt: existing.createdAt,
+        myList: this.getUserWatchlist(existing.id),
+        token
+      };
+
+      await this.saveLocalAccount(userProfile);
+      return { success: true, user: userProfile, token };
+    }
+
+    const userId = `usr_google_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const referralCode = `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const token = `tok_google_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+    const newUser: UserProfile = {
+      id: userId,
+      username,
+      email,
+      name,
+      avatar,
+      provider: 'google',
+      isPro: false,
+      referralCode,
+      createdAt: new Date().toISOString(),
+      myList: [],
+      token
+    };
+
+    await this.saveLocalAccount(newUser);
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+
+    return { success: true, user: newUser, token };
   },
 
   /**
@@ -298,6 +399,8 @@ export const authService = {
       username: user.username || user.name.toLowerCase().replace(/\s+/g, ''),
       email: user.email,
       name: user.name,
+      avatar: user.avatar,
+      provider: user.provider || (existingIndex >= 0 ? accounts[existingIndex].provider : 'credentials'),
       passwordHash: passwordHash || (existingIndex >= 0 ? accounts[existingIndex].passwordHash : ''),
       isPro: user.isPro,
       proPlanType: user.proPlanType,

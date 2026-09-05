@@ -25,6 +25,7 @@ interface AppContextType {
   login: (emailOrUser: string | UserProfile, name?: string) => void;
   loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (mockUser?: { email?: string; name?: string; avatar?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
 
@@ -417,6 +418,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: false, error: res.error || "Erreur lors de l'inscription." };
   };
 
+  const loginWithGoogle = async (mockUser?: { email?: string; name?: string; avatar?: string }) => {
+    const res = await authService.loginWithGoogle(mockUser);
+    if (res.success && res.user) {
+      // Synchronisation intelligente de la watchlist locale avec le compte Google
+      const currentList = watchlist;
+      const userSavedList = res.user.myList || [];
+      
+      const mergedMap = new Map<number, Movie>();
+      userSavedList.forEach(m => mergedMap.set(m.id, m));
+      currentList.forEach(m => mergedMap.set(m.id, m));
+      const mergedList = Array.from(mergedMap.values());
+
+      const userWithList: UserProfile = {
+        ...res.user,
+        myList: mergedList
+      };
+
+      setUser(userWithList);
+      setWatchlist(mergedList);
+      authService.saveUserWatchlist(res.user.id, mergedList);
+      setIsAuthModalOpen(false);
+      showToast(`👋 Bienvenue, ${res.user.name} ! Compte synchronisé.`);
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Erreur lors de la connexion Google.' };
+  };
+
   const logout = () => {
     setUser(null);
     authService.logout();
@@ -510,7 +538,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast(`Retiré de votre liste : ${movie.title}`);
         return prev.filter(m => m.id !== movie.id);
       } else {
-        showToast(`Ajouté à votre liste : ${movie.title}`);
+        if (!user) {
+          showToast("Film ajouté ! Connectez-vous pour synchroniser votre liste sur tous vos appareils.");
+        } else {
+          showToast(`Ajouté à votre liste : ${movie.title}`);
+        }
         return [...prev, movie];
       }
     });
@@ -574,6 +606,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         loginWithCredentials,
         registerWithCredentials,
+        loginWithGoogle,
         logout,
         upgradeToPro,
         apiSettings,

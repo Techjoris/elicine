@@ -52,6 +52,8 @@ export interface UserProfile {
   email: string;
   name: string;
   username?: string;
+  avatar?: string;
+  provider?: 'google' | 'credentials';
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly';
   proPlanExpiresAt?: string | null;

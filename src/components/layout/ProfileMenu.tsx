@@ -51,12 +51,22 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 transition-all cursor-pointer backdrop-blur-md group select-none"
         title="Menu Profil & Paramètres"
       >
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
+        <div className={`w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
           user?.isPro
-            ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 font-black ring-1 ring-amber-400/50'
-            : 'bg-gradient-to-tr from-sky-600 to-cyan-500'
+            ? 'ring-1 ring-amber-400/60'
+            : 'ring-1 ring-slate-700'
         }`}>
-          {initials}
+          {user?.avatar ? (
+            <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className={`w-full h-full flex items-center justify-center ${
+              user?.isPro
+                ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 font-black'
+                : 'bg-gradient-to-tr from-sky-600 to-cyan-500'
+            }`}>
+              {initials}
+            </div>
+          )}
         </div>
 
         <div className="hidden xl:flex flex-col text-left leading-none max-w-[100px]">
@@ -77,15 +87,23 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           
           {/* User Info & Quota Header */}
           <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 mb-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">
-                {user?.name || 'Cinéphile Invité'}
-              </p>
-              <p className="text-[10px] text-slate-400 truncate">
-                {user?.email || 'Non connecté'}
-              </p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {user?.avatar && (
+                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                  <span>{user?.name || 'Cinéphile Invité'}</span>
+                  {user?.provider === 'google' && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-cyan-300 border border-cyan-400/30">Google</span>
+                  )}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {user?.email || 'Non connecté'}
+                </p>
+              </div>
             </div>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
               user?.isPro
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-neon-gold'
                 : 'bg-sky-500/20 text-sky-300 border-sky-500/30'
