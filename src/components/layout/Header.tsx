@@ -30,60 +30,67 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
 
   return (
     <div className="sticky top-0 z-[60] w-full flex flex-col">
-      {/* Main Top Navbar - Ultra Épurée */}
-      <header className="h-16 w-full flex items-center justify-between md:justify-end px-4 sm:px-6 lg:px-8 bg-white/95 dark:bg-[#07090e]/95 border-b border-slate-200/80 dark:border-slate-800/40 relative transition-all">
-        {/* Mobile-only Controls (Hamburger + Logo when sidebar is hidden) */}
-        <div className="flex md:hidden items-center gap-3">
+      {/* Main Top Navbar - Ultra Épurée & Compacte */}
+      <header className="sticky top-0 z-50 w-full h-14 px-3 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-zinc-950/85 border-b border-slate-200/80 dark:border-white/10 transition-colors">
+        {/* ZONE GAUCHE: Burger + Logo */}
+        <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 rounded-xl bg-white dark:bg-[#0f141f] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-[#1e293b] cursor-pointer shadow-sm transition-colors"
+            className="md:hidden p-1.5 rounded-lg text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer select-none"
             title="Menu"
+            aria-label="Ouvrir le menu"
           >
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           <div 
             onClick={onGoHome || (() => setActiveView('home'))}
-            className="cursor-pointer hover:opacity-90 transition-opacity select-none"
+            className="flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-opacity select-none"
             title="Retour à l'accueil"
           >
             <ElicineLogo size="sm" />
           </div>
         </div>
 
-        {/* Global Utilities Grouped to the Right */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Bouton d'installation élégant & compact */}
-          <InstallAppButton variant="header" />
+        {/* ZONE DROITE: Actions compactes */}
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+          {/* Bouton d'installation (masqué sur mobile pour éviter l'encombrement, présent dans la sidebar) */}
+          <div className="hidden md:flex flex-shrink-0">
+            <InstallAppButton variant="header" />
+          </div>
 
-          {/* Bouton Soutenir le projet (Offrir un café / Don) */}
+          {/* Bouton Soutenir Responsive */}
           <button
             type="button"
             onClick={handleOpenTip}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold whitespace-nowrap shadow-sm shadow-amber-500/10 transition-all cursor-pointer select-none flex-shrink-0"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-medium text-xs shadow-sm hover:bg-amber-500/25 active:scale-95 transition-all cursor-pointer select-none flex-shrink-0 whitespace-nowrap"
             title="Soutenir le projet Éliciné (Pourboire)"
             aria-label="Soutenir le projet"
           >
-            <span className="text-xs sm:text-sm leading-none select-none" aria-hidden="true">☕</span>
-            <span className="inline sm:hidden font-semibold text-xs">Soutenir</span>
-            <span className="hidden sm:inline font-semibold text-xs">Offrir un café</span>
+            <span className="text-sm leading-none">☕</span>
+            <span className="text-[11px] sm:text-xs font-semibold">Soutenir</span>
           </button>
 
-          {/* Sélecteur de langue compact (FR / EN / ES) */}
-          <LanguageSelector />
+          {/* Sélecteur de langue compact */}
+          <div className="flex-shrink-0">
+            <LanguageSelector compact={true} />
+          </div>
 
-          {/* Profil Utilisateur / Menu avec Paramètres */}
-          <ProfileMenu
-            onOpenSettings={handleOpenSettings}
-            onOpenPro={() => setIsProModalOpen(true)}
-          />
+          {/* Profil Avatar */}
+          <div className="flex-shrink-0">
+            <ProfileMenu
+              onOpenSettings={handleOpenSettings}
+              onOpenPro={() => setIsProModalOpen(true)}
+            />
+          </div>
 
+          {/* Connexion rapide pour visiteurs sur grand écran */}
           {!user && (
             <button
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
               title="Se connecter ou s'inscrire"
             >
               <LogIn className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
