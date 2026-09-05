@@ -6,6 +6,21 @@ import { LanguageProvider } from './context/LanguageContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './index.css';
 
+// 1. Capture globale immédiate du prompt PWA sans fuite de mémoire ni crash SSR
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e: Event) => {
+    e.preventDefault();
+    (window as any).deferredPWAInstallPrompt = e;
+    window.dispatchEvent(new Event('pwa-install-ready'));
+  });
+
+  window.addEventListener('appinstalled', () => {
+    console.log("Éliciné a été installée avec succès");
+    (window as any).deferredPWAInstallPrompt = null;
+    window.dispatchEvent(new Event('pwa-installed'));
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>

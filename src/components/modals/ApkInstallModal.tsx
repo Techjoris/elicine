@@ -35,10 +35,10 @@ export const ApkInstallModal: React.FC = () => {
     : activeTab;
 
   const handleDownloadApk = () => {
-    const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/downloads/cineai-release.apk';
+    const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
     const link = document.createElement('a');
     link.href = apkUrl;
-    link.download = 'elicine-release.apk';
+    link.download = 'elicine.apk';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

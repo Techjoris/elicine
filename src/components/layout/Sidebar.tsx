@@ -192,8 +192,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
           </span>
         </div>
 
-        {/* Bouton Installer l'application (PWA) */}
-        <InstallAppButton className="w-full justify-between py-2" />
+        {/* Bouton Installer l'application (PWA & APK) */}
+        <InstallAppButton variant="sidebar" className="w-full" />
 
         {/* Bouton Soutenir le projet (PayPal) */}
         <button

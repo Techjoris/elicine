@@ -60,8 +60,8 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
 
         {/* Global Utilities Grouped to the Right */}
         <div className="flex items-center gap-3">
-          {/* Installation PWA avec détection d'OS */}
-          <InstallAppButton />
+          {/* Installation PWA & APK avec détection d'OS */}
+          <InstallAppButton variant="header" />
 
           {/* Sélecteur de langue compact (FR / EN / ES) */}
           <LanguageSelector />

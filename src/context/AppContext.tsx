@@ -77,7 +77,7 @@ interface AppContextType {
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
   canInstallPwa: boolean;
-  installPwa: () => Promise<void>;
+  installPwa: () => Promise<boolean | void>;
 
   // Toast / Feedback
   toastMessage: string | null;
@@ -101,7 +101,7 @@ const DEFAULT_QUOTA: AIQuota = {
   lastResetDate: new Date().toISOString().split('T')[0]
 };
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. API Settings loaded from localStorage keys with env fallbacks

@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.elicine.twa",
+        "sha256_cert_fingerprints": ["BB:A6:A9:97:59:2F:AA:82:83:0B:6A:04:19:E3:2C:96:31:8B:E6:BF:71:B4:06:27:1B:0F:B1:1E:FD:03:A4:42"]
+      }
+    }]
