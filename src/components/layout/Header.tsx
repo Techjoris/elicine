@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, AlertTriangle, LogIn, Heart } from 'lucide-react';
+import { Menu, X, AlertTriangle, LogIn } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
@@ -61,11 +61,13 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           <button
             type="button"
             onClick={handleOpenTip}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:border-amber-500/50 shadow-sm transition-all active:scale-95 cursor-pointer select-none"
-            title="Soutenir le projet Éliciné (Offrir un café / Faire un don)"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold whitespace-nowrap shadow-sm shadow-amber-500/10 transition-all cursor-pointer select-none flex-shrink-0"
+            title="Soutenir le projet Éliciné (Pourboire)"
+            aria-label="Soutenir le projet"
           >
-            <Heart className="w-3.5 h-3.5 fill-amber-500 text-amber-500 animate-pulse flex-shrink-0" />
-            <span className="hidden sm:inline">Soutenir</span>
+            <span className="text-xs sm:text-sm leading-none select-none" aria-hidden="true">☕</span>
+            <span className="inline sm:hidden font-semibold text-xs">Soutenir</span>
+            <span className="hidden sm:inline font-semibold text-xs">Offrir un café</span>
           </button>
 
           {/* Sélecteur de langue compact (FR / EN / ES) */}
