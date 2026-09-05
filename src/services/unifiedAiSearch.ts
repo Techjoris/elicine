@@ -423,29 +423,7 @@ export async function fetchTmdbDetails(
     const defaultPoster = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80';
 
     if (!match) {
-      const fallbackOverview = (item.synopsis && item.synopsis.trim().length > 20)
-        ? item.synopsis.trim()
-        : (item.reason || `Recommandation officielle Éliciné.`);
-
-      // Fiche propre locale si non trouvé sur TMDB
-      return {
-        id: 990000 + fallbackIndex,
-        media_type: mediaType,
-        title: cleanTitle,
-        original_title: cleanTitle,
-        release_date: item.year ? `${item.year}-01-01` : '2024-01-01',
-        poster_path: defaultPoster,
-        backdrop_path: defaultPoster,
-        vote_average: 8.0,
-        vote_count: 500,
-        overview: fallbackOverview,
-        synopsis: item.synopsis,
-        is_ai_overview: true,
-        match_rate: computedMatchRate,
-        ai_match_reason: item.reason,
-        genres: [{ id: 18, name: mediaType === 'SÉRIE' ? 'Drame' : 'Cinéma' }],
-        primary_platform: 'Cinéma / VOD'
-      };
+      return null;
     }
 
     const title = match.title || match.name || cleanTitle;
