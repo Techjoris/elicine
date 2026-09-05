@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Tv, ExternalLink } from 'lucide-react';
+import { Tv } from 'lucide-react';
 import { Movie, StreamingProvider } from '../../types';
 import { getWatchProviders, getDirectStreamingUrl, isIntermediaryWatchLink } from '../../services/tmdb';
+import { isNetflixProvider, handleStreamingClick } from '../../services/deepLinkHelper';
 import { buildStreamingUrl } from '../../services/streamingResolver';
+import { useApp } from '../../context/AppContext';
 
 interface PlatformBadgesProps {
   movie: Movie;
 }
 
 export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
+  const { showToast } = useApp();
   const [providers, setProviders] = useState<StreamingProvider[]>(() => {
     if (Array.isArray(movie.providers) && movie.providers.length > 0) {
       return movie.providers;
@@ -66,14 +69,20 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
                 ? getDirectStreamingUrl(p.name, movie.title, releaseYear, catalogId, watchLink)
                 : candidateUrl;
 
+              const isNetflix = isNetflixProvider(p.name);
+              const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
+              const badgeLabel = isNetflix ? 'Ouvrir sur Netflix' : p.name;
+              const actionLabel = isNetflix && !hasDirectId ? '🔍' : '↗';
+
               return (
-                <a
+                <button
                   key={p.id}
-                  href={directHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStreamingClick(directHref, p.name, movie.title, catalogId, showToast);
+                  }}
+                  className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm cursor-pointer select-none"
                   title={`Regarder "${movie.title}" sur ${p.name}`}
                 >
                 {p.logo ? (
@@ -88,11 +97,11 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
                     {p.name.slice(0, 2).toUpperCase()}
                   </span>
                 )}
-                <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[90px]">
-                  {p.name}
+                <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[110px]">
+                  {badgeLabel}
                 </span>
-                <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">↗</span>
-                </a>
+                <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">{actionLabel}</span>
+                </button>
               );
             })}
           </div>

@@ -13,6 +13,8 @@ export {
   getAppleTvDeepLink,
   buildAndroidIntentUrl,
   isAndroidClient,
+  isNetflixProvider,
+  handleStreamingClick,
   type StreamingDeepLinkOptions
 } from '../services/deepLinkHelper';
 

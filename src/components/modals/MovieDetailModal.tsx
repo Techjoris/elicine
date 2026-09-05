@@ -28,6 +28,7 @@ import {
   getDirectStreamingUrl,
   isIntermediaryWatchLink
 } from '../../services/streamingResolver';
+import { isNetflixProvider, handleStreamingClick } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
 
 export const MovieDetailModal: React.FC = () => {
@@ -382,20 +383,26 @@ export const MovieDetailModal: React.FC = () => {
                         ? getDirectStreamingUrl(p.name, selectedMovie.title, releaseYear, catalogId, watchLink)
                         : p.url;
 
+                      const isNetflix = isNetflixProvider(p.name);
+                      const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
+                      const badgeLabel = isNetflix ? 'Ouvrir sur Netflix' : p.name;
+                      const actionLabel = isNetflix && !hasDirectId ? '🔍' : 'Lancer ↗';
+
                       return (
-                        <a 
-                          key={i} 
-                          href={directUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105"
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStreamingClick(directUrl, p.name, selectedMovie.title, catalogId, showToast);
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
                           title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                         >
                           {p.logo && <img src={p.logo} alt={p.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />}
-                          <span className="text-xs font-semibold text-white">{p.name}</span>
-                          <span className="text-[10px] text-sky-400 group-hover:translate-x-0.5 transition-transform">Lancer ↗</span>
-                        </a>
+                          <span className="text-xs font-semibold text-white">{badgeLabel}</span>
+                          <span className="text-[10px] text-sky-400 group-hover:translate-x-0.5 transition-transform">{actionLabel}</span>
+                        </button>
                       );
                     })}
                   </div>

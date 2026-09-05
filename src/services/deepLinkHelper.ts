@@ -164,6 +164,48 @@ export const buildAndroidIntentUrl = (
 };
 
 /**
+ * Retourne true si le fournisseur est Netflix
+ */
+export const isNetflixProvider = (providerName: string): boolean =>
+  providerName.toLowerCase().includes('netflix');
+
+/**
+ * Gère le clic sur un badge de streaming avec logique clipboard + toast pour Netflix sans ID direct.
+ *
+ * - Si Netflix ET aucun catalogId connu : copie le titre dans le presse-papier et déclenche le toast
+ *   "📋 Titre copié ! Collez-le dans la recherche Netflix." avant d'ouvrir l'URL.
+ * - Sinon : ouvre simplement l'URL dans un nouvel onglet.
+ *
+ * @param url          URL de destination finale (déjà résolue par getDirectStreamingUrl)
+ * @param providerName Nom du fournisseur (ex: "Netflix", "Amazon Prime Video")
+ * @param movieTitle   Titre exact du film / de la série
+ * @param catalogId    Identifiant de catalogue direct (netflix_id, etc.) si disponible
+ * @param showToast    Fonction de notification toast fournie par le contexte React
+ */
+export const handleStreamingClick = (
+  url: string,
+  providerName: string,
+  movieTitle: string,
+  catalogId?: string | number | null,
+  showToast?: (msg: string) => void
+): void => {
+  const isNetflix = isNetflixProvider(providerName);
+  const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
+
+  if (isNetflix && !hasDirectId) {
+    // Copie le titre dans le presse-papier pour faciliter la recherche manuelle
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(movieTitle).catch(() => {});
+    }
+    if (showToast) {
+      showToast('📋 Titre copié ! Collez-le dans la recherche Netflix.');
+    }
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
+/**
  * 1. NETFLIX DEEP-LINK
  */
 export const getNetflixDeepLink = (

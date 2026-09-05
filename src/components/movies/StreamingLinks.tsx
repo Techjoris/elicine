@@ -1,8 +1,7 @@
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
 import { Movie, StreamingProvider } from '../../types';
-import { getPlatformDirectUrl, getDirectStreamingUrl, isIntermediaryWatchLink } from '../../services/deepLinkHelper';
-import { detectProviderKey } from '../../services/tmdb';
+import { getPlatformDirectUrl, getDirectStreamingUrl, isIntermediaryWatchLink, isNetflixProvider, handleStreamingClick } from '../../services/deepLinkHelper';
+import { useApp } from '../../context/AppContext';
 
 export interface StreamingLinksProps {
   movie: Movie;
@@ -19,6 +18,8 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
   className = '',
   showTitle = true
 }) => {
+  const { showToast } = useApp();
+
   if (!providers || providers.length === 0) {
     return null;
   }
@@ -44,13 +45,20 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
             ? getDirectStreamingUrl(p.name, movie.title, releaseYear, catalogId, watchLink)
             : candidateLink;
 
+          const isNetflix = isNetflixProvider(p.name);
+          const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
+          // Label clair pour Netflix sans ID direct (ouvrira Google Watch Action)
+          const badgeLabel = isNetflix ? 'Ouvrir sur Netflix' : p.name;
+          const actionLabel = isNetflix && !hasDirectId ? '🔍' : '↗';
+
           return (
-            <a
+            <button
               key={p.id || idx}
-              href={directLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStreamingClick(directLink, p.name, movie.title, catalogId, showToast);
+              }}
               className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 dark:bg-slate-900/90 border border-slate-700/80 dark:border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm cursor-pointer select-none"
               title={`Regarder "${movie.title}" directement sur ${p.name}`}
             >
@@ -66,11 +74,11 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
                   {p.name.slice(0, 2).toUpperCase()}
                 </span>
               )}
-              <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[90px]">
-                {p.name}
+              <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[110px]">
+                {badgeLabel}
               </span>
-              <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">↗</span>
-            </a>
+              <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">{actionLabel}</span>
+            </button>
           );
         })}
       </div>
