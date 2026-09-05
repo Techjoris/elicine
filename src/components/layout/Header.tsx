@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, AlertTriangle, LogIn } from 'lucide-react';
+import { Menu, X, AlertTriangle, LogIn, Heart } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
@@ -10,9 +10,10 @@ import { InstallAppButton } from '../InstallAppButton';
 interface HeaderProps {
   onGoHome?: () => void;
   onOpenSettings?: () => void;
+  onOpenTip?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
+export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpenTip }) => {
   const {
     user,
     setIsAuthModalOpen,
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsOpen(true));
+  const handleOpenTip = onOpenTip || (() => setIsTipModalOpen(true));
 
   return (
     <div className="sticky top-0 z-[60] w-full flex flex-col">
@@ -55,6 +57,17 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
           {/* Bouton d'installation élégant & compact */}
           <InstallAppButton variant="header" />
 
+          {/* Bouton Soutenir le projet (Offrir un café / Don) */}
+          <button
+            type="button"
+            onClick={handleOpenTip}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:border-amber-500/50 shadow-sm transition-all active:scale-95 cursor-pointer select-none"
+            title="Soutenir le projet Éliciné (Offrir un café / Faire un don)"
+          >
+            <Heart className="w-3.5 h-3.5 fill-amber-500 text-amber-500 animate-pulse flex-shrink-0" />
+            <span className="hidden sm:inline">Soutenir</span>
+          </button>
+
           {/* Sélecteur de langue compact (FR / EN / ES) */}
           <LanguageSelector />
 
@@ -62,7 +75,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
           <ProfileMenu
             onOpenSettings={handleOpenSettings}
             onOpenPro={() => setIsProModalOpen(true)}
-            onOpenTip={() => setIsTipModalOpen(true)}
           />
 
           {!user && (

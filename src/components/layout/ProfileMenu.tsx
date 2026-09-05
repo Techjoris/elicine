@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Crown, 
-  Coffee, 
   LogOut, 
   LogIn, 
   ChevronDown, 
@@ -16,14 +15,13 @@ import { authService } from '../../services/authService';
 interface ProfileMenuProps {
   onOpenSettings: () => void;
   onOpenPro: () => void;
-  onOpenTip: () => void;
+  onOpenTip?: () => void;
   onOpenApiKeys?: () => void;
 }
 
 export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenSettings,
-  onOpenPro,
-  onOpenTip
+  onOpenPro
 }) => {
   const { user, quota, logout, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
@@ -221,21 +219,6 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
                 <span className="font-bold text-xs">{user?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
-              </button>
-
-              {/* 🎁 Soutenir le projet */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenTip();
-                  setOpen(false);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
-              >
-                <Coffee className="w-4 h-4 text-orange-500 dark:text-orange-400 flex-shrink-0" />
-                <span className="font-medium text-xs">Soutenir le projet</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />
