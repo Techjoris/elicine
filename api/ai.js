@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     provider = 'auto',
     messages = [],
     model,
-    temperature = 0.5,
+    temperature = 0.2,
     response_format,
     max_tokens,
     stream = false,

@@ -4,6 +4,7 @@ import { analyzeSearchIntent } from './searchRouterService';
 
 export interface RawAiMovieItem {
   title: string;
+  french_title?: string;
   year?: number;
   type?: 'film' | 'serie' | string;
   match_rate?: number;
@@ -29,12 +30,11 @@ export const ACTIVE_QWEN_MODELS = [
 ];
 
 /**
- * MODÈLES GROQ — Fallback si Qwen indisponible
+ * MODÈLES GROQ — Fallback ultra-rapide (< 500ms)
  */
 export const ACTIVE_GROQ_MODELS = [
+  'llama-3.1-8b-instant',
   'llama-3.3-70b-versatile',
-  'openai/gpt-oss-20b',
-  'openai/gpt-oss-120b'
 ];
 
 export const GROQ_MODELS = ACTIVE_GROQ_MODELS;
@@ -107,8 +107,12 @@ export async function queryGroq(
   const safeSearch = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_safe_search') === 'true' : false;
   const safeInstruction = safeSearch ? '\nCONTRÔLE PARENTAL ACTIF :\nExclus impérativement tout contenu classé pour adultes, explicite ou ultra-violent.' : '';
 
-  const systemPrompt = `Tu es l'algorithme de recommandation cinéphile d'Éliciné.
-Analyse en profondeur la demande de l'utilisateur pour adapter strictement le type d'œuvres retournées :
+  const systemPrompt = `Tu es le moteur de recherche cinématographique Éliciné.
+MISSION STRICTE :
+1. Tu dois retourner UNIQUEMENT des VRAIS films et séries existants et vérifiables dans le catalogue mondial / TMDB.
+2. Il est TOTALEMENT INTERDIT d'inventer des films, des titres fictifs ou des histoires imaginées.
+3. Si l'utilisateur décrit une intrigue connue (ex: "film couloir de la mort pouvoir de guérison"), identifie obligatoirement l'œuvre exacte ("La Ligne Verte" / "The Green Mile") et des films réellement similaires (ex: "La Vie de David Gale", "Les Évadés").
+4. Réponds UNIQUEMENT sous forme d'un objet JSON strict contenant les titres originaux et français réels.
 
 RÈGLE LINGUISTIQUE IMPÉRATIVE :
 ${resolvedAiPromptLang}
@@ -120,18 +124,19 @@ RÈGLES D'INTENTION (6 à 8 résultats au total) :
 2. SI LA DEMANDE CIBLE UNE SÉRIE (mots-clés : "série", "saison", "mini-série", "épisodes", etc.) :
    -> Renvoie UNIQUEMENT des séries (type: "serie"). Aucun film.
 3. SI AUCUNE PRÉCISION N'EST DONNÉE (ex: ambiance, concept, citation, thématique globale) :
-   -> Propose les meilleures recommandations sans forcer d'équilibre artificiel. Laisse la pertinence décider de la répartition (il peut y avoir 6 films et 1 série, ou 5 séries et 2 films selon ce qui incarne le mieux la demande).
+   -> Propose les meilleures recommandations sans forcer d'équilibre artificiel.
 
 FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
 {
   "movies": [
     {
-      "title": "Titre",
+      "title": "Titre original / international",
+      "french_title": "Titre en français",
       "year": 2024,
       "type": "film",
       "match_rate": 95,
       "synopsis": "Un résumé captivant de 2 à 3 phrases détaillant l'intrigue principale, les enjeux et le ton sans spoiler.",
-      "reason": "Accroche critique"
+      "reason": "Correspondance exacte..."
     }
   ]
 }`;
@@ -155,7 +160,8 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
             { role: 'user', content: userQuery }
           ],
           response_format: { type: "json_object" },
-          temperature: 0.15
+          temperature: 0.2,
+          max_tokens: 600
         })
       });
 
@@ -180,6 +186,7 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
       if (Array.isArray(movies) && movies.length > 0) {
         return movies.map((m: any, index: number) => ({
           title: String(m.title || m.titre || '').trim(),
+          french_title: m.french_title ? String(m.french_title).trim() : undefined,
           year: m.year ? Number(m.year) : undefined,
           type: (m.type === 'serie' || m.type === 'series' || m.type === 'tv') ? 'serie' : 'film',
           match_rate: Number(m.match_rate) || Math.max(78, 98 - index * 3),
@@ -234,8 +241,12 @@ export async function queryQwen(
   const safeSearch = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_safe_search') === 'true' : false;
   const safeInstruction = safeSearch ? '\nCONTRÔLE PARENTAL ACTIF :\nExclus impérativement tout contenu classé pour adultes, explicite ou ultra-violent.' : '';
 
-  const systemPrompt = `Tu es l'algorithme de recommandation cinéphile d'Éliciné propulsé par Qwen.
-Analyse en profondeur la demande de l'utilisateur pour adapter strictement le type d'œuvres retournées :
+  const systemPrompt = `Tu es le moteur de recherche cinématographique Éliciné propulsé par Qwen.
+MISSION STRICTE :
+1. Tu dois retourner UNIQUEMENT des VRAIS films et séries existants et vérifiables dans le catalogue mondial / TMDB.
+2. Il est TOTALEMENT INTERDIT d'inventer des films, des titres fictifs ou des histoires imaginées.
+3. Si l'utilisateur décrit une intrigue connue (ex: "film couloir de la mort pouvoir de guérison"), identifie obligatoirement l'œuvre exacte ("La Ligne Verte" / "The Green Mile") et des films réellement similaires (ex: "La Vie de David Gale", "Les Évadés").
+4. Réponds UNIQUEMENT sous forme d'un objet JSON strict contenant les titres originaux et français réels.
 
 RÈGLE LINGUISTIQUE IMPÉRATIVE :
 ${resolvedAiPromptLang}
@@ -247,18 +258,19 @@ RÈGLES D'INTENTION (6 à 8 résultats au total) :
 2. SI LA DEMANDE CIBLE UNE SÉRIE (mots-clés : "série", "saison", "mini-série", "épisodes", etc.) :
    -> Renvoie UNIQUEMENT des séries (type: "serie"). Aucun film.
 3. SI AUCUNE PRÉCISION N'EST DONNÉE (ex: ambiance, concept, citation, thématique globale) :
-   -> Propose les meilleures recommandations sans forcer d'équilibre artificiel. Laisse la pertinence décider de la répartition.
+   -> Propose les meilleures recommandations sans forcer d'équilibre artificiel.
 
 FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
 {
   "movies": [
     {
-      "title": "Titre",
+      "title": "Titre original / international",
+      "french_title": "Titre en français",
       "year": 2024,
       "type": "film",
       "match_rate": 95,
       "synopsis": "Un résumé captivant de 2 à 3 phrases détaillant l'intrigue principale, les enjeux et le ton sans spoiler.",
-      "reason": "Accroche critique"
+      "reason": "Correspondance exacte..."
     }
   ]
 }`;
@@ -282,7 +294,8 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
             { role: 'user', content: userQuery }
           ],
           response_format: { type: 'json_object' },
-          temperature: 0.5
+          temperature: 0.2,
+          max_tokens: 600
         })
       });
 
@@ -306,6 +319,7 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
       if (Array.isArray(movies) && movies.length > 0) {
         return movies.map((m: any, index: number) => ({
           title: String(m.title || m.titre || '').trim(),
+          french_title: m.french_title ? String(m.french_title).trim() : undefined,
           year: m.year ? Number(m.year) : undefined,
           type: (m.type === 'serie' || m.type === 'series' || m.type === 'tv') ? 'serie' : 'film',
           match_rate: Number(m.match_rate) || Math.max(78, 98 - index * 3),
@@ -358,6 +372,16 @@ export async function fetchTmdbDetails(
         if (fallbackRes.ok) {
           const fallbackData = await fallbackRes.json();
           match = fallbackData.results?.[0] || null;
+        }
+      }
+
+      // 3. Fallback sur le titre français si fourni par l'IA (anti-hallucination)
+      if (!match && item.french_title) {
+        const frenchUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(item.french_title)}&language=${resolvedTmdbLang}${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
+        const frenchRes = await fetch(frenchUrl);
+        if (frenchRes.ok) {
+          const frenchData = await frenchRes.json();
+          match = frenchData.results?.[0] || null;
         }
       }
     } catch (e) {
