@@ -1,20 +1,7 @@
-import React, { useState } from 'react';
-import { 
-  X, 
-  Smartphone, 
-  Download, 
-  ShieldCheck, 
-  Layers, 
-  Apple, 
-  Sparkles,
-  Share,
-  PlusSquare,
-  QrCode,
-  CheckCircle2,
-  ArrowRight
-} from 'lucide-react';
+import React, { useEffect } from 'react';
+import { X, Apple, Share, PlusSquare } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { detectOS } from '../common/InstallAppButton';
+import { detectOS } from '../InstallAppButton';
 
 export const ApkInstallModal: React.FC = () => {
   const { 
@@ -25,271 +12,97 @@ export const ApkInstallModal: React.FC = () => {
     showToast 
   } = useApp();
 
-  const { isIOS, isAndroid, isDesktop } = detectOS();
-  const [activeTab, setActiveTab] = useState<'auto' | 'android' | 'ios' | 'desktop'>('auto');
+  const { isIOS, isAndroid } = detectOS();
 
-  if (!isApkModalOpen) return null;
+  useEffect(() => {
+    if (!isApkModalOpen) return;
 
-  const currentView = activeTab === 'auto' 
-    ? (isIOS ? 'ios' : isAndroid ? 'android' : 'desktop') 
-    : activeTab;
-
-  const handleDownloadApk = () => {
-    const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
-    const link = document.createElement('a');
-    link.href = apkUrl;
-    link.download = 'elicine.apk';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('🚀 Téléchargement de l\'APK Éliciné démarré !');
-  };
-
-  const handleNativePwaInstall = async () => {
-    if (canInstallPwa) {
-      await installPwa();
+    // Si ouvert sur Android, déclencher directement le téléchargement APK et fermer sans modal
+    if (isAndroid) {
+      const apkUrl = (import.meta as any).env?.VITE_APK_DOWNLOAD_URL || '/elicine.apk';
+      const link = document.createElement('a');
+      link.href = apkUrl;
+      link.download = 'elicine.apk';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Téléchargement de l'application en cours...");
       setIsApkModalOpen(false);
-    } else {
-      handleDownloadApk();
+      return;
     }
-  };
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://cineai.app';
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentOrigin)}&bgcolor=0c111e&color=38bdf8&margin=1`;
+    // Si ouvert sur Desktop, tenter l'installation PWA directe
+    if (!isIOS) {
+      if (canInstallPwa) {
+        installPwa();
+      } else {
+        showToast("💡 Utilisez l'icône d'installation dans la barre d'adresse de votre navigateur.");
+      }
+      setIsApkModalOpen(false);
+    }
+  }, [isApkModalOpen, isAndroid, isIOS, canInstallPwa, installPwa, showToast, setIsApkModalOpen]);
+
+  if (!isApkModalOpen || !isIOS) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
-      
-      <div className="relative w-full max-w-lg rounded-3xl bg-[#0c111e] border border-sky-500/30 shadow-[0_0_50px_rgba(14,165,233,0.2)] overflow-hidden text-slate-100 p-6 sm:p-8 space-y-5 my-auto">
-        
-        {/* Close Button */}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+      <div 
+        className="fixed inset-0" 
+        onClick={() => setIsApkModalOpen(false)} 
+        aria-hidden="true"
+      />
+
+      <div className="relative w-full max-w-sm rounded-3xl bg-zinc-950/95 border border-zinc-800/90 shadow-2xl backdrop-blur-2xl p-6 text-zinc-100 space-y-4 z-10 animate-slide-up">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white">
+              <Apple className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-white tracking-tight">Installer sur iPhone</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsApkModalOpen(false)}
+            className="p-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            title="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Visual Steps (Apple Style) */}
+        <div className="space-y-3 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-4 text-xs">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+              1
+            </div>
+            <p className="text-zinc-300 leading-relaxed">
+              Appuyez sur <strong className="text-white">Partager</strong> (icône <Share className="w-3.5 h-3.5 text-cyan-400 inline mx-1 -mt-0.5" /> dans Safari).
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+              2
+            </div>
+            <p className="text-zinc-300 leading-relaxed">
+              Sélectionnez <strong className="text-white">« Sur l'écran d'accueil »</strong> (icône <PlusSquare className="w-3.5 h-3.5 text-cyan-400 inline mx-1 -mt-0.5" />).
+            </p>
+          </div>
+        </div>
+
+        {/* Single Action Button */}
         <button
+          type="button"
           onClick={() => setIsApkModalOpen(false)}
-          className="absolute top-4 right-4 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all z-10 cursor-pointer"
+          className="w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-98"
         >
-          <X className="w-5 h-5" />
+          Compris
         </button>
-
-        {/* Tab Switcher */}
-        <div className="flex items-center justify-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-2xl max-w-xs mx-auto text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab('android')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentView === 'android' 
-                ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Android</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('ios')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentView === 'ios' 
-                ? 'bg-sky-500 text-white font-bold shadow-sm' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Apple className="w-3.5 h-3.5" />
-            <span>iPhone / iOS</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('desktop')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentView === 'desktop' 
-                ? 'bg-purple-500 text-white font-bold shadow-sm' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <QrCode className="w-3.5 h-3.5" />
-            <span>Desktop</span>
-          </button>
-        </div>
-
-        {/* ─── CAS 1 : VUE iOS (iPhone / iPad) ─── */}
-        {currentView === 'ios' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-500 p-0.5 mx-auto shadow-lg shadow-sky-500/20">
-                <div className="w-full h-full bg-[#0c111e] rounded-[14px] flex items-center justify-center">
-                  <Apple className="w-7 h-7 text-sky-400" />
-                </div>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Installer Éliciné sur <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-300">iPhone &amp; iPad</span>
-              </h2>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Profitez de l'application native sans passer par l'App Store, en 3 étapes simples.
-              </p>
-            </div>
-
-            {/* 3 Step Visual Guide */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <div className="w-7 h-7 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-                  1
-                </div>
-                <div className="text-xs">
-                  <div className="font-bold text-white flex items-center gap-1.5">
-                    <span>Ouvrir le menu Partager</span>
-                    <Share className="w-3.5 h-3.5 text-sky-400" />
-                  </div>
-                  <div className="text-slate-400 text-[11px] mt-0.5">
-                    Dans Safari, touchez le bouton <strong>Partager</strong> en bas au centre de votre écran.
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <div className="w-7 h-7 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-                  2
-                </div>
-                <div className="text-xs">
-                  <div className="font-bold text-white flex items-center gap-1.5">
-                    <span>Sur l'écran d'accueil</span>
-                    <PlusSquare className="w-3.5 h-3.5 text-sky-400" />
-                  </div>
-                  <div className="text-slate-400 text-[11px] mt-0.5">
-                    Faites défiler vers le bas puis choisissez <strong>"Sur l'écran d'accueil (+)"</strong>.
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-                  3
-                </div>
-                <div className="text-xs">
-                  <div className="font-bold text-white flex items-center gap-1.5">
-                    <span>Valider "Ajouter"</span>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  </div>
-                  <div className="text-slate-400 text-[11px] mt-0.5">
-                    Touchez <strong>Ajouter</strong> en haut à droite. Éliciné est maintenant installée comme une vraie appli !
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── CAS 2 : VUE ANDROID ─── */}
-        {currentView === 'android' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 mx-auto shadow-lg shadow-emerald-500/20">
-                <div className="w-full h-full bg-[#0c111e] rounded-[14px] flex items-center justify-center">
-                  <Smartphone className="w-7 h-7 text-emerald-400" />
-                </div>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Installer <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Éliciné Android</span>
-              </h2>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Téléchargez directement l'APK certifié sans publicité ni pistage.
-              </p>
-            </div>
-
-            <div className="space-y-2.5">
-              {/* Bouton APK Direct */}
-              <button
-                onClick={handleDownloadApk}
-                className="w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm tracking-wide shadow-lg shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 text-left">
-                  <div className="w-10 h-10 rounded-xl bg-slate-950/20 flex items-center justify-center">
-                    <Download className="w-5 h-5 text-slate-950" />
-                  </div>
-                  <div>
-                    <div className="font-extrabold text-slate-950">Télécharger le fichier APK</div>
-                    <div className="text-[11px] text-slate-900/80 font-medium">Pour tous smartphones Android (.apk direct)</div>
-                  </div>
-                </div>
-                <span className="text-xs font-black bg-slate-950/20 px-2.5 py-1 rounded-lg">v1.2.0</span>
-              </button>
-
-              {/* Bouton PWA si supporté */}
-              {canInstallPwa && (
-                <button
-                  onClick={handleNativePwaInstall}
-                  className="w-full p-3.5 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Layers className="w-4 h-4 text-sky-400" />
-                    <span>Installer comme Progressive Web App (PWA)</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-sky-400 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              )}
-
-              {/* Conseil autorisation Android */}
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
-                💡 <strong className="text-slate-300">Astuce :</strong> Si votre smartphone bloque l'installation, appuyez sur <em>"Détails"</em> puis <em>"Installer quand même"</em>.
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── CAS 3 : VUE DESKTOP (PC / MAC) ─── */}
-        {currentView === 'desktop' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="text-center space-y-2">
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Ouvrir Éliciné sur votre <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-400">Smartphone</span>
-              </h2>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Scannez le QR code ci-dessous avec l'appareil photo de votre smartphone.
-              </p>
-            </div>
-
-            {/* QR Code Card */}
-            <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
-              <div className="p-3 bg-white rounded-2xl shadow-xl">
-                <img 
-                  src={qrCodeUrl} 
-                  alt="QR Code Éliciné" 
-                  className="w-36 h-36 object-contain rounded-lg"
-                  loading="lazy"
-                />
-              </div>
-              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
-                <QrCode className="w-3.5 h-3.5 text-sky-400" />
-                <span>Compatible iOS &amp; Android (sans inscription requise)</span>
-              </span>
-            </div>
-
-            {/* Secondary Option: Direct APK download for PC users to send to their phone */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDownloadApk}
-                className="flex-1 p-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Télécharger l'APK sur PC</span>
-              </button>
-
-              {canInstallPwa && (
-                <button
-                  onClick={handleNativePwaInstall}
-                  className="flex-1 p-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Layers className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Installer sur PC (PWA)</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Security badge footer */}
-        <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500 pt-2 border-t border-slate-850">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          <span>Application 100% sécurisée, sans publicité intrusive ni pistage</span>
-        </div>
-
       </div>
-
     </div>
   );
 };
+
+export default ApkInstallModal;

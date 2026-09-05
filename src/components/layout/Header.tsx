@@ -5,6 +5,7 @@ import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { SettingsModal } from '../SettingsModal';
 import { ProfileMenu } from './ProfileMenu';
+import { InstallAppButton } from '../InstallAppButton';
 
 interface HeaderProps {
   onGoHome?: () => void;
@@ -63,7 +64,10 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
         </div>
 
         {/* Global Utilities Grouped to the Right */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Bouton d'installation élégant & compact */}
+          <InstallAppButton variant="header" />
+
           {/* Sélecteur de langue compact (FR / EN / ES) */}
           <LanguageSelector />
 
