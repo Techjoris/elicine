@@ -49,6 +49,14 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
 
   const handleSearch = async (textToSearch?: string) => {
     const query = (textToSearch || prompt).trim();
+
+    // Intercept immediately if quota is 0 for non-Pro user
+    if (!user?.isPro && quota.remaining <= 0) {
+      setIsProModalOpen(true);
+      showToast('⚡ Quota IA épuisé. Passez à Éliciné Pro pour un accès illimité !');
+      return;
+    }
+
     if (!query) {
       showToast('Veuillez décrire le film ou l\'ambiance souhaitée.');
       return;
@@ -57,7 +65,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
     // Check & decrement quota
     const permitted = useAiQuota();
     if (!permitted) {
-      // Pass Pro modal opened automatically in useAiQuota
+      setIsProModalOpen(true);
       return;
     }
 
@@ -93,11 +101,11 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
       <div className="relative group">
         <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-purple-600 to-amber-500 rounded-2xl blur-md opacity-40 group-hover:opacity-75 transition duration-500 group-focus-within:opacity-100" />
         
-        <div className="relative flex items-center bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-white/15 rounded-2xl p-2 sm:p-2.5 shadow-md dark:shadow-2xl backdrop-blur-xl">
+        <div className="relative flex items-center bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-white/15 rounded-2xl p-1.5 sm:p-2 shadow-md dark:shadow-2xl backdrop-blur-xl">
           
           {/* AI Icon with Sparkles */}
-          <div className="flex items-center justify-center pl-3 pr-2 text-blue-500 dark:text-blue-400">
-            <Sparkles className="w-6 h-6 animate-pulse text-amber-500 dark:text-amber-400" />
+          <div className="flex items-center justify-center pl-3 pr-2 text-blue-500 dark:text-blue-400 flex-shrink-0">
+            <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
           </div>
 
           {/* Input text */}
@@ -106,49 +114,47 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Décrivez une émotion, une ambiance, un décor (ex: un thriller psychologique sous la pluie)..."
-            className="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-2 py-1 font-normal"
+            placeholder="Décrivez une émotion, une ambiance, un décor..."
+            className="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-2 min-w-0 font-normal"
             disabled={isLoading}
           />
 
-          {/* Quota Indicator */}
-          <div className="hidden sm:flex items-center mr-2">
-            {user?.isPro ? (
-              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center gap-1">
-                <Crown className="w-3 h-3 text-amber-500 dark:text-amber-400" />
-                Illimité
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsProModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-xs font-bold flex items-center gap-1 transition-colors"
-                title="Vos crédits IA gratuits du jour"
-              >
-                <Zap className="w-3 h-3 text-amber-500 dark:text-amber-400" />
-                <span>⚡ {quota.remaining}/3 IA</span>
-              </button>
-            )}
-          </div>
+          {/* Integrated Quota Badge + Explorer Button inside the pill */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Quota Badge */}
+            <button
+              type="button"
+              onClick={() => setIsProModalOpen(true)}
+              title="Crédits IA journaliers"
+              className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                user?.isPro
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                  : quota.remaining > 0 
+                    ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20' 
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
+              }`}
+            >
+              <span>⚡</span>
+              <span className="font-bold">{user?.isPro ? 'Illimité' : `${quota.remaining}/3`}</span>
+            </button>
 
-          {/* Submit Search Button */}
-          <button
-            onClick={() => handleSearch()}
-            disabled={isLoading}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-sm shadow-md dark:shadow-neon-blue flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isLoading ? (
-              <>
+            {/* Explorer Button */}
+            <button
+              type="button"
+              onClick={() => handleSearch()}
+              disabled={isLoading}
+              className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+            >
+              {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Recherche IA...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Découvrir</span>
-              </>
-            )}
-          </button>
+              ) : (
+                <span>✨</span>
+              )}
+              <span className="hidden xs:inline sm:inline">
+                {isLoading ? 'Recherche...' : 'Explorer'}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 

@@ -106,6 +106,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
     addAlert, 
     isMovieAlertActive,
     useAiQuota,
+    quota,
+    user,
+    setIsProModalOpen,
     apiSettings,
     addHistoryItem,
     showToast
@@ -181,14 +184,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
     const q = (queryText !== undefined ? queryText : searchPrompt).trim();
     setErrorMessage(null);
 
+    // Intercept immediately if daily quota reaches 0 for non-Pro user
+    if (!user?.isPro && quota.remaining <= 0) {
+      setIsProModalOpen(true);
+      showToast('⚡ Quota IA épuisé. Passez à Éliciné Pro pour un accès illimité !');
+      return;
+    }
+
     if (!q) {
       showToast('Veuillez décrire le type de film ou l\'ambiance souhaitée.');
       return;
     }
 
-
     const permitted = useAiQuota();
-    if (!permitted) return;
+    if (!permitted) {
+      setIsProModalOpen(true);
+      return;
+    }
 
     setIsAiLoading(true);
     if (onAiSearchStart) {
@@ -280,45 +292,80 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           {t.searchPlaceholder}
         </p>
 
-        {/* c) Barre de Recherche "Floating Glass" */}
+        {/* c) Barre de Recherche Unifiée "Floating Glass" */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
             handleSearch(searchPrompt);
           }}
-          className="max-w-2xl w-full rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/90 shadow-2xl shadow-black/60 p-2 flex items-center gap-3 focus-within:border-sky-500/80 focus-within:ring-2 focus-within:ring-sky-500/20 transition-all"
+          className="relative flex items-center w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
         >
-          <Search className="w-4 h-4 text-slate-400 ml-3 flex-shrink-0" />
+          {/* Search icon */}
+          <div className="pl-3 pr-2 text-zinc-400 flex-shrink-0">
+            <Search className="w-5 h-5" />
+          </div>
+
+          {/* Input field */}
           <input
             id="main-ai-search"
             type="text"
+            className="flex-1 bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-2 min-w-0"
+            placeholder={t.searchPlaceholder || "Décrivez une émotion, une ambiance..."}
             value={searchPrompt}
             onChange={(e) => {
               setSearchPrompt(e.target.value);
               if (errorMessage) setErrorMessage(null);
             }}
-            placeholder={t.searchPlaceholder}
-            className="flex-1 bg-transparent text-white placeholder-slate-400 text-sm outline-none px-2 py-1 font-normal"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearch(searchPrompt);
+              }
+            }}
           />
 
-          {/* Bouton d'action à droite */}
-          <button
-            type="submit"
-            disabled={isAiLoading}
-            className="bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-medium text-xs md:text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-sky-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer whitespace-nowrap"
-          >
-            {isAiLoading ? (
-              <>
+          {/* Integrated Quota Badge + Explorer Button inside the pill */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Quota Badge */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsProModalOpen(true);
+              }}
+              title="Crédits IA journaliers"
+              className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                user?.isPro
+                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  : quota.remaining > 0 
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20' 
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+              }`}
+            >
+              <span>⚡</span>
+              <span className="font-bold">{user?.isPro ? 'Illimité' : `${quota.remaining}/3`}</span>
+            </button>
+
+            {/* Explorer Button */}
+            <button
+              type="submit"
+              disabled={isAiLoading}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSearch(searchPrompt);
+              }}
+              className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+            >
+              {isAiLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>{t.aiAnalysisBadge}...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>{t.exploreBtn}</span>
-              </>
-            )}
-          </button>
+              ) : (
+                <span>✨</span>
+              )}
+              <span className="hidden xs:inline sm:inline">
+                {isAiLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
+              </span>
+            </button>
+          </div>
         </form>
 
         {/* Banner de chargement IA */}
