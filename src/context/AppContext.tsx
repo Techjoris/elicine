@@ -75,6 +75,8 @@ interface AppContextType {
   setIsApkModalOpen: (open: boolean) => void;
   isThankYouModalOpen: boolean;
   setIsThankYouModalOpen: (open: boolean) => void;
+  isProSuccessModalOpen: boolean;
+  setIsProSuccessModalOpen: (open: boolean) => void;
 
   // Mobile Menu & PWA
   isMobileMenuOpen: boolean;
@@ -245,6 +247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isThankYouModalOpen, setIsThankYouModalOpen] = useState(false);
+  const [isProSuccessModalOpen, setIsProSuccessModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -643,6 +646,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsApkModalOpen,
         isThankYouModalOpen,
         setIsThankYouModalOpen,
+        isProSuccessModalOpen,
+        setIsProSuccessModalOpen,
         isMobileMenuOpen,
         setIsMobileMenuOpen,
         canInstallPwa,

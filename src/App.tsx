@@ -16,6 +16,7 @@ import { ProModal } from './components/modals/ProModal';
 import { TipModal } from './components/modals/TipModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
+import { ProSuccessModal } from './components/modals/ProSuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { DevModal } from './components/DevModal';
@@ -41,7 +42,9 @@ export const AppContent: React.FC = () => {
     upgradeToPro,
     user,
     isThankYouModalOpen,
-    setIsThankYouModalOpen
+    setIsThankYouModalOpen,
+    isProSuccessModalOpen,
+    setIsProSuccessModalOpen
   } = useApp();
 
   const { t } = useTranslation();
@@ -66,24 +69,37 @@ export const AppContent: React.FC = () => {
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
 
-  // Intercept ?payment_status=success callback from Notch Pay
+  // Intercept payment return URL params and route to the correct modal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_status') === 'success' || params.get('payment') === 'success') {
-      const paymentType = (params.get('type') || 'tip') as 'pro' | 'tip';
-      if (paymentType === 'pro') {
-        upgradeToPro('yearly');
-      }
-      // Nettoyer l'URL proprement sans recharger la page
+
+    // --- PRO SUBSCRIPTION SUCCESS ---
+    // Triggered by ?subscription=pro_success OR ?payment=pro_success
+    const isProSuccess =
+      params.get('subscription') === 'pro_success' ||
+      params.get('payment') === 'pro_success';
+
+    // --- TIP / DONATION SUCCESS ---
+    // Triggered by ?payment=success OR ?tip=success
+    const isTipSuccess =
+      (params.get('payment') === 'success' && params.get('subscription') !== 'pro_success') ||
+      params.get('tip') === 'success';
+
+    if (isProSuccess) {
+      // 1. Activate Pro immediately in state & localStorage
+      upgradeToPro('yearly');
+      // 2. Open the dedicated Pro welcome modal
+      setIsProSuccessModalOpen(true);
+      // 3. Clean URL so refresh doesn't re-trigger
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Déclencher l'affichage de la modale de remerciement
+    } else if (isTipSuccess) {
+      // Show the donation thank-you modal
       setShowThankYouModal(true);
-      setSuccessModal({
-        isOpen: true,
-        type: paymentType
-      });
+      setSuccessModal({ isOpen: true, type: 'tip' });
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [upgradeToPro]);
+  }, [upgradeToPro, setIsProSuccessModalOpen]);
 
   const key = apiSettings.tmdbApiKey;
   const fetchTrendingFn = React.useCallback(
@@ -275,7 +291,12 @@ export const AppContent: React.FC = () => {
           setShowThankYouModal(false);
           setSuccessModal(prev => ({ ...prev, isOpen: false }));
         }}
-        type={successModal.type}
+        type="tip"
+      />
+
+      <ProSuccessModal
+        isOpen={isProSuccessModalOpen}
+        onClose={() => setIsProSuccessModalOpen(false)}
       />
 
     </div>
