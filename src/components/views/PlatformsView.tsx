@@ -56,14 +56,14 @@ export const PlatformsView: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
 
       {/* Controls Header */}
-      <div className="p-6 rounded-3xl bg-[#0f141f] border border-[#1e293b] shadow-2xl space-y-6">
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b] shadow-sm dark:shadow-2xl space-y-6">
 
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-3">
-            <Tv className="w-7 h-7 text-sky-400" />
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+            <Tv className="w-7 h-7 text-sky-500 dark:text-sky-400" />
             <span>Catalogues Streaming</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
             Défilement infini automatique — synchronisé en temps réel avec TMDB.
           </p>
         </div>
@@ -76,10 +76,10 @@ export const PlatformsView: React.FC = () => {
               <button
                 key={p.id}
                 onClick={() => setSelectedPlatform(p)}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition-all duration-300 ${
+                className={`p-3.5 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition-all duration-300 cursor-pointer ${
                   isSel
-                    ? `bg-gradient-to-br ${p.color} border-white/40 text-white shadow-neon-blue scale-[1.02]`
-                    : 'bg-[#07090e] border-[#1e293b] text-slate-300 hover:bg-slate-800'
+                    ? `bg-gradient-to-br ${p.color} border-white/40 text-white shadow-sm dark:shadow-neon-blue scale-[1.02]`
+                    : 'bg-slate-100 dark:bg-[#07090e] border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
                 {p.name}
@@ -89,10 +89,10 @@ export const PlatformsView: React.FC = () => {
         </div>
 
         {/* Filter & Sort Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-[#1e293b]/70">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-200 dark:border-[#1e293b]/70">
 
           {/* Media type filter pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#07090e] border border-[#1e293b] text-xs font-semibold">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-[#07090e] border border-slate-200 dark:border-[#1e293b] text-xs font-semibold">
             {([
               { id: 'all',   label: 'Tout voir', icon: Clapperboard },
               { id: 'movie', label: 'Films',      icon: Film         },
@@ -104,8 +104,8 @@ export const PlatformsView: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setMediaFilter(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all ${
-                    isSel ? 'bg-blue-600 text-white shadow-neon-blue font-bold' : 'text-slate-400 hover:text-slate-200'
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                    isSel ? 'bg-blue-600 text-white shadow-sm dark:shadow-neon-blue font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -117,14 +117,14 @@ export const PlatformsView: React.FC = () => {
 
           {/* Sort dropdown */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
-              <ArrowUpDown className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-medium">
+              <ArrowUpDown className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
               Trier par :
             </span>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortOption)}
-              className="bg-[#07090e] border border-[#1e293b] rounded-xl px-3 py-1.5 text-xs text-white font-semibold outline-none focus:border-sky-500 cursor-pointer"
+              className="bg-slate-50 dark:bg-[#07090e] border border-slate-200 dark:border-[#1e293b] rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-semibold outline-none focus:border-sky-500 cursor-pointer"
             >
               <option value="popularity.desc">🔥 Les plus populaires</option>
               <option value="vote_average.desc">⭐ Les mieux notés</option>

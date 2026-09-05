@@ -64,13 +64,13 @@ export const CatalogView: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
 
       {/* Header + Controls */}
-      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-5">
+      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
         <div>
-          <h1 className="text-3xl font-black text-white flex items-center gap-3">
-            <Film className="w-8 h-8 text-blue-400" />
-            <span>Catalogue Complet CinéIA</span>
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+            <Film className="w-8 h-8 text-blue-500 dark:text-blue-400" />
+            <span>Catalogue Complet Éliciné</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
             Défilement infini — Films, Séries &amp; Recherche en temps réel via TMDB.
           </p>
         </div>
@@ -81,10 +81,10 @@ export const CatalogView: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-blue-600 border-blue-500 text-white shadow-neon-blue'
-                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-blue-600 border-blue-500 text-white shadow-sm dark:shadow-neon-blue'
+                  : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
               }`}
             >
               {tab.label}
@@ -96,28 +96,28 @@ export const CatalogView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative flex gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 type="text"
                 placeholder="Rechercher par titre, genre, mot-clé..."
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-blue-500"
               />
             </div>
             <button
               onClick={handleSearch}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" /> Chercher
             </button>
           </div>
 
           {/* Rating filter */}
-          <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-700">
-            <Star className="w-4 h-4 text-amber-400 fill-amber-400 flex-shrink-0" />
-            <span className="text-xs text-slate-300 font-semibold whitespace-nowrap">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+            <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-400 flex-shrink-0" />
+            <span className="text-xs text-slate-700 dark:text-slate-300 font-semibold whitespace-nowrap">
               Note min : {minRating > 0 ? `${minRating}/10` : 'Toutes'}
             </span>
             <input

@@ -31,7 +31,7 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
       viewBox="0 0 512 512"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`${currentSize.box} flex-shrink-0 transition-transform duration-300 group-hover:scale-105 select-none`}
+      className={`${currentSize.box} flex-shrink-0 transition-transform duration-300 group-hover:scale-105 select-none rounded-xl shadow-sm ring-1 ring-slate-900/10 dark:ring-white/10`}
     >
       <defs>
         {/* Cyan Refraction Gradient for Play Triangle */}
@@ -52,7 +52,7 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
 
       {/* 1. Deep Slate Canvas with Precision Squircle (rx=120) */}
       <rect width="512" height="512" rx="120" fill="#090b10" />
-      <rect x="1" y="1" width="510" height="510" rx="119" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="2" />
+      <rect x="1" y="1" width="510" height="510" rx="119" stroke="rgba(255, 255, 255, 0.12)" strokeWidth="2" />
 
       {/* 2. The Architectural 'É' Spine and Arms (Solid Optical White #FFFFFF) */}
       <path
@@ -123,13 +123,14 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
 
       {/* Typographie intégrée : "Éliciné" haute précision */}
       <div className="flex items-baseline leading-none tracking-tight">
-        <span className={`${currentSize.text} font-black tracking-tight text-white font-sans flex items-baseline`}>
-          <span>Éli</span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-cyan-300 to-sky-200">
+        <span className={`${currentSize.text} font-black tracking-tight font-sans flex items-baseline`}>
+          <span className="text-slate-900 dark:text-white">É</span>
+          <span className="text-slate-900 dark:text-white">li</span>
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-sky-500 dark:from-sky-400 dark:via-cyan-300 dark:to-sky-200">
             ciné
           </span>
         </span>
-        <span className={`${currentSize.dot} rounded-full bg-cyan-400 ml-1.5 shadow-[0_0_8px_#00d2ff] animate-pulse`}></span>
+        <span className={`${currentSize.dot} rounded-full bg-cyan-500 dark:bg-cyan-400 ml-1.5 shadow-[0_0_8px_#00d2ff] animate-pulse`}></span>
       </div>
     </div>
   );

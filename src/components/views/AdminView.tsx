@@ -284,22 +284,22 @@ export const AdminView: React.FC = () => {
     <div className="space-y-8 animate-fade-in pb-12">
       
       {/* Top Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-zinc-950/80 border border-white/10 backdrop-blur-xl shadow-2xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-white dark:bg-zinc-950/80 border border-slate-200 dark:border-white/10 backdrop-blur-xl shadow-sm dark:shadow-2xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-cyan-400" />
+            <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-cyan-500 dark:text-cyan-400" />
               Console Administrateur Éliciné
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Système En Ligne
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Suivi des Inscriptions & Abonnés
           </h1>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-slate-600 dark:text-zinc-400">
             Visionnez la base d'utilisateurs en temps réel, gérez les statuts Pass Pro et exportez vos données.
           </p>
         </div>
@@ -310,7 +310,7 @@ export const AdminView: React.FC = () => {
             type="button"
             onClick={loadData}
             disabled={isLoading}
-            className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-800 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-zinc-800 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
             title="Rafraîchir les données"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -320,27 +320,27 @@ export const AdminView: React.FC = () => {
           <button
             type="button"
             onClick={handleExportCSV}
-            className="px-3.5 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
             title="Télécharger le fichier CSV"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Export CSV</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportJSON}
-            className="px-3.5 py-2 rounded-xl bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-            title="Télécharger le fichier JSON"
+            className="px-3.5 py-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Télécharger les données en JSON"
           >
-            <FileJson className="w-3.5 h-3.5 text-blue-400" />
+            <FileJson className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
             <span>Export JSON</span>
           </button>
 
           <button
             type="button"
             onClick={handleLockSession}
-            className="p-2 rounded-xl bg-red-950/30 hover:bg-red-950/60 text-red-300 border border-red-500/30 text-xs transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/60 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-500/30 text-xs transition-colors cursor-pointer"
             title="Verrouiller la console admin"
           >
             <Lock className="w-4 h-4" />
@@ -352,23 +352,23 @@ export const AdminView: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         
         {/* Card 1: Total Users */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950/80 border border-white/10 backdrop-blur-xl space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-zinc-950/80 border border-slate-200 dark:border-white/10 backdrop-blur-xl shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-xs">
             <span className="font-bold">Total Inscrits</span>
-            <Users className="w-4 h-4 text-cyan-400" />
+            <Users className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-white">{metrics.totalUsers}</span>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{metrics.totalUsers}</span>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center">
               <TrendingUp className="w-3 h-3 mr-0.5" /> +100%
             </span>
           </div>
-          <p className="text-[10px] text-zinc-500">Comptes actifs enregistrés</p>
+          <p className="text-[10px] text-slate-400 dark:text-zinc-500">Comptes actifs enregistrés</p>
         </div>
 
         {/* Card 2: Premium Pass Pro */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/30 backdrop-blur-xl space-y-2 shadow-lg shadow-amber-500/5">
-          <div className="flex items-center justify-between text-amber-300 text-xs">
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 dark:bg-gradient-to-b dark:from-amber-500/10 dark:to-transparent border border-amber-200 dark:border-amber-500/30 backdrop-blur-xl space-y-2 shadow-sm dark:shadow-lg dark:shadow-amber-500/5">
+          <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 text-xs">
             <span className="font-bold">Abonnés Pass Pro</span>
             <Crown className="w-4 h-4 text-amber-400" />
           </div>
