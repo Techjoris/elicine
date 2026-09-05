@@ -22,22 +22,22 @@ export interface AIRecommendationResult {
 }
 
 /**
- * MODÈLES QWEN ACTIFS — Moteur principal de recommandation
- */
-export const ACTIVE_QWEN_MODELS = [
-  'qwen2.5-72b-instruct',
-  'qwen-plus',
-];
-
-/**
- * MODÈLES GROQ — Fallback ultra-rapide (< 500ms)
+ * MODÈLES GROQ ACTIFS — Moteur principal de recommandation (Vitesse & Fiabilité)
  */
 export const ACTIVE_GROQ_MODELS = [
-  'llama-3.1-8b-instant',
   'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
 ];
 
 export const GROQ_MODELS = ACTIVE_GROQ_MODELS;
+
+/**
+ * MODÈLES QWEN — Fallback si Groq indisponible
+ */
+export const ACTIVE_QWEN_MODELS = [
+  'qwen-plus',
+  'qwen2.5-72b-instruct',
+];
 
 /**
  * RÉCUPÉRATION SÉCURISÉE DE LA CLÉ GROQ
@@ -516,34 +516,63 @@ export async function executeCinoraSearch(
   }
 
   // Clés API client (le proxy /api/ai utilise les env vars côté serveur en priorité)
-  const qwenKey = getApiKey('qwen', apiSettings);
   const groqKey = getGroqKey(apiSettings);
+  const qwenKey = getApiKey('qwen', apiSettings);
 
-  // 1. Tentative Qwen (moteur principal — qwen2.5-72b-instruct)
-  console.log(`[Éliciné AI] Exécution recherche sémantique Qwen pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
+  // 1. TENTATIVE PRINCIPALE : GROQ (llama-3.3-70b-versatile / 8b-instant — Ultra-rapide & Fiable)
+  console.log(`[Éliciné AI] Exécution recherche principale Groq pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
   let aiMovies: RawAiMovieItem[] = [];
-  let providerLabel = 'Qwen 2.5 72B';
+  let providerLabel = 'Llama 3.3 70B (Groq)';
 
   try {
-    aiMovies = await queryQwen(cleanQuery, qwenKey, resolvedAiPromptLang);
-  } catch (qwenErr: any) {
-    console.warn(`[Éliciné AI] Qwen indisponible (${qwenErr.message}), repli vers Groq/Llama...`);
-    // 2. Fallback Groq (Llama 3.3 70B) si Qwen échoue
+    aiMovies = await queryGroq(cleanQuery, groqKey, resolvedAiPromptLang);
+    providerLabel = 'Llama 3.3 70B (Groq)';
+  } catch (groqErr: any) {
+    console.warn(`[Éliciné AI] Groq indisponible (${groqErr?.message || groqErr}), tentative Fallback 1: Qwen...`);
+    // 2. FALLBACK 1 : QWEN (Alibaba DashScope)
     try {
-      aiMovies = await queryGroq(cleanQuery, groqKey, resolvedAiPromptLang);
-      providerLabel = 'Llama 3.3 70B (Groq)';
-    } catch (groqErr: any) {
-      console.error('[Éliciné AI] Tous les moteurs IA ont échoué.', groqErr.message);
-      throw groqErr;
+      aiMovies = await queryQwen(cleanQuery, qwenKey, resolvedAiPromptLang);
+      providerLabel = 'Qwen (DashScope)';
+    } catch (qwenErr: any) {
+      console.warn('[Éliciné AI] Qwen indisponible également, activation Fallback 2: Recherche sémantique TMDB...', qwenErr?.message || qwenErr);
     }
   }
 
+  // 3. FALLBACK 2 : RECHERCHE DIRECTE TMDB (GARANTIE 0% ÉCHEC / 0% BLOQUANT)
   if (!aiMovies || aiMovies.length === 0) {
+    console.log(`[Éliciné AI] Repli absolu TMDB direct pour : "${cleanQuery}"`);
+    try {
+      const tmdbDirectResults = await searchMoviesTmdb(cleanQuery, tmdbKey, resolvedTmdbLang);
+      if (tmdbDirectResults && tmdbDirectResults.length > 0) {
+        const fallbackMovies = tmdbDirectResults.slice(0, 8).map((m, idx) => ({
+          ...m,
+          match_rate: Math.max(75, 95 - idx * 3),
+          ai_match_reason: `Recommandation thématique TMDB pour "${cleanQuery}"`
+        }));
+
+        return {
+          thought: `🎬 Recherche TMDB en direct : ${fallbackMovies.length} œuvres trouvées`,
+          moodDetected: cleanQuery,
+          recommendedMovies: fallbackMovies,
+          isFallbackMode: true,
+          providerUsed: 'TMDB Direct (Fallback)',
+          suggestedPrompts: [
+            'Un film de braquage drôle et haletant',
+            'Une série policière sombre et addictive',
+            'Une fresque spatiale émouvante',
+            'Un film néo-noir avec ambiance pluvieuse'
+          ]
+        };
+      }
+    } catch (tmdbErr) {
+      console.error('[Éliciné AI] Échec du fallback TMDB direct :', tmdbErr);
+    }
+
     return {
       thought: "Aucune œuvre correspondante trouvée pour cette recherche.",
       moodDetected: cleanQuery,
       recommendedMovies: [],
-      isFallbackMode: false,
+      isFallbackMode: true,
       providerUsed: providerLabel,
       suggestedPrompts: [
         'Un film de braquage drôle et haletant',
@@ -553,14 +582,14 @@ export async function executeCinoraSearch(
     };
   }
 
-  // 3. Mappage ciblé sur l'endpoint TMDB (/tv ou /movie) pour chaque résultat
+  // 4. Mappage ciblé sur l'endpoint TMDB (/tv ou /movie) pour chaque résultat
   const enrichedResults = (
     await Promise.all(
       aiMovies.map((item, idx) => fetchTmdbDetails(item, tmdbKey, idx, resolvedTmdbLang))
     )
   ).filter((m): m is Movie => m !== null);
 
-  // 4. Compteur dynamique exact reflétant l'ensemble des résultats
+  // 5. Compteur dynamique exact reflétant l'ensemble des résultats
   return {
     thought: `✨ Analyse Éliciné AI en direct : ${enrichedResults.length} résultats trouvés`,
     moodDetected: cleanQuery,
@@ -580,18 +609,18 @@ export const executeElicineSearch = executeCinoraSearch;
 export const unifiedAiSearch = executeElicineSearch;
 export const AI_PROVIDERS = [
   {
-    name: 'Qwen 2.5 72B',
-    type: 'qwen' as const,
-    endpoint: '/api/ai',
-    model: 'qwen2.5-72b-instruct',
-    keyStorage: 'cinéia_qwen_api_key'
-  },
-  {
-    name: 'Llama 3.3 70B (Groq — Fallback)',
+    name: 'Llama 3.3 70B (Groq)',
     type: 'groq' as const,
     endpoint: '/api/ai',
     model: 'llama-3.3-70b-versatile',
     keyStorage: 'elicine_groq_api_key'
+  },
+  {
+    name: 'Qwen 2.5 (Alibaba — Fallback)',
+    type: 'qwen' as const,
+    endpoint: '/api/ai',
+    model: 'qwen-plus',
+    keyStorage: 'cinéia_qwen_api_key'
   }
 ];
 
