@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tv, ExternalLink } from 'lucide-react';
 import { Movie, StreamingProvider } from '../../types';
-import { getWatchProviders } from '../../services/tmdb';
+import { getWatchProviders, getDirectStreamingUrl, isIntermediaryWatchLink } from '../../services/tmdb';
 import { buildStreamingUrl } from '../../services/streamingResolver';
 
 interface PlatformBadgesProps {
@@ -58,13 +58,11 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
           </span>
           <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
             {providers.map((p) => {
-              const directHref = p.deepLink || p.directUrl || buildStreamingUrl(p.providerKey, p.name, movie.title, {
-                movie,
-                justWatchUrl: p.justWatchUrl || movie.watch_provider_link,
-                netflixId: movie.netflix_id || movie.netflixId || p.netflixId,
-                primeId: movie.prime_id || movie.primeId || p.primeId,
-                disneyId: movie.disney_id || movie.disneyId || p.disneyId
-              });
+              const releaseYear = movie.release_date ? movie.release_date.split('-')[0] : '';
+              const candidateUrl = p.deepLink || p.directUrl;
+              const directHref = (!candidateUrl || isIntermediaryWatchLink(candidateUrl))
+                ? getDirectStreamingUrl(p.name, movie.title, releaseYear)
+                : candidateUrl;
 
               return (
                 <a
@@ -105,3 +103,6 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
     </div>
   );
 };
+
+export const StreamingBadges = PlatformBadges;
+export default PlatformBadges;

@@ -1,6 +1,13 @@
 import { detectProviderKey } from './tmdb';
 import { getVpnAffiliateUrl } from '../config/affiliates';
-import { getPlatformDirectUrl, StreamingDeepLinkOptions } from './deepLinkHelper';
+import { 
+  getPlatformDirectUrl, 
+  getDirectStreamingUrl,
+  isIntermediaryWatchLink,
+  StreamingDeepLinkOptions 
+} from './deepLinkHelper';
+
+export { getDirectStreamingUrl, isIntermediaryWatchLink };
 
 export interface SvodProviderItem {
   name: string;
@@ -123,7 +130,8 @@ export async function getMediaProviders(
 
     // 1. Test local (incluant flatrate, free et replay avec pub)
     const userCountryData = results[userCountryCode] || results['FR'] || results['US'] || results['GB'];
-    const justWatchLink = userCountryData?.link || null;
+    const rawJustWatchLink = userCountryData?.link || null;
+    const justWatchLink = isIntermediaryWatchLink(rawJustWatchLink) ? null : rawJustWatchLink;
 
     const localFlatrate = [
       ...(results[userCountryCode]?.flatrate || []),
@@ -141,7 +149,7 @@ export async function getMediaProviders(
             providerName: p.provider_name,
             movieTitle: movieTitle || movie?.title || '',
             movie,
-            watchProviderLink: justWatchLink || movie?.watch_provider_link,
+            watchProviderLink: justWatchLink,
             netflixId: movie?.netflix_id || movie?.netflixId || p.netflix_id,
             primeId: movie?.prime_id || movie?.primeId || p.prime_id,
             disneyId: movie?.disney_id || movie?.disneyId || p.disney_id,
@@ -239,16 +247,19 @@ export const resolveStreamingAction = async (
       type: 'DIRECT' as const,
       providers: res.svod.providers.map((p, idx) => {
         const pKey = detectProviderKey(p.name);
-        const actionUrl = p.url || p.deepLink || getPlatformDirectUrl({
-          providerKey: pKey,
-          providerName: p.name,
-          movieTitle,
-          movie,
-          watchProviderLink: res.svod.justWatchLink || movie?.watch_provider_link,
-          netflixId: movie?.netflix_id || movie?.netflixId,
-          primeId: movie?.prime_id || movie?.primeId,
-          disneyId: movie?.disney_id || movie?.disneyId
-        });
+        const candidateUrl = p.url || p.deepLink;
+        const actionUrl = (!candidateUrl || isIntermediaryWatchLink(candidateUrl))
+          ? getPlatformDirectUrl({
+              providerKey: pKey,
+              providerName: p.name,
+              movieTitle,
+              movie,
+              watchProviderLink: res.svod.justWatchLink,
+              netflixId: movie?.netflix_id || movie?.netflixId,
+              primeId: movie?.prime_id || movie?.primeId,
+              disneyId: movie?.disney_id || movie?.disneyId
+            })
+          : candidateUrl;
 
         return {
           id: idx + 1,

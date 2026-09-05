@@ -1,5 +1,5 @@
 import { Movie, StreamingProvider } from '../types';
-import { getPlatformDirectUrl } from './deepLinkHelper';
+import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -452,7 +452,8 @@ export async function getWatchProviders(
 
     if (!countryData) return [];
 
-    const justWatchLink = countryData.link || null;
+    const rawLink = countryData.link || null;
+    const justWatchLink = isIntermediaryWatchLink(rawLink) ? null : rawLink;
 
     // Fusionner flatrate (abonnements), free (gratuit) et ads (replay avec pub : TF1+, 6play...)
     const rawList = [
@@ -504,6 +505,8 @@ export {
   getMediaProviders, 
   getVodStoreUrl, 
   getPlatformSearchUrl,
+  getDirectStreamingUrl,
+  isIntermediaryWatchLink,
   type MediaProvidersResult,
   type SvodProviderItem,
   type VodProviderItem 

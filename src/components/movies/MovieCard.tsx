@@ -14,7 +14,9 @@ import { useTranslation } from '../../context/LanguageContext';
 import { 
   resolveStreamingAction, 
   StreamingActionResult,
-  buildStreamingUrl 
+  buildStreamingUrl,
+  getDirectStreamingUrl,
+  isIntermediaryWatchLink 
 } from '../../services/streamingResolver';
 import { getCachedCountryCode } from '../../services/geoService';
 import { getVpnAffiliateUrl } from '../../config/affiliates';
@@ -179,16 +181,21 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             
             {/* Grille fluide de badges plateformes locales */}
             <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
-              {streamingAction.providers.map((p) => (
-                <a
-                  key={p.id}
-                  href={p.actionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm"
-                  title={`Regarder "${movie.title}" sur ${p.name}`}
-                >
+              {streamingAction.providers.map((p) => {
+                const directUrl = (!p.actionUrl || isIntermediaryWatchLink(p.actionUrl))
+                  ? getDirectStreamingUrl(p.name, movie.title, releaseYear)
+                  : p.actionUrl;
+
+                return (
+                  <a
+                    key={p.id}
+                    href={directUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm"
+                    title={`Regarder "${movie.title}" sur ${p.name}`}
+                  >
                   {p.logo ? (
                     <img
                       src={p.logo}
@@ -206,7 +213,8 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
                   </span>
                   <span className="text-[8px] text-emerald-600 dark:text-emerald-400">↗</span>
                 </a>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : streamingAction?.type === 'VPN_REQUIRED' ? (

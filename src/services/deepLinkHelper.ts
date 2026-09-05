@@ -18,6 +18,7 @@ export interface StreamingDeepLinkOptions {
   providerName?: string;
   providerKey?: string;
   movieTitle: string;
+  year?: string;
   movie?: any;
   netflixId?: string | number | null;
   primeId?: string | number | null;
@@ -29,6 +30,92 @@ export interface StreamingDeepLinkOptions {
   fallbackJustWatch?: string | null;
   useAndroidIntent?: boolean;
 }
+
+/**
+ * Détecte et rejette formellement les pages intermédiaires TMDB et JustWatch
+ * Empêche toute redirection parasite vers "themoviedb.org/.../watch"
+ */
+export const isIntermediaryWatchLink = (url?: string | null): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes('themoviedb.org') ||
+    lower.includes('tmdb.org') ||
+    lower.includes('/watch') ||
+    lower.includes('justwatch.com')
+  );
+};
+
+/**
+ * Générateur direct d'URL vers la plateforme de streaming officielle
+ * Bypasse complètement toute page intermédiaire TMDB ou JustWatch
+ */
+export const getDirectStreamingUrl = (
+  providerName: string,
+  title: string,
+  year?: string
+): string => {
+  const cleanTitle = encodeURIComponent(title.trim());
+  const lower = providerName.toLowerCase();
+
+  // NETFLIX
+  if (lower.includes('netflix')) {
+    return `https://www.netflix.com/search?q=${cleanTitle}`;
+  }
+
+  // AMAZON PRIME VIDEO
+  if (lower.includes('amazon') || lower.includes('prime')) {
+    return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${cleanTitle}`;
+  }
+
+  // DISNEY+
+  if (lower.includes('disney')) {
+    return `https://www.disneyplus.com/search?q=${cleanTitle}`;
+  }
+
+  // CANAL+
+  if (lower.includes('canal') || lower.includes('mycanal')) {
+    return `https://www.canalplus.com/recherche/${cleanTitle}`;
+  }
+
+  // APPLE TV
+  if (lower.includes('apple')) {
+    return `https://tv.apple.com/search?term=${cleanTitle}`;
+  }
+
+  // MAX / HBO MAX
+  if (lower.includes('max') || lower.includes('hbo')) {
+    return `https://www.max.com/search?q=${cleanTitle}`;
+  }
+
+  // PARAMOUNT+
+  if (lower.includes('paramount')) {
+    return `https://www.paramountplus.com/search/?query=${cleanTitle}`;
+  }
+
+  // TF1+
+  if (lower.includes('tf1')) {
+    return `https://www.tf1.fr/recherche?q=${cleanTitle}`;
+  }
+
+  // FRANCE.TV
+  if (lower.includes('france') || lower.includes('francetv')) {
+    return `https://www.france.tv/recherche/?q=${cleanTitle}`;
+  }
+
+  // ARTE
+  if (lower.includes('arte')) {
+    return `https://www.arte.tv/fr/search/?q=${cleanTitle}`;
+  }
+
+  // 6PLAY / M6+
+  if (lower.includes('6play') || lower.includes('m6')) {
+    return `https://www.6play.fr/recherche?q=${cleanTitle}`;
+  }
+
+  // FALLBACK UNIVERSEL (Recherche streaming Google sans passer par TMDB)
+  return `https://www.google.com/search?q=regarder+${cleanTitle}+streaming`;
+};
 
 /**
  * Détecte si le client actuel tourne sous Android
@@ -72,12 +159,12 @@ export const getNetflixDeepLink = (
     return universalUrl;
   }
 
-  // Priorité 2 : Lien certifié TMDB Watch Providers / JustWatch
-  if (watchProviderLink && watchProviderLink.trim()) {
+  // Priorité 2 : Lien direct valide (uniquement si NON-TMDB / NON-JustWatch intermédiaire et hébergé par Netflix)
+  if (watchProviderLink && !isIntermediaryWatchLink(watchProviderLink) && watchProviderLink.includes('netflix.com')) {
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Recherche ciblée in-app / web
+  // Priorité 3 : Recherche ciblée in-app / web officielle Netflix
   const searchFallback = `https://www.netflix.com/search?q=${encodedTitle}`;
   if (useIntent && isAndroidClient()) {
     return buildAndroidIntentUrl(`www.netflix.com/search?q=${encodedTitle}`, 'com.netflix.mediaclient', searchFallback);
@@ -108,12 +195,12 @@ export const getPrimeVideoDeepLink = (
     return directUrl;
   }
 
-  // Priorité 2 : Lien certifié JustWatch
-  if (watchProviderLink && watchProviderLink.trim()) {
+  // Priorité 2 : Lien direct valide hébergé par Prime Video
+  if (watchProviderLink && !isIntermediaryWatchLink(watchProviderLink) && (watchProviderLink.includes('primevideo.com') || watchProviderLink.includes('amazon.'))) {
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Recherche ciblée in-app / web
+  // Priorité 3 : Recherche ciblée in-app / web officielle Prime Video
   const searchFallback = `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
   if (useIntent && isAndroidClient()) {
     return buildAndroidIntentUrl(`www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`, 'com.amazon.avod.thirdpartyclient', searchFallback);
@@ -142,12 +229,12 @@ export const getDisneyDeepLink = (
     return directUrl;
   }
 
-  // Priorité 2 : Lien certifié JustWatch
-  if (watchProviderLink && watchProviderLink.trim()) {
+  // Priorité 2 : Lien direct valide hébergé par Disney+
+  if (watchProviderLink && !isIntermediaryWatchLink(watchProviderLink) && watchProviderLink.includes('disneyplus.com')) {
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Recherche ciblée in-app / web
+  // Priorité 3 : Recherche ciblée in-app / web officielle Disney+
   const searchFallback = `https://www.disneyplus.com/search?q=${encodedTitle}`;
   if (useIntent && isAndroidClient()) {
     return buildAndroidIntentUrl(`www.disneyplus.com/search?q=${encodedTitle}`, 'com.disney.disneyplus', searchFallback);
@@ -175,7 +262,7 @@ export const getCanalDeepLink = (
     return directUrl;
   }
 
-  if (watchProviderLink && watchProviderLink.trim()) {
+  if (watchProviderLink && !isIntermediaryWatchLink(watchProviderLink) && watchProviderLink.includes('canalplus.com')) {
     return watchProviderLink.trim();
   }
 
@@ -198,7 +285,7 @@ export const getAppleTvDeepLink = (
   if (cleanId) {
     return `https://tv.apple.com/movie/${cleanId}`;
   }
-  if (watchProviderLink && watchProviderLink.trim()) {
+  if (watchProviderLink && !isIntermediaryWatchLink(watchProviderLink) && watchProviderLink.includes('tv.apple.com')) {
     return watchProviderLink.trim();
   }
   return `https://tv.apple.com/search?term=${encodeURIComponent(movieTitle.trim())}`;
@@ -228,6 +315,7 @@ export const getPlatformDirectUrl = (
 
   const name = (opts.providerName || opts.providerKey || '').toLowerCase();
   const title = (opts.movieTitle || opts.movie?.title || '').trim();
+  const year = opts.year || (opts.movie?.release_date ? opts.movie.release_date.split('-')[0] : '');
   const encodedTitle = encodeURIComponent(title);
 
   // Extraction des IDs directs depuis l'objet movie si présent
@@ -237,7 +325,10 @@ export const getPlatformDirectUrl = (
   const disneyId = opts.disneyId || movie.disney_id || movie.disneyId || null;
   const canalId = opts.canalId || movie.canal_id || movie.canalId || null;
   const appleId = opts.appleId || movie.apple_id || movie.appleId || null;
-  const watchLink = opts.watchProviderLink || opts.justWatchUrl || opts.fallbackJustWatch || movie.watch_provider_link || null;
+  
+  // Rejet absolu des liens TMDB / JustWatch intermédiaires
+  const rawWatchLink = opts.watchProviderLink || opts.justWatchUrl || opts.fallbackJustWatch || movie.watch_provider_link || null;
+  const watchLink = isIntermediaryWatchLink(rawWatchLink) ? null : rawWatchLink;
   const useIntent = opts.useAndroidIntent ?? false;
 
   // 1. NETFLIX
@@ -267,40 +358,44 @@ export const getPlatformDirectUrl = (
 
   // 6. MAX (HBO)
   if (name.includes('max') || name.includes('hbo')) {
-    if (watchLink) return watchLink;
+    if (watchLink && watchLink.includes('max.com')) return watchLink;
     return `https://www.max.com/search?q=${encodedTitle}`;
   }
 
   // 7. PARAMOUNT+
   if (name.includes('paramount')) {
-    if (watchLink) return watchLink;
-    return `https://www.paramountplus.com/search/?q=${encodedTitle}`;
+    if (watchLink && watchLink.includes('paramountplus.com')) return watchLink;
+    return `https://www.paramountplus.com/search/?query=${encodedTitle}`;
   }
 
   // 8. TF1+ / TF1
   if (name.includes('tf1')) {
-    if (watchLink) return watchLink;
+    if (watchLink && watchLink.includes('tf1.fr')) return watchLink;
     return `https://www.tf1.fr/recherche?q=${encodedTitle}`;
   }
 
   // 9. FRANCE.TV
   if (name.includes('france') || name.includes('francetv')) {
-    if (watchLink) return watchLink;
+    if (watchLink && watchLink.includes('france.tv')) return watchLink;
     return `https://www.france.tv/recherche/?q=${encodedTitle}`;
   }
 
   // 10. ARTE
   if (name.includes('arte')) {
-    if (watchLink) return watchLink;
+    if (watchLink && watchLink.includes('arte.tv')) return watchLink;
     return `https://www.arte.tv/fr/search/?q=${encodedTitle}`;
   }
 
   // 11. 6PLAY / M6+
   if (name.includes('6play') || name.includes('m6')) {
-    if (watchLink) return watchLink;
+    if (watchLink && watchLink.includes('6play.fr')) return watchLink;
     return `https://www.6play.fr/recherche?q=${encodedTitle}`;
   }
 
-  // Fallback universel : lien certifié JustWatch ou recherche Google ciblée
-  return watchLink || `https://www.google.com/search?q=regarder+${encodedTitle}+streaming`;
+  // Fallback direct avec getDirectStreamingUrl (garantit de ne jamais aller sur themoviedb.org)
+  if (name) {
+    return getDirectStreamingUrl(name, title, year);
+  }
+
+  return `https://www.google.com/search?q=regarder+${encodedTitle}+streaming`;
 };
