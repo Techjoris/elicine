@@ -184,23 +184,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
     const q = (queryText !== undefined ? queryText : searchPrompt).trim();
     setErrorMessage(null);
 
-    // Intercept immediately if daily quota reaches 0 for non-Pro user
-    if (!user?.isPro && quota.remaining <= 0) {
-      setIsProModalOpen(true);
-      showToast('⚡ Quota IA épuisé. Passez à Éliciné Pro pour un accès illimité !');
-      return;
-    }
-
     if (!q) {
       showToast('Veuillez décrire le type de film ou l\'ambiance souhaitée.');
       return;
     }
 
-    const permitted = useAiQuota();
-    if (!permitted) {
-      setIsProModalOpen(true);
-      return;
-    }
+    useAiQuota();
 
     setIsAiLoading(true);
     if (onAiSearchStart) {
@@ -333,17 +322,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 e.preventDefault();
                 setIsProModalOpen(true);
               }}
-              title="Crédits IA journaliers"
-              className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-                user?.isPro
-                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                  : quota.remaining > 0 
-                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20' 
-                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-              }`}
+              title="Exploration IA illimitée"
+              className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
             >
               <span>⚡</span>
-              <span className="font-bold">{user?.isPro ? 'Illimité' : `${quota.remaining}/3`}</span>
+              <span className="font-bold">Illimité</span>
             </button>
 
             {/* Explorer Button */}

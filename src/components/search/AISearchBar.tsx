@@ -50,24 +50,13 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   const handleSearch = async (textToSearch?: string) => {
     const query = (textToSearch || prompt).trim();
 
-    // Intercept immediately if quota is 0 for non-Pro user
-    if (!user?.isPro && quota.remaining <= 0) {
-      setIsProModalOpen(true);
-      showToast('⚡ Quota IA épuisé. Passez à Éliciné Pro pour un accès illimité !');
-      return;
-    }
-
     if (!query) {
       showToast('Veuillez décrire le film ou l\'ambiance souhaitée.');
       return;
     }
 
-    // Check & decrement quota
-    const permitted = useAiQuota();
-    if (!permitted) {
-      setIsProModalOpen(true);
-      return;
-    }
+    // Check & decrement quota (bypassed)
+    useAiQuota();
 
     setIsLoading(true);
     try {
@@ -125,17 +114,11 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             <button
               type="button"
               onClick={() => setIsProModalOpen(true)}
-              title="Crédits IA journaliers"
-              className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-                user?.isPro
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
-                  : quota.remaining > 0 
-                    ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20' 
-                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
-              }`}
+              title="Exploration IA illimitée"
+              className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
             >
               <span>⚡</span>
-              <span className="font-bold">{user?.isPro ? 'Illimité' : `${quota.remaining}/3`}</span>
+              <span className="font-bold">Illimité</span>
             </button>
 
             {/* Explorer Button */}

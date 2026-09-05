@@ -106,8 +106,8 @@ const DEFAULT_USER: UserProfile = {
 };
 
 const DEFAULT_QUOTA: AIQuota = {
-  remaining: 3,
-  max: 3,
+  remaining: 999,
+  max: 999,
   lastResetDate: new Date().toISOString().split('T')[0]
 };
 
@@ -151,16 +151,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const hasApiKeysConfigured = true;
 
-  // 2. Quota IA
+  // 2. Quota IA (Illimité)
   const [quota, setQuota] = useState<AIQuota>(() => {
-    const saved = localStorage.getItem('cineia_quota');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
     return DEFAULT_QUOTA;
   });
 
@@ -335,29 +327,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Quota Management
+  // Quota Management - Bypassed for unlimited exploration
   const useAiQuota = (): boolean => {
-    if (user?.isPro) return true;
-
-    if (quota.remaining <= 0) {
-      setIsProModalOpen(true);
-      return false;
-    }
-
-    setQuota(prev => ({
-      ...prev,
-      remaining: Math.max(0, prev.remaining - 1)
-    }));
     return true;
   };
 
   const resetQuota = () => {
-    setQuota({
-      remaining: 3,
-      max: 3,
-      lastResetDate: new Date().toISOString().split('T')[0]
-    });
-    showToast('⚡ Quota IA réinitialisé à 3/3 !');
+    setQuota(DEFAULT_QUOTA);
+    showToast('⚡ Quota IA illimité actif !');
   };
 
   // User Actions

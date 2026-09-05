@@ -189,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Crédits IA</span>
           </div>
           <span className="text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
-            ⚡ {user?.isPro ? 'Illimité' : `${quota.remaining}/3 recherches`}
+            ⚡ Illimité
           </span>
         </div>
 

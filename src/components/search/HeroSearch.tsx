@@ -22,23 +22,12 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   const handleSearchSubmit = () => {
     const q = query.trim();
 
-    // Intercept when quota is 0 for non-Pro users
-    if (!isPro && remainingCredits <= 0) {
-      setIsProModalOpen(true);
-      showToast('⚡ Quota IA épuisé. Passez à Éliciné Pro pour un accès illimité !');
-      return;
-    }
-
     if (!q) {
       showToast('Veuillez décrire le film ou l\'ambiance souhaitée.');
       return;
     }
 
-    const permitted = useAiQuota();
-    if (!permitted) {
-      setIsProModalOpen(true);
-      return;
-    }
+    useAiQuota();
 
     if (onSearch) {
       onSearch(q);
@@ -70,17 +59,11 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
         <button
           type="button"
           onClick={() => setIsProModalOpen(true)}
-          title="Crédits IA journaliers" 
-          className={`text-[11px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-            isPro
-              ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-              : remainingCredits > 0 
-                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20' 
-                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-          }`}
+          title="Exploration IA illimitée" 
+          className="text-[11px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
         >
           <span>⚡</span>
-          <span className="font-bold">{isPro ? 'Illimité' : `${remainingCredits}/3`}</span>
+          <span className="font-bold">Illimité</span>
         </button>
 
         {/* Explorer Button */}

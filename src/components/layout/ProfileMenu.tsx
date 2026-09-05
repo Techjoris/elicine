@@ -78,7 +78,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {user?.name || (user ? 'Mon Compte' : 'Invité')}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
-            {user?.isPro ? '👑 Pro' : `⚡ ${quota.remaining}/3 IA`}
+            {user?.isPro ? '👑 Pro' : '⚡ Illimité'}
           </span>
         </div>
 
@@ -128,7 +128,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
                   : 'bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/30'
               }`}>
-                {user?.isPro ? '👑 PRO' : `⚡ ${quota.remaining}/3`}
+                {user?.isPro ? '👑 PRO' : '⚡ Illimité'}
               </span>
             </div>
 
