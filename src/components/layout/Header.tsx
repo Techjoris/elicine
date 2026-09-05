@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Menu, X, AlertTriangle } from 'lucide-react';
+import { Menu, X, AlertTriangle, LogIn } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { InstallAppButton } from '../InstallAppButton';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { SettingsModal } from '../SettingsModal';
+import { ProfileMenu } from './ProfileMenu';
 
 interface HeaderProps {
   onGoHome?: () => void;
@@ -13,6 +14,10 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
   const {
+    user,
+    setIsAuthModalOpen,
+    setIsProModalOpen,
+    setIsTipModalOpen,
     setIsApiSettingsModalOpen,
     hasApiKeysConfigured,
     setActiveView,
@@ -59,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
         </div>
 
         {/* Global Utilities Grouped to the Right */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           {/* Installation PWA & APK avec détection d'OS */}
           <InstallAppButton variant="header" />
 
@@ -75,6 +80,26 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
           >
             ⚙️
           </button>
+
+          {/* Profil Utilisateur / Connexion Netflix-Style */}
+          {user ? (
+            <ProfileMenu
+              onOpenSettings={handleOpenSettings}
+              onOpenPro={() => setIsProModalOpen(true)}
+              onOpenTip={() => setIsTipModalOpen(true)}
+              onOpenApiKeys={() => setIsApiSettingsModalOpen(true)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-300 hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
+              title="Se connecter ou s'inscrire"
+            >
+              <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Connexion</span>
+            </button>
+          )}
         </div>
       </header>
 

@@ -12,7 +12,7 @@ import {
   PricingBillingCycle
 } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-
+import { authService } from '../services/authService';
 
 interface AppContextType {
   // Quota & AI
@@ -22,7 +22,9 @@ interface AppContextType {
 
   // User & Auth
   user: UserProfile | null;
-  login: (email: string, name: string) => void;
+  login: (emailOrUser: string | UserProfile, name?: string) => void;
+  loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
 
@@ -164,7 +166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error(e);
       }
     }
-    return DEFAULT_USER;
+    return null;
   });
 
   // 4. Currency
@@ -175,6 +177,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 5. Watchlist
   const [watchlist, setWatchlist] = useState<Movie[]>(() => {
+    const savedUserRaw = localStorage.getItem('cineia_user');
+    if (savedUserRaw) {
+      try {
+        const u = JSON.parse(savedUserRaw);
+        if (u?.id) {
+          const userList = authService.getUserWatchlist(u.id);
+          if (userList && userList.length > 0) return userList;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
     const saved = localStorage.getItem('cineia_watchlist');
     if (saved) {
       try {
@@ -274,7 +288,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     localStorage.setItem('cineia_watchlist', JSON.stringify(watchlist));
-  }, [watchlist]);
+    if (user?.id) {
+      authService.saveUserWatchlist(user.id, watchlist);
+    }
+  }, [watchlist, user]);
 
   useEffect(() => {
     localStorage.setItem('cineia_alerts', JSON.stringify(alerts));
@@ -320,25 +337,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // User Actions
-  const login = (email: string, name: string) => {
+  const login = (emailOrUser: string | UserProfile, name?: string) => {
+    if (typeof emailOrUser === 'object') {
+      setUser(emailOrUser);
+      if (emailOrUser.myList && emailOrUser.myList.length > 0) {
+        setWatchlist(emailOrUser.myList);
+      }
+      setIsAuthModalOpen(false);
+      showToast(`👋 Bienvenue sur Éliciné, ${emailOrUser.name} !`);
+      return;
+    }
+
     const refCode = 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase();
     const referredBy = localStorage.getItem('cineia_referred_by') || undefined;
+    const finalName = name || emailOrUser.split('@')[0];
     const newUser: UserProfile = {
       id: 'usr_' + Date.now(),
-      email,
-      name,
+      email: emailOrUser,
+      name: finalName,
       isPro: false,
       referralCode: refCode,
       referredBy,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      myList: watchlist
     };
     setUser(newUser);
+    authService.saveLocalAccount(newUser);
     setIsAuthModalOpen(false);
-    showToast(`👋 Bienvenue sur CinéIA, ${name} !`);
+    showToast(`👋 Bienvenue sur Éliciné, ${finalName} !`);
+  };
+
+  const loginWithCredentials = async (identifier: string, password: string) => {
+    const res = await authService.login(identifier, password);
+    if (res.success && res.user) {
+      setUser(res.user);
+      if (res.user.myList && res.user.myList.length > 0) {
+        setWatchlist(res.user.myList);
+      }
+      setIsAuthModalOpen(false);
+      showToast(`👋 Bon retour sur Éliciné, ${res.user.name} !`);
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Identifiant ou mot de passe incorrect.' };
+  };
+
+  const registerWithCredentials = async (username: string, email: string, password: string) => {
+    const res = await authService.register(username, email, password);
+    if (res.success && res.user) {
+      const userWithList: UserProfile = {
+        ...res.user,
+        myList: watchlist
+      };
+      setUser(userWithList);
+      authService.saveUserWatchlist(res.user.id, watchlist);
+      setIsAuthModalOpen(false);
+      showToast(`🎉 Bienvenue sur Éliciné, ${res.user.name} !`);
+      return { success: true };
+    }
+    return { success: false, error: res.error || "Erreur lors de l'inscription." };
   };
 
   const logout = () => {
     setUser(null);
+    authService.logout();
+    setIsAuthModalOpen(false);
     showToast('Déconnexion réussie.');
   };
 
@@ -490,6 +552,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetQuota,
         user,
         login,
+        loginWithCredentials,
+        registerWithCredentials,
         logout,
         upgradeToPro,
         apiSettings,

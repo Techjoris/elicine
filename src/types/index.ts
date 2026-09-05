@@ -51,12 +51,15 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
+  username?: string;
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly';
   proPlanExpiresAt?: string | null;
   referralCode: string;
   referredBy?: string | null;
   createdAt: string;
+  myList?: Movie[];
+  token?: string;
 }
 
 export interface ApiSettings {

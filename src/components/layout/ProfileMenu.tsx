@@ -5,7 +5,9 @@ import {
   Key, 
   LogOut, 
   LogIn, 
-  ChevronDown
+  ChevronDown,
+  User,
+  Heart
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -22,7 +24,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenTip,
   onOpenApiKeys
 }) => {
-  const { user, quota, logout, setIsAuthModalOpen, hasApiKeysConfigured } = useApp();
+  const { user, quota, logout, setIsAuthModalOpen, hasApiKeysConfigured, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +97,41 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           {/* Action Items */}
           <div className="space-y-0.5 text-xs">
             
+            {/* 👤 Mon Compte & Profil */}
+            {user && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setIsAuthModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-200 hover:text-white hover:bg-slate-900 transition-colors text-left cursor-pointer"
+              >
+                <User className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="font-semibold">Mon Profil</span>
+              </button>
+            )}
+
+            {/* ❤️ Ma Liste */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setActiveView('watchlist');
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:text-white hover:bg-slate-900 transition-colors text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Heart className="w-3.5 h-3.5 text-red-400" />
+                <span className="font-medium">Ma Liste</span>
+              </div>
+              {watchlist.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-md bg-red-500/20 text-red-300 text-[10px] font-bold">
+                  {watchlist.length}
+                </span>
+              )}
+            </button>
+
             {/* ⚙️ Paramètres de visionnage */}
             <button
               type="button"

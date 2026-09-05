@@ -11,7 +11,8 @@ import {
   Film, 
   PanelLeftClose,
   Plus,
-  X
+  X,
+  User
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ActiveView } from '../../types';
@@ -217,34 +218,62 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
         {/* User Profile Card */}
         <div 
           onClick={() => setIsAuthModalOpen(true)}
-          className="p-2.5 rounded-2xl bg-[#0f141f] hover:bg-slate-850 border border-[#1e293b] cursor-pointer transition-all flex items-center justify-between"
+          className="p-2.5 rounded-2xl bg-[#0f141f] hover:bg-slate-850 border border-[#1e293b] cursor-pointer transition-all flex items-center justify-between group select-none"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            {/* Round Avatar */}
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-              user?.isPro
-                ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
-                : 'bg-gradient-to-tr from-blue-600 to-cyan-500 text-white'
-            }`}>
-              {user?.name 
-                ? user.name.slice(0, 2).toUpperCase() 
-                : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC')}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-white truncate">
-                {user?.name || 'Cinéphile'}
-              </span>
-              <span className="text-[10px] text-slate-400 truncate">
-                {user?.email || 'invite@elicine.app'}
-              </span>
-            </div>
-          </div>
+          {user ? (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Round Avatar */}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
+                  user.isPro
+                    ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
+                    : 'bg-gradient-to-tr from-blue-600 to-cyan-500 text-white'
+                }`}>
+                  {user.name 
+                    ? user.name.slice(0, 2).toUpperCase() 
+                    : (user.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC')}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors">
+                    {user.name}
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    {user.email}
+                  </span>
+                </div>
+              </div>
 
-          {/* Gold Badge 👑 Pro */}
-          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-black flex items-center gap-1 flex-shrink-0 shadow-neon-gold">
-            <Crown className="w-2.5 h-2.5" />
-            {user?.isPro ? 'Pro' : 'Gratuit'}
-          </span>
+              {/* Badge */}
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
+                user.isPro
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-gold'
+                  : 'bg-slate-800 text-slate-300 border border-slate-700'
+              }`}>
+                {user.isPro && <Crown className="w-2.5 h-2.5" />}
+                {user.isPro ? 'Pro' : 'Gratuit'}
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 group-hover:text-white group-hover:border-cyan-500/40 transition-colors">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
+                    Se connecter
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    Sauvegarder ma liste
+                  </span>
+                </div>
+              </div>
+
+              <span className="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold group-hover:bg-cyan-500/25 transition-colors">
+                Connexion
+              </span>
+            </>
+          )}
         </div>
 
         {/* CONTRÔLE VISIBILITÉ DEV : Mettre à false lors de la mise en production */}
