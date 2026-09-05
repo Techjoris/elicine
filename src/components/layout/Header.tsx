@@ -29,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
   return (
     <div className="sticky top-0 z-[60] w-full flex flex-col">
       {/* Main Top Navbar - Ultra Épurée */}
-      <header className="h-16 w-full flex items-center justify-between md:justify-end px-4 sm:px-6 lg:px-8 bg-white/90 dark:bg-[#07090e]/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/40 relative transition-all">
+      <header className="h-16 w-full flex items-center justify-between md:justify-end px-4 sm:px-6 lg:px-8 bg-white/95 dark:bg-[#07090e]/95 border-b border-slate-200/80 dark:border-slate-800/40 relative transition-all">
         {/* Mobile-only Controls (Hamburger + Logo when sidebar is hidden) */}
         <div className="flex md:hidden items-center gap-3">
           <button

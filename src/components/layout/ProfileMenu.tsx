@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { 
   Crown, 
   Coffee, 
@@ -31,6 +30,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -42,7 +42,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, []);
+  }, [open]);
 
   const initials = user?.name
     ? user.name.slice(0, 2).toUpperCase()
@@ -90,20 +90,25 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
       {/* Dropdown Card */}
       {open && (
         <>
-          {/* Backdrop overlay on mobile for clean tap-outside closing */}
-          {typeof document !== 'undefined' && createPortal(
-            <div 
-              className="fixed inset-0 z-[95] bg-black/40 md:hidden animate-in fade-in duration-150"
-              onClick={() => setOpen(false)}
-              aria-hidden="true"
-            />,
-            document.body
-          )}
+          {/* Backdrop overlay for outside tap/click closing */}
+          <div 
+            className="fixed inset-0 z-[105] bg-black/25 md:bg-transparent"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+            aria-hidden="true"
+          />
 
-          <div className="absolute right-0 mt-2 w-64 sm:w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-[#11131a] border border-slate-200 dark:border-zinc-800 shadow-2xl shadow-slate-900/15 dark:shadow-black/60 p-2 z-[100] animate-in fade-in zoom-in-95 duration-150">
+          <div 
+            className="absolute right-0 mt-2 w-64 sm:w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl shadow-slate-900/15 dark:shadow-black/70 p-2 z-[110] animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
             
             {/* User Info & Quota Header */}
-            <div className="p-3 bg-slate-50 dark:bg-zinc-900/90 rounded-xl border border-slate-200 dark:border-zinc-800 mb-2 flex items-center justify-between gap-2">
+            <div className="p-3 bg-slate-50 dark:bg-zinc-850/80 dark:bg-[#181a24] rounded-xl border border-slate-200 dark:border-zinc-800 mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 {user?.avatar && (
                   <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" />
@@ -136,14 +141,16 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {user && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpen(false);
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setIsAuthModalOpen(true);
+                    setOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
                 >
-                  <User className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
-                  <span className="font-semibold">Mon Profil</span>
+                  <User className="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" />
+                  <span className="font-semibold text-xs">Mon Profil</span>
                 </button>
               )}
 
@@ -151,32 +158,36 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {authService.isAdmin(user) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpen(false);
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setActiveView('admin');
+                    setOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 transition-colors text-left cursor-pointer font-bold border border-cyan-500/30 dark:border-cyan-500/20"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 transition-colors text-left cursor-pointer font-bold border border-cyan-500/30 dark:border-cyan-500/20"
                 >
-                  <Shield className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
-                  <span>Console Admin</span>
+                  <Shield className="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" />
+                  <span className="text-xs">Console Admin</span>
                 </button>
               )}
 
               {/* ❤️ Ma Liste */}
               <button
                 type="button"
-                onClick={() => {
-                  setOpen(false);
+                onClick={(e) => {
+                  e.stopPropagation();
                   setActiveView('watchlist');
+                  setOpen(false);
                 }}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
               >
-                <div className="flex items-center gap-2.5">
-                  <Heart className="w-4 h-4 text-red-500 dark:text-red-400" />
-                  <span className="font-medium">Ma Liste</span>
+                <div className="flex items-center gap-3">
+                  <Heart className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0" />
+                  <span className="font-medium text-xs">Ma Liste</span>
                 </div>
                 {watchlist.length > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-md bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[10px] font-bold">
                     {watchlist.length}
                   </span>
                 )}
@@ -185,40 +196,46 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {/* ⚙️ Paramètres */}
               <button
                 type="button"
-                onClick={() => {
-                  setOpen(false);
+                onClick={(e) => {
+                  e.stopPropagation();
                   onOpenSettings();
+                  setOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
               >
-                <Settings className="w-4 h-4 text-slate-500 dark:text-zinc-400" />
-                <span className="font-medium">Paramètres</span>
+                <Settings className="w-4 h-4 text-slate-500 dark:text-zinc-400 flex-shrink-0" />
+                <span className="font-medium text-xs">Paramètres</span>
               </button>
 
               {/* 👑 Passer à Éliciné Pro */}
               <button
                 type="button"
-                onClick={() => {
-                  setOpen(false);
+                onClick={(e) => {
+                  e.stopPropagation();
                   onOpenPro();
+                  setOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
               >
-                <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                <span className="font-bold">{user?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+                <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                <span className="font-bold text-xs">{user?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
               {/* 🎁 Soutenir le projet */}
               <button
                 type="button"
-                onClick={() => {
-                  setOpen(false);
+                onClick={(e) => {
+                  e.stopPropagation();
                   onOpenTip();
+                  setOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
               >
-                <Coffee className="w-4 h-4 text-orange-500 dark:text-orange-400" />
-                <span className="font-medium">Soutenir le projet</span>
+                <Coffee className="w-4 h-4 text-orange-500 dark:text-orange-400 flex-shrink-0" />
+                <span className="font-medium text-xs">Soutenir le projet</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />
@@ -227,26 +244,30 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {user ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpen(false);
+                  onClick={(e) => {
+                    e.stopPropagation();
                     logout();
+                    setOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer font-medium"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer font-medium"
                 >
-                  <LogOut className="w-4 h-4 text-red-500" />
-                  <span>Déconnexion</span>
+                  <LogOut className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <span className="text-xs">Déconnexion</span>
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpen(false);
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setIsAuthModalOpen(true);
+                    setOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-blue-600 dark:text-sky-400 hover:text-blue-700 dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-sky-950/30 transition-colors text-left cursor-pointer font-bold"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-blue-600 dark:text-sky-400 hover:text-blue-700 dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-sky-950/30 transition-colors text-left cursor-pointer font-bold"
                 >
-                  <LogIn className="w-4 h-4 text-blue-600 dark:text-sky-400" />
-                  <span>Se connecter / S'inscrire</span>
+                  <LogIn className="w-4 h-4 text-blue-600 dark:text-sky-400 flex-shrink-0" />
+                  <span className="text-xs">Se connecter / S'inscrire</span>
                 </button>
               )}
 
