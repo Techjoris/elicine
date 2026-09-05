@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Menu, X, AlertTriangle, LogIn } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { InstallAppButton } from '../InstallAppButton';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { SettingsModal } from '../SettingsModal';
@@ -64,10 +63,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
         </div>
 
         {/* Global Utilities Grouped to the Right */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Installation PWA & APK avec détection d'OS */}
-          <InstallAppButton variant="header" />
-
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Sélecteur de langue compact (FR / EN / ES) */}
           <LanguageSelector />
 
@@ -93,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings }) => {
             <button
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-300 hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
+              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-300 hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
               title="Se connecter ou s'inscrire"
             >
               <LogIn className="w-3.5 h-3.5 text-cyan-400" />

@@ -12,7 +12,7 @@ import {
   PanelLeftClose,
   Plus,
   X,
-  User
+  LogIn
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ActiveView } from '../../types';
@@ -215,66 +215,65 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
           </span>
         </button>
 
-        {/* User Profile Card */}
-        <div 
-          onClick={() => setIsAuthModalOpen(true)}
-          className="p-2.5 rounded-2xl bg-[#0f141f] hover:bg-slate-850 border border-[#1e293b] cursor-pointer transition-all flex items-center justify-between group select-none"
-        >
-          {user ? (
-            <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                {/* Round Avatar */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-                  user.isPro
-                    ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
-                    : 'bg-gradient-to-tr from-blue-600 to-cyan-500 text-white'
-                }`}>
-                  {user.name 
-                    ? user.name.slice(0, 2).toUpperCase() 
-                    : (user.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC')}
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors">
-                    {user.name}
-                  </span>
-                  <span className="text-[10px] text-slate-400 truncate">
-                    {user.email}
-                  </span>
-                </div>
-              </div>
-
-              {/* Badge */}
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
+        {/* User Profile Card (Uniquement lorsque connecté) */}
+        {user && (
+          <div 
+            onClick={() => {
+              setIsAuthModalOpen(true);
+              setIsMobileMenuOpen(false);
+            }}
+            className="p-2.5 rounded-2xl bg-[#0f141f] hover:bg-slate-850 border border-[#1e293b] hover:border-slate-700 cursor-pointer transition-all flex items-center justify-between group select-none"
+            title="Gérer mon profil"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Round Avatar */}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
                 user.isPro
-                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-gold'
-                  : 'bg-slate-800 text-slate-300 border border-slate-700'
+                  ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
+                  : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
               }`}>
-                {user.isPro && <Crown className="w-2.5 h-2.5" />}
-                {user.isPro ? 'Pro' : 'Gratuit'}
-              </span>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 group-hover:text-white group-hover:border-cyan-500/40 transition-colors">
-                  <User className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    Se connecter
-                  </span>
-                  <span className="text-[10px] text-slate-400 truncate">
-                    Sauvegarder ma liste
-                  </span>
-                </div>
+                {user.name 
+                  ? user.name.slice(0, 2).toUpperCase() 
+                  : (user.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC')}
               </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors">
+                  {user.name}
+                </span>
+                <span className="text-[10px] text-slate-400 truncate">
+                  {user.email}
+                </span>
+              </div>
+            </div>
 
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold group-hover:bg-cyan-500/25 transition-colors">
-                Connexion
-              </span>
-            </>
-          )}
-        </div>
+            {/* Badge */}
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
+              user.isPro
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-gold'
+                : 'bg-slate-800 text-slate-300 border border-slate-700'
+            }`}>
+              {user.isPro && <Crown className="w-2.5 h-2.5" />}
+              {user.isPro ? 'Pro' : 'Gratuit'}
+            </span>
+          </div>
+        )}
+
+        {/* Accès Connexion Mobile Drawer (visible uniquement dans le menu tiroir mobile si déconnecté) */}
+        {!user && (
+          <div className="md:hidden pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setIsAuthModalOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-300 hover:text-white border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer select-none"
+            >
+              <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Se connecter / S'inscrire</span>
+            </button>
+          </div>
+        )}
 
         {/* CONTRÔLE VISIBILITÉ DEV : Mettre à false lors de la mise en production */}
         {SHOW_DEV_PANEL && (
