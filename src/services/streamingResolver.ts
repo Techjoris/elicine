@@ -130,8 +130,7 @@ export async function getMediaProviders(
 
     // 1. Test local (incluant flatrate, free et replay avec pub)
     const userCountryData = results[userCountryCode] || results['FR'] || results['US'] || results['GB'];
-    const rawJustWatchLink = userCountryData?.link || null;
-    const justWatchLink = isIntermediaryWatchLink(rawJustWatchLink) ? null : rawJustWatchLink;
+    const justWatchLink = userCountryData?.link || null;
 
     const localFlatrate = [
       ...(results[userCountryCode]?.flatrate || []),

@@ -452,8 +452,7 @@ export async function getWatchProviders(
 
     if (!countryData) return [];
 
-    const rawLink = countryData.link || null;
-    const justWatchLink = isIntermediaryWatchLink(rawLink) ? null : rawLink;
+    const justWatchLink = countryData.link || null;
 
     // Fusionner flatrate (abonnements), free (gratuit) et ads (replay avec pub : TF1+, 6play...)
     const rawList = [

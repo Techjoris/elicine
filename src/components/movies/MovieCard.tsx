@@ -182,8 +182,10 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             {/* Grille fluide de badges plateformes locales */}
             <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
               {streamingAction.providers.map((p) => {
+                const catalogId = movie.netflix_id || movie.netflixId;
+                const watchLink = movie.watch_provider_link;
                 const directUrl = (!p.actionUrl || isIntermediaryWatchLink(p.actionUrl))
-                  ? getDirectStreamingUrl(p.name, movie.title, releaseYear)
+                  ? getDirectStreamingUrl(p.name, movie.title, releaseYear, catalogId, watchLink)
                   : p.actionUrl;
 
                 return (

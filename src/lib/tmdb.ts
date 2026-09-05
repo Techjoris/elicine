@@ -5,3 +5,4 @@
 export * from '../services/tmdb';
 export * from '../services/streamingResolver';
 export * from '../services/deepLinkHelper';
+export * from './streamingLinks';

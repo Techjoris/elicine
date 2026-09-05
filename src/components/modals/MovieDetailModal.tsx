@@ -376,8 +376,10 @@ export const MovieDetailModal: React.FC = () => {
                   <div className="flex flex-wrap gap-2">
                     {providerData.svod.providers.map((p, i) => {
                       const releaseYear = selectedMovie.release_date ? selectedMovie.release_date.split('-')[0] : '';
+                      const catalogId = selectedMovie.netflix_id || selectedMovie.netflixId || p.providerId;
+                      const watchLink = providerData.svod.justWatchLink || selectedMovie.watch_provider_link;
                       const directUrl = (!p.url || isIntermediaryWatchLink(p.url))
-                        ? getDirectStreamingUrl(p.name, selectedMovie.title, releaseYear)
+                        ? getDirectStreamingUrl(p.name, selectedMovie.title, releaseYear, catalogId, watchLink)
                         : p.url;
 
                       return (
@@ -386,6 +388,7 @@ export const MovieDetailModal: React.FC = () => {
                           href={directUrl} 
                           target="_blank" 
                           rel="noopener noreferrer" 
+                          onClick={(e) => e.stopPropagation()}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105"
                           title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                         >
@@ -448,6 +451,7 @@ export const MovieDetailModal: React.FC = () => {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all text-xs text-slate-300 hover:text-white"
                     title={`Louer ou acheter sur ${item.name}`}
                   >
