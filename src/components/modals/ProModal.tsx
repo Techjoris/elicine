@@ -52,8 +52,8 @@ export const ProModal: React.FC = () => {
   };
 
   const handleOpenPayPal = ({ currency, amount, plan }: CheckoutPayload) => {
-    showToast('Ouverture du paiement sécurisé PayPal...');
-    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank');
+    showToast('Ouverture du paiement sécurisé PayPal Pro...');
+    window.open('https://www.paypal.com/ncp/payment/JMKSFXQKQPV82', '_blank', 'noopener,noreferrer');
   };
 
   return (
