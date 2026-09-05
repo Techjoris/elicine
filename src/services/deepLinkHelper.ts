@@ -1,22 +1,306 @@
 /**
- * Générateur de liens directs vers les moteurs de recherche des plateformes de streaming
+ * Module de Deep-Linking Direct pour Plateformes de Streaming
+ * (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.)
+ *
+ * Hiérarchie de résolution stricte :
+ * 1. Priorité 1 : Si un ID de catalogue spécifique est disponible (netflix_id, prime_id, disney_id...),
+ *    formater en deep-link officiel direct ouvrant la fiche dans l'application mobile ou web :
+ *    - Netflix : https://www.netflix.com/title/${netflixId}
+ *    - Prime Video : https://www.amazon.fr/gp/video/detail/${primeId} ou https://www.primevideo.com/detail/${primeId}
+ *    - Disney+ : https://www.disneyplus.com/video/${disneyId}
+ *    - Canal+ : https://www.canalplus.com/programme-tv/${canalId}
+ * 2. Priorité 2 : Utiliser l'URL directe fournie par TMDB Watch Providers (results.FR.link / JustWatch certifié).
+ * 3. Priorité 3 (Fallback recherche directe optimisée) :
+ *    Cibler la recherche de la plateforme avec encodage strict et schémas d'intent Android optionnels.
+ */
+
+export interface StreamingDeepLinkOptions {
+  providerName?: string;
+  providerKey?: string;
+  movieTitle: string;
+  movie?: any;
+  netflixId?: string | number | null;
+  primeId?: string | number | null;
+  disneyId?: string | number | null;
+  canalId?: string | number | null;
+  appleId?: string | number | null;
+  watchProviderLink?: string | null;
+  justWatchUrl?: string | null;
+  fallbackJustWatch?: string | null;
+  useAndroidIntent?: boolean;
+}
+
+/**
+ * Détecte si le client actuel tourne sous Android
+ */
+export const isAndroidClient = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return /android/i.test(navigator.userAgent || '');
+};
+
+/**
+ * Construit un schéma d'intent Android officiel avec URL de repli sécurisée pour le navigateur
+ */
+export const buildAndroidIntentUrl = (
+  path: string,
+  packageName: string,
+  fallbackUrl: string
+): string => {
+  const cleanPath = path.replace(/^https?:\/\//, '');
+  const encodedFallback = encodeURIComponent(fallbackUrl);
+  return `intent://${cleanPath}#Intent;scheme=https;package=${packageName};S.browser_fallback_url=${encodedFallback};end`;
+};
+
+/**
+ * 1. NETFLIX DEEP-LINK
+ */
+export const getNetflixDeepLink = (
+  movieTitle: string,
+  netflixId?: string | number | null,
+  watchProviderLink?: string | null,
+  useIntent: boolean = false
+): string => {
+  const cleanId = netflixId ? String(netflixId).trim() : null;
+  const encodedTitle = encodeURIComponent(movieTitle.trim());
+
+  // Priorité 1 : ID direct de catalogue Netflix
+  if (cleanId) {
+    const universalUrl = `https://www.netflix.com/title/${cleanId}`;
+    if (useIntent && isAndroidClient()) {
+      return buildAndroidIntentUrl(`www.netflix.com/title/${cleanId}`, 'com.netflix.mediaclient', universalUrl);
+    }
+    return universalUrl;
+  }
+
+  // Priorité 2 : Lien certifié TMDB Watch Providers / JustWatch
+  if (watchProviderLink && watchProviderLink.trim()) {
+    return watchProviderLink.trim();
+  }
+
+  // Priorité 3 : Recherche ciblée in-app / web
+  const searchFallback = `https://www.netflix.com/search?q=${encodedTitle}`;
+  if (useIntent && isAndroidClient()) {
+    return buildAndroidIntentUrl(`www.netflix.com/search?q=${encodedTitle}`, 'com.netflix.mediaclient', searchFallback);
+  }
+  return searchFallback;
+};
+
+/**
+ * 2. AMAZON PRIME VIDEO DEEP-LINK
+ */
+export const getPrimeVideoDeepLink = (
+  movieTitle: string,
+  primeId?: string | number | null,
+  watchProviderLink?: string | null,
+  useIntent: boolean = false
+): string => {
+  const cleanId = primeId ? String(primeId).trim() : null;
+  const encodedTitle = encodeURIComponent(movieTitle.trim());
+
+  // Priorité 1 : ID direct Amazon Prime Video
+  if (cleanId) {
+    const directUrl = cleanId.startsWith('amzn') 
+      ? `https://www.amazon.fr/gp/video/detail/${cleanId}`
+      : `https://www.primevideo.com/detail/${cleanId}`;
+    if (useIntent && isAndroidClient()) {
+      return buildAndroidIntentUrl(`www.primevideo.com/detail/${cleanId}`, 'com.amazon.avod.thirdpartyclient', directUrl);
+    }
+    return directUrl;
+  }
+
+  // Priorité 2 : Lien certifié JustWatch
+  if (watchProviderLink && watchProviderLink.trim()) {
+    return watchProviderLink.trim();
+  }
+
+  // Priorité 3 : Recherche ciblée in-app / web
+  const searchFallback = `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
+  if (useIntent && isAndroidClient()) {
+    return buildAndroidIntentUrl(`www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`, 'com.amazon.avod.thirdpartyclient', searchFallback);
+  }
+  return searchFallback;
+};
+
+/**
+ * 3. DISNEY+ DEEP-LINK
+ */
+export const getDisneyDeepLink = (
+  movieTitle: string,
+  disneyId?: string | number | null,
+  watchProviderLink?: string | null,
+  useIntent: boolean = false
+): string => {
+  const cleanId = disneyId ? String(disneyId).trim() : null;
+  const encodedTitle = encodeURIComponent(movieTitle.trim());
+
+  // Priorité 1 : ID direct Disney+
+  if (cleanId) {
+    const directUrl = `https://www.disneyplus.com/video/${cleanId}`;
+    if (useIntent && isAndroidClient()) {
+      return buildAndroidIntentUrl(`www.disneyplus.com/video/${cleanId}`, 'com.disney.disneyplus', directUrl);
+    }
+    return directUrl;
+  }
+
+  // Priorité 2 : Lien certifié JustWatch
+  if (watchProviderLink && watchProviderLink.trim()) {
+    return watchProviderLink.trim();
+  }
+
+  // Priorité 3 : Recherche ciblée in-app / web
+  const searchFallback = `https://www.disneyplus.com/search?q=${encodedTitle}`;
+  if (useIntent && isAndroidClient()) {
+    return buildAndroidIntentUrl(`www.disneyplus.com/search?q=${encodedTitle}`, 'com.disney.disneyplus', searchFallback);
+  }
+  return searchFallback;
+};
+
+/**
+ * 4. CANAL+ (myCANAL) DEEP-LINK
+ */
+export const getCanalDeepLink = (
+  movieTitle: string,
+  canalId?: string | number | null,
+  watchProviderLink?: string | null,
+  useIntent: boolean = false
+): string => {
+  const cleanId = canalId ? String(canalId).trim() : null;
+  const encodedTitle = encodeURIComponent(movieTitle.trim());
+
+  if (cleanId) {
+    const directUrl = `https://www.canalplus.com/programme-tv/${cleanId}`;
+    if (useIntent && isAndroidClient()) {
+      return buildAndroidIntentUrl(`www.canalplus.com/programme-tv/${cleanId}`, 'com.canal.android.canal', directUrl);
+    }
+    return directUrl;
+  }
+
+  if (watchProviderLink && watchProviderLink.trim()) {
+    return watchProviderLink.trim();
+  }
+
+  const searchFallback = `https://www.canalplus.com/recherche/${encodedTitle}`;
+  if (useIntent && isAndroidClient()) {
+    return buildAndroidIntentUrl(`www.canalplus.com/recherche/${encodedTitle}`, 'com.canal.android.canal', searchFallback);
+  }
+  return searchFallback;
+};
+
+/**
+ * 5. APPLE TV+ DEEP-LINK
+ */
+export const getAppleTvDeepLink = (
+  movieTitle: string,
+  appleId?: string | number | null,
+  watchProviderLink?: string | null
+): string => {
+  const cleanId = appleId ? String(appleId).trim() : null;
+  if (cleanId) {
+    return `https://tv.apple.com/movie/${cleanId}`;
+  }
+  if (watchProviderLink && watchProviderLink.trim()) {
+    return watchProviderLink.trim();
+  }
+  return `https://tv.apple.com/search?term=${encodeURIComponent(movieTitle.trim())}`;
+};
+
+/**
+ * Résolveur Universel de Deep-Linking Direct
+ * Supporte la signature par objet d'options ou la signature classique (providerName, movieTitle, fallbackJustWatch).
  */
 export const getPlatformDirectUrl = (
-  providerName: string,
-  movieTitle: string,
-  fallbackJustWatch?: string | null
+  providerNameOrOptions: string | StreamingDeepLinkOptions,
+  legacyMovieTitle?: string,
+  legacyFallbackJustWatch?: string | null
 ): string => {
-  const name = (providerName || '').toLowerCase();
-  const encodedTitle = encodeURIComponent(movieTitle);
+  // Détection de l'appel objet vs arguments séparés
+  let opts: StreamingDeepLinkOptions;
+  if (typeof providerNameOrOptions === 'object' && providerNameOrOptions !== null) {
+    opts = providerNameOrOptions;
+  } else {
+    opts = {
+      providerName: typeof providerNameOrOptions === 'string' ? providerNameOrOptions : '',
+      movieTitle: legacyMovieTitle || '',
+      watchProviderLink: legacyFallbackJustWatch,
+      fallbackJustWatch: legacyFallbackJustWatch
+    };
+  }
 
-  if (name.includes('netflix')) return `https://www.netflix.com/search?q=${encodedTitle}`;
-  if (name.includes('amazon') || name.includes('prime')) return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
-  if (name.includes('disney')) return `https://www.disneyplus.com/search?q=${encodedTitle}`;
-  if (name.includes('canal') || name.includes('mycanal')) return `https://www.canalplus.com/recherche?q=${encodedTitle}`;
-  if (name.includes('apple')) return `https://tv.apple.com/search?term=${encodedTitle}`;
-  if (name.includes('max') || name.includes('hbo')) return `https://www.max.com/search?q=${encodedTitle}`;
-  if (name.includes('paramount')) return `https://www.paramountplus.com/search/?q=${encodedTitle}`;
+  const name = (opts.providerName || opts.providerKey || '').toLowerCase();
+  const title = (opts.movieTitle || opts.movie?.title || '').trim();
+  const encodedTitle = encodeURIComponent(title);
 
-  // Fallback vers la page certifiée JustWatch ou recherche Google
-  return fallbackJustWatch || `https://www.google.com/search?q=regarder+${encodedTitle}+streaming`;
+  // Extraction des IDs directs depuis l'objet movie si présent
+  const movie = opts.movie || {};
+  const netflixId = opts.netflixId || movie.netflix_id || movie.netflixId || null;
+  const primeId = opts.primeId || movie.prime_id || movie.primeId || null;
+  const disneyId = opts.disneyId || movie.disney_id || movie.disneyId || null;
+  const canalId = opts.canalId || movie.canal_id || movie.canalId || null;
+  const appleId = opts.appleId || movie.apple_id || movie.appleId || null;
+  const watchLink = opts.watchProviderLink || opts.justWatchUrl || opts.fallbackJustWatch || movie.watch_provider_link || null;
+  const useIntent = opts.useAndroidIntent ?? false;
+
+  // 1. NETFLIX
+  if (name.includes('netflix')) {
+    return getNetflixDeepLink(title, netflixId, watchLink, useIntent);
+  }
+
+  // 2. AMAZON PRIME VIDEO
+  if (name.includes('amazon') || name.includes('prime')) {
+    return getPrimeVideoDeepLink(title, primeId, watchLink, useIntent);
+  }
+
+  // 3. DISNEY+
+  if (name.includes('disney')) {
+    return getDisneyDeepLink(title, disneyId, watchLink, useIntent);
+  }
+
+  // 4. CANAL+ / myCANAL
+  if (name.includes('canal') || name.includes('mycanal')) {
+    return getCanalDeepLink(title, canalId, watchLink, useIntent);
+  }
+
+  // 5. APPLE TV+
+  if (name.includes('apple')) {
+    return getAppleTvDeepLink(title, appleId, watchLink);
+  }
+
+  // 6. MAX (HBO)
+  if (name.includes('max') || name.includes('hbo')) {
+    if (watchLink) return watchLink;
+    return `https://www.max.com/search?q=${encodedTitle}`;
+  }
+
+  // 7. PARAMOUNT+
+  if (name.includes('paramount')) {
+    if (watchLink) return watchLink;
+    return `https://www.paramountplus.com/search/?q=${encodedTitle}`;
+  }
+
+  // 8. TF1+ / TF1
+  if (name.includes('tf1')) {
+    if (watchLink) return watchLink;
+    return `https://www.tf1.fr/recherche?q=${encodedTitle}`;
+  }
+
+  // 9. FRANCE.TV
+  if (name.includes('france') || name.includes('francetv')) {
+    if (watchLink) return watchLink;
+    return `https://www.france.tv/recherche/?q=${encodedTitle}`;
+  }
+
+  // 10. ARTE
+  if (name.includes('arte')) {
+    if (watchLink) return watchLink;
+    return `https://www.arte.tv/fr/search/?q=${encodedTitle}`;
+  }
+
+  // 11. 6PLAY / M6+
+  if (name.includes('6play') || name.includes('m6')) {
+    if (watchLink) return watchLink;
+    return `https://www.6play.fr/recherche?q=${encodedTitle}`;
+  }
+
+  // Fallback universel : lien certifié JustWatch ou recherche Google ciblée
+  return watchLink || `https://www.google.com/search?q=regarder+${encodedTitle}+streaming`;
 };

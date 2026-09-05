@@ -1,4 +1,5 @@
 import { Movie, StreamingProvider } from '../types';
+import { getPlatformDirectUrl } from './deepLinkHelper';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -432,7 +433,9 @@ export async function getWatchProviders(
   id: number,
   mediaType: 'movie' | 'tv' = 'movie',
   country: string = 'FR',
-  apiKey?: string
+  apiKey?: string,
+  movieTitle: string = '',
+  movie?: any
 ): Promise<StreamingProvider[]> {
   if (!id) {
     return [];
@@ -445,9 +448,11 @@ export async function getWatchProviders(
     const data = await res.json();
     const override = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_region_override') : null;
     const targetCountry = (override && override !== 'auto') ? override.toUpperCase() : country;
-    const countryData = data.results?.[targetCountry] || data.results?.[country] || data.results?.['US'];
+    const countryData = data.results?.[targetCountry] || data.results?.[country] || data.results?.['FR'] || data.results?.['US'];
 
     if (!countryData) return [];
+
+    const justWatchLink = countryData.link || null;
 
     // Fusionner flatrate (abonnements), free (gratuit) et ads (replay avec pub : TF1+, 6play...)
     const rawList = [
@@ -460,11 +465,29 @@ export async function getWatchProviders(
     const uniqueMap = new Map<number, StreamingProvider>();
     rawList.forEach((p: any) => {
       if (p.provider_id && !uniqueMap.has(p.provider_id)) {
+        const pKey = detectProviderKey(p.provider_name);
+        const resolvedUrl = getPlatformDirectUrl({
+          providerKey: pKey,
+          providerName: p.provider_name,
+          movieTitle,
+          movie,
+          watchProviderLink: justWatchLink,
+          netflixId: p.netflix_id || movie?.netflix_id || movie?.netflixId,
+          primeId: p.prime_id || movie?.prime_id || movie?.primeId,
+          disneyId: p.disney_id || movie?.disney_id || movie?.disneyId
+        });
+
         uniqueMap.set(p.provider_id, {
           id: p.provider_id,
           name: p.provider_name,
           logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
-          providerKey: detectProviderKey(p.provider_name)
+          providerKey: pKey,
+          deepLink: resolvedUrl,
+          directUrl: resolvedUrl,
+          justWatchUrl: justWatchLink,
+          netflixId: p.netflix_id || movie?.netflix_id || movie?.netflixId || null,
+          primeId: p.prime_id || movie?.prime_id || movie?.primeId || null,
+          disneyId: p.disney_id || movie?.disney_id || movie?.disneyId || null
         });
       }
     });

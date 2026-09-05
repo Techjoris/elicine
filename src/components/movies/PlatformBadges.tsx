@@ -26,7 +26,7 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
 
     let isMounted = true;
     const mediaType = movie.media_type === 'SÉRIE' ? 'tv' : 'movie';
-    getWatchProviders(movie.id, mediaType)
+    getWatchProviders(movie.id, mediaType, undefined, undefined, movie.title, movie)
       .then((data) => {
         if (isMounted) {
           setProviders(data || []);
@@ -42,7 +42,7 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
     return () => {
       isMounted = false;
     };
-  }, [movie.id, movie.media_type, movie.providers]);
+  }, [movie.id, movie.media_type, movie.providers, movie.title]);
 
   return (
     <div 
@@ -57,16 +57,25 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
             Disponible sur ({providers.length}) :
           </span>
           <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
-            {providers.map((p) => (
-              <a
-                key={p.id}
-                href={buildStreamingUrl(p.providerKey, p.name, movie.title)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm"
-                title={`Regarder "${movie.title}" sur ${p.name}`}
-              >
+            {providers.map((p) => {
+              const directHref = p.deepLink || p.directUrl || buildStreamingUrl(p.providerKey, p.name, movie.title, {
+                movie,
+                justWatchUrl: p.justWatchUrl || movie.watch_provider_link,
+                netflixId: movie.netflix_id || movie.netflixId || p.netflixId,
+                primeId: movie.prime_id || movie.primeId || p.primeId,
+                disneyId: movie.disney_id || movie.disneyId || p.disneyId
+              });
+
+              return (
+                <a
+                  key={p.id}
+                  href={directHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm"
+                  title={`Regarder "${movie.title}" sur ${p.name}`}
+                >
                 {p.logo ? (
                   <img
                     src={p.logo}
@@ -83,8 +92,9 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
                   {p.name}
                 </span>
                 <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">↗</span>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
         </div>
       ) : (

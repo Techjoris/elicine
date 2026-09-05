@@ -50,7 +50,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
     let isMounted = true;
     const userCountry = getCachedCountryCode();
 
-    resolveStreamingAction(movie.id, typeEndpoint, userCountry, movie.title, apiSettings?.tmdbApiKey)
+    resolveStreamingAction(movie.id, typeEndpoint, userCountry, movie.title, apiSettings?.tmdbApiKey, movie)
       .then((action) => {
         if (isMounted) {
           setStreamingAction(action);
@@ -67,7 +67,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
     return () => {
       isMounted = false;
     };
-  }, [movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey]);
+  }, [movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey, movie]);
 
   return (
     <div className="group relative flex flex-col rounded-2xl bg-white dark:bg-[#0f141f] border border-slate-200/80 dark:border-[#1e293b] hover:border-blue-500/60 dark:hover:border-[#0ea5e9]/60 transition-all duration-300 overflow-hidden shadow-sm dark:shadow-lg hover:shadow-md dark:hover:shadow-neon-cyan hover:-translate-y-1">

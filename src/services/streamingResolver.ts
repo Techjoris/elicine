@@ -1,10 +1,13 @@
 import { detectProviderKey } from './tmdb';
 import { getVpnAffiliateUrl } from '../config/affiliates';
+import { getPlatformDirectUrl, StreamingDeepLinkOptions } from './deepLinkHelper';
 
 export interface SvodProviderItem {
   name: string;
   logo: string | null;
   url?: string;
+  deepLink?: string | null;
+  providerId?: number;
 }
 
 export interface VodProviderItem {
@@ -19,29 +22,24 @@ export interface MediaProvidersResult {
     providers: SvodProviderItem[];
     targetCountry?: string | null;
     flag?: string | null;
+    justWatchLink?: string | null;
   };
   vod: VodProviderItem[];
 }
 
-// Générateur de lien de recherche officiel par plateforme SVOD
-export const buildStreamingUrl = (providerKey: string, providerName: string, title: string = ''): string => {
-  const q = encodeURIComponent(title);
-  switch (providerKey) {
-    case 'netflix': return q ? `https://www.netflix.com/search?q=${q}` : 'https://www.netflix.com';
-    case 'prime': return q ? `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${q}` : 'https://www.primevideo.com';
-    case 'disney': return q ? `https://www.disneyplus.com/search?q=${q}` : 'https://www.disneyplus.com';
-    case 'canal': return q ? `https://www.canalplus.com/recherche/${q}` : 'https://www.canalplus.com';
-    case 'tf1': return q ? `https://www.tf1.fr/recherche?q=${q}` : 'https://www.tf1.fr';
-    case 'francetv': return q ? `https://www.france.tv/recherche/?q=${q}` : 'https://www.france.tv';
-    case 'arte': return q ? `https://www.arte.tv/fr/search/?q=${q}` : 'https://www.arte.tv';
-    case '6play': return q ? `https://www.6play.fr/recherche?q=${q}` : 'https://www.6play.fr';
-    case 'apple': return q ? `https://tv.apple.com/search?term=${q}` : 'https://tv.apple.com';
-    case 'max': return q ? `https://www.max.com/search?q=${q}` : 'https://www.max.com';
-    case 'paramount': return q ? `https://www.paramountplus.com/search/?q=${q}` : 'https://www.paramountplus.com';
-    case 'molotov': return q ? `https://www.molotov.tv/search?q=${q}` : 'https://www.molotov.tv';
-    case 'pluto': return q ? `https://pluto.tv/search/details?q=${q}` : 'https://pluto.tv';
-    default: return `https://www.google.com/search?q=regarder+${q}+sur+${encodeURIComponent(providerName)}`;
-  }
+// Générateur de lien direct / deep-link officiel par plateforme SVOD
+export const buildStreamingUrl = (
+  providerKey: string, 
+  providerName: string, 
+  title: string = '',
+  options?: Partial<StreamingDeepLinkOptions>
+): string => {
+  return getPlatformDirectUrl({
+    providerKey,
+    providerName,
+    movieTitle: title,
+    ...options
+  });
 };
 
 export function getPlatformSearchUrl(name: string, movieTitle: string = ''): string {
@@ -71,7 +69,8 @@ export async function getMediaProviders(
   mediaType: string = 'movie',
   userCountryCode: string = 'CM',
   movieTitle: string = '',
-  apiKey?: string
+  apiKey?: string,
+  movie?: any
 ): Promise<MediaProvidersResult> {
   const endpoint = (
     mediaType === 'tv' || 
@@ -123,6 +122,9 @@ export async function getMediaProviders(
     };
 
     // 1. Test local (incluant flatrate, free et replay avec pub)
+    const userCountryData = results[userCountryCode] || results['FR'] || results['US'] || results['GB'];
+    const justWatchLink = userCountryData?.link || null;
+
     const localFlatrate = [
       ...(results[userCountryCode]?.flatrate || []),
       ...(results[userCountryCode]?.free || []),
@@ -133,17 +135,34 @@ export async function getMediaProviders(
       const uniqueLocal = new Map<number, SvodProviderItem>();
       localFlatrate.forEach((p: any) => {
         if (p.provider_id && !uniqueLocal.has(p.provider_id)) {
+          const pKey = detectProviderKey(p.provider_name);
+          const directUrl = getPlatformDirectUrl({
+            providerKey: pKey,
+            providerName: p.provider_name,
+            movieTitle: movieTitle || movie?.title || '',
+            movie,
+            watchProviderLink: justWatchLink || movie?.watch_provider_link,
+            netflixId: movie?.netflix_id || movie?.netflixId || p.netflix_id,
+            primeId: movie?.prime_id || movie?.primeId || p.prime_id,
+            disneyId: movie?.disney_id || movie?.disneyId || p.disney_id,
+            canalId: movie?.canal_id || movie?.canalId,
+            appleId: movie?.apple_id || movie?.appleId
+          });
+
           uniqueLocal.set(p.provider_id, {
             name: p.provider_name,
             logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
-            url: getPlatformSearchUrl(p.provider_name, movieTitle)
+            url: directUrl,
+            deepLink: directUrl,
+            providerId: p.provider_id
           });
         }
       });
 
       svod = {
         status: 'local',
-        providers: Array.from(uniqueLocal.values())
+        providers: Array.from(uniqueLocal.values()),
+        justWatchLink
       };
     } else {
       // 2. Test marchés étrangers STRICTEMENT pour option VPN
@@ -211,19 +230,35 @@ export const resolveStreamingAction = async (
   mediaType: string,
   userCountryCode: string,
   movieTitle: string,
-  apiKey?: string
+  apiKey?: string,
+  movie?: any
 ) => {
-  const res = await getMediaProviders(movieId, mediaType, userCountryCode, movieTitle, apiKey);
+  const res = await getMediaProviders(movieId, mediaType, userCountryCode, movieTitle, apiKey, movie);
   if (res.svod.status === 'local') {
     return {
       type: 'DIRECT' as const,
-      providers: res.svod.providers.map((p, idx) => ({
-        id: idx + 1,
-        name: p.name,
-        logo: p.logo,
-        providerKey: detectProviderKey(p.name),
-        actionUrl: p.url || buildStreamingUrl(detectProviderKey(p.name), p.name, movieTitle)
-      }))
+      providers: res.svod.providers.map((p, idx) => {
+        const pKey = detectProviderKey(p.name);
+        const actionUrl = p.url || p.deepLink || getPlatformDirectUrl({
+          providerKey: pKey,
+          providerName: p.name,
+          movieTitle,
+          movie,
+          watchProviderLink: res.svod.justWatchLink || movie?.watch_provider_link,
+          netflixId: movie?.netflix_id || movie?.netflixId,
+          primeId: movie?.prime_id || movie?.primeId,
+          disneyId: movie?.disney_id || movie?.disneyId
+        });
+
+        return {
+          id: idx + 1,
+          name: p.name,
+          logo: p.logo,
+          providerKey: pKey,
+          actionUrl,
+          deepLink: actionUrl
+        };
+      })
     };
   }
   if (res.svod.status === 'vpn_needed') {

@@ -3,6 +3,12 @@ export interface StreamingProvider {
   name: string;
   logo: string | null;
   providerKey: string;
+  deepLink?: string | null;
+  directUrl?: string | null;
+  justWatchUrl?: string | null;
+  netflixId?: string | number | null;
+  primeId?: string | number | null;
+  disneyId?: string | number | null;
 }
 
 export interface Movie {
@@ -28,6 +34,18 @@ export interface Movie {
   match_rate?: number;
   synopsis?: string;
   is_ai_overview?: boolean;
+  netflix_id?: string | number;
+  netflixId?: string | number;
+  prime_id?: string | number;
+  primeId?: string | number;
+  disney_id?: string | number;
+  disneyId?: string | number;
+  canal_id?: string | number;
+  canalId?: string | number;
+  apple_id?: string | number;
+  appleId?: string | number;
+  imdb_id?: string;
+  watch_provider_link?: string;
 }
 
 export type Currency = 'XAF' | 'XOF' | 'EUR' | 'USD' | 'CAD';
