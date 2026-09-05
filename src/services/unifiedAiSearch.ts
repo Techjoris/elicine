@@ -153,7 +153,7 @@ Exemple de format attendu :
 
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
-      const movies = extractRawMovieItems(rawContent);
+      const movies = extractRawMovieItems(rawContent, userQuery);
       if (movies.length > 0) {
         return movies;
       }
@@ -169,42 +169,49 @@ Exemple de format attendu :
 
 /**
  * Extraction universelle et ultra-résiliente des titres retournés par l'IA
- * Supporte : tableau de chaînes, objets avec title/titre, JSON pur ou texte brut
+ * Supporte : parsed.movies, parsed.titles, parsed.results, regex fallback sur guillemets, et mots-clés utilisateur
  */
-export function extractRawMovieItems(rawText: string): RawAiMovieItem[] {
-  let parsed: any = null;
-  const cleaned = rawText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+export function extractRawMovieItems(aiText: string, userQuery?: string): RawAiMovieItem[] {
+  let titles: any[] = [];
 
   try {
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    } else {
-      parsed = JSON.parse(cleaned);
+    const cleanContent = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const jsonMatch = cleanContent.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleanContent);
+
+    if (Array.isArray(parsed)) {
+      titles = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      titles = parsed.movies || parsed.titles || parsed.results || parsed.films || parsed.recommendations || [];
     }
   } catch (e) {
-    console.warn('[Éliciné AI] Parse JSON direct impossible, tentative extraction lignes/regex...', e);
+    // Regex fallback if JSON was malformed: extract lines or quoted strings
+    const matches = aiText.match(/"([^"]+)"/g);
+    if (matches && matches.length > 0) {
+      titles = matches.map(m => m.replace(/"/g, ''));
+    }
   }
 
-  let list: any[] = [];
-  if (Array.isArray(parsed)) {
-    list = parsed;
-  } else if (parsed && typeof parsed === 'object') {
-    list = parsed.movies || parsed.films || parsed.results || parsed.titles || parsed.recommendations || [];
-  }
-
-  // Si le format JSON était vide ou invalide, extraire les lignes
-  if (!Array.isArray(list) || list.length === 0) {
-    const lines = cleaned.split('\n');
+  // Fallback si le tableau est vide mais que le texte contient des lignes ordonnées
+  if (!Array.isArray(titles) || titles.length === 0) {
+    const lines = aiText.split('\n');
     for (const line of lines) {
       const match = line.match(/^[\s\*\-\d\.\)]+["']?([^"'\n\r\(\)]+)["']?/);
       if (match && match[1] && match[1].trim().length > 1) {
-        list.push(match[1].trim());
+        titles.push(match[1].trim());
       }
     }
   }
 
-  return list.map((item: any, index: number): RawAiMovieItem | null => {
+  // If still empty, extract core keywords from user query for TMDB direct search:
+  if ((!titles || titles.length === 0) && userQuery) {
+    const coreKeyword = userQuery.replace(/(film|film de|films|série|séries|avec|une fin twist|recommande|recommande-moi|moi|cherche|trouve|un|une|des)/gi, '').trim();
+    if (coreKeyword.length > 1) {
+      titles = [coreKeyword];
+    }
+  }
+
+  return titles.map((item: any, index: number): RawAiMovieItem | null => {
     if (typeof item === 'string') {
       const clean = item.replace(/^[\d\.\-\s\*\#]+/, '').replace(/^["']|["']$/g, '').trim();
       const yearMatch = clean.match(/\((\d{4})\)$/);
@@ -313,7 +320,7 @@ Exemple de format attendu :
 
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
-      const movies = extractRawMovieItems(rawContent);
+      const movies = extractRawMovieItems(rawContent, userQuery);
       if (movies.length > 0) {
         return movies;
       }
