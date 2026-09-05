@@ -1,4 +1,4 @@
-﻿export default async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
@@ -7,49 +7,40 @@
     provider = 'auto',
     messages = [],
     model,
-    temperature = 0.2,
+    temperature = 0.5,
     response_format,
     max_tokens,
     stream = false,
   } = req.body || {};
 
-  const groqKey = process.env.GROQ_API_KEY || (req.headers.authorization?.startsWith('Bearer gsk_') ? req.headers.authorization.slice(7).trim() : '');
-  const qwenKey = process.env.QWEN_API_KEY || (req.headers.authorization?.startsWith('Bearer sk-') ? req.headers.authorization.slice(7).trim() : '');
+  // ─── Clés API ────────────────────────────────────────────────────────────────
+  // Priorité : variable d'environnement générique AI_API_KEY,
+  // puis clé spécifique au provider, puis header Authorization du client.
+  const authHeader = req.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
-  // 1. Helper Groq Cloud
-  const tryGroq = async (customModel) => {
-    if (!groqKey) throw new Error('Clé GROQ_API_KEY non configurée');
-    const selectedModel = customModel || model || 'llama-3.3-70b-versatile';
+  // Qwen / DashScope (Alibaba Cloud)
+  const qwenKey = (
+    process.env.AI_API_KEY        ||   // clé générique recommandée
+    process.env.QWEN_API_KEY      ||   // clé spécifique Qwen
+    (bearerToken.startsWith('sk-') ? bearerToken : '')
+  ).trim();
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`,
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages,
-        temperature,
-        ...(response_format ? { response_format } : {}),
-        ...(max_tokens ? { max_tokens } : {}),
-        stream: false,
-      }),
-    });
+  // Groq Cloud (Llama / GPT-OSS — fallback)
+  const groqKey = (
+    process.env.GROQ_API_KEY      ||
+    (bearerToken.startsWith('gsk_') ? bearerToken : '')
+  ).trim();
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Groq HTTP ${response.status}: ${errText}`);
-    }
+  // Modèle actif : variable d'environnement AI_MODEL > payload > défaut Qwen
+  const DEFAULT_QWEN_MODEL = 'qwen2.5-72b-instruct';
+  const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+  const resolvedModel = process.env.AI_MODEL || model || DEFAULT_QWEN_MODEL;
 
-    const data = await response.json();
-    return { ...data, provider_used: `Groq (${selectedModel})` };
-  };
-
-  // 2. Helper Qwen DashScope (Alibaba Cloud)
+  // ─── Helper Qwen DashScope ────────────────────────────────────────────────────
   const tryQwen = async (customModel) => {
-    if (!qwenKey) throw new Error('Clé QWEN_API_KEY non configurée');
-    const selectedModel = customModel || model || 'qwen-plus';
+    if (!qwenKey) throw new Error('Clé Qwen non configurée (AI_API_KEY ou QWEN_API_KEY manquante)');
+    const selectedModel = customModel || resolvedModel;
     const endpoints = [
       'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
       'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
@@ -90,32 +81,63 @@
     throw lastError || new Error('Tous les endpoints Qwen ont échoué');
   };
 
-  // 3. Routage et repli automatique
+  // ─── Helper Groq Cloud (fallback) ────────────────────────────────────────────
+  const tryGroq = async (customModel) => {
+    if (!groqKey) throw new Error('Clé GROQ_API_KEY non configurée');
+    const selectedModel = customModel || DEFAULT_GROQ_MODEL;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${groqKey}`,
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages,
+        temperature,
+        ...(response_format ? { response_format } : {}),
+        ...(max_tokens ? { max_tokens } : {}),
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Groq HTTP ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    return { ...data, provider_used: `Groq (${selectedModel})` };
+  };
+
+  // ─── Routage & repli automatique ─────────────────────────────────────────────
   try {
-    if (provider === 'qwen') {
+    if (provider === 'groq') {
+      // Appel explicitement Groq (ex: validation de clé dans les paramètres)
       try {
-        const result = await tryQwen();
-        return res.status(200).json(result);
-      } catch (qwenErr) {
-        console.warn('[API /api/ai] Échec Qwen, repli automatique vers Groq...', qwenErr.message);
-        if (groqKey) {
-          const fallbackResult = await tryGroq('llama-3.3-70b-versatile');
-          return res.status(200).json(fallbackResult);
-        }
-        throw qwenErr;
-      }
-    } else {
-      // Priorité Groq Cloud par défaut
-      try {
-        const result = await tryGroq();
+        const result = await tryGroq(model || DEFAULT_GROQ_MODEL);
         return res.status(200).json(result);
       } catch (groqErr) {
-        console.warn('[API /api/ai] Échec Groq, repli automatique vers Qwen...', groqErr.message);
+        console.warn('[API /api/ai] Échec Groq explicite, repli vers Qwen...', groqErr.message);
         if (qwenKey) {
-          const fallbackResult = await tryQwen('qwen-plus');
+          const fallbackResult = await tryQwen(DEFAULT_QWEN_MODEL);
           return res.status(200).json(fallbackResult);
         }
         throw groqErr;
+      }
+    } else {
+      // Défaut : Qwen en priorité → Groq en fallback
+      try {
+        const result = await tryQwen(provider === 'qwen' ? (model || resolvedModel) : resolvedModel);
+        return res.status(200).json(result);
+      } catch (qwenErr) {
+        console.warn('[API /api/ai] Échec Qwen, repli automatique vers Groq (Llama)...', qwenErr.message);
+        if (groqKey) {
+          const fallbackResult = await tryGroq(DEFAULT_GROQ_MODEL);
+          return res.status(200).json(fallbackResult);
+        }
+        throw qwenErr;
       }
     }
   } catch (finalErr) {

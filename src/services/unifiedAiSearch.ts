@@ -21,7 +21,15 @@ export interface AIRecommendationResult {
 }
 
 /**
- * LISTE EXCLUSIVE DES MODÈLES GROQ ACTIFS
+ * MODÈLES QWEN ACTIFS — Moteur principal de recommandation
+ */
+export const ACTIVE_QWEN_MODELS = [
+  'qwen2.5-72b-instruct',
+  'qwen-plus',
+];
+
+/**
+ * MODÈLES GROQ — Fallback si Qwen indisponible
  */
 export const ACTIVE_GROQ_MODELS = [
   'llama-3.3-70b-versatile',
@@ -198,6 +206,124 @@ export function parseAIResponse(rawText: string): RawAiMovieItem[] {
 }
 
 /**
+ * 2. MOTEUR QWEN — Requête principale (qwen2.5-72b-instruct avec fallback qwen-plus)
+ * Itère sur ACTIVE_QWEN_MODELS et transmet via le proxy /api/ai (provider='qwen').
+ */
+export async function queryQwen(
+  userQuery: string,
+  apiKey?: string,
+  aiPromptLang?: string
+): Promise<RawAiMovieItem[]> {
+  const currentLang = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : 'fr';
+  const resolvedAiPromptLang = aiPromptLang || (
+    currentLang === 'en'
+      ? 'Respond STRICTLY in English for movie summaries and reasons.'
+      : currentLang === 'es'
+        ? 'Responde ESTRICTAMENTE en español para los resúmenes y motivos.'
+        : 'Réponds STRICTEMENT en français pour les descriptions et raisons.'
+  );
+
+  const aiTone = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_ai_curation') : null;
+  let curationInstruction = '';
+  if (aiTone === 'popular') {
+    curationInstruction = '\nDIRECTIVE DE CURATION :\nPrivilégie les films et séries acclamés par le grand public et très connus.';
+  } else if (aiTone === 'auteur') {
+    curationInstruction = "\nDIRECTIVE DE CURATION :\nPrivilégie les pépites méconnues, le cinéma d'auteur et les œuvres cultes indépendantes.";
+  }
+
+  const safeSearch = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_safe_search') === 'true' : false;
+  const safeInstruction = safeSearch ? '\nCONTRÔLE PARENTAL ACTIF :\nExclus impérativement tout contenu classé pour adultes, explicite ou ultra-violent.' : '';
+
+  const systemPrompt = `Tu es l'algorithme de recommandation cinéphile d'Éliciné propulsé par Qwen.
+Analyse en profondeur la demande de l'utilisateur pour adapter strictement le type d'œuvres retournées :
+
+RÈGLE LINGUISTIQUE IMPÉRATIVE :
+${resolvedAiPromptLang}
+${curationInstruction}${safeInstruction}
+
+RÈGLES D'INTENTION (6 à 8 résultats au total) :
+1. SI LA DEMANDE CIBLE UN FILM (mots-clés : "film", "long-métrage", "ce soir devant un film", etc.) :
+   -> Renvoie UNIQUEMENT des films (type: "film"). Aucune série.
+2. SI LA DEMANDE CIBLE UNE SÉRIE (mots-clés : "série", "saison", "mini-série", "épisodes", etc.) :
+   -> Renvoie UNIQUEMENT des séries (type: "serie"). Aucun film.
+3. SI AUCUNE PRÉCISION N'EST DONNÉE (ex: ambiance, concept, citation, thématique globale) :
+   -> Propose les meilleures recommandations sans forcer d'équilibre artificiel. Laisse la pertinence décider de la répartition.
+
+FORMAT DE RÉPONSE OBLIGATOIRE (JSON pur sans markdown) :
+{
+  "movies": [
+    {
+      "title": "Titre",
+      "year": 2024,
+      "type": "film",
+      "match_rate": 95,
+      "synopsis": "Un résumé captivant de 2 à 3 phrases détaillant l'intrigue principale, les enjeux et le ton sans spoiler.",
+      "reason": "Accroche critique"
+    }
+  ]
+}`;
+
+  let lastError: Error | null = null;
+
+  for (const model of ACTIVE_QWEN_MODELS) {
+    try {
+      console.log(`[Éliciné] Requête IA Qwen via proxy /api/ai : ${model}`);
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
+        },
+        body: JSON.stringify({
+          provider: 'qwen',
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userQuery }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.5
+        })
+      });
+
+      if (response.status === 400 || response.status === 404) {
+        const warnText = await response.text();
+        console.warn(`[Éliciné] Modèle Qwen ${model} indisponible (${response.status}), passage au suivant...`, warnText);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const rawContent = data.choices?.[0]?.message?.content || '';
+      const cleanJson = rawContent.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+
+      const movies = parsed.movies || parsed.results || [];
+      if (Array.isArray(movies) && movies.length > 0) {
+        return movies.map((m: any, index: number) => ({
+          title: String(m.title || m.titre || '').trim(),
+          year: m.year ? Number(m.year) : undefined,
+          type: (m.type === 'serie' || m.type === 'series' || m.type === 'tv') ? 'serie' : 'film',
+          match_rate: Number(m.match_rate) || Math.max(78, 98 - index * 3),
+          synopsis: String(m.synopsis || m.overview || m.summary || '').trim(),
+          reason: String(m.reason || m.justification || m.pitch || '').trim()
+        })).filter((m: RawAiMovieItem) => m.title.length > 0);
+      }
+
+    } catch (err: any) {
+      console.warn(`[Éliciné] Échec sur Qwen ${model} :`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Échec de connexion à Qwen.');
+}
+
+/**
  * 2. CIBLAGE PRÉCIS DANS L'ENRICHISSEMENT TMDB (/tv ou /movie)
  * Interroge l'endpoint spécifique en fonction du type retourné par l'IA.
  */
@@ -364,12 +490,28 @@ export async function executeCinoraSearch(
     };
   }
 
-  // Clé Groq optionnelle (le proxy /api/ai exploite directement process.env.GROQ_API_KEY côté serveur)
+  // Clés API client (le proxy /api/ai utilise les env vars côté serveur en priorité)
+  const qwenKey = getApiKey('qwen', apiSettings);
   const groqKey = getGroqKey(apiSettings);
 
-  // 1. Appel direct IA Groq avec prompt d'intention contextuelle et langue active
-  console.log(`[Éliciné AI] Exécution recherche sémantique Groq pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
-  const aiMovies = await queryGroq(cleanQuery, groqKey, resolvedAiPromptLang);
+  // 1. Tentative Qwen (moteur principal — qwen2.5-72b-instruct)
+  console.log(`[Éliciné AI] Exécution recherche sémantique Qwen pour : "${cleanQuery}" (${resolvedAiPromptLang})`);
+  let aiMovies: RawAiMovieItem[] = [];
+  let providerLabel = 'Qwen 2.5 72B';
+
+  try {
+    aiMovies = await queryQwen(cleanQuery, qwenKey, resolvedAiPromptLang);
+  } catch (qwenErr: any) {
+    console.warn(`[Éliciné AI] Qwen indisponible (${qwenErr.message}), repli vers Groq/Llama...`);
+    // 2. Fallback Groq (Llama 3.3 70B) si Qwen échoue
+    try {
+      aiMovies = await queryGroq(cleanQuery, groqKey, resolvedAiPromptLang);
+      providerLabel = 'Llama 3.3 70B (Groq)';
+    } catch (groqErr: any) {
+      console.error('[Éliciné AI] Tous les moteurs IA ont échoué.', groqErr.message);
+      throw groqErr;
+    }
+  }
 
   if (!aiMovies || aiMovies.length === 0) {
     return {
@@ -377,33 +519,33 @@ export async function executeCinoraSearch(
       moodDetected: cleanQuery,
       recommendedMovies: [],
       isFallbackMode: false,
-      providerUsed: 'Llama 3.3 70B (Groq)',
+      providerUsed: providerLabel,
       suggestedPrompts: [
         'Un film de braquage drôle et haletant',
-        'Une série d\'enquête sombre sous la pluie',
+        "Une série d'enquête sombre sous la pluie",
         'Une fresque spatiale émouvante'
       ]
     };
   }
 
-  // 2. Mappage ciblé sur l'endpoint TMDB (/tv ou /movie) pour chaque résultat
+  // 3. Mappage ciblé sur l'endpoint TMDB (/tv ou /movie) pour chaque résultat
   const enrichedResults = (
     await Promise.all(
       aiMovies.map((item, idx) => fetchTmdbDetails(item, tmdbKey, idx, resolvedTmdbLang))
     )
   ).filter((m): m is Movie => m !== null);
 
-  // 3. Compteur dynamique exact reflétant l'ensemble des résultats
+  // 4. Compteur dynamique exact reflétant l'ensemble des résultats
   return {
     thought: `✨ Analyse Éliciné AI en direct : ${enrichedResults.length} résultats trouvés`,
     moodDetected: cleanQuery,
     recommendedMovies: enrichedResults,
     isFallbackMode: false,
-    providerUsed: 'Llama 3.3 70B (Groq)',
+    providerUsed: providerLabel,
     suggestedPrompts: [
       'Un film de braquage haletant avec twist',
       'Une série policière scandinave sous la neige',
-      'Un chef-d\'œuvre de science-fiction dystopique',
+      "Un chef-d'œuvre de science-fiction dystopique",
       'Une comédie française feel-good et touchante'
     ]
   };
@@ -413,7 +555,14 @@ export const executeElicineSearch = executeCinoraSearch;
 export const unifiedAiSearch = executeElicineSearch;
 export const AI_PROVIDERS = [
   {
-    name: 'Llama 3.3 70B (Groq)',
+    name: 'Qwen 2.5 72B',
+    type: 'qwen' as const,
+    endpoint: '/api/ai',
+    model: 'qwen2.5-72b-instruct',
+    keyStorage: 'cinéia_qwen_api_key'
+  },
+  {
+    name: 'Llama 3.3 70B (Groq — Fallback)',
     type: 'groq' as const,
     endpoint: '/api/ai',
     model: 'llama-3.3-70b-versatile',
@@ -422,3 +571,4 @@ export const AI_PROVIDERS = [
 ];
 
 export default executeCinoraSearch;
+

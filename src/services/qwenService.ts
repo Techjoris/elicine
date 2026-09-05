@@ -1,4 +1,4 @@
-﻿export const DEFAULT_QWEN_KEY = '';
+export const DEFAULT_QWEN_KEY = '';
 
 export interface QwenRawMovie {
   title: string;
@@ -44,13 +44,13 @@ Format requis :
       },
       body: JSON.stringify({
         provider: 'qwen',
-        model: 'qwen-plus',
+        model: 'qwen2.5-72b-instruct',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userQuery }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.2
+        temperature: 0.5
       })
     });
 
