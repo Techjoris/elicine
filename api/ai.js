@@ -13,6 +13,19 @@ export default async function handler(req, res) {
     stream = false,
   } = req.body || {};
 
+  // Auto-génération des messages si query/prompt est fourni directement
+  let finalMessages = messages;
+  if ((!finalMessages || finalMessages.length === 0) && (req.body?.query || req.body?.prompt)) {
+    const userQ = String(req.body.query || req.body.prompt).trim();
+    finalMessages = [
+      {
+        role: 'system',
+        content: `Tu es le moteur de recommandation de films d'Éliciné.\nPour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 5 à 8 titres de films ou séries exacts et pertinents.\nExemple de format attendu :\n{\n  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]\n}`
+      },
+      { role: 'user', content: userQ }
+    ];
+  }
+
   // ─── Clés API ────────────────────────────────────────────────────────────────
   // Priorité absolue : Groq en premier (vitesse, fiabilité, 0% 401)
   const authHeader = req.headers.authorization || '';
@@ -50,7 +63,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages,
+        messages: finalMessages,
         temperature,
         ...(response_format ? { response_format } : {}),
         ...(max_tokens ? { max_tokens } : {}),
@@ -87,7 +100,7 @@ export default async function handler(req, res) {
           },
           body: JSON.stringify({
             model: selectedModel,
-            messages,
+            messages: finalMessages,
             temperature,
             ...(response_format ? { response_format } : {}),
             ...(max_tokens ? { max_tokens } : {}),
