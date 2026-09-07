@@ -12,7 +12,6 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
-import { ElicineLogo } from '../ElicineLogo';
 import { Movie } from '../../types';
 
 interface HeroSectionProps {
@@ -240,7 +239,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   };
 
   return (
-    <div className="relative w-full rounded-3xl overflow-hidden border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(14,165,233,0.2)] bg-slate-950 min-h-[580px] md:min-h-[640px] flex flex-col justify-between p-6 sm:p-10 md:p-12 transition-all duration-700">
+    <div className="relative w-full rounded-3xl overflow-hidden border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(14,165,233,0.2)] bg-slate-950 min-h-[520px] sm:min-h-[580px] md:min-h-[640px] flex flex-col justify-between px-3.5 py-6 sm:p-10 md:p-12 transition-all duration-700">
       
       {/* ─── 1. ARRIÈRE-PLAN CINÉMATOGRAPHIQUE IMMERSIF (Backdrop) ─── */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
@@ -265,40 +264,39 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       <div className="relative z-10 flex flex-col items-center justify-center text-center max-w-3xl mx-auto my-auto w-full">
         
         {/* a) Badge Supérieur */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-950/80 border border-sky-500/40 backdrop-blur-md shadow-lg shadow-black/50 mb-4 animate-fade-in">
+        <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1 sm:py-1.5 rounded-full bg-slate-950/80 border border-sky-500/40 backdrop-blur-md shadow-lg shadow-black/50 mb-2.5 sm:mb-4 animate-fade-in">
           <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
           <span className="text-xs font-semibold text-slate-200">{t.aiAnalysisBadge}</span>
         </div>
 
-        {/* b) Marque & Accroche */}
-        <div className="flex flex-col items-center justify-center mb-3 animate-fade-in">
-          <ElicineLogo size="lg" className="mb-2" />
+        {/* b) Marque & Accroche (Logo central doublon supprimé pour remonter la recherche de ~35px) */}
+        <div className="flex flex-col items-center justify-center mb-1.5 sm:mb-3 animate-fade-in">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
             {t.tagline}
           </h1>
         </div>
-        <p className="text-sm md:text-base text-slate-100 max-w-xl mx-auto font-normal leading-relaxed mb-6 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
+        <p className="text-xs sm:text-sm md:text-base text-slate-200 max-w-xl mx-auto font-normal leading-relaxed mb-4 sm:mb-6 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] px-2">
           {t.searchPlaceholder}
         </p>
 
-        {/* c) Barre de Recherche Unifiée "Floating Glass" */}
+        {/* c) Barre de Recherche Unifiée "Floating Glass" optimisée mobile */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
             handleSearch(searchPrompt);
           }}
-          className="relative flex items-center w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
+          className="relative flex items-center w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl p-1 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
         >
           {/* Search icon */}
-          <div className="pl-3 pr-2 text-zinc-400 flex-shrink-0">
-            <Search className="w-5 h-5" />
+          <div className="pl-2.5 pr-1.5 sm:pl-3 sm:pr-2 text-zinc-400 flex-shrink-0">
+            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          {/* Input field */}
+          {/* Input field - Largeur maximale et padding réduit sur mobile */}
           <input
             id="main-ai-search"
             type="text"
-            className="flex-1 bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-2 min-w-0"
+            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
             placeholder={t.searchPlaceholder || "Décrivez une émotion, une ambiance..."}
             value={searchPrompt}
             onChange={(e) => {
@@ -314,8 +312,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           />
 
           {/* Integrated Quota Badge + Explorer Button inside the pill */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Quota Badge */}
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+            {/* Quota Badge - Icône ⚡ seule sur mobile, texte "Illimité" masqué sous 640px */}
             <button
               type="button"
               onClick={(e) => {
@@ -323,13 +321,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 setIsProModalOpen(true);
               }}
               title="Exploration IA illimitée"
-              className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+              className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
             >
               <span>⚡</span>
-              <span className="font-bold">Illimité</span>
+              <span className="hidden sm:inline font-bold">Illimité</span>
             </button>
 
-            {/* Explorer Button */}
+            {/* Explorer Button - Compact sur mobile */}
             <button
               type="submit"
               disabled={isAiLoading}
@@ -337,14 +335,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 e.preventDefault();
                 handleSearch(searchPrompt);
               }}
-              className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1 sm:gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
             >
               {isAiLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
               ) : (
                 <span>✨</span>
               )}
-              <span className="hidden xs:inline sm:inline">
+              <span className="hidden sm:inline">
                 {isAiLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
               </span>
             </button>
@@ -375,8 +373,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           </div>
         )}
 
-        {/* d) Filtres Rapides (Pills) */}
-        <div className="flex items-center justify-center gap-2 mt-3.5 mb-6">
+        {/* d) Filtres Rapides (Pills) - Aérés et confortables */}
+        <div className="flex items-center justify-center gap-2.5 sm:gap-3 mt-4 sm:mt-5 mb-5 sm:mb-6 px-2">
           {[
             { type: 'Tous' as const, label: t.filterAll },
             { type: 'Films' as const, label: t.filterMovies },
@@ -388,9 +386,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 key={type}
                 type="button"
                 onClick={() => setSelectedTypeFilter(type)}
-                className={`px-3.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md transition-all cursor-pointer ${
+                className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm ${
                   isSelected
-                    ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.5)] border border-sky-400'
+                    ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.5)] border border-sky-400 scale-105'
                     : 'bg-slate-900/85 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
                 }`}
               >
@@ -402,41 +400,45 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
 
         {/* e) Encart "À l'Affiche" & Actions du Film */}
         {currentMovie && (
-          <div className="pt-2 pb-1 space-y-3">
+          <div className="pt-1 sm:pt-2 pb-1 space-y-2.5 sm:space-y-3">
             <p className="text-xs uppercase tracking-widest text-sky-300 font-extrabold drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
               {t.featuredBadge} : {currentMovie.title}
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <div className="flex items-center justify-center gap-2 sm:gap-2.5">
               
-              {/* [▶ Bande-annonce] */}
+              {/* [▶ Bande-annonce] - Bouton prioritaire visible */}
               <button
                 onClick={() => setSelectedMovie(currentMovie)}
-                className="bg-sky-500 hover:bg-sky-400 text-white font-semibold text-xs px-4 py-2 rounded-full flex items-center gap-2 shadow-md shadow-sky-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                className="bg-sky-500 hover:bg-sky-400 text-white font-semibold text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-full flex items-center gap-2 shadow-md shadow-sky-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>{t.trailerBtn}</span>
               </button>
 
-              {/* [+ Ma Liste] */}
+              {/* [+ Ma Liste] - Bouton circulaire compact sur mobile, étendu sur desktop */}
               <button
                 onClick={() => toggleWatchlist(currentMovie)}
-                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-black/50 ${
+                title={inWatchlist ? `${t.myListBtn} (Ajouté)` : t.myListBtn}
+                aria-label={t.myListBtn}
+                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-black/50 ${
                   inWatchlist ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/20' : ''
                 }`}
               >
-                {inWatchlist ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Plus className="w-3.5 h-3.5" />}
-                <span>{inWatchlist ? `${t.myListBtn} ✓` : t.myListBtn}</span>
+                {inWatchlist ? <Check className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-emerald-400" /> : <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
+                <span className="hidden sm:inline">{inWatchlist ? `${t.myListBtn} ✓` : t.myListBtn}</span>
               </button>
 
-              {/* [🔔 Alerte] */}
+              {/* [🔔 Alerte] - Bouton circulaire compact sur mobile, étendu sur desktop */}
               <button
                 onClick={() => addAlert(currentMovie)}
-                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-black/50 ${
+                title={alertActive ? `${t.alertBtn} (Active)` : t.alertBtn}
+                aria-label={t.alertBtn}
+                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-black/50 ${
                   alertActive ? 'border-amber-500/50 text-amber-300 bg-amber-500/20' : ''
                 }`}
               >
-                <Bell className="w-3.5 h-3.5" />
-                <span>{alertActive ? `${t.alertBtn} ✓` : t.alertBtn}</span>
+                <Bell className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden sm:inline">{alertActive ? `${t.alertBtn} ✓` : t.alertBtn}</span>
               </button>
 
             </div>

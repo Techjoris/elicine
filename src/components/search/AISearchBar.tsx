@@ -104,12 +104,12 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Décrivez une émotion, une ambiance, un décor..."
-            className="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-2 min-w-0 font-normal"
+            className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
             disabled={isLoading}
           />
 
           {/* Integrated Quota Badge + Explorer Button inside the pill */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {/* Quota Badge */}
             <button
               type="button"
@@ -118,7 +118,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
             >
               <span>⚡</span>
-              <span className="font-bold">Illimité</span>
+              <span className="hidden sm:inline font-bold">Illimité</span>
             </button>
 
             {/* Explorer Button */}
@@ -126,14 +126,14 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               type="button"
               onClick={() => handleSearch()}
               disabled={isLoading}
-              className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1 sm:gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
               ) : (
                 <span>✨</span>
               )}
-              <span className="hidden xs:inline sm:inline">
+              <span className="hidden sm:inline">
                 {isLoading ? 'Recherche...' : 'Explorer'}
               </span>
             </button>
