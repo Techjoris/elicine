@@ -535,6 +535,24 @@ export const authService = {
   },
 
   /**
+   * Récupère le profil utilisateur sauvegardé localement (cineia_user)
+   */
+  getStoredUser(): UserProfile | null {
+    try {
+      const raw = localStorage.getItem('cineia_user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.email || parsed.id)) {
+          return parsed as UserProfile;
+        }
+      }
+    } catch (e) {
+      console.warn('[authService.getStoredUser] error:', e);
+    }
+    return null;
+  },
+
+  /**
    * Déconnexion
    */
   logout(): void {

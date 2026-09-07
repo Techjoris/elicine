@@ -514,6 +514,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (typeof emailOrUser === 'object') {
       setUser(emailOrUser);
       setAuthUser(emailOrUser);
+      try {
+        localStorage.setItem('cineia_user', JSON.stringify(emailOrUser));
+      } catch (_) {}
       if (emailOrUser.myList && emailOrUser.myList.length > 0) {
         setWatchlist(emailOrUser.myList);
       }
@@ -537,6 +540,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setUser(newUser);
     setAuthUser(newUser);
+    try {
+      localStorage.setItem('cineia_user', JSON.stringify(newUser));
+    } catch (_) {}
     authService.saveLocalAccount(newUser);
     setIsAuthModalOpen(false);
     showToast(`👋 Bienvenue sur Éliciné, ${finalName} !`);
@@ -565,6 +571,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Repli API / local si Supabase échoue ou s'il s'agit d'un nom d'utilisateur
     const res = await authService.login(cleanId, password);
     if (res.success && res.user) {
+      // Persister dans localStorage AVANT setAuthUser pour survivre à la race condition getSession()
+      try {
+        localStorage.setItem('cineia_user', JSON.stringify(res.user));
+      } catch (_) {}
       setUser(res.user);
       setAuthUser(res.user);
       if (res.user.myList && res.user.myList.length > 0) {
@@ -611,6 +621,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setUser(userWithList);
       setAuthUser(userWithList);
+      try {
+        localStorage.setItem('cineia_user', JSON.stringify(userWithList));
+      } catch (_) {}
       authService.saveUserWatchlist(res.user.id, watchlist);
       setIsAuthModalOpen(false);
       showToast(`🎉 Bienvenue sur Éliciné, ${res.user.name} !`);
