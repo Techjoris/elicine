@@ -18,6 +18,7 @@ import {
   getDirectStreamingUrl,
   isIntermediaryWatchLink 
 } from '../../services/streamingResolver';
+import { redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
 import { getVpnAffiliateUrl } from '../../config/affiliates';
 
@@ -33,7 +34,8 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
     isInWatchlist, 
     addAlert, 
     isMovieAlertActive,
-    apiSettings
+    apiSettings,
+    showToast
   } = useApp();
 
   const { t } = useTranslation();
@@ -181,23 +183,17 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             
             {/* Grille fluide de badges plateformes locales */}
             <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
-              {streamingAction.providers.map((p) => {
-                const catalogId = movie.netflix_id || movie.netflixId;
-                const watchLink = movie.watch_provider_link;
-                const directUrl = (!p.actionUrl || isIntermediaryWatchLink(p.actionUrl))
-                  ? getDirectStreamingUrl(p.name, movie.title, releaseYear, catalogId, watchLink)
-                  : p.actionUrl;
-
-                return (
-                  <a
-                    key={p.id}
-                    href={directUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm"
-                    title={`Regarder "${movie.title}" sur ${p.name}`}
-                  >
+              {streamingAction.providers.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    redirectToStreamingProvider(movie, p, showToast);
+                  }}
+                  className="group/badge relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm cursor-pointer select-none"
+                  title={`Regarder "${movie.title}" sur ${p.name}`}
+                >
                   {p.logo ? (
                     <img
                       src={p.logo}
@@ -210,13 +206,11 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
                       {p.name.slice(0, 2).toUpperCase()}
                     </span>
                   )}
-                  <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200 group-hover/badge:text-emerald-950 dark:group-hover/badge:text-white transition-colors truncate max-w-[90px]">
-                    {p.name}
+                  <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200 group-hover/badge:text-emerald-950 dark:group-hover/badge:text-white transition-colors truncate max-w-[130px]">
+                    Regarder sur {p.name} ↗
                   </span>
-                  <span className="text-[8px] text-emerald-600 dark:text-emerald-400">↗</span>
-                </a>
-                );
-              })}
+                </button>
+              ))}
             </div>
           </div>
         ) : streamingAction?.type === 'VPN_REQUIRED' ? (

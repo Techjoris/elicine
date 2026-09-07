@@ -31,6 +31,18 @@ export interface StreamingDeepLinkOptions {
   useAndroidIntent?: boolean;
 }
 
+export interface MovieStreamingTarget {
+  title: string;
+  release_date?: string;
+  [key: string]: any;
+}
+
+export interface ProviderStreamingTarget {
+  provider_name?: string;
+  name?: string;
+  [key: string]: any;
+}
+
 /**
  * Détecte et rejette formellement les pages intermédiaires TMDB et JustWatch
  * Empêche toute redirection parasite vers "themoviedb.org/.../watch"
@@ -61,7 +73,9 @@ export const getDirectStreamingUrl = (
   watchProviderLink?: string | null
 ): string => {
   const cleanTitle = title.trim();
-  const encodedTitle = encodeURIComponent(cleanTitle);
+  const cleanYear = year ? String(year).slice(0, 4) : '';
+  const searchPhrase = [cleanTitle, cleanYear].filter(Boolean).join(' ');
+  const encodedTitle = encodeURIComponent(searchPhrase);
   const lower = providerName.toLowerCase();
   const cleanId = catalogId ? String(catalogId).trim() : null;
 
@@ -170,39 +184,86 @@ export const isNetflixProvider = (providerName: string): boolean =>
   providerName.toLowerCase().includes('netflix');
 
 /**
- * Gère le clic sur un badge de streaming avec logique clipboard + toast pour Netflix sans ID direct.
- *
- * - Si Netflix ET aucun catalogId connu : copie le titre dans le presse-papier et déclenche le toast
- *   "📋 Titre copié ! Collez-le dans la recherche Netflix." avant d'ouvrir l'URL.
- * - Sinon : ouvre simplement l'URL dans un nouvel onglet.
- *
- * @param url          URL de destination finale (déjà résolue par getDirectStreamingUrl)
- * @param providerName Nom du fournisseur (ex: "Netflix", "Amazon Prime Video")
- * @param movieTitle   Titre exact du film / de la série
- * @param catalogId    Identifiant de catalogue direct (netflix_id, etc.) si disponible
- * @param showToast    Fonction de notification toast fournie par le contexte React
+ * Destination Universelle Mobile :
+ * Génère l'action de recherche officielle mobile vérifiée qui résout les deep-links in-app dans n'importe quel pays.
  */
-export const handleStreamingClick = (
-  url: string,
-  providerName: string,
-  movieTitle: string,
-  catalogId?: string | number | null,
-  showToast?: (msg: string) => void
-): void => {
-  const isNetflix = isNetflixProvider(providerName);
-  const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
+export const getUniversalStreamingUrl = (
+  movie: MovieStreamingTarget,
+  provider: ProviderStreamingTarget | string
+): string => {
+  const providerName = typeof provider === 'string'
+    ? provider
+    : (provider.provider_name || provider.name || '');
 
-  if (isNetflix && !hasDirectId) {
-    // Copie le titre dans le presse-papier pour faciliter la recherche manuelle
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(movieTitle).catch(() => {});
-    }
-    if (showToast) {
-      showToast('📋 Titre copié ! Collez-le dans la recherche Netflix.');
+  const cleanTitle = (movie?.title || '').trim();
+  const year = movie?.release_date ? movie.release_date.slice(0, 4) : '';
+  const searchPart = [cleanTitle, year].filter(Boolean).join(' ');
+
+  return `https://www.google.com/search?q=regarder+${encodeURIComponent(searchPart)}+sur+${encodeURIComponent(providerName.trim())}`;
+};
+
+/**
+ * MOTEUR DE REDIRECTION UNIVERSELLE (Universal Redirection Engine) :
+ * 1. Smart Clipboard Helper : Copie le titre propre du film dans le presse-papier instantanément.
+ * 2. Toast feedback : Déclenche un toast discret de 1.5s : "Redirection vers le film... (Titre copié)"
+ * 3. Universal Destination : Ouvre l'action de recherche mobile certifiée qui résout l'application native.
+ */
+export const redirectToStreamingProvider = (
+  movie: MovieStreamingTarget,
+  provider: ProviderStreamingTarget | string,
+  showToast?: (msg: string, durationMs?: number) => void
+): void => {
+  const providerName = typeof provider === 'string'
+    ? provider
+    : (provider.provider_name || provider.name || '');
+
+  // 1. Smart Clipboard Helper
+  if (typeof navigator !== 'undefined' && navigator.clipboard && movie?.title) {
+    try {
+      navigator.clipboard.writeText(movie.title).catch(() => {});
+    } catch {
+      // Ignoré en environnement restreint
     }
   }
 
-  window.open(url, '_blank', 'noopener,noreferrer');
+  // 2. Toast feedback (1.5s)
+  if (showToast) {
+    showToast('Redirection vers le film... (Titre copié)', 1500);
+  }
+
+  // 3. Universal Destination
+  const targetUrl = getUniversalStreamingUrl(movie, providerName);
+  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+};
+
+/**
+ * Gère le clic sur un badge ou bouton de streaming.
+ * Supporte la signature objet (movie, provider, showToast) ainsi que la signature historique
+ * (url, providerName, movieTitle, catalogId, showToast, releaseDate).
+ */
+export const handleStreamingClick = (
+  urlOrMovie: string | MovieStreamingTarget,
+  providerNameOrProvider?: string | ProviderStreamingTarget,
+  movieTitleOrShowToast?: string | ((msg: string, durationMs?: number) => void),
+  catalogId?: string | number | null,
+  showToast?: (msg: string, durationMs?: number) => void,
+  releaseDate?: string
+): void => {
+  if (typeof urlOrMovie === 'object' && urlOrMovie !== null) {
+    const movie = urlOrMovie;
+    const provider = (providerNameOrProvider || '') as (ProviderStreamingTarget | string);
+    const toastFn = typeof movieTitleOrShowToast === 'function' ? movieTitleOrShowToast : showToast;
+    redirectToStreamingProvider(movie, provider, toastFn);
+    return;
+  }
+
+  // Signature classique : url, providerName, movieTitle, catalogId, showToast, releaseDate
+  const movie: MovieStreamingTarget = {
+    title: typeof movieTitleOrShowToast === 'string' ? movieTitleOrShowToast : '',
+    release_date: releaseDate
+  };
+  const provider = typeof providerNameOrProvider === 'string' ? providerNameOrProvider : '';
+  redirectToStreamingProvider(movie, provider, showToast);
 };
 
 /**

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Movie,
@@ -86,7 +86,7 @@ interface AppContextType {
 
   // Toast / Feedback
   toastMessage: string | null;
-  showToast: (msg: string) => void;
+  showToast: (msg: string, durationMs?: number) => void;
 
   // APK Download Toast / Banner
   showOpenInstallerToast: boolean;
@@ -246,12 +246,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 9. PWA Deferred Prompt & Hook
   const { isInstallable: canInstallPwa, handleInstallClick: installPwa } = usePWAInstall();
 
-  // Toast trigger
-  const showToast = (msg: string) => {
+  // Toast trigger (with optional custom duration)
+  const toastTimeoutRef = useRef<any>(null);
+  const showToast = (msg: string, durationMs: number = 4000) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
-    }, 4000);
+      toastTimeoutRef.current = null;
+    }, durationMs);
   };
 
   // 10. APK Direct Download & Open Installer Toast

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Movie, StreamingProvider } from '../../types';
-import { getPlatformDirectUrl, getDirectStreamingUrl, isIntermediaryWatchLink, isNetflixProvider, handleStreamingClick } from '../../services/deepLinkHelper';
+import { getPlatformDirectUrl, getDirectStreamingUrl, isIntermediaryWatchLink, isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { useApp } from '../../context/AppContext';
 
 export interface StreamingLinksProps {
@@ -57,9 +57,9 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleStreamingClick(directLink, p.name, movie.title, catalogId, showToast);
+                redirectToStreamingProvider(movie, p, showToast);
               }}
-              className="group/badge relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/90 dark:bg-slate-900/90 border border-slate-700/80 dark:border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm cursor-pointer select-none"
+              className="group/badge relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/90 dark:bg-slate-900/90 border border-slate-700/80 dark:border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm cursor-pointer select-none"
               title={`Regarder "${movie.title}" directement sur ${p.name}`}
             >
               {p.logo ? (
@@ -74,10 +74,9 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
                   {p.name.slice(0, 2).toUpperCase()}
                 </span>
               )}
-              <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[110px]">
-                {badgeLabel}
+              <span className="text-[11px] font-medium text-slate-300 group-hover/badge:text-sky-300 transition-colors truncate max-w-[150px]">
+                Regarder sur {p.name} ↗
               </span>
-              <span className="text-[8px] text-slate-500 group-hover/badge:text-sky-400">{actionLabel}</span>
             </button>
           );
         })}

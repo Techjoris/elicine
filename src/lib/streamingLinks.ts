@@ -4,6 +4,9 @@
  */
 
 export {
+  getUniversalStreamingUrl,
+  redirectToStreamingProvider,
+  handleStreamingClick,
   getDirectStreamingUrl,
   getPlatformDirectUrl,
   getNetflixDeepLink,
@@ -14,8 +17,9 @@ export {
   buildAndroidIntentUrl,
   isAndroidClient,
   isNetflixProvider,
-  handleStreamingClick,
-  type StreamingDeepLinkOptions
+  type StreamingDeepLinkOptions,
+  type MovieStreamingTarget,
+  type ProviderStreamingTarget
 } from '../services/deepLinkHelper';
 
 export {

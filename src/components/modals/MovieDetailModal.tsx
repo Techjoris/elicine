@@ -28,7 +28,7 @@ import {
   getDirectStreamingUrl,
   isIntermediaryWatchLink
 } from '../../services/streamingResolver';
-import { isNetflixProvider, handleStreamingClick } from '../../services/deepLinkHelper';
+import { isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
 
 export const MovieDetailModal: React.FC = () => {
@@ -411,36 +411,23 @@ export const MovieDetailModal: React.FC = () => {
                 {/* Cas local : lecture directe */}
                 {providerData.svod.status === 'local' && (
                   <div className="flex flex-wrap gap-2">
-                    {providerData.svod.providers.map((p, i) => {
-                      const releaseYear = selectedMovie.release_date ? selectedMovie.release_date.split('-')[0] : '';
-                      const catalogId = selectedMovie.netflix_id || selectedMovie.netflixId || p.providerId;
-                      const watchLink = providerData.svod.justWatchLink || selectedMovie.watch_provider_link;
-                      const directUrl = (!p.url || isIntermediaryWatchLink(p.url))
-                        ? getDirectStreamingUrl(p.name, selectedMovie.title, releaseYear, catalogId, watchLink)
-                        : p.url;
-
-                      const isNetflix = isNetflixProvider(p.name);
-                      const hasDirectId = catalogId != null && String(catalogId).trim().length > 0;
-                      const badgeLabel = isNetflix ? 'Ouvrir sur Netflix' : p.name;
-                      const actionLabel = isNetflix && !hasDirectId ? '🔍' : 'Lancer ↗';
-
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStreamingClick(directUrl, p.name, selectedMovie.title, catalogId, showToast);
-                          }}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
-                          title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
-                        >
-                          {p.logo && <img src={p.logo} alt={p.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />}
-                          <span className="text-xs font-semibold text-white">{badgeLabel}</span>
-                          <span className="text-[10px] text-sky-400 group-hover:translate-x-0.5 transition-transform">{actionLabel}</span>
-                        </button>
-                      );
-                    })}
+                    {providerData.svod.providers.map((p, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          redirectToStreamingProvider(selectedMovie, p, showToast);
+                        }}
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
+                        title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
+                      >
+                        {p.logo && <img src={p.logo} alt={p.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />}
+                        <span className="text-xs font-semibold text-white group-hover:text-sky-300 transition-colors">
+                          Regarder sur {p.name} ↗
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
 
@@ -453,10 +440,19 @@ export const MovieDetailModal: React.FC = () => {
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
                         {providerData.svod.providers.map((p, i) => (
-                          <span key={i} className="flex items-center gap-1.5 text-xs text-slate-200 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              redirectToStreamingProvider(selectedMovie, p, showToast);
+                            }}
+                            className="flex items-center gap-1.5 text-xs text-slate-200 bg-slate-950 hover:border-sky-500 px-2.5 py-1 rounded-lg border border-slate-800 cursor-pointer transition-all"
+                            title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
+                          >
                             {p.logo && <img src={p.logo} alt="" className="w-4 h-4 rounded object-cover" />}
-                            <span>{p.name}</span>
-                          </span>
+                            <span>Regarder sur {p.name} ↗</span>
+                          </button>
                         ))}
                       </div>
                     </div>
