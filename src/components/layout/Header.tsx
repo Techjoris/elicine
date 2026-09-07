@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             />
           </div>
 
-          {/* Connexion rapide pour visiteurs sur grand écran */}
+          {/* Connexion rapide pour visiteurs sur grand écran (masqué si connecté) */}
           {!user && (
             <button
               type="button"

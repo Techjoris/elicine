@@ -48,18 +48,71 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
     };
   }, [open]);
 
-  const isConnected = Boolean(user && (user.email || user.id));
-  const activeUserFullName = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.name;
-  const activeDisplayName = activeUserFullName || user?.email || 'Ivan Joris';
+  // Synchronisation directe avec l'objet user de la session Supabase active
+  const [supabaseUser, setSupabaseUser] = useState<any>(() => {
+    if (user?.email) return user;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('cineia_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) return parsed;
+        }
+        const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
+        if (authKey) {
+          const raw = localStorage.getItem(authKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const u = parsed?.user || parsed?.currentSession?.user;
+            if (u?.email) return u;
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    // 1. Lecture directe de la session active Supabase
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setSupabaseUser(session.user);
+      }
+    }).catch(() => {});
+
+    // 2. Écoute permanente des changements d'authentification Supabase
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setSupabaseUser(session.user);
+      } else {
+        setSupabaseUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user?.email) {
+      setSupabaseUser(user);
+    }
+  }, [user]);
+
+  const activeUser = supabaseUser || user;
+  const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
+  const activeUserFullName = activeUser?.user_metadata?.full_name || activeUser?.user_metadata?.name || activeUser?.name;
+  const activeDisplayName = activeUserFullName || activeUser?.email || 'Ivan Joris';
   const displayName = isConnected ? activeDisplayName : 'Cinéphile Invité';
-  const displayAvatar = user?.avatar || (user as any)?.user_metadata?.avatar_url || (user as any)?.user_metadata?.picture;
-  const isGoogle = user?.provider === 'google' || (user as any)?.app_metadata?.provider === 'google' || Boolean((user as any)?.user_metadata?.avatar_url);
+  const displayAvatar = activeUser?.avatar || activeUser?.user_metadata?.avatar_url || activeUser?.user_metadata?.picture;
+  const isGoogle = activeUser?.provider === 'google' || activeUser?.app_metadata?.provider === 'google' || Boolean(activeUser?.user_metadata?.avatar_url);
 
   const initials = isConnected
     ? (
-        activeDisplayName
-          ? activeDisplayName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase()
-          : 'IJ'
+        activeUser?.user_metadata?.full_name
+          ? activeUser.user_metadata.full_name.slice(0, 2).toUpperCase()
+          : (activeUser?.email ? activeUser.email.slice(0, 2).toUpperCase() : 'IJ')
       )
     : 'CI';
 
@@ -71,6 +124,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
     } catch (err) {
       console.warn('[Supabase signOut error]', err);
     }
+    setSupabaseUser(null);
     logout();
     setOpen(false);
     if (typeof window !== 'undefined') {
@@ -115,7 +169,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {displayName}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
-            {isConnected ? (user?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
+            {isConnected ? (activeUser?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
           </span>
         </div>
 
@@ -167,9 +221,14 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   {isConnected ? (
                     <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
-                        Connecté • {user?.email}
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
+                        Connecté
                       </span>
+                      {activeUser?.email && (
+                        <span className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                          • {activeUser.email}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
@@ -179,11 +238,11 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
-                user?.isPro
+                activeUser?.isPro
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
                   : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
               }`}>
-                {user?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
+                {activeUser?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
               </span>
             </div>
 
@@ -191,7 +250,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             <div className="space-y-0.5 text-xs">
               
               {/* 👤 Mon Profil */}
-              {user && (
+              {isConnected && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -208,7 +267,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               )}
 
               {/* 🛡️ Console Administrateur (Visible pour créateur/admin) */}
-              {authService.isAdmin(user) && (
+              {authService.isAdmin(activeUser) && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -273,7 +332,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                <span className="font-bold text-xs">{user?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+                <span className="font-bold text-xs">{activeUser?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />
