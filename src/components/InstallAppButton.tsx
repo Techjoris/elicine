@@ -132,17 +132,20 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
     );
   }
 
-  // Pilule compacte et sobre pour le Header / Navbar
+  // Pastille responsive pour le Header / Navbar :
+  // - Mobile (< 640px) : pastille compacte avec UNIQUEMENT l'icône de téléchargement
+  // - Desktop (>= 640px / sm:) : icône + texte complet "Installer"
   return (
     <>
       <button
         onClick={handleDirectInstall}
         type="button"
-        className={`text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-slate-900/90 dark:bg-zinc-800/90 hover:bg-slate-800 dark:hover:bg-zinc-700 border border-slate-700/80 dark:border-white/15 text-slate-100 dark:text-zinc-100 hover:text-white flex items-center gap-1 sm:gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap ${className}`}
+        className={`text-xs font-semibold h-7 sm:h-auto w-7 sm:w-auto p-0 sm:px-2.5 sm:py-1 rounded-full bg-slate-900/90 dark:bg-zinc-800/90 hover:bg-slate-800 dark:hover:bg-zinc-700 border border-slate-700/80 dark:border-white/15 text-slate-100 dark:text-zinc-100 hover:text-white flex items-center justify-center sm:gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap ${className}`}
         title="Installer l'application Éliciné"
+        aria-label="Installer l'application Éliciné"
       >
         <Download className="w-3.5 h-3.5 text-cyan-400 dark:text-cyan-300 flex-shrink-0" />
-        <span>Installer</span>
+        <span className="hidden sm:inline">Installer</span>
       </button>
       {guideModal}
     </>

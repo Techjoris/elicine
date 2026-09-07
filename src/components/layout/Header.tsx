@@ -32,8 +32,8 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
     <div className="sticky top-0 z-[60] w-full flex flex-col">
       {/* Main Top Navbar - Ultra Épurée & Compacte */}
       <header className="sticky top-0 z-50 w-full h-14 px-2.5 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-zinc-950/85 border-b border-slate-200/80 dark:border-white/10 transition-colors">
-        {/* ZONE GAUCHE: Burger + Logo */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink-0">
+        {/* ZONE GAUCHE: Burger + Logo (Strictement justify-start, sans bouton installer) */}
+        <div className="flex items-center justify-start gap-1.5 sm:gap-2 min-w-0 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -53,21 +53,21 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           </div>
         </div>
 
-        {/* ZONE DROITE: Actions compactes avec gap-1.5 sm:gap-2 */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* 1. Bouton PWA "Installer" (Permanent sauf si mode autonome/déjà installé, avec guidage au clic) */}
+        {/* ZONE DROITE: Actions compactes (Strictement justify-end) : [Installer] [☕ Soutenir] [🇫🇷 FR] [IV] */}
+        <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* 1. Bouton PWA "Installer" (Icône seule sur mobile < 640px, avec libellé sur desktop >= 640px) */}
           <InstallAppButton variant="header" />
 
-          {/* 2. Bouton Soutenir Responsive (Intact) */}
+          {/* 2. Bouton Soutenir Responsive (Libellé complet avec padding compact px-2.5 py-1 text-xs) */}
           <button
             type="button"
             onClick={handleOpenTip}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-medium text-xs shadow-sm hover:bg-amber-500/25 active:scale-95 transition-all cursor-pointer select-none flex-shrink-0 whitespace-nowrap"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold text-xs shadow-sm hover:bg-amber-500/25 active:scale-95 transition-all cursor-pointer select-none flex-shrink-0 whitespace-nowrap"
             title="Soutenir le projet Éliciné (Pourboire)"
             aria-label="Soutenir le projet"
           >
             <span className="text-sm leading-none">☕</span>
-            <span className="text-[11px] sm:text-xs font-semibold">Soutenir</span>
+            <span className="text-xs font-semibold">Soutenir</span>
           </button>
 
           {/* 3. Sélecteur de langue compact (Visible en permanence à côté du profil) */}
