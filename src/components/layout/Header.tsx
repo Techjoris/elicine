@@ -53,9 +53,12 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           </div>
         </div>
 
-        {/* ZONE DROITE: Actions compactes avec gap-1.5 sur mobile */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-          {/* 1. Bouton Soutenir Responsive (Intact) */}
+        {/* ZONE DROITE: Actions compactes avec gap-1.5 sm:gap-2 */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* 1. Bouton PWA "Installer" (Placé à gauche de Soutenir, affiché si beforeinstallprompt capturé) */}
+          <InstallAppButton variant="header" />
+
+          {/* 2. Bouton Soutenir Responsive (Intact) */}
           <button
             type="button"
             onClick={handleOpenTip}
@@ -67,11 +70,8 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             <span className="text-[11px] sm:text-xs font-semibold">Soutenir</span>
           </button>
 
-          {/* 2. Bouton PWA "Installer" (Placé entre Soutenir et Profil, actif si beforeinstallprompt capturé) */}
-          <InstallAppButton variant="header" />
-
-          {/* 3. Sélecteur de langue compact (Masqué sur mobile < 768px, accessible dans la sidebar) */}
-          <div className="hidden md:flex flex-shrink-0">
+          {/* 3. Sélecteur de langue compact (Visible en permanence à côté du profil) */}
+          <div className="flex-shrink-0">
             <LanguageSelector compact={true} />
           </div>
 
