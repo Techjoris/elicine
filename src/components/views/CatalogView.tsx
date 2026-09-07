@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { MovieGrid } from '../movies/MovieGrid';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { fetchDiscoverPage, fetchSearchPage, fetchTopRatedPage, FALLBACK_MOVIES } from '../../services/tmdb';
 import { useInfiniteCatalog } from '../../hooks/useInfiniteCatalog';
 import { Movie } from '../../types';
@@ -17,6 +18,7 @@ const TABS: { id: CatalogTab; label: string; icon: any }[] = [
 
 export const CatalogView: React.FC = () => {
   const { apiSettings } = useApp();
+  const { t } = useTranslation();
   const key = apiSettings.tmdbApiKey;
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('popular');
@@ -24,30 +26,30 @@ export const CatalogView: React.FC = () => {
   const [committedQuery, setCommittedQuery] = useState('');
   const [minRating, setMinRating] = useState(0);
 
-  // ─── Fetch function changes with tab + key ──────────────────────────────
+  // ─── Fetch function changes with tab + key + language ─────────────────────
   const fetchFn = useCallback(
     (page: number) => {
       if (activeTab === 'popular') {
-        return fetchDiscoverPage(page, { mediaType: 'movie', sortBy: 'popularity.desc', apiKey: key });
+        return fetchDiscoverPage(page, { mediaType: 'movie', sortBy: 'popularity.desc', apiKey: key, language: t.tmdbLang });
       }
       if (activeTab === 'top_rated') {
-        return fetchTopRatedPage(page, 'movie', key);
+        return fetchTopRatedPage(page, 'movie', key, t.tmdbLang);
       }
       if (activeTab === 'series') {
-        return fetchDiscoverPage(page, { mediaType: 'tv', sortBy: 'popularity.desc', apiKey: key });
+        return fetchDiscoverPage(page, { mediaType: 'tv', sortBy: 'popularity.desc', apiKey: key, language: t.tmdbLang });
       }
       if (activeTab === 'search' && committedQuery) {
-        return fetchSearchPage(committedQuery, page, key);
+        return fetchSearchPage(committedQuery, page, key, t.tmdbLang);
       }
       // Search tab without query — return empty immediately
       return Promise.resolve({ results: [] as Movie[], total_pages: 0 });
     },
-    [activeTab, committedQuery, key]
+    [activeTab, committedQuery, key, t.tmdbLang]
   );
 
   const { items, loading, hasMore, sentinelRef } = useInfiniteCatalog<Movie>(
     fetchFn,
-    [activeTab, committedQuery, key] as const
+    [activeTab, committedQuery, key, t.tmdbLang] as const
   );
 
   // Client-side rating filter (applied on top of server results)

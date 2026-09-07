@@ -1,5 +1,6 @@
 import { Movie, StreamingProvider } from '../types';
 import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
+import { getCachedCountryCode } from './geoService';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -30,11 +31,52 @@ export const KNOWN_TRAILERS: Record<number, string> = {
 export const FALLBACK_MOVIES: Movie[] = [];
 
 export function getActiveTmdbLanguage(language?: string): string {
-  if (language) return language;
-  const current = typeof localStorage !== 'undefined' ? localStorage.getItem('elicine_lang') : null;
-  if (current === 'en') return 'en-US';
-  if (current === 'es') return 'es-ES';
-  return 'fr-FR';
+  const code = (
+    language || 
+    (typeof document !== 'undefined' ? (document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i)?.[1]) : null) ||
+    (typeof localStorage !== 'undefined' ? (localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang')) : null) ||
+    (typeof navigator !== 'undefined' ? navigator.language : null) ||
+    'fr'
+  ).toLowerCase().trim();
+
+  if (code.startsWith('en')) return 'en-US';
+  if (code.startsWith('es')) return 'es-ES';
+  if (code.startsWith('fr')) return 'fr-FR';
+  if (code.includes('-')) return code;
+  return `${code}-${code.toUpperCase()}`;
+}
+
+/**
+ * Récupère les métadonnées détaillées localisées d'un film ou d'une série (titre, synopsis, genres)
+ */
+export async function fetchMovieDetails(
+  movieId: number,
+  mediaType: string = 'movie',
+  apiKey?: string,
+  language?: string
+): Promise<Partial<Movie> | null> {
+  const isTv = mediaType === 'SÉRIE' || mediaType === 'tv' || mediaType === 'series';
+  const typeEndpoint = isTv ? 'tv' : 'movie';
+  const lang = getActiveTmdbLanguage(language);
+
+  try {
+    const res = await fetchTmdbEndpoint(`${typeEndpoint}/${movieId}`, { language: lang }, apiKey);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      title: data.title || data.name || '',
+      original_title: data.original_title || data.original_name,
+      overview: data.overview || '',
+      genres: data.genres || [],
+      runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : undefined),
+      release_date: data.release_date || data.first_air_date,
+      vote_average: data.vote_average,
+      vote_count: data.vote_count
+    };
+  } catch (err) {
+    console.warn(`[TMDB] fetchMovieDetails error for ${movieId}:`, err);
+    return null;
+  }
 }
 
 export function getTmdbApiKey(explicitKey?: string): string {
@@ -181,6 +223,8 @@ export interface PlatformFilterOptions {
   mediaType?: 'all' | 'movie' | 'tv';
   sortBy?: 'popularity.desc' | 'vote_average.desc' | 'primary_release_date.desc';
   apiKey?: string;
+  language?: string;
+  watchRegion?: string;
 }
 
 export async function fetchMoviesByPlatform({
@@ -188,9 +232,14 @@ export async function fetchMoviesByPlatform({
   page = 1,
   mediaType = 'all',
   sortBy = 'popularity.desc',
-  apiKey
+  apiKey,
+  language,
+  watchRegion
 }: PlatformFilterOptions): Promise<{ movies: Movie[]; totalPages: number }> {
   const key = getTmdbApiKey(apiKey);
+  const lang = getActiveTmdbLanguage(language);
+  const region = watchRegion || (typeof window !== 'undefined' ? getCachedCountryCode() : 'FR') || 'FR';
+
   if (!key) {
     let filtered = FALLBACK_MOVIES.filter(m => 
       m.providers?.flatrate?.some(p => p.provider_id === providerId) ||
@@ -217,11 +266,11 @@ export async function fetchMoviesByPlatform({
       fetchEndpoints.push(
         fetchTmdbEndpoint('discover/movie', {
           with_watch_providers: providerId,
-          watch_region: 'FR',
+          watch_region: region,
           sort_by: sortBy,
           'vote_count.gte': voteCountThreshold,
           page,
-          language: 'fr-FR',
+          language: lang,
           include_adult: false
         }, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })
@@ -234,11 +283,11 @@ export async function fetchMoviesByPlatform({
       fetchEndpoints.push(
         fetchTmdbEndpoint('discover/tv', {
           with_watch_providers: providerId,
-          watch_region: 'FR',
+          watch_region: region,
           sort_by: tvSortBy,
           'vote_count.gte': voteCountThreshold,
           page,
-          language: 'fr-FR',
+          language: lang,
           include_adult: false
         }, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })

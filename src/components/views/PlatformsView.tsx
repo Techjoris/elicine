@@ -3,6 +3,7 @@ import { MovieGrid } from '../movies/MovieGrid';
 import { fetchMoviesByPlatform, PLATFORM_PROVIDER_IDS } from '../../services/tmdb';
 import { useInfiniteCatalog } from '../../hooks/useInfiniteCatalog';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
 import { Tv, Film, Clapperboard, ArrowUpDown } from 'lucide-react';
 
@@ -25,6 +26,7 @@ type SortOption  = 'popularity.desc' | 'vote_average.desc' | 'primary_release_da
 
 export const PlatformsView: React.FC = () => {
   const { apiSettings } = useApp();
+  const { t } = useTranslation();
   const key = apiSettings.tmdbApiKey;
 
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformItem>(PLATFORMS[0]);
@@ -39,17 +41,18 @@ export const PlatformsView: React.FC = () => {
         page,
         mediaType: mediaFilter,
         sortBy,
-        apiKey: key
+        apiKey: key,
+        language: t.tmdbLang
       }).then(res => ({
         results: res.movies,
         total_pages: res.totalPages
       })),
-    [selectedPlatform.id, mediaFilter, sortBy, key]
+    [selectedPlatform.id, selectedPlatform.providerId, mediaFilter, sortBy, key, t.tmdbLang]
   );
 
   const { items, loading, hasMore, sentinelRef } = useInfiniteCatalog<Movie>(
     fetchFn,
-    [selectedPlatform.id, mediaFilter, sortBy, key] as const
+    [selectedPlatform.id, selectedPlatform.providerId, mediaFilter, sortBy, key, t.tmdbLang] as const
   );
 
   return (

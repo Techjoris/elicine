@@ -20,7 +20,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
-import { getMovieTrailer } from '../../services/tmdb';
+import { getMovieTrailer, fetchMovieDetails } from '../../services/tmdb';
 import { getVpnAffiliateUrl } from '../../config/affiliates';
 import { 
   getMediaProviders, 
@@ -48,6 +48,7 @@ export const MovieDetailModal: React.FC = () => {
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isLoadingTrailer, setIsLoadingTrailer] = useState(false);
+  const [localizedDetails, setLocalizedDetails] = useState<Partial<Movie> | null>(null);
   const [providerData, setProviderData] = useState<MediaProvidersResult>({
     svod: { status: 'none', providers: [] },
     vod: []
@@ -57,10 +58,11 @@ export const MovieDetailModal: React.FC = () => {
   const mediaHeroRef = useRef<HTMLDivElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch dynamic trailer and watch providers whenever selectedMovie or language changes
+  // Fetch dynamic trailer, localized details and watch providers whenever selectedMovie or language changes
   useEffect(() => {
     if (!selectedMovie) {
       setTrailerKey(null);
+      setLocalizedDetails(null);
       setProviderData({ svod: { status: 'none', providers: [] }, vod: [] });
       setIsPlayingTrailer(false);
       return;
@@ -78,6 +80,18 @@ export const MovieDetailModal: React.FC = () => {
     );
     const mediaTypeEndpoint = isTv ? 'tv' : 'movie';
 
+    // 1. Recharger les métadonnées localisées (titre, synopsis, genres) dans la langue choisie
+    fetchMovieDetails(selectedMovie.id, selectedMovie.media_type, apiSettings.tmdbApiKey, lang)
+      .then((details) => {
+        if (isMounted && details) {
+          setLocalizedDetails(details);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Éliciné] Localized details load error:', err);
+      });
+
+    // 2. Recharger la bande-annonce selon la langue de l'utilisateur
     getMovieTrailer(selectedMovie.id, apiSettings.tmdbApiKey, selectedMovie.media_type, lang)
       .then((key) => {
         if (isMounted) {
@@ -92,6 +106,7 @@ export const MovieDetailModal: React.FC = () => {
         }
       });
 
+    // 3. Interroger les disponibilités de streaming selon la localisation géographique détectée
     const userCountry = getCachedCountryCode();
     getMediaProviders(
       selectedMovie.id, 
@@ -154,10 +169,16 @@ export const MovieDetailModal: React.FC = () => {
   );
   const mediaTypeBadge = isTv ? 'SÉRIE' : 'FILM';
 
+  const displayTitle = localizedDetails?.title || selectedMovie.title;
+  const displayOriginalTitle = localizedDetails?.original_title || selectedMovie.original_title;
+  const currentGenres = (localizedDetails?.genres && localizedDetails.genres.length > 0)
+    ? localizedDetails.genres
+    : (selectedMovie.genres || []);
+
   // 3. Correction du double badge "Série" : dédupliquer et exclure la redondance
   const uniqueGenres = Array.from(
     new Map(
-      (selectedMovie.genres || [])
+      currentGenres
         .filter(g => {
           const n = g.name.toLowerCase().trim();
           return n !== 'série' && n !== 'serie' && n !== 'film';
@@ -169,8 +190,8 @@ export const MovieDetailModal: React.FC = () => {
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: selectedMovie.title,
-        text: `Découvre "${selectedMovie.title}" sur Éliciné !`,
+        title: displayTitle,
+        text: `Découvre "${displayTitle}" sur Éliciné !`,
         url: window.location.href
       }).catch(() => {});
     } else {
@@ -180,8 +201,9 @@ export const MovieDetailModal: React.FC = () => {
   };
 
   const openYouTubeFallback = () => {
+    const trailerSuffix = lang === 'en' ? 'official trailer' : lang === 'es' ? 'trailer oficial' : 'bande annonce vf';
     window.open(
-      `https://www.youtube.com/results?search_query=${encodeURIComponent(selectedMovie.title + ' bande annonce vf')}`,
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(`${displayTitle} ${trailerSuffix}`)}`,
       '_blank'
     );
   };
@@ -319,11 +341,11 @@ export const MovieDetailModal: React.FC = () => {
               </div>
 
               <h2 className="text-2xl sm:text-4xl font-black text-white">
-                {selectedMovie.title}
+                {displayTitle}
               </h2>
-              {selectedMovie.original_title && selectedMovie.original_title !== selectedMovie.title && (
+              {displayOriginalTitle && displayOriginalTitle !== displayTitle && (
                 <p className="text-xs text-slate-400 italic">
-                  Titre original : {selectedMovie.original_title}
+                  Titre original : {displayOriginalTitle}
                 </p>
               )}
             </div>
@@ -418,7 +440,7 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* Synopsis */}
           {(() => {
-            const rawOverview = (selectedMovie.overview || '').trim();
+            const rawOverview = (localizedDetails?.overview || selectedMovie.overview || '').trim();
             const isOriginalShort = rawOverview.length < 40;
             const isAiEnrichedSynopsis = selectedMovie.is_ai_overview || (isOriginalShort && Boolean(selectedMovie.ai_match_reason || selectedMovie.synopsis));
             const displayOverview = (isOriginalShort && (selectedMovie.synopsis || selectedMovie.ai_match_reason))

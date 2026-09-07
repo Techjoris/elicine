@@ -27,6 +27,11 @@ export default async function handler(req, res) {
 
   try {
     const tmdbUrl = `https://api.themoviedb.org/3/${endpoint}?${searchParams.toString()}`;
+    const countryHeader = req.headers['x-vercel-ip-country'] || req.headers['cf-ipcountry'];
+    if (countryHeader) {
+      res.setHeader('x-user-country', String(countryHeader).toUpperCase().trim());
+    }
+
     const response = await fetch(tmdbUrl);
     const data = await response.json();
     return res.status(response.status).json(data);

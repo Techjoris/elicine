@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { MovieGrid } from '../movies/MovieGrid';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { fetchTrendingPage } from '../../services/tmdb';
 import { useInfiniteCatalog } from '../../hooks/useInfiniteCatalog';
 import { Movie } from '../../types';
@@ -8,16 +9,17 @@ import { Flame } from 'lucide-react';
 
 export const TrendingView: React.FC = () => {
   const { apiSettings } = useApp();
+  const { t } = useTranslation();
   const key = apiSettings.tmdbApiKey;
 
   const fetchFn = useCallback(
-    (page: number) => fetchTrendingPage(page, key),
-    [key]
+    (page: number) => fetchTrendingPage(page, key, t.tmdbLang),
+    [key, t.tmdbLang]
   );
 
   const { items, loading, hasMore, sentinelRef } = useInfiniteCatalog<Movie>(
     fetchFn,
-    [key] as const
+    [key, t.tmdbLang] as const
   );
 
   return (

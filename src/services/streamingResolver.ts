@@ -1,5 +1,6 @@
 import { detectProviderKey } from './tmdb';
 import { getVpnAffiliateUrl } from '../config/affiliates';
+import { getCachedCountryCode } from './geoService';
 import { 
   getPlatformDirectUrl, 
   getDirectStreamingUrl,
@@ -74,7 +75,7 @@ const mediaProvidersCache = new Map<string, MediaProvidersResult>();
 export async function getMediaProviders(
   id: number,
   mediaType: string = 'movie',
-  userCountryCode: string = 'CM',
+  userCountryCode: string = getCachedCountryCode(),
   movieTitle: string = '',
   apiKey?: string,
   movie?: any
@@ -117,7 +118,8 @@ export async function getMediaProviders(
     const majorMarkets = [
       { code: 'US', label: 'USA', flag: '🇺🇸' },
       { code: 'FR', label: 'France', flag: '🇫🇷' },
-      { code: 'GB', label: 'Royaume-Uni', flag: '🇬🇧' }
+      { code: 'GB', label: 'Royaume-Uni', flag: '🇬🇧' },
+      { code: 'CA', label: 'Canada', flag: '🇨🇦' }
     ];
 
     // A. STREAMING SVOD (Abonnement illimité)
