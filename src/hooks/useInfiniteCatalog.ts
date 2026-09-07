@@ -57,11 +57,12 @@ export function useInfiniteCatalog<T extends { id: number }>(
       const list2 = res2?.results ?? [];
 
       const combined = [...list1, ...list2];
-      const existingIds = new Set<number>();
+      const existingKeys = new Set<string>();
       const deduplicated: T[] = [];
       for (const item of combined) {
-        if (!existingIds.has(item.id)) {
-          existingIds.add(item.id);
+        const key = `${(item as any).media_type || ''}_${item.id}`;
+        if (!existingKeys.has(key)) {
+          existingKeys.add(key);
           deduplicated.push(item);
         }
       }
@@ -105,8 +106,8 @@ export function useInfiniteCatalog<T extends { id: number }>(
 
       if (results.length > 0) {
         setItems(prev => {
-          const ids = new Set(prev.map(i => i.id));
-          const fresh = results.filter(i => !ids.has(i.id));
+          const keys = new Set(prev.map(i => `${(i as any).media_type || ''}_${i.id}`));
+          const fresh = results.filter(i => !keys.has(`${(i as any).media_type || ''}_${i.id}`));
           return [...prev, ...fresh];
         });
         setTotal(serverTotal);

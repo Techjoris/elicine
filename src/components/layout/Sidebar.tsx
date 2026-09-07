@@ -9,6 +9,7 @@ import {
   Crown, 
   Zap, 
   Film, 
+  Tv,
   PanelLeftClose,
   Plus,
   X,
@@ -54,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'home' as ActiveView, label: 'Accueil', icon: Home, count: null },
     { id: 'trending' as ActiveView, label: 'Tendances', icon: Flame, count: null },
     { id: 'catalog' as ActiveView, label: 'Catalogue & Genres', icon: Disc, count: null },
+    { id: 'platforms' as ActiveView, label: 'Streaming', icon: Tv, count: null },
     { id: 'watchlist' as ActiveView, label: 'Ma Liste', icon: Heart, count: watchlist.length > 0 ? watchlist.length : null },
   ];
 

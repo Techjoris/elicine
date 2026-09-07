@@ -27,6 +27,19 @@ interface MovieCardProps {
   showAiMatch?: boolean;
 }
 
+const getPlatformBadgeStyle = (name?: string): string => {
+  if (!name) return 'bg-sky-600/90 border-sky-400/30 text-white';
+  const n = name.toLowerCase();
+  if (n.includes('netflix')) return 'bg-red-600/90 border-red-400/40 text-white';
+  if (n.includes('prime')) return 'bg-sky-600/90 border-sky-400/40 text-white';
+  if (n.includes('disney')) return 'bg-blue-800/90 border-blue-400/40 text-white';
+  if (n.includes('apple')) return 'bg-zinc-800/90 border-zinc-500/40 text-white';
+  if (n.includes('max') || n.includes('hbo')) return 'bg-purple-700/90 border-purple-400/40 text-white';
+  if (n.includes('canal')) return 'bg-slate-900/90 border-slate-600/40 text-white';
+  if (n.includes('paramount')) return 'bg-blue-600/90 border-blue-400/40 text-white';
+  return 'bg-sky-600/90 border-sky-400/30 text-white';
+};
+
 export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true }) => {
   const { 
     setSelectedMovie, 
@@ -90,12 +103,18 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
 
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 dark:from-[#0f141f] via-transparent to-black/50 opacity-85 group-hover:opacity-60 transition-opacity" />
-
-        {/* Top-Left: Type Badge + Match Rate Badge */}
+        {/* Top-Left: Type Badge + Platform Badge + Match Rate Badge */}
         <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5 items-start">
-          <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-white text-[10px] font-black tracking-wider uppercase">
-            {mediaType === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-white text-[10px] font-black tracking-wider uppercase">
+              {mediaType === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
+            </span>
+            {movie.primary_platform && (
+              <span className={`px-2 py-0.5 rounded-md backdrop-blur-md border text-[10px] font-black tracking-wider uppercase shadow-sm ${getPlatformBadgeStyle(movie.primary_platform)}`}>
+                {movie.primary_platform}
+              </span>
+            )}
+          </div>
           {movie.match_rate !== undefined && movie.match_rate > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 backdrop-blur-md shadow-sm">
               🎯 {movie.match_rate}% match

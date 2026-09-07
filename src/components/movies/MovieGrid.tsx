@@ -87,7 +87,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
           {movies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} showAiMatch={showAiMatch} />
+            <MovieCard key={`${movie.media_type || 'item'}-${movie.id}`} movie={movie} showAiMatch={showAiMatch} />
           ))}
 
           {/* Seamless skeleton placeholders during background fetch */}

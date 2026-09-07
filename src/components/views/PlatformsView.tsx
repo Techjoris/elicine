@@ -7,18 +7,88 @@ import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
 import { Tv, Film, Clapperboard, ArrowUpDown } from 'lucide-react';
 
-interface PlatformItem {
+export interface PlatformItem {
   id: string;
   name: string;
+  shortName: string;
   providerId: number;
   color: string;
+  badgeBg: string;
+  badgeText: string;
+  symbol: string;
 }
 
-const PLATFORMS: PlatformItem[] = [
-  { id: 'netflix', name: 'Netflix',     providerId: PLATFORM_PROVIDER_IDS.NETFLIX, color: 'from-red-600 to-red-800'      },
-  { id: 'prime',   name: 'Prime Video', providerId: PLATFORM_PROVIDER_IDS.PRIME,   color: 'from-sky-500 to-blue-700'     },
-  { id: 'disney',  name: 'Disney+',     providerId: PLATFORM_PROVIDER_IDS.DISNEY,  color: 'from-blue-700 to-indigo-900'  },
-  { id: 'canal',   name: 'Canal+',      providerId: PLATFORM_PROVIDER_IDS.CANAL,   color: 'from-slate-700 to-slate-900'  }
+export const PLATFORMS: PlatformItem[] = [
+  {
+    id: 'netflix',
+    name: 'Netflix',
+    shortName: 'Netflix',
+    providerId: PLATFORM_PROVIDER_IDS.NETFLIX,
+    color: 'from-red-600 via-red-700 to-red-900',
+    badgeBg: 'bg-red-600',
+    badgeText: 'text-white',
+    symbol: 'N'
+  },
+  {
+    id: 'prime',
+    name: 'Amazon Prime Video',
+    shortName: 'Prime Video',
+    providerId: PLATFORM_PROVIDER_IDS.PRIME,
+    color: 'from-sky-500 via-blue-600 to-blue-800',
+    badgeBg: 'bg-[#00a8e1]',
+    badgeText: 'text-white',
+    symbol: 'P'
+  },
+  {
+    id: 'disney',
+    name: 'Disney+',
+    shortName: 'Disney+',
+    providerId: PLATFORM_PROVIDER_IDS.DISNEY,
+    color: 'from-blue-700 via-indigo-800 to-indigo-950',
+    badgeBg: 'bg-blue-600',
+    badgeText: 'text-white',
+    symbol: 'D+'
+  },
+  {
+    id: 'apple',
+    name: 'Apple TV+',
+    shortName: 'Apple TV+',
+    providerId: PLATFORM_PROVIDER_IDS.APPLE_TV,
+    color: 'from-zinc-700 via-zinc-800 to-zinc-950',
+    badgeBg: 'bg-zinc-800',
+    badgeText: 'text-white',
+    symbol: ''
+  },
+  {
+    id: 'max',
+    name: 'Max / HBO',
+    shortName: 'Max',
+    providerId: PLATFORM_PROVIDER_IDS.MAX,
+    color: 'from-purple-600 via-indigo-700 to-purple-900',
+    badgeBg: 'bg-purple-600',
+    badgeText: 'text-white',
+    symbol: 'MAX'
+  },
+  {
+    id: 'canal',
+    name: 'Canal+',
+    shortName: 'Canal+',
+    providerId: PLATFORM_PROVIDER_IDS.CANAL,
+    color: 'from-slate-800 via-slate-900 to-black',
+    badgeBg: 'bg-black',
+    badgeText: 'text-white',
+    symbol: 'C+'
+  },
+  {
+    id: 'paramount',
+    name: 'Paramount+',
+    shortName: 'Paramount+',
+    providerId: PLATFORM_PROVIDER_IDS.PARAMOUNT,
+    color: 'from-blue-600 via-blue-700 to-blue-900',
+    badgeBg: 'bg-[#0064ff]',
+    badgeText: 'text-white',
+    symbol: 'P+'
+  }
 ];
 
 type MediaFilter = 'all' | 'movie' | 'tv';
@@ -38,6 +108,7 @@ export const PlatformsView: React.FC = () => {
     (page: number) =>
       fetchMoviesByPlatform({
         providerId: selectedPlatform.providerId,
+        platformName: selectedPlatform.shortName,
         page,
         mediaType: mediaFilter,
         sortBy,
@@ -47,7 +118,7 @@ export const PlatformsView: React.FC = () => {
         results: res.movies,
         total_pages: res.totalPages
       })),
-    [selectedPlatform.id, selectedPlatform.providerId, mediaFilter, sortBy, key, t.tmdbLang]
+    [selectedPlatform.id, selectedPlatform.providerId, selectedPlatform.shortName, mediaFilter, sortBy, key, t.tmdbLang]
   );
 
   const { items, loading, hasMore, sentinelRef } = useInfiniteCatalog<Movie>(
@@ -64,28 +135,33 @@ export const PlatformsView: React.FC = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
             <Tv className="w-7 h-7 text-sky-500 dark:text-sky-400" />
-            <span>Catalogues Streaming</span>
+            <span>Classement par Plateforme</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
-            Défilement infini automatique — synchronisé en temps réel avec TMDB.
+            Explorez les meilleurs films et séries par service de streaming avec défilement infini.
           </p>
         </div>
 
-        {/* Platform Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Horizontal Platform Selector Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
           {PLATFORMS.map(p => {
             const isSel = selectedPlatform.id === p.id;
             return (
               <button
                 key={p.id}
+                type="button"
                 onClick={() => setSelectedPlatform(p)}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition-all duration-300 cursor-pointer ${
+                className={`flex-shrink-0 flex items-center gap-2.5 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-2xl border text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer select-none ${
                   isSel
-                    ? `bg-gradient-to-br ${p.color} border-white/40 text-white shadow-sm dark:shadow-neon-blue scale-[1.02]`
-                    : 'bg-slate-100 dark:bg-[#07090e] border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    ? `bg-gradient-to-r ${p.color} border-white/40 text-white shadow-md shadow-black/25 scale-[1.02]`
+                    : 'bg-slate-100 dark:bg-[#07090e] border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/70 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
+                title={`Explorer le catalogue ${p.name}`}
               >
-                {p.name}
+                <span className={`w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center flex-shrink-0 shadow-inner ${isSel ? 'bg-white/20 text-white border border-white/30' : `${p.badgeBg} ${p.badgeText}`}`}>
+                  {p.symbol}
+                </span>
+                <span className="whitespace-nowrap">{p.name}</span>
               </button>
             );
           })}
@@ -95,19 +171,20 @@ export const PlatformsView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-200 dark:border-[#1e293b]/70">
 
           {/* Media type filter pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-[#07090e] border border-slate-200 dark:border-[#1e293b] text-xs font-semibold">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-[#07090e] border border-slate-200 dark:border-[#1e293b] text-xs font-semibold self-start">
             {([
-              { id: 'all',   label: 'Tout voir', icon: Clapperboard },
-              { id: 'movie', label: 'Films',      icon: Film         },
-              { id: 'tv',    label: 'Séries',     icon: Tv           }
+              { id: 'all',   label: 'Tous',    icon: Clapperboard },
+              { id: 'movie', label: 'Films',   icon: Film         },
+              { id: 'tv',    label: 'Séries',  icon: Tv           }
             ] as { id: MediaFilter; label: string; icon: any }[]).map(tab => {
               const Icon = tab.icon;
               const isSel = mediaFilter === tab.id;
               return (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setMediaFilter(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer select-none ${
                     isSel ? 'bg-blue-600 text-white shadow-sm dark:shadow-neon-blue font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
@@ -119,8 +196,8 @@ export const PlatformsView: React.FC = () => {
           </div>
 
           {/* Sort dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-medium">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-medium whitespace-nowrap">
               <ArrowUpDown className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
               Trier par :
             </span>
@@ -129,8 +206,8 @@ export const PlatformsView: React.FC = () => {
               onChange={e => setSortBy(e.target.value as SortOption)}
               className="bg-slate-50 dark:bg-[#07090e] border border-slate-200 dark:border-[#1e293b] rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-semibold outline-none focus:border-sky-500 cursor-pointer"
             >
-              <option value="popularity.desc">🔥 Les plus populaires</option>
-              <option value="vote_average.desc">⭐ Les mieux notés</option>
+              <option value="popularity.desc">🔥 Populaires</option>
+              <option value="vote_average.desc">⭐ Mieux notés</option>
               <option value="primary_release_date.desc">✨ Nouveautés</option>
             </select>
           </div>
@@ -140,7 +217,7 @@ export const PlatformsView: React.FC = () => {
       {/* Grid with sentinel inside MovieGrid */}
       <MovieGrid
         title={`${selectedPlatform.name} — ${mediaFilter === 'all' ? 'Films & Séries' : mediaFilter === 'movie' ? 'Films' : 'Séries'}`}
-        subtitle={`${items.length} titres chargés${hasMore ? ' — défilez pour charger la suite' : ' — fin du catalogue'}`}
+        subtitle={`${items.length} titres chargés${hasMore ? ' — défilez vers le bas pour charger la suite' : ' — fin du catalogue'}`}
         movies={items}
         showAiMatch={false}
         sentinelRef={sentinelRef}
