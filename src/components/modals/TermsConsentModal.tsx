@@ -48,7 +48,7 @@ export const TermsConsentModal: React.FC = () => {
 
   return (
     <div 
-      className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity duration-200 select-none ${
+      className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-sm transition-opacity duration-200 select-none ${
         isClosing ? 'opacity-0' : 'opacity-100 animate-fade-in'
       }`}
       role="dialog"
@@ -56,7 +56,7 @@ export const TermsConsentModal: React.FC = () => {
       aria-labelledby="terms-gate-title"
     >
       <div 
-        className={`w-full max-w-md bg-[#0D0D0E] border border-white/10 rounded-xl p-6 sm:p-7 shadow-2xl text-white space-y-5 transition-all duration-200 transform ${
+        className={`w-full max-w-md bg-white dark:bg-[#0D0D0E] border border-zinc-200 dark:border-white/10 rounded-xl p-6 sm:p-7 shadow-2xl text-zinc-900 dark:text-white space-y-5 transition-all duration-200 transform ${
           isClosing ? 'scale-95' : 'scale-100'
         }`}
       >
@@ -65,26 +65,26 @@ export const TermsConsentModal: React.FC = () => {
           <ElicineLogo variant="full" size="sm" />
         </div>
 
-        {/* Hiérarchie typographique sobre */}
+        {/* Hiérarchie typographique sobre & contrastée */}
         <div className="space-y-2">
           <h2 
             id="terms-gate-title"
-            className="text-base sm:text-lg font-semibold text-white tracking-tight"
+            className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-white tracking-tight"
           >
             Conditions &amp; Confidentialité
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
             Pour profiter de la découverte cinématographique intelligente et de nos recommandations personnalisées, veuillez accepter nos conditions d'utilisation et notre politique de protection des données.
           </p>
         </div>
 
-        {/* Simple lien souligné en gris clair */}
+        {/* Simple lien souligné lisible en mode clair et sombre */}
         <div>
           <a
             href="/terms"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-zinc-300 hover:text-white underline underline-offset-4 transition-colors inline-block"
+            className="text-xs text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white underline underline-offset-4 transition-colors inline-block font-medium"
           >
             Consulter l'intégralité des CGU et de la Politique de Confidentialité
           </a>
@@ -101,9 +101,9 @@ export const TermsConsentModal: React.FC = () => {
               type="checkbox"
               checked={isChecked}
               onChange={(e) => setIsChecked(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-white accent-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-white accent-zinc-900 dark:accent-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
             />
-            <span className="text-xs text-zinc-300 group-hover:text-zinc-200 leading-snug">
+            <span className="text-xs text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100 leading-snug">
               J'ai lu et j'accepte les Conditions Générales d'Utilisation et la Politique de Confidentialité.
             </span>
           </label>
@@ -112,7 +112,7 @@ export const TermsConsentModal: React.FC = () => {
             type="button"
             onClick={handleAccept}
             disabled={!isChecked}
-            className="w-full py-2.5 px-4 rounded-lg bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed font-medium text-xs sm:text-sm transition-colors cursor-pointer text-center select-none"
+            className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-900 dark:disabled:hover:bg-white disabled:cursor-not-allowed font-medium text-xs sm:text-sm transition-colors cursor-pointer text-center select-none shadow-sm"
           >
             Accepter et continuer
           </button>
