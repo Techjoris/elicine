@@ -53,21 +53,11 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium">
           <button
             type="button"
-            onClick={() => handleGoToTerms('service')}
-            className="hover:text-slate-900 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none"
+            onClick={() => handleGoToTerms()}
+            className="hover:text-slate-900 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none flex items-center gap-1.5"
           >
-            Conditions d'utilisation
-          </button>
-
-          <span className="text-slate-300 dark:text-zinc-700">•</span>
-
-          <button
-            type="button"
-            onClick={() => handleGoToTerms('privacy')}
-            className="hover:text-slate-900 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none flex items-center gap-1"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500/80" />
-            <span>Confidentialité</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-500/80" />
+            <span>Conditions &amp; Confidentialité</span>
           </button>
 
           <span className="text-slate-300 dark:text-zinc-700">•</span>

@@ -135,6 +135,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </svg>
               <span>{isGoogleLoading ? 'Connexion en cours...' : 'Continuer avec Google'}</span>
             </button>
+            <p className="text-[10px] text-slate-400 text-center leading-tight pt-0.5">
+              En continuant, vous confirmez votre accord avec nos{' '}
+              <a 
+                href="/terms" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+              >
+                Conditions Générales d'Utilisation
+              </a>
+              .
+            </p>
           </div>
         ) : (
           <div className="flex items-center justify-between p-2.5 px-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">

@@ -20,6 +20,7 @@ import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ProSuccessModal } from './components/modals/ProSuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
+import { TermsConsentModal } from './components/modals/TermsConsentModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { DevModal } from './components/DevModal';
 import { SupportModal } from './components/SupportModal';
@@ -310,6 +311,7 @@ export const AppContent: React.FC = () => {
       )}
 
       {/* Modals */}
+      <TermsConsentModal />
       <MovieDetailModal />
       <ProModal />
       <TipModal />

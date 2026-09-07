@@ -329,7 +329,7 @@ export const AuthModal: React.FC = () => {
             </div>
 
             {/* PRIMARY ACTION: Continuer avec Google */}
-            <div>
+            <div className="space-y-2">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -354,6 +354,20 @@ export const AuthModal: React.FC = () => {
                   </>
                 )}
               </button>
+
+              {/* Mentions légales CGU sous le bouton Google */}
+              <p className="text-[11px] text-zinc-400 text-center leading-tight">
+                En continuant, vous confirmez votre accord avec nos{' '}
+                <a 
+                  href="/terms" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                >
+                  Conditions Générales d'Utilisation
+                </a>
+                .
+              </p>
             </div>
 
             {/* Divider: "ou par identifiant" */}
