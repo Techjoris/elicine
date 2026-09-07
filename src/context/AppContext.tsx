@@ -159,14 +159,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return DEFAULT_QUOTA;
   });
 
-  // 3. User Profile
+  // 3. User Profile - Lecture directe immédiate du token / session au montage
   const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('cineia_user');
-    if (saved) {
+    if (typeof window !== 'undefined') {
       try {
-        return JSON.parse(saved);
+        const saved = localStorage.getItem('cineia_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) return parsed;
+        }
+
+        // Lecture immédiate d'un token Supabase existant dans LocalStorage
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              try {
+                const data = JSON.parse(raw);
+                const sbUser = data?.user || data?.currentSession?.user;
+                if (sbUser?.email) {
+                  const meta = sbUser.user_metadata || {};
+                  const identityMeta = sbUser.identities?.[0]?.identity_data || {};
+                  const avatar = meta.avatar_url || meta.picture || identityMeta.avatar_url || identityMeta.picture || sbUser.avatar;
+                  const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || sbUser.name || sbUser.email.split('@')[0];
+                  return {
+                    ...sbUser,
+                    id: sbUser.id,
+                    email: sbUser.email,
+                    name,
+                    avatar,
+                    provider: 'google',
+                    role: meta.role || 'user',
+                    isPro: false,
+                    referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+                    createdAt: sbUser.created_at || new Date().toISOString(),
+                    token: data?.access_token || data?.currentSession?.access_token
+                  };
+                }
+              } catch (e) {}
+            }
+          }
+        }
       } catch (e) {
-        console.error(e);
+        console.error('Erreur extraction session locale:', e);
       }
     }
     return null;
@@ -423,17 +459,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Récupération initiale (avec support code PKCE et persistance)
-    const checkInitialSession = async () => {
+    // 1. Récupération initiale (avec lecture immédiate et activation de session)
+    const initAuth = async () => {
       try {
-        // Prise en charge du Callback OAuth PKCE (?code=...)
+        // Lecture directe et activation de session si token présent en LocalStorage
         if (typeof window !== 'undefined') {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                try {
+                  const data = JSON.parse(raw);
+                  if (data?.access_token && data?.refresh_token) {
+                    await supabase.auth.setSession({
+                      access_token: data.access_token,
+                      refresh_token: data.refresh_token
+                    }).catch(() => {});
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+
+          // Prise en charge du Callback OAuth PKCE (?code=...)
           const url = new URL(window.location.href);
           const code = url.searchParams.get('code');
           if (code) {
             try {
               const { data, error } = await supabase.auth.exchangeCodeForSession(code);
               if (!error && data?.session?.user && isMounted) {
+                console.log("Utilisateur connecté détecté :", data.session.user.email);
                 syncSupabaseUser(data.session, 'SIGNED_IN');
                 setLoading(false);
                 return;
@@ -445,14 +501,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn('[Supabase] Initial session retrieval error:', error);
-        }
         if (session?.user && isMounted) {
+          console.log("Utilisateur connecté détecté :", session.user.email);
           syncSupabaseUser(session, 'INITIAL_SESSION');
         }
       } catch (err) {
-        console.warn('[Supabase] Initial session exception:', err);
+        console.warn('[Supabase] initAuth exception:', err);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -460,16 +514,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    checkInitialSession();
+    initAuth();
 
     // 2. Écoute dynamique (OAuth redirect, sign in, sign out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event:', event, session?.user?.email);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth event:', _event, session?.user?.email);
       if (!isMounted) return;
 
       if (session?.user) {
-        syncSupabaseUser(session, event);
-      } else if (event === 'SIGNED_OUT') {
+        console.log("Utilisateur connecté détecté :", session.user.email);
+        syncSupabaseUser(session, _event);
+      } else {
         setUser(null);
         try {
           localStorage.removeItem('cineia_user');
