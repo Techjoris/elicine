@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { authService } from '../../services/authService';
+import { supabase } from '../../lib/supabase';
 
 interface ProfileMenuProps {
   onOpenSettings: () => void;
@@ -47,13 +48,35 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
     };
   }, [open]);
 
-  const displayName = user?.name || (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : '');
+  const isConnected = Boolean(user && (user.email || user.id));
+  const activeUserFullName = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.name;
+  const activeDisplayName = activeUserFullName || user?.email || 'Ivan Joris';
+  const displayName = isConnected ? activeDisplayName : 'Cinéphile Invité';
   const displayAvatar = user?.avatar || (user as any)?.user_metadata?.avatar_url || (user as any)?.user_metadata?.picture;
   const isGoogle = user?.provider === 'google' || (user as any)?.app_metadata?.provider === 'google' || Boolean((user as any)?.user_metadata?.avatar_url);
 
-  const initials = displayName
-    ? displayName.slice(0, 2).toUpperCase()
-    : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'CI');
+  const initials = isConnected
+    ? (
+        activeDisplayName
+          ? activeDisplayName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase()
+          : 'IJ'
+      )
+    : 'CI';
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      localStorage.removeItem('cineia_user');
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[Supabase signOut error]', err);
+    }
+    logout();
+    setOpen(false);
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="relative" ref={menuRef}>
@@ -72,7 +95,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           {displayAvatar && !imgError ? (
             <img 
               src={displayAvatar} 
-              alt={displayName || 'Profil'} 
+              alt={displayName} 
               className="w-full h-full object-cover" 
               onError={() => setImgError(true)}
             />
@@ -89,10 +112,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
         <div className="hidden xl:flex flex-col text-left leading-none max-w-[100px]">
           <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-950 dark:group-hover:text-white transition-colors">
-            {displayName || (user ? 'Mon Compte' : 'Invité')}
+            {displayName}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
-            {user?.isPro ? '👑 Pro' : '⚡ Illimité'}
+            {isConnected ? (user?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
           </span>
         </div>
 
@@ -122,27 +145,45 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {/* User Info & Quota Header */}
             <div className="p-3 bg-slate-50 dark:bg-zinc-850/80 dark:bg-[#181a24] rounded-xl border border-slate-200 dark:border-zinc-800 mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                {displayAvatar && (
-                  <img src={displayAvatar} alt={displayName} className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" />
+                {displayAvatar && !imgError ? (
+                  <img 
+                    src={displayAvatar} 
+                    alt={displayName} 
+                    className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" 
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 text-white font-black text-xs flex items-center justify-center flex-shrink-0 ring-1 ring-cyan-500/40">
+                    {initials}
+                  </div>
                 )}
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                    <span>{displayName || 'Cinéphile Invité'}</span>
+                    <span>{displayName}</span>
                     {isGoogle && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-zinc-800 text-cyan-600 dark:text-cyan-300 border border-cyan-400/30 font-semibold">Google</span>
                     )}
                   </p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
-                    {user?.email || (user as any)?.user_metadata?.email || 'Non connecté'}
-                  </p>
+                  {isConnected ? (
+                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
+                        Connecté • {user?.email}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                      Non connecté
+                    </p>
+                  )}
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
                 user?.isPro
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
-                  : 'bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/30'
+                  : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
               }`}>
-                {user?.isPro ? '👑 PRO' : '⚡ Illimité'}
+                {user?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
               </span>
             </div>
 
@@ -238,19 +279,15 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />
 
               {/* 🚪 Connexion / Déconnexion */}
-              {user ? (
+              {isConnected ? (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    logout();
-                    setOpen(false);
-                  }}
+                  onClick={handleLogout}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer font-medium"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer font-semibold"
                 >
                   <LogOut className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <span className="text-xs">Déconnexion</span>
+                  <span className="text-xs">Se déconnecter</span>
                 </button>
               ) : (
                 <button

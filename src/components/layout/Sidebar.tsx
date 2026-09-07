@@ -247,13 +247,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
                   : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
               }`}>
-                {user.name 
-                  ? user.name.slice(0, 2).toUpperCase() 
-                  : (user.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC')}
+                {(user as any)?.user_metadata?.full_name 
+                  ? (user as any).user_metadata.full_name.slice(0, 2).toUpperCase() 
+                  : (user.email ? user.email.slice(0, 2).toUpperCase() : 'IJ')}
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-cyan-300 transition-colors">
-                  {user.name}
+                  {(user as any)?.user_metadata?.full_name || user.email || user.name || 'Ivan Joris'}
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                   {user.email}
