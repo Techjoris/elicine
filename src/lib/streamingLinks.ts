@@ -4,6 +4,7 @@
  */
 
 export {
+  getDirectPlatformSearchUrl,
   getUniversalStreamingUrl,
   redirectToStreamingProvider,
   handleStreamingClick,

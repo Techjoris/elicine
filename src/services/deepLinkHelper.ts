@@ -83,7 +83,7 @@ export const getDirectStreamingUrl = (
   if (lower.includes('netflix')) {
     if (cleanId) return `https://www.netflix.com/title/${cleanId}`;
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Netflix`;
+    return `https://www.netflix.com/search?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 2. AMAZON PRIME VIDEO
@@ -94,66 +94,66 @@ export const getDirectStreamingUrl = (
         : `https://www.primevideo.com/detail/${cleanId}`;
     }
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Prime+Video`;
+    return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 3. DISNEY+
   if (lower.includes('disney')) {
     if (cleanId) return `https://www.disneyplus.com/video/${cleanId}`;
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Disney%2B`;
+    return `https://www.disneyplus.com/search?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 4. CANAL+ (myCANAL)
   if (lower.includes('canal') || lower.includes('mycanal')) {
     if (cleanId) return `https://www.canalplus.com/programme-tv/${cleanId}`;
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.canalplus.com/recherche/${encodedTitle}`;
+    return `https://www.canalplus.com/recherche/${encodeURIComponent(cleanTitle)}`;
   }
 
   // 5. APPLE TV+
   if (lower.includes('apple')) {
     if (cleanId) return `https://tv.apple.com/movie/${cleanId}`;
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Apple+TV`;
+    return `https://tv.apple.com/search?term=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 6. MAX / HBO MAX
   if (lower.includes('max') || lower.includes('hbo')) {
     if (cleanId) return `https://www.max.com/title/${cleanId}`;
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Max`;
+    return `https://www.max.com/search?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 7. PARAMOUNT+
   if (lower.includes('paramount')) {
     if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Paramount%2B`;
+    return `https://www.paramountplus.com/search/?query=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 8. TF1+
   if (lower.includes('tf1')) {
-    return `https://www.tf1.fr/recherche?q=${encodedTitle}`;
+    return `https://www.tf1.fr/recherche?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 9. FRANCE.TV
   if (lower.includes('france') || lower.includes('francetv')) {
-    return `https://www.france.tv/recherche/?q=${encodedTitle}`;
+    return `https://www.france.tv/recherche/?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 10. ARTE
   if (lower.includes('arte')) {
-    return `https://www.arte.tv/fr/search/?q=${encodedTitle}`;
+    return `https://www.arte.tv/fr/search/?q=${encodeURIComponent(cleanTitle)}`;
   }
 
   // 11. 6PLAY / M6+
   if (lower.includes('6play') || lower.includes('m6')) {
-    return `https://www.6play.fr/recherche?q=${encodedTitle}`;
+    return `https://www.6play.fr/recherche?q=${encodeURIComponent(cleanTitle)}`;
   }
 
-  // FALLBACK UNIVERSEL (Google Watch Action avec fiche officielle)
+  // FALLBACK DIRECT INTERNE
   if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-  return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+${encodeURIComponent(providerName.trim())}`;
+  return `https://www.netflix.com/search?q=${encodeURIComponent(cleanTitle)}`;
 };
 
 /**
@@ -184,8 +184,79 @@ export const isNetflixProvider = (providerName: string): boolean =>
   providerName.toLowerCase().includes('netflix');
 
 /**
- * Destination Universelle Mobile :
- * Génère l'action de recherche officielle mobile vérifiée qui résout les deep-links in-app dans n'importe quel pays.
+ * Génère l'URL de recherche interne directe sur la plateforme de streaming officielle.
+ * Supprime tout intermédiaire Google et ouvre directement la recherche in-app / web.
+ */
+export const getDirectPlatformSearchUrl = (
+  providerName: string,
+  movieTitle: string
+): string => {
+  const cleanTitle = (movieTitle || '').trim();
+  const encodedTitle = encodeURIComponent(cleanTitle);
+  const lower = (providerName || '').toLowerCase();
+
+  // 1. NETFLIX
+  if (lower.includes('netflix')) {
+    return `https://www.netflix.com/search?q=${encodedTitle}`;
+  }
+
+  // 2. AMAZON PRIME VIDEO
+  if (lower.includes('amazon') || lower.includes('prime')) {
+    return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
+  }
+
+  // 3. DISNEY+
+  if (lower.includes('disney')) {
+    return `https://www.disneyplus.com/search?q=${encodedTitle}`;
+  }
+
+  // 4. CANAL+ / myCANAL
+  if (lower.includes('canal') || lower.includes('mycanal')) {
+    return `https://www.canalplus.com/recherche/${encodedTitle}`;
+  }
+
+  // 5. APPLE TV+
+  if (lower.includes('apple')) {
+    return `https://tv.apple.com/search?term=${encodedTitle}`;
+  }
+
+  // 6. MAX / HBO MAX
+  if (lower.includes('max') || lower.includes('hbo')) {
+    return `https://www.max.com/search?q=${encodedTitle}`;
+  }
+
+  // 7. PARAMOUNT+
+  if (lower.includes('paramount')) {
+    return `https://www.paramountplus.com/search/?query=${encodedTitle}`;
+  }
+
+  // 8. TF1+
+  if (lower.includes('tf1')) {
+    return `https://www.tf1.fr/recherche?q=${encodedTitle}`;
+  }
+
+  // 9. FRANCE.TV
+  if (lower.includes('france') || lower.includes('francetv')) {
+    return `https://www.france.tv/recherche/?q=${encodedTitle}`;
+  }
+
+  // 10. ARTE
+  if (lower.includes('arte')) {
+    return `https://www.arte.tv/fr/search/?q=${encodedTitle}`;
+  }
+
+  // 11. 6PLAY / M6+
+  if (lower.includes('6play') || lower.includes('m6')) {
+    return `https://www.6play.fr/recherche?q=${encodedTitle}`;
+  }
+
+  // Fallback direct sur Netflix
+  return `https://www.netflix.com/search?q=${encodedTitle}`;
+};
+
+/**
+ * Destination Directe Plateforme :
+ * Génère l'URL de recherche interne officielle sans intermédiaire Google.
  */
 export const getUniversalStreamingUrl = (
   movie: MovieStreamingTarget,
@@ -196,17 +267,14 @@ export const getUniversalStreamingUrl = (
     : (provider.provider_name || provider.name || '');
 
   const cleanTitle = (movie?.title || '').trim();
-  const year = movie?.release_date ? movie.release_date.slice(0, 4) : '';
-  const searchPart = [cleanTitle, year].filter(Boolean).join(' ');
-
-  return `https://www.google.com/search?q=regarder+${encodeURIComponent(searchPart)}+sur+${encodeURIComponent(providerName.trim())}`;
+  return getDirectPlatformSearchUrl(providerName, cleanTitle);
 };
 
 /**
- * MOTEUR DE REDIRECTION UNIVERSELLE (Universal Redirection Engine) :
+ * MOTEUR DE REDIRECTION DIRECTE :
  * 1. Smart Clipboard Helper : Copie le titre propre du film dans le presse-papier instantanément.
- * 2. Toast feedback : Déclenche un toast discret de 1.5s : "Redirection vers le film... (Titre copié)"
- * 3. Universal Destination : Ouvre l'action de recherche mobile certifiée qui résout l'application native.
+ * 2. Toast feedback : Déclenche un toast discret de 1.5s.
+ * 3. Destination Directe : Ouvre la recherche interne de la plateforme dans un nouvel onglet.
  */
 export const redirectToStreamingProvider = (
   movie: MovieStreamingTarget,
@@ -217,10 +285,12 @@ export const redirectToStreamingProvider = (
     ? provider
     : (provider.provider_name || provider.name || '');
 
+  const movieTitle = (movie?.title || '').trim();
+
   // 1. Smart Clipboard Helper
-  if (typeof navigator !== 'undefined' && navigator.clipboard && movie?.title) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard && movieTitle) {
     try {
-      navigator.clipboard.writeText(movie.title).catch(() => {});
+      navigator.clipboard.writeText(movieTitle).catch(() => {});
     } catch {
       // Ignoré en environnement restreint
     }
@@ -228,10 +298,10 @@ export const redirectToStreamingProvider = (
 
   // 2. Toast feedback (1.5s)
   if (showToast) {
-    showToast('Redirection vers le film... (Titre copié)', 1500);
+    showToast(`Redirection vers ${providerName || 'la plateforme'}... (Titre copié)`, 1500);
   }
 
-  // 3. Universal Destination
+  // 3. Recherche interne directe sur la plateforme (nouvel onglet sécurisé)
   const targetUrl = getUniversalStreamingUrl(movie, providerName);
   window.open(targetUrl, '_blank', 'noopener,noreferrer');
 };
@@ -293,10 +363,8 @@ export const getNetflixDeepLink = (
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Google Watch Action mobile
-  // Sur Android, netflix.com/search?q= est intercepté par l'app mais le champ q est purgé.
-  // La recherche Google Watch Action affiche la fiche interactive officielle avec le deep-link direct :
-  return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Netflix`;
+  // Priorité 3 : Recherche interne directe Netflix
+  return `https://www.netflix.com/search?q=${encodedTitle}`;
 };
 
 /**
@@ -327,8 +395,8 @@ export const getPrimeVideoDeepLink = (
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Fallback officiel Watch Action
-  return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Prime+Video`;
+  // Priorité 3 : Recherche interne directe Prime Video
+  return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
 };
 
 /**
@@ -357,8 +425,8 @@ export const getDisneyDeepLink = (
     return watchProviderLink.trim();
   }
 
-  // Priorité 3 : Fallback officiel Watch Action
-  return `https://www.google.com/search?q=regarder+${encodedTitle}+sur+Disney%2B`;
+  // Priorité 3 : Recherche interne directe Disney+
+  return `https://www.disneyplus.com/search?q=${encodedTitle}`;
 };
 
 /**
@@ -403,7 +471,7 @@ export const getAppleTvDeepLink = (
   if (watchProviderLink && watchProviderLink.trim()) {
     return watchProviderLink.trim();
   }
-  return `https://www.google.com/search?q=regarder+${encodeURIComponent(movieTitle.trim())}+sur+Apple+TV`;
+  return `https://tv.apple.com/search?term=${encodeURIComponent(movieTitle.trim())}`;
 };
 
 /**
@@ -512,5 +580,5 @@ export const getPlatformDirectUrl = (
   }
 
   if (watchLink && watchLink.trim()) return watchLink.trim();
-  return `https://www.google.com/search?q=regarder+${encodedTitle}+streaming`;
+  return `https://www.netflix.com/search?q=${encodedTitle}`;
 };
