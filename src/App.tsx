@@ -9,6 +9,8 @@ import { PlatformsView } from './components/views/PlatformsView';
 import { WatchlistView } from './components/views/WatchlistView';
 import { AlertsView } from './components/views/AlertsView';
 import { AdminView } from './components/views/AdminView';
+import { TermsView } from './components/views/TermsView';
+import { Footer } from './components/layout/Footer';
 
 // Modals
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
@@ -183,15 +185,48 @@ export const AppContent: React.FC = () => {
     }
   };
 
+  // Route /terms detection & browser history synchronization
+  useEffect(() => {
+    const handleLocation = () => {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path === '/terms' || path === '/terms/') {
+        setActiveView('terms');
+      }
+    };
+
+    handleLocation();
+    window.addEventListener('popstate', handleLocation);
+    return () => window.removeEventListener('popstate', handleLocation);
+  }, [setActiveView]);
+
   const [heroResetKey, setHeroResetKey] = useState(0);
 
   // 1. NAVIGATION RETOUR ACCUEIL : Réinitialisation globale de l'application
   const handleResetHome = () => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/terms')) {
+      window.history.pushState({}, '', '/');
+    }
     setActiveView('home');
     setAiResults(null);
     setSelectedMovie(null);
     setHeroResetKey(prev => prev + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 2. NAVIGATION VERS /terms : Conditions & Confidentialité
+  const handleNavigateTerms = (section?: string) => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/terms${section ? `#${section}` : ''}`);
+    }
+    setActiveView('terms');
+    if (section) {
+      setTimeout(() => {
+        const el = document.getElementById(section);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   return (
@@ -208,6 +243,7 @@ export const AppContent: React.FC = () => {
           onGoHome={handleResetHome} 
           onOpenDevModal={() => setIsDevModalOpen(true)} 
           onOpenSupport={() => setIsSupportOpen(true)} 
+          onNavigateTerms={handleNavigateTerms}
         />
 
         {/* Main Content Area */}
@@ -255,9 +291,13 @@ export const AppContent: React.FC = () => {
           {activeView === 'watchlist' && <WatchlistView />}
           {activeView === 'alerts' && <AlertsView />}
           {activeView === 'admin' && <AdminView />}
+          {activeView === 'terms' && <TermsView />}
 
         </main>
       </div>
+
+      {/* Site Footer */}
+      <Footer onNavigateTerms={handleNavigateTerms} />
 
       {/* Toast Notification Container */}
       {toastMessage && (

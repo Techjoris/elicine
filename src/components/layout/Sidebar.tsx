@@ -24,9 +24,15 @@ export interface SidebarProps {
   onGoHome?: () => void;
   onOpenDevModal?: () => void;
   onOpenSupport?: () => void;
+  onNavigateTerms?: (section?: string) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOpenSupport }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  onGoHome, 
+  onOpenDevModal, 
+  onOpenSupport,
+  onNavigateTerms 
+}) => {
   const {
     activeView,
     setActiveView,
@@ -297,6 +303,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
             <span className="ml-auto text-[9px] bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-600 dark:text-amber-400 font-bold">DEV</span>
           </button>
         )}
+
+        {/* Lien discret Conditions & Confidentialité */}
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigateTerms) {
+                onNavigateTerms();
+              } else {
+                setActiveView('terms');
+              }
+              setIsMobileMenuOpen(false);
+            }}
+            className="text-[11px] text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors cursor-pointer select-none"
+          >
+            Conditions &amp; Confidentialité
+          </button>
+        </div>
 
       </div>
 
