@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Star, 
@@ -53,6 +53,9 @@ export const MovieDetailModal: React.FC = () => {
     vod: []
   });
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+
+  const mediaHeroRef = useRef<HTMLDivElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch dynamic trailer and watch providers whenever selectedMovie or language changes
   useEffect(() => {
@@ -177,12 +180,31 @@ export const MovieDetailModal: React.FC = () => {
   };
 
   const openYouTubeFallback = () => {
-    window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(selectedMovie.title + ' bande annonce vf')}`, '_blank');
+    window.open(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(selectedMovie.title + ' bande annonce vf')}`,
+      '_blank'
+    );
+  };
+
+  const handleWatchTrailer = () => {
+    if (trailerKey) {
+      setIsPlayingTrailer(true);
+      if (modalContainerRef.current) {
+        modalContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (mediaHeroRef.current) {
+        mediaHeroRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } else if (isLoadingTrailer) {
+      showToast('Recherche de la bande-annonce...');
+    } else {
+      openYouTubeFallback();
+    }
   };
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 overflow-y-auto bg-black/80 backdrop-blur-md animate-fade-in"
+      ref={modalContainerRef}
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-20 pb-6 px-0 sm:px-4 overflow-y-auto bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           setSelectedMovie(null);
@@ -192,7 +214,7 @@ export const MovieDetailModal: React.FC = () => {
       
       {/* Modal Card */}
       <div 
-        className="relative w-full max-w-4xl min-h-screen sm:min-h-0 sm:max-h-[92vh] rounded-none sm:rounded-3xl bg-[#0e1424] border-0 sm:border border-white/15 shadow-2xl overflow-hidden text-slate-100 flex flex-col"
+        className="relative w-full max-w-4xl min-h-[calc(100vh-4rem)] sm:min-h-0 sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl bg-[#0e1424] border-t sm:border border-white/15 shadow-2xl overflow-hidden text-slate-100 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -202,32 +224,48 @@ export const MovieDetailModal: React.FC = () => {
             e.stopPropagation();
             setSelectedMovie(null);
           }}
-          className="absolute top-3 right-3 z-50 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 shadow-lg active:scale-95 transition-all"
+          className="absolute top-3 right-3 z-50 p-2.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg active:scale-95 transition-all cursor-pointer"
           title="Fermer"
+          aria-label="Fermer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Media Hero: Video Trailer or Backdrop */}
-        <div className="relative w-full aspect-video max-h-[420px] bg-slate-950 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {/* Media Hero: Video Trailer or Backdrop (Ratio standard 16/9 propre) */}
+        <div 
+          ref={mediaHeroRef}
+          className="relative w-full aspect-video bg-slate-950 flex items-center justify-center overflow-hidden flex-shrink-0"
+        >
           {isPlayingTrailer ? (
             trailerKey ? (
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`}
-                title={`Bande-annonce de ${selectedMovie.title}`}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+              <div className="relative w-full h-full aspect-video">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`}
+                  title={`Bande-annonce de ${selectedMovie.title}`}
+                  className="w-full h-full border-0 aspect-video"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+                {/* Bouton pour revenir à l'affiche */}
+                <button
+                  type="button"
+                  onClick={() => setIsPlayingTrailer(false)}
+                  className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/75 hover:bg-black text-white text-xs font-semibold backdrop-blur-md border border-white/20 shadow-lg cursor-pointer transition-all"
+                  title="Revenir à l'affiche"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Affiche</span>
+                </button>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+              <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 aspect-video w-full">
                 <AlertCircle className="w-10 h-10 text-amber-400" />
-                <p className="text-sm text-slate-300">
+                <p className="text-sm text-slate-300 max-w-md">
                   Aucune bande-annonce officielle intégrable disponible directement pour ce titre.
                 </p>
                 <button
                   onClick={openYouTubeFallback}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg transition-all cursor-pointer"
                 >
                   <Youtube className="w-4 h-4" />
                   <span>Rechercher sur YouTube</span>
@@ -235,7 +273,7 @@ export const MovieDetailModal: React.FC = () => {
               </div>
             )
           ) : (
-            <div className="relative w-full h-full">
+            <div className="relative w-full h-full aspect-video">
               <img
                 src={selectedMovie.backdrop_path || selectedMovie.poster_path || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&q=80'}
                 alt={selectedMovie.title}
@@ -246,13 +284,14 @@ export const MovieDetailModal: React.FC = () => {
               {/* Play Trailer Overlay Button */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <button
-                  onClick={() => setIsPlayingTrailer(true)}
-                  className="group flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-blue-600/90 hover:bg-blue-500 text-white font-bold shadow-neon-blue backdrop-blur-md transition-all hover:scale-105"
+                  type="button"
+                  onClick={handleWatchTrailer}
+                  className="group flex items-center gap-3 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-blue-600/90 hover:bg-blue-500 text-white font-bold shadow-neon-blue backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full bg-white text-blue-600 flex items-center justify-center">
-                    <Play className="w-5 h-5 fill-blue-600 ml-0.5" />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white text-blue-600 flex items-center justify-center shadow">
+                    <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-blue-600 ml-0.5" />
                   </div>
-                  <span className="text-sm uppercase tracking-wider">Regarder la Bande-annonce</span>
+                  <span className="text-xs sm:text-sm uppercase tracking-wider font-bold">Bande-annonce</span>
                 </button>
               </div>
             </div>
@@ -260,7 +299,7 @@ export const MovieDetailModal: React.FC = () => {
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="p-6 sm:p-8 space-y-6 overflow-y-auto">
+        <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
           
           {/* Header Row */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -290,10 +329,22 @@ export const MovieDetailModal: React.FC = () => {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+              {/* Bouton d'action principal bien visible "▶ Bande-annonce" (juste avant "Ma Liste") */}
               <button
+                type="button"
+                onClick={handleWatchTrailer}
+                className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer select-none whitespace-nowrap"
+                title="Regarder la bande-annonce"
+              >
+                <Play className="w-3.5 h-3.5 fill-white" />
+                <span>Bande-annonce</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => toggleWatchlist(selectedMovie)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer select-none whitespace-nowrap ${
                   inWatchlist
                     ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
                     : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
@@ -304,8 +355,9 @@ export const MovieDetailModal: React.FC = () => {
               </button>
 
               <button
+                type="button"
                 onClick={() => addAlert(selectedMovie)}
-                className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                className={`p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                   alertActive
                     ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
                     : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-amber-300'
@@ -316,8 +368,9 @@ export const MovieDetailModal: React.FC = () => {
               </button>
 
               <button
+                type="button"
                 onClick={handleShare}
-                className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-all"
+                className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-all cursor-pointer"
                 title="Partager"
               >
                 <Share2 className="w-4 h-4" />
