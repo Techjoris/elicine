@@ -29,7 +29,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onOpenNotchPay, 
   onOpenPayPal 
 }) => {
-  const { user } = useApp();
+  const { user, loginWithGoogle } = useApp();
   const [currency, setCurrency] = useState<'XAF' | 'XOF' | 'EUR' | 'USD'>('XAF');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
@@ -39,14 +39,20 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      await supabase.auth.signInWithOAuth({
+      const redirectUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin : ''
+          redirectTo: redirectUrl
         }
       });
+      if (error) {
+        console.warn('[Google OAuth error in SubscriptionModal, falling back]', error);
+        await loginWithGoogle();
+      }
     } catch (err) {
-      console.warn('[Google OAuth error in SubscriptionModal]', err);
+      console.warn('[Google OAuth exception in SubscriptionModal, falling back]', err);
+      await loginWithGoogle();
     } finally {
       setIsGoogleLoading(false);
     }

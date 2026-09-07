@@ -333,78 +333,131 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // 11. Supabase Session Lifecycle & Realtime onAuthStateChange
-  useEffect(() => {
-    // A. Récupération de la session initiale active (localStorage / PWA mobile)
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (!error && session?.user) {
-        const sbUser = session.user;
-        const meta = sbUser.user_metadata || {};
-        const avatar = meta.avatar_url || meta.picture || null;
-        const name = meta.full_name || meta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
-        const email = sbUser.email || '';
+  // Helper de nettoyage sécurisé des fragments et paramètres OAuth dans l'URL
+  const cleanOAuthUrl = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      const hasHashToken = url.hash.includes('access_token=') || url.hash.includes('error=');
+      const hasCodeParam = url.searchParams.has('code') || url.searchParams.has('error');
 
-        setUser(prev => {
-          const updated: UserProfile = {
-            id: sbUser.id,
-            email,
-            name,
-            avatar: avatar || prev?.avatar,
-            provider: 'google',
-            role: (meta.role as any) || prev?.role || 'user',
-            isPro: prev?.isPro ?? false,
-            proPlanType: prev?.proPlanType,
-            proPlanExpiresAt: prev?.proPlanExpiresAt,
-            referralCode: prev?.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
-            createdAt: sbUser.created_at || prev?.createdAt || new Date().toISOString(),
-            myList: prev?.myList || watchlist,
-            token: session.access_token
-          };
-          return updated;
-        });
+      if (hasHashToken || hasCodeParam) {
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        url.searchParams.delete('error');
+        url.searchParams.delete('error_description');
+        url.hash = '';
+        const cleanUrl = url.pathname + (url.search ? url.search : '');
+        window.history.replaceState({}, document.title, cleanUrl);
       }
-    }).catch(err => {
-      console.warn('[Supabase] Initial session retrieval error:', err);
+    } catch (e) {
+      console.warn('[cleanOAuthUrl error]', e);
+    }
+  };
+
+  // Helper de synchronisation du compte utilisateur depuis la session Supabase
+  const syncSupabaseUser = (session: any, eventName?: string) => {
+    if (!session?.user) return;
+    const sbUser = session.user;
+    const meta = sbUser.user_metadata || {};
+    const identityMeta = sbUser.identities?.[0]?.identity_data || {};
+    const avatar = meta.avatar_url || meta.picture || identityMeta.avatar_url || identityMeta.picture || null;
+    const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
+    const email = sbUser.email || meta.email || identityMeta.email || '';
+
+    const updatedUser: UserProfile = {
+      id: sbUser.id,
+      email,
+      name,
+      avatar: avatar || undefined,
+      provider: 'google',
+      role: (meta.role as any) || 'user',
+      isPro: false,
+      proPlanType: undefined,
+      proPlanExpiresAt: undefined,
+      referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+      createdAt: sbUser.created_at || new Date().toISOString(),
+      myList: watchlist,
+      token: session.access_token
+    };
+
+    setUser(prev => {
+      const merged: UserProfile = {
+        ...updatedUser,
+        avatar: avatar || prev?.avatar,
+        isPro: prev?.isPro ?? false,
+        proPlanType: prev?.proPlanType,
+        proPlanExpiresAt: prev?.proPlanExpiresAt,
+        referralCode: prev?.referralCode || updatedUser.referralCode,
+        createdAt: prev?.createdAt || updatedUser.createdAt,
+        myList: (prev?.myList && prev.myList.length > 0) ? prev.myList : watchlist
+      };
+      try {
+        localStorage.setItem('cineia_user', JSON.stringify(merged));
+      } catch (e) {
+        console.error('Error saving user to localStorage:', e);
+      }
+      authService.saveLocalAccount(merged);
+      return merged;
     });
 
-    // B. Écoute permanente des événements d'authentification (connexion OAuth, refresh token, déconnexion)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    // Fermeture systématique de la modale de connexion
+    setIsAuthModalOpen(false);
+
+    // Notification toast si connexion explicite ou retour de callback OAuth
+    const isOAuthCallback = typeof window !== 'undefined' && 
+      (window.location.hash.includes('access_token=') || window.location.search.includes('code='));
+
+    if (eventName === 'SIGNED_IN' || (eventName === 'INITIAL_SESSION' && isOAuthCallback)) {
+      showToast(`👋 Bienvenue sur Éliciné, ${name} !`);
+    }
+
+    // Nettoyage de l'URL pour supprimer les fragments / codes OAuth
+    cleanOAuthUrl();
+  };
+
+  // 11. Supabase Session Lifecycle & Realtime onAuthStateChange
+  useEffect(() => {
+    let isMounted = true;
+
+    // A. Prise en charge du Callback OAuth (Hash / Code URL) et session initiale active
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!isMounted) return;
+      if (error) {
+        console.warn('[Supabase] Initial session retrieval error:', error);
+      }
       if (session?.user) {
-        const sbUser = session.user;
-        const meta = sbUser.user_metadata || {};
-        const avatar = meta.avatar_url || meta.picture || null;
-        const name = meta.full_name || meta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
-        const email = sbUser.email || '';
+        syncSupabaseUser(session, 'INITIAL_SESSION');
+      } else {
+        // Nettoyage de l'URL même en cas d'erreur OAuth ou d'absence de session
+        cleanOAuthUrl();
+      }
+    }).catch(err => {
+      console.warn('[Supabase] Initial session exception:', err);
+      cleanOAuthUrl();
+    });
 
-        setUser(prev => {
-          const updated: UserProfile = {
-            id: sbUser.id,
-            email,
-            name,
-            avatar: avatar || prev?.avatar,
-            provider: 'google',
-            role: (meta.role as any) || prev?.role || 'user',
-            isPro: prev?.isPro ?? false,
-            proPlanType: prev?.proPlanType,
-            proPlanExpiresAt: prev?.proPlanExpiresAt,
-            referralCode: prev?.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
-            createdAt: sbUser.created_at || prev?.createdAt || new Date().toISOString(),
-            myList: prev?.myList || watchlist,
-            token: session.access_token
-          };
-          return updated;
-        });
+    // B. Écoute permanente des événements d'authentification (onAuthStateChange)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
 
-        if (event === 'SIGNED_IN') {
-          showToast(`👋 Bienvenue sur Éliciné, ${name} !`);
-          setIsAuthModalOpen(false);
-        }
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
+        syncSupabaseUser(session, event);
       } else if (event === 'SIGNED_OUT') {
-        setUser(prev => (prev?.provider === 'google' ? null : prev));
+        setUser(prev => {
+          if (prev?.provider === 'google') {
+            try {
+              localStorage.removeItem('cineia_user');
+            } catch (e) {}
+            return null;
+          }
+          return prev;
+        });
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);

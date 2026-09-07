@@ -37,11 +37,8 @@ export async function signInWithGoogle(redirectTo?: string) {
   return await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: targetRedirect,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent'
-      }
+      redirectTo: targetRedirect
     }
   });
 }
+

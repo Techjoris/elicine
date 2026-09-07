@@ -64,10 +64,18 @@ export const AuthModal: React.FC = () => {
         }
       });
       if (error) {
-        setErrorMessage(error.message || 'Erreur lors de la connexion Google.');
+        console.warn('[Google OAuth error, falling back to loginWithGoogle]', error);
+        const res = await loginWithGoogle();
+        if (!res.success) {
+          setErrorMessage(error.message || 'Erreur lors de la connexion Google.');
+        }
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Une erreur est survenue lors de la connexion avec Google.');
+      console.warn('[Google OAuth exception, falling back to loginWithGoogle]', err);
+      const res = await loginWithGoogle();
+      if (!res.success) {
+        setErrorMessage(err?.message || 'Une erreur est survenue lors de la connexion avec Google.');
+      }
     } finally {
       setIsGoogleLoading(false);
     }
