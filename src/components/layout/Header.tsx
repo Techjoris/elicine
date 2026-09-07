@@ -17,6 +17,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpenTip }) => {
   const { user } = useAuth();
   const {
+    user: appUser,
     setIsAuthModalOpen,
     setIsProModalOpen,
     setIsTipModalOpen,
@@ -24,6 +25,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
     isMobileMenuOpen,
     setIsMobileMenuOpen
   } = useApp();
+
+  const activeUser = user || appUser;
+  const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsOpen(true));
@@ -54,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           </div>
         </div>
 
-        {/* ZONE DROITE: Actions compactes (Strictement justify-end) : [Installer] [☕ Soutenir] [🇫🇷 FR] [IV] */}
+        {/* ZONE DROITE: Actions compactes (Strictement justify-end) : [Installer] [☕ Soutenir] [🇫🇷 FR] [Profil OU Connexion] */}
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
           {/* 1. Bouton PWA "Installer" (Icône seule sur mobile < 640px, avec libellé sur desktop >= 640px) */}
           <InstallAppButton variant="header" />
@@ -76,20 +80,19 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             <LanguageSelector compact={true} />
           </div>
 
-          {/* 4. Profil Avatar (Compact 32x32px circulaire sans chevron sur mobile) */}
-          <div className="flex-shrink-0">
-            <ProfileMenu
-              onOpenSettings={handleOpenSettings}
-              onOpenPro={() => setIsProModalOpen(true)}
-            />
-          </div>
-
-          {/* Connexion rapide pour visiteurs sur grand écran (masqué si connecté) */}
-          {!user && (
+          {/* 4. Profil si connecté, ou Bouton Connexion si non connecté */}
+          {isConnected ? (
+            <div className="flex-shrink-0">
+              <ProfileMenu
+                onOpenSettings={handleOpenSettings}
+                onOpenPro={() => setIsProModalOpen(true)}
+              />
+            </div>
+          ) : (
             <button
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-white border border-cyan-500/40 hover:border-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm select-none"
               title="Se connecter ou s'inscrire"
             >
               <LogIn className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />

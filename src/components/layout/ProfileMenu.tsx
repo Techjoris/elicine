@@ -25,12 +25,14 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenPro
 }) => {
   const { user, loading, signOut } = useAuth();
-  const { setIsAuthModalOpen, setActiveView, watchlist } = useApp();
+  const { user: appUser, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const displayAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  const activeUser = user || appUser;
+  const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
+  const displayAvatar = (activeUser as any)?.user_metadata?.avatar_url || (activeUser as any)?.user_metadata?.picture || (activeUser as any)?.avatar;
 
   useEffect(() => {
     setImgError(false);
@@ -52,23 +54,22 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   }, [open]);
 
   // Si en cours de chargement initial sans utilisateur : afficher un squelette compact
-  if (loading && !user) {
+  if (loading && !activeUser) {
     return (
       <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse flex-shrink-0" />
     );
   }
 
-  const isConnected = Boolean(user && (user.email || user.id));
-  const activeUserFullName = user?.user_metadata?.full_name || user?.user_metadata?.name;
-  const activeDisplayName = activeUserFullName || user?.email;
+  const activeUserFullName = (activeUser as any)?.user_metadata?.full_name || (activeUser as any)?.user_metadata?.name || (activeUser as any)?.name;
+  const activeDisplayName = activeUserFullName || activeUser?.email;
   const displayName = isConnected ? (activeDisplayName || 'Ivan Joris') : 'Cinéphile Invité';
-  const isGoogle = user?.app_metadata?.provider === 'google' || Boolean(user?.user_metadata?.avatar_url);
+  const isGoogle = (activeUser as any)?.app_metadata?.provider === 'google' || Boolean((activeUser as any)?.user_metadata?.avatar_url);
 
   const initials = isConnected
     ? (
-        user?.user_metadata?.full_name
-          ? user.user_metadata.full_name.slice(0, 2).toUpperCase()
-          : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'IJ')
+        activeUserFullName
+          ? activeUserFullName.slice(0, 2).toUpperCase()
+          : (activeUser?.email ? activeUser.email.slice(0, 2).toUpperCase() : 'IJ')
       )
     : 'CI';
 
@@ -88,7 +89,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         title="Menu Profil & Paramètres"
       >
         <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
-          (user as any)?.isPro
+          (activeUser as any)?.isPro
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-300 dark:ring-slate-700'
         }`}>
@@ -101,7 +102,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${
-              (user as any)?.isPro
+              (activeUser as any)?.isPro
                 ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 font-black'
                 : 'bg-gradient-to-tr from-sky-600 to-cyan-500 text-white'
             }`}>
@@ -115,7 +116,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {displayName}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
-            {isConnected ? ((user as any)?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
+            {isConnected ? ((activeUser as any)?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
           </span>
         </div>
 
@@ -170,9 +171,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
                         Connecté
                       </span>
-                      {user?.email && (
+                      {activeUser?.email && (
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
-                          • {user.email}
+                          • {activeUser.email}
                         </span>
                       )}
                     </div>
@@ -184,11 +185,11 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
-                (user as any)?.isPro
+                (activeUser as any)?.isPro
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
                   : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
               }`}>
-                {(user as any)?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
+                {(activeUser as any)?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
               </span>
             </div>
 
@@ -278,7 +279,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                <span className="font-bold text-xs">{(user as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+                <span className="font-bold text-xs">{(activeUser as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />

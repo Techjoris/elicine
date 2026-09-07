@@ -37,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { user } = useAuth();
   const {
+    user: appUser,
     activeView,
     setActiveView,
     searchHistory,
@@ -232,64 +233,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* User Profile Card (Uniquement lorsque connecté) */}
-        {user && (
-          <div 
-            onClick={() => {
-              setIsAuthModalOpen(true);
-              setIsMobileMenuOpen(false);
-            }}
-            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-[#0f141f] hover:bg-slate-100 dark:hover:bg-slate-850 border border-slate-200 dark:border-[#1e293b] hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer transition-all flex items-center justify-between group select-none"
-            title="Gérer mon profil"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {/* Round Avatar */}
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-                (user as any)?.isPro
-                  ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
-                  : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
-              }`}>
-                {(user as any)?.user_metadata?.full_name 
-                  ? (user as any).user_metadata.full_name.slice(0, 2).toUpperCase() 
-                  : (user.email ? user.email.slice(0, 2).toUpperCase() : 'IJ')}
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-cyan-300 transition-colors">
-                  {(user as any)?.user_metadata?.full_name || user.email || (user as any)?.name || 'Ivan Joris'}
+        {/* Carte Profil Utilisateur Connecté */}
+        {(() => {
+          const activeUser = user || appUser;
+          const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
+
+          if (isConnected) {
+            return (
+              <div 
+                onClick={() => {
+                  setIsAuthModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-[#0f141f] hover:bg-slate-100 dark:hover:bg-slate-850 border border-slate-200 dark:border-[#1e293b] hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer transition-all flex items-center justify-between group select-none"
+                title="Gérer mon profil"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Round Avatar */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
+                    (activeUser as any)?.isPro
+                      ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
+                      : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
+                  }`}>
+                    {(activeUser as any)?.user_metadata?.full_name 
+                      ? (activeUser as any).user_metadata.full_name.slice(0, 2).toUpperCase() 
+                      : (activeUser.email ? activeUser.email.slice(0, 2).toUpperCase() : 'IJ')}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-cyan-300 transition-colors">
+                      {(activeUser as any)?.user_metadata?.full_name || activeUser.email || (activeUser as any)?.name || 'Ivan Joris'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                      {activeUser.email}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Badge */}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
+                  (activeUser as any)?.isPro
+                    ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/40 shadow-neon-gold'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                }`}>
+                  {(activeUser as any)?.isPro && <Crown className="w-2.5 h-2.5" />}
+                  {(activeUser as any)?.isPro ? 'Pro' : 'Gratuit'}
                 </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                  {user.email}
-                </span>
               </div>
+            );
+          }
+
+          return (
+            <div className="md:hidden pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuthModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-700 dark:text-cyan-300 hover:text-cyan-800 dark:hover:text-white border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer select-none"
+              >
+                <LogIn className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                <span>Se connecter / S'inscrire</span>
+              </button>
             </div>
-
-            {/* Badge */}
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
-              (user as any)?.isPro
-                ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/40 shadow-neon-gold'
-                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
-            }`}>
-              {(user as any)?.isPro && <Crown className="w-2.5 h-2.5" />}
-              {(user as any)?.isPro ? 'Pro' : 'Gratuit'}
-            </span>
-          </div>
-        )}
-
-        {/* Accès Connexion Mobile Drawer (visible uniquement dans le menu tiroir mobile si déconnecté) */}
-        {!user && (
-          <div className="md:hidden pt-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                setIsAuthModalOpen(true);
-                setIsMobileMenuOpen(false);
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-700 dark:text-cyan-300 hover:text-cyan-800 dark:hover:text-white border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer select-none"
-            >
-              <LogIn className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-              <span>Se connecter / S'inscrire</span>
-            </button>
-          </div>
-        )}
+          );
+        })()}
 
         {/* CONTRÔLE VISIBILITÉ DEV : Mettre à false lors de la mise en production */}
         {SHOW_DEV_PANEL && (

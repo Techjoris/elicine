@@ -140,7 +140,7 @@ export const formatUser = (rawUser: any): UserProfile => {
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user: authUser, session: authSession, signOut: authSignOut } = useAuth();
+  const { user: authUser, session: authSession, signOut: authSignOut, setAuthUser } = useAuth();
 
   // 1. API Settings loaded from localStorage keys with env fallbacks
   const [apiSettings, setApiSettings] = useState<ApiSettings>(() => {
@@ -484,12 +484,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...authUser,
           token: authSession?.access_token
         }),
-        isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || false
+        isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
       }));
       setIsAuthModalOpen(false);
       cleanOAuthUrl();
     } else {
-      setUser(null);
+      const stored = authService.getStoredUser();
+      if (stored && stored.email) {
+        setUser(stored);
+      } else {
+        setUser(null);
+      }
     }
     setLoading(false);
   }, [authUser, authSession]);
@@ -508,6 +513,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = (emailOrUser: string | UserProfile, name?: string) => {
     if (typeof emailOrUser === 'object') {
       setUser(emailOrUser);
+      setAuthUser(emailOrUser);
       if (emailOrUser.myList && emailOrUser.myList.length > 0) {
         setWatchlist(emailOrUser.myList);
       }
@@ -530,15 +536,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       myList: watchlist
     };
     setUser(newUser);
+    setAuthUser(newUser);
     authService.saveLocalAccount(newUser);
     setIsAuthModalOpen(false);
     showToast(`👋 Bienvenue sur Éliciné, ${finalName} !`);
   };
 
   const loginWithCredentials = async (identifier: string, password: string) => {
-    const res = await authService.login(identifier, password);
+    const cleanId = identifier.trim();
+
+    // 1. Tenter la connexion native Supabase si l'identifiant est un email
+    if (cleanId.includes('@')) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanId,
+          password
+        });
+        if (!error && data?.user) {
+          setIsAuthModalOpen(false);
+          showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email} !`);
+          return { success: true };
+        }
+      } catch (sbErr) {
+        console.warn('[Supabase signInWithPassword fallback]', sbErr);
+      }
+    }
+
+    // 2. Repli API / local si Supabase échoue ou s'il s'agit d'un nom d'utilisateur
+    const res = await authService.login(cleanId, password);
     if (res.success && res.user) {
       setUser(res.user);
+      setAuthUser(res.user);
       if (res.user.myList && res.user.myList.length > 0) {
         setWatchlist(res.user.myList);
       }
@@ -550,6 +578,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const registerWithCredentials = async (username: string, email: string, password: string) => {
+    const cleanEmail = email.trim();
+
+    // 1. Tenter l'inscription native Supabase si un email est fourni
+    if (cleanEmail && cleanEmail.includes('@')) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              full_name: username.trim()
+            }
+          }
+        });
+        if (!error && data?.user) {
+          setIsAuthModalOpen(false);
+          showToast(`🎉 Bienvenue sur Éliciné, ${username} !`);
+          return { success: true };
+        }
+      } catch (sbErr) {
+        console.warn('[Supabase signUp fallback]', sbErr);
+      }
+    }
+
+    // 2. Repli API / local
     const res = await authService.register(username, email, password);
     if (res.success && res.user) {
       const userWithList: UserProfile = {
@@ -557,6 +610,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         myList: watchlist
       };
       setUser(userWithList);
+      setAuthUser(userWithList);
       authService.saveUserWatchlist(res.user.id, watchlist);
       setIsAuthModalOpen(false);
       showToast(`🎉 Bienvenue sur Éliciné, ${res.user.name} !`);

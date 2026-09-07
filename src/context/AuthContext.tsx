@@ -3,20 +3,24 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, signInWithGoogle } from '../lib/supabase';
 
 export interface AuthContextType {
-  user: User | null;
+  user: User | any | null;
   session: Session | null;
   loading: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: (redirectTo?: string) => Promise<any>;
+  signInWithPassword: (email: string, password: string) => Promise<{ data?: any; error?: any }>;
+  signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<{ data?: any; error?: any }>;
+  setAuthUser: (user: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. Récupération synchrone immédiate depuis le LocalStorage pour éviter tout décalage visuel
-  const [user, setUser] = useState<User | null>(() => {
+  const [user, setUser] = useState<User | any | null>(() => {
     if (typeof window !== 'undefined') {
       try {
+        // A. Jeton / Session Supabase standard
         const authKey = Object.keys(localStorage).find(
           key => key.includes('auth-token') || key.startsWith('sb-')
         );
@@ -26,6 +30,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const parsed = JSON.parse(raw);
             const u = parsed?.user || parsed?.currentSession?.user;
             if (u?.email || u?.id) return u;
+          }
+        }
+
+        // B. Profil local / email synchronisé
+        const localUserRaw = localStorage.getItem('cineia_user');
+        if (localUserRaw) {
+          const parsedLocal = JSON.parse(localUserRaw);
+          if (parsedLocal?.email || parsedLocal?.id) {
+            return {
+              id: parsedLocal.id,
+              email: parsedLocal.email,
+              user_metadata: {
+                full_name: parsedLocal.name,
+                name: parsedLocal.name,
+                avatar_url: parsedLocal.avatar,
+                isPro: parsedLocal.isPro
+              },
+              ...parsedLocal
+            };
           }
         }
       } catch (_) {}
@@ -56,8 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // 2. Récupération initiale synchrone/asynchrone de la session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setSession(session ?? null);
+      if (session?.user) {
+        setUser(session.user);
+        setSession(session);
+      }
       setLoading(false);
     }).catch(err => {
       console.warn('[AuthContext] getSession error:', err);
@@ -67,8 +92,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 3. Écouteur en temps réel de tous les changements d'état (login, logout, OAuth callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('[AuthContext] onAuthStateChange event:', event, session?.user?.email);
-      setUser(session?.user ?? null);
-      setSession(session ?? null);
+      if (session?.user) {
+        setUser(session.user);
+        setSession(session);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setSession(null);
+      }
       setLoading(false);
     });
 
@@ -76,6 +106,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  const setAuthUser = (newUser: any) => {
+    setUser(newUser);
+  };
+
+  const signInWithPassword = async (email: string, password: string) => {
+    const res = await supabase.auth.signInWithPassword({ email, password });
+    if (res.data?.user) {
+      setUser(res.data.user);
+      setSession(res.data.session);
+    }
+    return res;
+  };
+
+  const signUpWithPassword = async (email: string, password: string, fullName?: string) => {
+    const res = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: fullName ? { full_name: fullName } : undefined
+      }
+    });
+    if (res.data?.user) {
+      setUser(res.data.user);
+      setSession(res.data.session);
+    }
+    return res;
+  };
 
   const signOut = async () => {
     try {
@@ -94,7 +152,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut, signInWithGoogle }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      loading, 
+      signOut, 
+      signInWithGoogle,
+      signInWithPassword,
+      signUpWithPassword,
+      setAuthUser
+    }}>
       {children}
     </AuthContext.Provider>
   );
