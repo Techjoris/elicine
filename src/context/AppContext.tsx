@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { authService } from '../services/authService';
+import { supabase, signInWithGoogle } from '../lib/supabase';
 
 interface AppContextType {
   // Quota & AI
@@ -332,6 +333,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // 11. Supabase Session Lifecycle & Realtime onAuthStateChange
+  useEffect(() => {
+    // A. Récupération de la session initiale active (localStorage / PWA mobile)
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!error && session?.user) {
+        const sbUser = session.user;
+        const meta = sbUser.user_metadata || {};
+        const avatar = meta.avatar_url || meta.picture || null;
+        const name = meta.full_name || meta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
+        const email = sbUser.email || '';
+
+        setUser(prev => {
+          const updated: UserProfile = {
+            id: sbUser.id,
+            email,
+            name,
+            avatar: avatar || prev?.avatar,
+            provider: 'google',
+            role: (meta.role as any) || prev?.role || 'user',
+            isPro: prev?.isPro ?? false,
+            proPlanType: prev?.proPlanType,
+            proPlanExpiresAt: prev?.proPlanExpiresAt,
+            referralCode: prev?.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+            createdAt: sbUser.created_at || prev?.createdAt || new Date().toISOString(),
+            myList: prev?.myList || watchlist,
+            token: session.access_token
+          };
+          return updated;
+        });
+      }
+    }).catch(err => {
+      console.warn('[Supabase] Initial session retrieval error:', err);
+    });
+
+    // B. Écoute permanente des événements d'authentification (connexion OAuth, refresh token, déconnexion)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const sbUser = session.user;
+        const meta = sbUser.user_metadata || {};
+        const avatar = meta.avatar_url || meta.picture || null;
+        const name = meta.full_name || meta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
+        const email = sbUser.email || '';
+
+        setUser(prev => {
+          const updated: UserProfile = {
+            id: sbUser.id,
+            email,
+            name,
+            avatar: avatar || prev?.avatar,
+            provider: 'google',
+            role: (meta.role as any) || prev?.role || 'user',
+            isPro: prev?.isPro ?? false,
+            proPlanType: prev?.proPlanType,
+            proPlanExpiresAt: prev?.proPlanExpiresAt,
+            referralCode: prev?.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+            createdAt: sbUser.created_at || prev?.createdAt || new Date().toISOString(),
+            myList: prev?.myList || watchlist,
+            token: session.access_token
+          };
+          return updated;
+        });
+
+        if (event === 'SIGNED_IN') {
+          showToast(`👋 Bienvenue sur Éliciné, ${name} !`);
+          setIsAuthModalOpen(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(prev => (prev?.provider === 'google' ? null : prev));
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Quota Management - Bypassed for unlimited exploration
   const useAiQuota = (): boolean => {
     return true;
@@ -404,33 +481,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginWithGoogle = async (mockUser?: { email?: string; name?: string; avatar?: string }) => {
-    const res = await authService.loginWithGoogle(mockUser);
-    if (res.success && res.user) {
-      // Synchronisation intelligente de la watchlist locale avec le compte Google
-      const currentList = watchlist;
-      const userSavedList = res.user.myList || [];
-      
-      const mergedMap = new Map<number, Movie>();
-      userSavedList.forEach(m => mergedMap.set(m.id, m));
-      currentList.forEach(m => mergedMap.set(m.id, m));
-      const mergedList = Array.from(mergedMap.values());
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? window.location.origin : ''
+        }
+      });
 
-      const userWithList: UserProfile = {
-        ...res.user,
-        myList: mergedList
-      };
+      if (error) {
+        console.warn('[Supabase OAuth error]', error);
+        // Fallback local fluide si Supabase n'est pas encore provisionné avec les clés de prod
+        const res = await authService.loginWithGoogle(mockUser);
+        if (res.success && res.user) {
+          setUser(res.user);
+          setIsAuthModalOpen(false);
+          showToast(`👋 Bienvenue, ${res.user.name} !`);
+          return { success: true };
+        }
+        return { success: false, error: error.message };
+      }
 
-      setUser(userWithList);
-      setWatchlist(mergedList);
-      authService.saveUserWatchlist(res.user.id, mergedList);
-      setIsAuthModalOpen(false);
-      showToast(`👋 Bienvenue, ${res.user.name} ! Compte synchronisé.`);
       return { success: true };
+    } catch (err: any) {
+      console.warn('[Supabase OAuth exception]', err);
+      // Fallback
+      const res = await authService.loginWithGoogle(mockUser);
+      if (res.success && res.user) {
+        setUser(res.user);
+        setIsAuthModalOpen(false);
+        showToast(`👋 Bienvenue, ${res.user.name} !`);
+        return { success: true };
+      }
+      return { success: false, error: err?.message || 'Erreur lors de la connexion Google.' };
     }
-    return { success: false, error: res.error || 'Erreur lors de la connexion Google.' };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[Supabase signOut error]', e);
+    }
     setUser(null);
     authService.logout();
     setIsAuthModalOpen(false);

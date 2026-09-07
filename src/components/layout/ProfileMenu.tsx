@@ -25,7 +25,12 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 }) => {
   const { user, quota, logout, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [user?.avatar]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,8 +65,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-300 dark:ring-slate-700'
         }`}>
-          {user?.avatar ? (
-            <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+          {user?.avatar && !imgError ? (
+            <img 
+              src={user.avatar} 
+              alt={user.name} 
+              className="w-full h-full object-cover" 
+              onError={() => setImgError(true)}
+            />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${
               user?.isPro
