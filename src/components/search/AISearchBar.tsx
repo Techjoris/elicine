@@ -103,7 +103,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Décrivez une émotion, une ambiance, un décor..."
+            placeholder="Décrivez une ambiance, une émotion..."
             className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
             disabled={isLoading}
           />

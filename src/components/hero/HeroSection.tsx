@@ -124,12 +124,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize du textarea façon ChatGPT (scrollHeight contraint à max 128px)
+  // Auto-resize du textarea : démarre strictement à 1 ligne (28px) et grandit UNIQUEMENT si le texte saisi dépasse la première ligne
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+
+    // Si le champ est vide (placeholder affiché), forcer strictement la hauteur fine de base (28px)
+    if (!searchPrompt) {
+      textarea.style.height = '28px';
+      return;
+    }
+
+    // Réinitialiser temporairement à 'auto' pour mesurer le scrollHeight réel du texte saisi
     textarea.style.height = 'auto';
-    const nextHeight = Math.min(textarea.scrollHeight, 128);
+    // Plafond maximal à 120px (~4 lignes), minimum 28px (1 ligne)
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 28), 120);
     textarea.style.height = `${nextHeight}px`;
   };
 
@@ -316,29 +325,29 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           </h1>
         </div>
         <p className="text-xs sm:text-sm md:text-base text-slate-200 max-w-xl mx-auto font-normal leading-relaxed mb-4 sm:mb-6 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] px-2">
-          {t.searchPlaceholder}
+          L'algorithme intelligent d'Éliciné trouve la perle rare selon vos envies.
         </p>
 
-        {/* c) Barre de Recherche Unifiée "Floating Glass" auto-extensible façon ChatGPT */}
+        {/* c) Barre de Recherche Unifiée "Floating Glass" auto-extensible compacte (min-h-[48px]) */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
             handleSearch(searchPrompt);
           }}
-          className="relative flex items-end w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
+          className="relative flex items-end min-h-[48px] w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl px-2.5 sm:px-3 py-1.5 shadow-2xl focus-within:border-cyan-500/80 transition-all"
         >
-          {/* Search icon - Ancré en bas pour accompagner l'extension du textarea */}
-          <div className="pl-2.5 pr-1.5 sm:pl-3 sm:pr-2 text-zinc-400 flex-shrink-0 self-end mb-2 sm:mb-2.5">
+          {/* Search icon - Aligné au centre vertical de la première ligne */}
+          <div className="pl-1 pr-2 text-zinc-400 flex-shrink-0 self-start mt-2">
             <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          {/* Textarea auto-extensible (1 ligne par défaut, scrollHeight jusqu'à max-h-32) */}
+          {/* Textarea auto-extensible (1 ligne par défaut, scrollHeight jusqu'à max 120px) */}
           <textarea
             ref={textareaRef}
             id="main-ai-search"
             rows={1}
-            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal resize-none overflow-y-auto max-h-32 leading-relaxed"
-            placeholder={t.searchPlaceholder || "Décrivez une émotion, une ambiance..."}
+            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
+            placeholder="Décrivez une ambiance, une émotion..."
             value={searchPrompt}
             onChange={(e) => {
               setSearchPrompt(e.target.value);
@@ -347,7 +356,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
             onKeyDown={handleKeyDown}
           />
 
-          {/* Integrated Quota Badge + Explorer Button inside the pill - Ancrés en bas */}
+          {/* Integrated Quota Badge + Explorer Button inside the pill - Alignés en bas */}
           <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
             {/* Quota Badge - Icône ⚡ seule sur mobile, texte "Illimité" masqué sous 640px */}
             <button

@@ -11,7 +11,7 @@ interface HeroSearchProps {
 export const HeroSearch: React.FC<HeroSearchProps> = ({
   onSearch,
   isLoading = false,
-  placeholder = "Décrivez une émotion, une ambiance..."
+  placeholder = "Décrivez une ambiance, une émotion..."
 }) => {
   const { quota, user, setIsProModalOpen, showToast, useAiQuota } = useApp();
   const [query, setQuery] = useState('');
@@ -20,12 +20,18 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   const remainingCredits = quota.remaining;
   const isPro = user?.isPro;
 
-  // Auto-resize du textarea (scrollHeight contraint à max 128px)
+  // Auto-resize du textarea : démarre strictement à 1 ligne (28px) et grandit UNIQUEMENT si le texte dépasse
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+
+    if (!query) {
+      textarea.style.height = '28px';
+      return;
+    }
+
     textarea.style.height = 'auto';
-    const nextHeight = Math.min(textarea.scrollHeight, 128);
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 28), 120);
     textarea.style.height = `${nextHeight}px`;
   };
 
@@ -74,9 +80,9 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   };
 
   return (
-    <div className="relative flex items-end w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all">
-      {/* Search icon - Ancré en bas */}
-      <div className="pl-3 pr-2 text-zinc-400 flex-shrink-0 self-end mb-2 sm:mb-2.5">
+    <div className="relative flex items-end min-h-[48px] w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl px-2.5 sm:px-3 py-1.5 shadow-2xl focus-within:border-cyan-500/80 transition-all">
+      {/* Search icon - Aligné au centre vertical de la première ligne */}
+      <div className="pl-1 pr-2 text-zinc-400 flex-shrink-0 self-start mt-2">
         <SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
 
@@ -84,14 +90,14 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
       <textarea
         ref={textareaRef}
         rows={1}
-        className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal resize-none overflow-y-auto max-h-32 leading-relaxed"
+        className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
         placeholder={placeholder}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
       />
 
-      {/* Integrated Quota Badge + Explorer Button inside the pill - Ancrés en bas */}
+      {/* Integrated Quota Badge + Explorer Button inside the pill - Alignés en bas */}
       <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
         {/* Quota Badge */}
         <button

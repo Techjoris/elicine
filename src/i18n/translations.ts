@@ -33,7 +33,7 @@ export interface TranslationSchema {
 export const translations: Record<Language, TranslationSchema> = {
   fr: {
     tagline: "Le cinéma d'exception, élu pour vous.",
-    searchPlaceholder: "Décrivez une émotion, une ambiance ou une intrigue — l'algorithme Éliciné trouve votre film...",
+    searchPlaceholder: "Décrivez une ambiance, une émotion...",
     exploreBtn: "Explorer",
     featuredBadge: "À L'AFFICHE",
     trailerBtn: "Bande-annonce",
@@ -62,7 +62,7 @@ export const translations: Record<Language, TranslationSchema> = {
   },
   en: {
     tagline: "Exceptional cinema, handpicked for you.",
-    searchPlaceholder: "Describe an emotion, a mood or a plot — the Éliciné algorithm finds your movie...",
+    searchPlaceholder: "Describe a mood, an emotion...",
     exploreBtn: "Explore",
     featuredBadge: "FEATURED",
     trailerBtn: "Trailer",
@@ -91,7 +91,7 @@ export const translations: Record<Language, TranslationSchema> = {
   },
   es: {
     tagline: "El cine de excepción, elegido para ti.",
-    searchPlaceholder: "Describe una emoción, una atmósfera o una trama — el algoritmo Éliciné encuentra tu película...",
+    searchPlaceholder: "Describe un ambiente, una emoción...",
     exploreBtn: "Explorar",
     featuredBadge: "EN CARTELERA",
     trailerBtn: "Tráiler",
