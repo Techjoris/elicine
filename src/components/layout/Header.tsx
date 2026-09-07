@@ -31,9 +31,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
   return (
     <div className="sticky top-0 z-[60] w-full flex flex-col">
       {/* Main Top Navbar - Ultra Épurée & Compacte */}
-      <header className="sticky top-0 z-50 w-full h-14 px-3 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-zinc-950/85 border-b border-slate-200/80 dark:border-white/10 transition-colors">
+      <header className="sticky top-0 z-50 w-full h-14 px-2.5 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-zinc-950/85 border-b border-slate-200/80 dark:border-white/10 transition-colors">
         {/* ZONE GAUCHE: Burger + Logo */}
-        <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -53,14 +53,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           </div>
         </div>
 
-        {/* ZONE DROITE: Actions compactes */}
-        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-          {/* Bouton d'installation (masqué sur mobile pour éviter l'encombrement, présent dans la sidebar) */}
-          <div className="hidden md:flex flex-shrink-0">
-            <InstallAppButton variant="header" />
-          </div>
-
-          {/* Bouton Soutenir Responsive */}
+        {/* ZONE DROITE: Actions compactes avec gap-1.5 sur mobile */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+          {/* 1. Bouton Soutenir Responsive (Intact) */}
           <button
             type="button"
             onClick={handleOpenTip}
@@ -72,12 +67,15 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             <span className="text-[11px] sm:text-xs font-semibold">Soutenir</span>
           </button>
 
-          {/* Sélecteur de langue compact */}
-          <div className="flex-shrink-0">
+          {/* 2. Bouton PWA "Installer" (Placé entre Soutenir et Profil, actif si beforeinstallprompt capturé) */}
+          <InstallAppButton variant="header" />
+
+          {/* 3. Sélecteur de langue compact (Masqué sur mobile < 768px, accessible dans la sidebar) */}
+          <div className="hidden md:flex flex-shrink-0">
             <LanguageSelector compact={true} />
           </div>
 
-          {/* Profil Avatar */}
+          {/* 4. Profil Avatar (Compact 32x32px circulaire sans chevron sur mobile) */}
           <div className="flex-shrink-0">
             <ProfileMenu
               onOpenSettings={handleOpenSettings}

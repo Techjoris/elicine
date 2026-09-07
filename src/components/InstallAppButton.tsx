@@ -36,6 +36,11 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
     return null;
   }
 
+  // Pour le Header, n'apparaît que si l'événement beforeinstallprompt est capturé
+  if (variant === 'header' && !deferredPrompt) {
+    return null;
+  }
+
   const { isIOS, isAndroid } = detectOS();
   const isSidebarMode = variant === 'sidebar' || variant === 'link';
 
@@ -102,15 +107,15 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
     );
   }
 
-  // Pillule sobre et chic pour le Header / Navbar
+  // Pilule compacte et sobre pour le Header / Navbar
   return (
     <button
       onClick={handleDirectInstall}
       type="button"
-      className={`text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm ${className}`}
-      title="Installer l'application"
+      className={`text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-slate-900/90 dark:bg-zinc-800/90 hover:bg-slate-800 dark:hover:bg-zinc-700 border border-slate-700/80 dark:border-white/15 text-slate-100 dark:text-zinc-100 hover:text-white flex items-center gap-1 sm:gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap ${className}`}
+      title="Installer l'application Éliciné"
     >
-      <Download className="w-3.5 h-3.5 text-slate-700 dark:text-white/90" />
+      <Download className="w-3.5 h-3.5 text-cyan-400 dark:text-cyan-300 flex-shrink-0" />
       <span>Installer</span>
     </button>
   );

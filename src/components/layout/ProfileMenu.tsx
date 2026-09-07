@@ -52,10 +52,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer group select-none shadow-sm"
+        className="flex items-center sm:gap-2 p-0.5 sm:p-1 sm:pl-1.5 sm:pr-2 rounded-full sm:rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer group select-none shadow-sm flex-shrink-0"
         title="Menu Profil & Paramètres"
       >
-        <div className={`w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
+        <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
           user?.isPro
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-300 dark:ring-slate-700'
@@ -82,7 +82,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           </span>
         </div>
 
-        <ChevronDown className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`hidden sm:block w-3 h-3 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown Card */}

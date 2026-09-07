@@ -18,6 +18,7 @@ import { useApp } from '../../context/AppContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { InstallAppButton } from '../InstallAppButton';
+import { LanguageSelector } from '../LanguageSelector';
 
 export interface SidebarProps {
   onGoHome?: () => void;
@@ -214,6 +215,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onGoHome, onOpenDevModal, onOp
             PayPal
           </span>
         </button>
+
+        {/* Sélecteur de langue (accessible dans le menu tiroir mobile) */}
+        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b]">
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Langue</span>
+          <LanguageSelector compact={true} />
+        </div>
 
         {/* User Profile Card (Uniquement lorsque connecté) */}
         {user && (
