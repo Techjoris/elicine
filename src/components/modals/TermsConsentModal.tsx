@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { ElicineLogo } from '../ElicineLogo';
 
 export const TermsConsentModal: React.FC = () => {
   const { activeView } = useApp();
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [hasAccepted, setHasAccepted] = useState(true);
   const [isChecked, setIsChecked] = useState(false);
@@ -65,20 +67,20 @@ export const TermsConsentModal: React.FC = () => {
           <ElicineLogo variant="full" size="sm" />
         </div>
 
-        {/* Hiérarchie typographique sobre & contrastée */}
+        {/* Hiérarchie typographique dynamique via store i18n */}
         <div className="space-y-2">
           <h2 
             id="terms-gate-title"
             className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-white tracking-tight"
           >
-            Conditions &amp; Confidentialité
+            {t.consentModal.title}
           </h2>
           <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Pour profiter de la découverte cinématographique intelligente et de nos recommandations personnalisées, veuillez accepter nos conditions d'utilisation et notre politique de protection des données.
+            {t.consentModal.description}
           </p>
         </div>
 
-        {/* Simple lien souligné lisible en mode clair et sombre */}
+        {/* Lien dynamique vers les CGU */}
         <div>
           <a
             href="/terms"
@@ -86,11 +88,11 @@ export const TermsConsentModal: React.FC = () => {
             rel="noopener noreferrer"
             className="text-xs text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white underline underline-offset-4 transition-colors inline-block font-medium"
           >
-            Consulter l'intégralité des CGU et de la Politique de Confidentialité
+            {t.consentModal.readTermsLink}
           </a>
         </div>
 
-        {/* Case à cocher & Bouton principal sobre */}
+        {/* Case à cocher & Bouton principal localisés */}
         <div className="space-y-4 pt-1">
           <label 
             htmlFor="cgu-checkbox"
@@ -104,7 +106,7 @@ export const TermsConsentModal: React.FC = () => {
               className="mt-0.5 w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-white accent-zinc-900 dark:accent-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
             />
             <span className="text-xs text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100 leading-snug">
-              J'ai lu et j'accepte les Conditions Générales d'Utilisation et la Politique de Confidentialité.
+              {t.consentModal.checkbox}
             </span>
           </label>
 
@@ -114,7 +116,7 @@ export const TermsConsentModal: React.FC = () => {
             disabled={!isChecked}
             className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-900 dark:disabled:hover:bg-white disabled:cursor-not-allowed font-medium text-xs sm:text-sm transition-colors cursor-pointer text-center select-none shadow-sm"
           >
-            Accepter et continuer
+            {t.consentModal.button}
           </button>
         </div>
       </div>

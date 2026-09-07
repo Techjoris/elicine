@@ -10,14 +10,17 @@ export interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const SUPPORTED_LANGUAGES: Language[] = ['fr', 'en', 'es', 'de', 'it'];
 const SPANISH_COUNTRIES = ['ES', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'GT', 'CU', 'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA', 'UY', 'PR', 'GQ'];
 const FRENCH_COUNTRIES = ['FR', 'CM', 'CI', 'SN', 'CD', 'MG', 'ML', 'BF', 'NE', 'GN', 'TD', 'BI', 'BJ', 'TG', 'CF', 'CG', 'GA', 'DJ', 'KM', 'BE', 'CH', 'LU', 'MC'];
+const GERMAN_COUNTRIES = ['DE', 'AT'];
+const ITALIAN_COUNTRIES = ['IT', 'SM', 'VA'];
 
 export function detectPreferredLanguage(): Language {
   // 1. Cookie 'userLanguage'
   if (typeof document !== 'undefined') {
     const match = document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i);
-    if (match && ['fr', 'en', 'es'].includes(match[1].toLowerCase())) {
+    if (match && SUPPORTED_LANGUAGES.includes(match[1].toLowerCase() as Language)) {
       return match[1].toLowerCase() as Language;
     }
   }
@@ -25,16 +28,16 @@ export function detectPreferredLanguage(): Language {
   // 2. LocalStorage sauvegardé
   if (typeof localStorage !== 'undefined') {
     const saved = localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang');
-    if (saved && ['fr', 'en', 'es'].includes(saved.toLowerCase())) {
+    if (saved && SUPPORTED_LANGUAGES.includes(saved.toLowerCase() as Language)) {
       return saved.toLowerCase() as Language;
     }
   }
 
   // 3. Navigateur (navigator.language)
   if (typeof navigator !== 'undefined' && navigator.language) {
-    const nav = navigator.language.slice(0, 2).toLowerCase();
-    if (['fr', 'en', 'es'].includes(nav)) {
-      return nav as Language;
+    const nav = navigator.language.slice(0, 2).toLowerCase() as Language;
+    if (SUPPORTED_LANGUAGES.includes(nav)) {
+      return nav;
     }
   }
 
@@ -53,7 +56,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         (typeof localStorage !== 'undefined' ? (localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang')) : null)
       )?.toLowerCase() as Language | null;
 
-      if (savedLang && ['fr', 'en', 'es'].includes(savedLang)) {
+      if (savedLang && SUPPORTED_LANGUAGES.includes(savedLang)) {
         setLang(savedLang);
         document.documentElement.lang = savedLang;
         return;
@@ -62,7 +65,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       // 2. Navigateur en priorité si pas de préférence explicite
       if (typeof navigator !== 'undefined' && navigator.language) {
         const navLang = navigator.language.slice(0, 2).toLowerCase() as Language;
-        if (['fr', 'en', 'es'].includes(navLang)) {
+        if (SUPPORTED_LANGUAGES.includes(navLang)) {
           setLang(navLang);
           document.documentElement.lang = navLang;
           return;
@@ -80,6 +83,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         } else if (code && FRENCH_COUNTRIES.includes(code)) {
           setLang('fr');
           document.documentElement.lang = 'fr';
+        } else if (code && GERMAN_COUNTRIES.includes(code)) {
+          setLang('de');
+          document.documentElement.lang = 'de';
+        } else if (code && ITALIAN_COUNTRIES.includes(code)) {
+          setLang('it');
+          document.documentElement.lang = 'it';
         } else {
           // Reste du monde : anglais par défaut
           setLang('en');
@@ -95,7 +104,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const changeLanguage = (newLang: Language) => {
-    if (['fr', 'en', 'es'].includes(newLang)) {
+    if (SUPPORTED_LANGUAGES.includes(newLang)) {
       setLang(newLang);
       localStorage.setItem('userLanguage', newLang);
       localStorage.setItem('elicine_lang', newLang);
