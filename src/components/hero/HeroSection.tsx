@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Plus, 
@@ -121,6 +121,46 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'Tous' | 'Films' | 'Séries TV'>('Tous');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize du textarea façon ChatGPT (scrollHeight contraint à max 128px)
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(textarea.scrollHeight, 128);
+    textarea.style.height = `${nextHeight}px`;
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [searchPrompt]);
+
+  useEffect(() => {
+    const handleResize = () => adjustTextareaHeight();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      const isMobileDevice = typeof window !== 'undefined' && (
+        window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      );
+
+      // Sur mobile : retour à la ligne naturel, le bouton lance la recherche
+      if (isMobileDevice) {
+        return;
+      }
+
+      // Sur desktop : Entrée soumet la recherche, Shift + Entrée insère un saut de ligne
+      if (!e.shiftKey) {
+        e.preventDefault();
+        handleSearch(searchPrompt);
+      }
+    }
+  };
 
   // ─── 1. FETCH LIVE TMDB TRENDING MOVIES FOR HERO (5 RÉCENTS BOX-OFFICE) ───
   useEffect(() => {
@@ -279,40 +319,36 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           {t.searchPlaceholder}
         </p>
 
-        {/* c) Barre de Recherche Unifiée "Floating Glass" optimisée mobile */}
+        {/* c) Barre de Recherche Unifiée "Floating Glass" auto-extensible façon ChatGPT */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
             handleSearch(searchPrompt);
           }}
-          className="relative flex items-center w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl p-1 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
+          className="relative flex items-end w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all"
         >
-          {/* Search icon */}
-          <div className="pl-2.5 pr-1.5 sm:pl-3 sm:pr-2 text-zinc-400 flex-shrink-0">
+          {/* Search icon - Ancré en bas pour accompagner l'extension du textarea */}
+          <div className="pl-2.5 pr-1.5 sm:pl-3 sm:pr-2 text-zinc-400 flex-shrink-0 self-end mb-2 sm:mb-2.5">
             <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          {/* Input field - Largeur maximale et padding réduit sur mobile */}
-          <input
+          {/* Textarea auto-extensible (1 ligne par défaut, scrollHeight jusqu'à max-h-32) */}
+          <textarea
+            ref={textareaRef}
             id="main-ai-search"
-            type="text"
-            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
+            rows={1}
+            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal resize-none overflow-y-auto max-h-32 leading-relaxed"
             placeholder={t.searchPlaceholder || "Décrivez une émotion, une ambiance..."}
             value={searchPrompt}
             onChange={(e) => {
               setSearchPrompt(e.target.value);
               if (errorMessage) setErrorMessage(null);
             }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleSearch(searchPrompt);
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
 
-          {/* Integrated Quota Badge + Explorer Button inside the pill */}
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          {/* Integrated Quota Badge + Explorer Button inside the pill - Ancrés en bas */}
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
             {/* Quota Badge - Icône ⚡ seule sur mobile, texte "Illimité" masqué sous 640px */}
             <button
               type="button"

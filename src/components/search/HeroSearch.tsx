@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search as SearchIcon, Sparkles, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -15,9 +15,48 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
 }) => {
   const { quota, user, setIsProModalOpen, showToast, useAiQuota } = useApp();
   const [query, setQuery] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const remainingCredits = quota.remaining;
   const isPro = user?.isPro;
+
+  // Auto-resize du textarea (scrollHeight contraint à max 128px)
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(textarea.scrollHeight, 128);
+    textarea.style.height = `${nextHeight}px`;
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [query]);
+
+  useEffect(() => {
+    const handleResize = () => adjustTextareaHeight();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      const isMobileDevice = typeof window !== 'undefined' && (
+        window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      );
+
+      // Sur mobile : saut de ligne naturel
+      if (isMobileDevice) {
+        return;
+      }
+
+      // Sur desktop : Entrée soumet la recherche, Shift + Entrée insère un saut de ligne
+      if (!e.shiftKey) {
+        e.preventDefault();
+        handleSearchSubmit();
+      }
+    }
+  };
 
   const handleSearchSubmit = () => {
     const q = query.trim();
@@ -35,26 +74,25 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   };
 
   return (
-    <div className="relative flex items-center w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all">
-      {/* Search icon */}
-      <div className="pl-3 pr-2 text-zinc-400 flex-shrink-0">
-        <SearchIcon className="w-5 h-5" />
+    <div className="relative flex items-end w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/80 dark:bg-zinc-950/80 backdrop-blur-xl p-1.5 sm:p-2 shadow-2xl focus-within:border-cyan-500/80 transition-all">
+      {/* Search icon - Ancré en bas */}
+      <div className="pl-3 pr-2 text-zinc-400 flex-shrink-0 self-end mb-2 sm:mb-2.5">
+        <SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
 
-      {/* Input field */}
-      <input
-        type="text"
-        className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
+      {/* Textarea auto-extensible */}
+      <textarea
+        ref={textareaRef}
+        rows={1}
+        className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal resize-none overflow-y-auto max-h-32 leading-relaxed"
         placeholder={placeholder}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') handleSearchSubmit();
-        }}
+        onKeyDown={handleKeyDown}
       />
 
-      {/* Integrated Quota Badge + Explorer Button inside the pill */}
-      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+      {/* Integrated Quota Badge + Explorer Button inside the pill - Ancrés en bas */}
+      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
         {/* Quota Badge */}
         <button
           type="button"
