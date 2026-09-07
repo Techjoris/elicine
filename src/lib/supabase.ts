@@ -1,32 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Configuration Supabase officielle
-export const SUPABASE_URL = 
+// Configuration Supabase officielle (Support Vite & Next.js)
+const supabaseUrl = 
   (import.meta as any).env?.VITE_SUPABASE_URL || 
+  (typeof process !== 'undefined' ? (process as any).env?.NEXT_PUBLIC_SUPABASE_URL : undefined) ||
   'https://xwhrxtzbxvakqjlajjlc.supabase.co';
 
-export const SUPABASE_ANON_KEY = 
+const supabaseAnonKey = 
   (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 
+  (typeof process !== 'undefined' ? (process as any).env?.NEXT_PUBLIC_SUPABASE_ANON_KEY : undefined) ||
   '<COLLE_ICI_TA_CLE_ANON>';
+
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseAnonKey;
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(
-    SUPABASE_ANON_KEY && 
-    SUPABASE_ANON_KEY !== '<COLLE_ICI_TA_CLE_ANON>' &&
-    SUPABASE_ANON_KEY.length > 20
+    supabaseAnonKey && 
+    supabaseAnonKey !== '<COLLE_ICI_TA_CLE_ANON>' &&
+    supabaseAnonKey.length > 20
   );
 };
 
 // Client Supabase avec persistance automatique de session (LocalStorage / PWA mobile)
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'elicine-supabase-auth'
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined
   }
 });
+
+export const supabaseClient = supabase;
+export default supabase;
 
 /**
  * Déclenchement standard de l'authentification Google OAuth
@@ -41,4 +48,5 @@ export async function signInWithGoogle(redirectTo?: string) {
     }
   });
 }
+
 

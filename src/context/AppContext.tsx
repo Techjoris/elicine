@@ -420,22 +420,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
-    // A. Prise en charge du Callback OAuth (Hash / Code URL) et session initiale active
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (!isMounted) return;
-      if (error) {
-        console.warn('[Supabase] Initial session retrieval error:', error);
+    // A. Prise en charge du Callback OAuth (Code PKCE / Hash) et session initiale active
+    const handleInitialAuth = async () => {
+      try {
+        // 1. Détection et échange explicite du code OAuth PKCE (?code=...)
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          const code = url.searchParams.get('code');
+          if (code) {
+            try {
+              const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+              if (!error && data?.session?.user && isMounted) {
+                syncSupabaseUser(data.session, 'SIGNED_IN');
+                return;
+              }
+            } catch (exchangeErr) {
+              console.warn('[Supabase] exchangeCodeForSession error:', exchangeErr);
+            }
+          }
+        }
+
+        // 2. Récupération de la session active courante (localStorage / hash tokens)
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('[Supabase] Initial session retrieval error:', error);
+        }
+        if (session?.user && isMounted) {
+          syncSupabaseUser(session, 'INITIAL_SESSION');
+        }
+      } catch (err) {
+        console.warn('[Supabase] Initial session exception:', err);
       }
-      if (session?.user) {
-        syncSupabaseUser(session, 'INITIAL_SESSION');
-      } else {
-        // Nettoyage de l'URL même en cas d'erreur OAuth ou d'absence de session
-        cleanOAuthUrl();
-      }
-    }).catch(err => {
-      console.warn('[Supabase] Initial session exception:', err);
-      cleanOAuthUrl();
-    });
+    };
+
+    handleInitialAuth();
 
     // B. Écoute permanente des événements d'authentification (onAuthStateChange)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
