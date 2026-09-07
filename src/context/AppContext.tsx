@@ -114,6 +114,28 @@ const DEFAULT_QUOTA: AIQuota = {
   lastResetDate: new Date().toISOString().split('T')[0]
 };
 
+export const formatUser = (rawUser: any): UserProfile => {
+  if (!rawUser) return rawUser;
+  const meta = rawUser.user_metadata || {};
+  const identityMeta = rawUser.identities?.[0]?.identity_data || {};
+  const avatar = meta.avatar_url || meta.picture || identityMeta.avatar_url || identityMeta.picture || rawUser.avatar;
+  const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Cinéphile');
+  const email = rawUser.email || meta.email || identityMeta.email || '';
+
+  return {
+    ...rawUser,
+    id: rawUser.id || 'usr_' + Date.now(),
+    email,
+    name,
+    avatar: avatar || undefined,
+    provider: 'google',
+    role: meta.role || rawUser.role || 'user',
+    isPro: rawUser.isPro ?? false,
+    referralCode: rawUser.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+    createdAt: rawUser.created_at || rawUser.createdAt || new Date().toISOString()
+  };
+};
+
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -166,39 +188,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const saved = localStorage.getItem('cineia_user');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed?.email) return parsed;
+          if (parsed?.email) return formatUser(parsed);
         }
 
         // Lecture immédiate d'un token Supabase existant dans LocalStorage
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-              try {
-                const data = JSON.parse(raw);
-                const sbUser = data?.user || data?.currentSession?.user;
-                if (sbUser?.email) {
-                  const meta = sbUser.user_metadata || {};
-                  const identityMeta = sbUser.identities?.[0]?.identity_data || {};
-                  const avatar = meta.avatar_url || meta.picture || identityMeta.avatar_url || identityMeta.picture || sbUser.avatar;
-                  const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || sbUser.name || sbUser.email.split('@')[0];
-                  return {
-                    ...sbUser,
-                    id: sbUser.id,
-                    email: sbUser.email,
-                    name,
-                    avatar,
-                    provider: 'google',
-                    role: meta.role || 'user',
-                    isPro: false,
-                    referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-                    createdAt: sbUser.created_at || new Date().toISOString(),
-                    token: data?.access_token || data?.currentSession?.access_token
-                  };
-                }
-              } catch (e) {}
-            }
+        const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
+        if (authKey) {
+          const raw = localStorage.getItem(authKey);
+          if (raw) {
+            try {
+              const data = JSON.parse(raw);
+              const sbUser = data?.user || data?.currentSession?.user;
+              if (sbUser?.email) {
+                return formatUser({
+                  ...sbUser,
+                  token: data?.access_token || data?.currentSession?.access_token
+                });
+              }
+            } catch (e) {}
           }
         }
       } catch (e) {
@@ -459,54 +466,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Récupération initiale (avec lecture immédiate et activation de session)
-    const initAuth = async () => {
-      try {
-        // Lecture directe et activation de session si token présent en LocalStorage
-        if (typeof window !== 'undefined') {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
-              const raw = localStorage.getItem(key);
-              if (raw) {
-                try {
-                  const data = JSON.parse(raw);
-                  if (data?.access_token && data?.refresh_token) {
-                    await supabase.auth.setSession({
-                      access_token: data.access_token,
-                      refresh_token: data.refresh_token
-                    }).catch(() => {});
-                  }
-                } catch (e) {}
-              }
+    // Au démarrage :
+    const checkAuth = async () => {
+      // 0. Prise en charge préalable du Callback OAuth PKCE (?code=...)
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        if (code) {
+          try {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (!error && data?.session?.user && isMounted) {
+              console.log("Utilisateur connecté détecté :", data.session.user.email);
+              setUser(formatUser(data.session.user));
+              syncSupabaseUser(data.session, 'SIGNED_IN');
+              setLoading(false);
+              return;
             }
-          }
-
-          // Prise en charge du Callback OAuth PKCE (?code=...)
-          const url = new URL(window.location.href);
-          const code = url.searchParams.get('code');
-          if (code) {
-            try {
-              const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-              if (!error && data?.session?.user && isMounted) {
-                console.log("Utilisateur connecté détecté :", data.session.user.email);
-                syncSupabaseUser(data.session, 'SIGNED_IN');
-                setLoading(false);
-                return;
-              }
-            } catch (exchangeErr) {
-              console.warn('[Supabase] exchangeCodeForSession error:', exchangeErr);
-            }
+          } catch (exchangeErr) {
+            console.warn('[Supabase] exchangeCodeForSession error:', exchangeErr);
           }
         }
+      }
 
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (session?.user && isMounted) {
+      // 1. Tenter la récupération standard
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        if (isMounted) {
           console.log("Utilisateur connecté détecté :", session.user.email);
+          setUser(formatUser(session.user));
           syncSupabaseUser(session, 'INITIAL_SESSION');
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 2. Secours direct (Fallback LocalStorage) si getSession() renvoie null :
+      try {
+        if (typeof window !== 'undefined') {
+          const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
+          if (authKey) {
+            const rawData = localStorage.getItem(authKey);
+            if (rawData) {
+              const parsed = JSON.parse(rawData);
+              const token = parsed?.access_token || parsed?.currentSession?.access_token;
+              const refreshToken = parsed?.refresh_token || parsed?.currentSession?.refresh_token;
+
+              if (token && refreshToken) {
+                const { data, error } = await supabase.auth.setSession({
+                  access_token: token,
+                  refresh_token: refreshToken
+                });
+                if (data?.session?.user && isMounted) {
+                  console.log("Session restaurée avec succès via setSession :", data.session.user.email);
+                  setUser(formatUser(data.session.user));
+                  syncSupabaseUser(data.session, 'INITIAL_SESSION');
+                  setLoading(false);
+                  return;
+                }
+              }
+              
+              if (parsed?.user || parsed?.currentSession?.user) {
+                // Si l'objet user est directement stocké
+                const storedUser = parsed?.user || parsed?.currentSession?.user;
+                if (isMounted) {
+                  console.log("Session restaurée depuis LocalStorage user :", storedUser.email);
+                  setUser(formatUser(storedUser));
+                  syncSupabaseUser({ user: storedUser, access_token: token }, 'INITIAL_SESSION');
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          }
         }
       } catch (err) {
-        console.warn('[Supabase] initAuth exception:', err);
+        console.error("Erreur lecture token localStorage:", err);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -514,7 +549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    initAuth();
+    checkAuth();
 
     // 2. Écoute dynamique (OAuth redirect, sign in, sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -523,8 +558,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (session?.user) {
         console.log("Utilisateur connecté détecté :", session.user.email);
+        setUser(formatUser(session.user));
         syncSupabaseUser(session, _event);
-      } else {
+      } else if (_event === 'SIGNED_OUT') {
         setUser(null);
         try {
           localStorage.removeItem('cineia_user');
