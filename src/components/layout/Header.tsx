@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
 
         {/* ZONE DROITE: Actions compactes avec gap-1.5 sm:gap-2 */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* 1. Bouton PWA "Installer" (Placé à gauche de Soutenir, affiché si beforeinstallprompt capturé) */}
+          {/* 1. Bouton PWA "Installer" (Permanent sauf si mode autonome/déjà installé, avec guidage au clic) */}
           <InstallAppButton variant="header" />
 
           {/* 2. Bouton Soutenir Responsive (Intact) */}
