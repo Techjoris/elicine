@@ -47,8 +47,12 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
     };
   }, [open]);
 
-  const initials = user?.name
-    ? user.name.slice(0, 2).toUpperCase()
+  const displayName = user?.name || (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : '');
+  const displayAvatar = user?.avatar || (user as any)?.user_metadata?.avatar_url || (user as any)?.user_metadata?.picture;
+  const isGoogle = user?.provider === 'google' || (user as any)?.app_metadata?.provider === 'google' || Boolean((user as any)?.user_metadata?.avatar_url);
+
+  const initials = displayName
+    ? displayName.slice(0, 2).toUpperCase()
     : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'CI');
 
   return (
@@ -65,10 +69,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-300 dark:ring-slate-700'
         }`}>
-          {user?.avatar && !imgError ? (
+          {displayAvatar && !imgError ? (
             <img 
-              src={user.avatar} 
-              alt={user.name} 
+              src={displayAvatar} 
+              alt={displayName || 'Profil'} 
               className="w-full h-full object-cover" 
               onError={() => setImgError(true)}
             />
@@ -85,7 +89,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
         <div className="hidden xl:flex flex-col text-left leading-none max-w-[100px]">
           <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-950 dark:group-hover:text-white transition-colors">
-            {user?.name || (user ? 'Mon Compte' : 'Invité')}
+            {displayName || (user ? 'Mon Compte' : 'Invité')}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
             {user?.isPro ? '👑 Pro' : '⚡ Illimité'}
@@ -118,18 +122,18 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {/* User Info & Quota Header */}
             <div className="p-3 bg-slate-50 dark:bg-zinc-850/80 dark:bg-[#181a24] rounded-xl border border-slate-200 dark:border-zinc-800 mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                {user?.avatar && (
-                  <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" />
+                {displayAvatar && (
+                  <img src={displayAvatar} alt={displayName} className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" />
                 )}
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                    <span>{user?.name || 'Cinéphile Invité'}</span>
-                    {user?.provider === 'google' && (
+                    <span>{displayName || 'Cinéphile Invité'}</span>
+                    {isGoogle && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-zinc-800 text-cyan-600 dark:text-cyan-300 border border-cyan-400/30 font-semibold">Google</span>
                     )}
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
-                    {user?.email || 'Non connecté'}
+                    {user?.email || (user as any)?.user_metadata?.email || 'Non connecté'}
                   </p>
                 </div>
               </div>

@@ -23,6 +23,8 @@ interface AppContextType {
 
   // User & Auth
   user: UserProfile | null;
+  loading: boolean;
+  setLoading: (l: boolean) => void;
   login: (emailOrUser: string | UserProfile, name?: string) => void;
   loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -243,6 +245,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProSuccessModalOpen, setIsProSuccessModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // 9. PWA Deferred Prompt & Hook
   const { isInstallable: canInstallPwa, handleInstallClick: installPwa } = usePWAInstall();
@@ -420,10 +423,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
-    // A. Prise en charge du Callback OAuth (Code PKCE / Hash) et session initiale active
-    const handleInitialAuth = async () => {
+    // 1. Récupération initiale (avec support code PKCE et persistance)
+    const checkInitialSession = async () => {
       try {
-        // 1. Détection et échange explicite du code OAuth PKCE (?code=...)
+        // Prise en charge du Callback OAuth PKCE (?code=...)
         if (typeof window !== 'undefined') {
           const url = new URL(window.location.href);
           const code = url.searchParams.get('code');
@@ -432,6 +435,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const { data, error } = await supabase.auth.exchangeCodeForSession(code);
               if (!error && data?.session?.user && isMounted) {
                 syncSupabaseUser(data.session, 'SIGNED_IN');
+                setLoading(false);
                 return;
               }
             } catch (exchangeErr) {
@@ -440,7 +444,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        // 2. Récupération de la session active courante (localStorage / hash tokens)
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.warn('[Supabase] Initial session retrieval error:', error);
@@ -450,27 +453,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch (err) {
         console.warn('[Supabase] Initial session exception:', err);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    handleInitialAuth();
+    checkInitialSession();
 
-    // B. Écoute permanente des événements d'authentification (onAuthStateChange)
+    // 2. Écoute dynamique (OAuth redirect, sign in, sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event, session?.user?.email);
       if (!isMounted) return;
 
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
+      if (session?.user) {
         syncSupabaseUser(session, event);
       } else if (event === 'SIGNED_OUT') {
-        setUser(prev => {
-          if (prev?.provider === 'google') {
-            try {
-              localStorage.removeItem('cineia_user');
-            } catch (e) {}
-            return null;
-          }
-          return prev;
-        });
+        setUser(null);
+        try {
+          localStorage.removeItem('cineia_user');
+        } catch (e) {}
       }
     });
 
@@ -751,6 +754,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         useAiQuota,
         resetQuota,
         user,
+        loading,
+        setLoading,
         login,
         loginWithCredentials,
         registerWithCredentials,
