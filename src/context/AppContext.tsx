@@ -479,15 +479,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 12. Synchronisation réactive avec AuthContext
   useEffect(() => {
     if (authUser) {
-      setUser(prev => ({
-        ...formatUser({
+      setUser(prev => {
+        const formatted = formatUser({
           ...authUser,
           token: authSession?.access_token
-        }),
-        isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
-      }));
+        });
+        const updatedUser = {
+          ...formatted,
+          isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
+        };
+        try {
+          localStorage.setItem('cineia_user', JSON.stringify(updatedUser));
+        } catch (_) {}
+        return updatedUser;
+      });
       setIsAuthModalOpen(false);
-      cleanOAuthUrl();
     } else {
       const stored = authService.getStoredUser();
       if (stored && stored.email) {

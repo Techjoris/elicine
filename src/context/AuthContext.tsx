@@ -95,6 +95,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         setUser(session.user);
         setSession(session);
+        
+        // Nettoyage de l'URL après un callback OAuth réussi
+        if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          if (url.hash.includes('access_token=') || url.searchParams.has('code')) {
+            url.hash = '';
+            url.searchParams.delete('code');
+            window.history.replaceState({}, document.title, url.pathname + url.search);
+          }
+        }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setSession(null);
