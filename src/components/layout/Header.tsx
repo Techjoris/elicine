@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Menu, X, AlertTriangle, LogIn } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { SettingsModal } from '../SettingsModal';
@@ -14,8 +15,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpenTip }) => {
+  const { user } = useAuth();
   const {
-    user,
     setIsAuthModalOpen,
     setIsProModalOpen,
     setIsTipModalOpen,

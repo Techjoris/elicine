@@ -22,8 +22,15 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
-// Client Supabase UNIQUE singleton (Support Vite & PWA mobile)
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Client Supabase UNIQUE singleton avec persistance explicite (Support Vite & PWA mobile)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined
+  }
+});
 export const supabaseClient = supabase;
 export default supabase;
 

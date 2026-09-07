@@ -16,6 +16,7 @@ import {
   LogIn
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { InstallAppButton } from '../InstallAppButton';
@@ -34,13 +35,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSupport,
   onNavigateTerms 
 }) => {
+  const { user } = useAuth();
   const {
     activeView,
     setActiveView,
     searchHistory,
     clearHistory,
     watchlist,
-    user,
     quota,
     showToast,
     setIsProModalOpen,
@@ -243,7 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-2.5 min-w-0">
               {/* Round Avatar */}
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-                user.isPro
+                (user as any)?.isPro
                   ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
                   : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
               }`}>
@@ -253,7 +254,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-cyan-300 transition-colors">
-                  {(user as any)?.user_metadata?.full_name || user.email || user.name || 'Ivan Joris'}
+                  {(user as any)?.user_metadata?.full_name || user.email || (user as any)?.name || 'Ivan Joris'}
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                   {user.email}
@@ -263,12 +264,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Badge */}
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
-              user.isPro
+              (user as any)?.isPro
                 ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/40 shadow-neon-gold'
                 : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
             }`}>
-              {user.isPro && <Crown className="w-2.5 h-2.5" />}
-              {user.isPro ? 'Pro' : 'Gratuit'}
+              {(user as any)?.isPro && <Crown className="w-2.5 h-2.5" />}
+              {(user as any)?.isPro ? 'Pro' : 'Gratuit'}
             </span>
           </div>
         )}

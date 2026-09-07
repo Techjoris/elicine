@@ -10,8 +10,8 @@ import {
   Settings
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
-import { supabase } from '../../lib/supabase';
 
 interface ProfileMenuProps {
   onOpenSettings: () => void;
@@ -24,14 +24,17 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenSettings,
   onOpenPro
 }) => {
-  const { user, quota, logout, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
+  const { user, loading, signOut } = useAuth();
+  const { setIsAuthModalOpen, setActiveView, watchlist } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const displayAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+
   useEffect(() => {
     setImgError(false);
-  }, [user?.avatar]);
+  }, [displayAvatar]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,88 +51,31 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
     };
   }, [open]);
 
-  // Synchronisation directe avec l'objet user de la session Supabase active
-  const [supabaseUser, setSupabaseUser] = useState<any>(() => {
-    if (user?.email) return user;
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('cineia_user');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.email) return parsed;
-        }
-        const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
-        if (authKey) {
-          const raw = localStorage.getItem(authKey);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            const u = parsed?.user || parsed?.currentSession?.user;
-            if (u?.email) return u;
-          }
-        }
-      } catch (e) {}
-    }
-    return null;
-  });
+  // Si en cours de chargement initial sans utilisateur : afficher un squelette compact
+  if (loading && !user) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse flex-shrink-0" />
+    );
+  }
 
-  useEffect(() => {
-    // 1. Lecture directe de la session active Supabase
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-      }
-    }).catch(() => {});
-
-    // 2. Écoute permanente des changements d'authentification Supabase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-      } else {
-        setSupabaseUser(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (user?.email) {
-      setSupabaseUser(user);
-    }
-  }, [user]);
-
-  const activeUser = supabaseUser || user;
-  const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
-  const activeUserFullName = activeUser?.user_metadata?.full_name || activeUser?.user_metadata?.name || activeUser?.name;
-  const activeDisplayName = activeUserFullName || activeUser?.email || 'Ivan Joris';
-  const displayName = isConnected ? activeDisplayName : 'Cinéphile Invité';
-  const displayAvatar = activeUser?.avatar || activeUser?.user_metadata?.avatar_url || activeUser?.user_metadata?.picture;
-  const isGoogle = activeUser?.provider === 'google' || activeUser?.app_metadata?.provider === 'google' || Boolean(activeUser?.user_metadata?.avatar_url);
+  const isConnected = Boolean(user && (user.email || user.id));
+  const activeUserFullName = user?.user_metadata?.full_name || user?.user_metadata?.name;
+  const activeDisplayName = activeUserFullName || user?.email;
+  const displayName = isConnected ? (activeDisplayName || 'Ivan Joris') : 'Cinéphile Invité';
+  const isGoogle = user?.app_metadata?.provider === 'google' || Boolean(user?.user_metadata?.avatar_url);
 
   const initials = isConnected
     ? (
-        activeUser?.user_metadata?.full_name
-          ? activeUser.user_metadata.full_name.slice(0, 2).toUpperCase()
-          : (activeUser?.email ? activeUser.email.slice(0, 2).toUpperCase() : 'IJ')
+        user?.user_metadata?.full_name
+          ? user.user_metadata.full_name.slice(0, 2).toUpperCase()
+          : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'IJ')
       )
     : 'CI';
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      localStorage.removeItem('cineia_user');
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.warn('[Supabase signOut error]', err);
-    }
-    setSupabaseUser(null);
-    logout();
     setOpen(false);
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
+    await signOut();
   };
 
   return (
@@ -142,7 +88,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         title="Menu Profil & Paramètres"
       >
         <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
-          user?.isPro
+          (user as any)?.isPro
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-300 dark:ring-slate-700'
         }`}>
@@ -155,7 +101,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${
-              user?.isPro
+              (user as any)?.isPro
                 ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 font-black'
                 : 'bg-gradient-to-tr from-sky-600 to-cyan-500 text-white'
             }`}>
@@ -169,7 +115,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {displayName}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
-            {isConnected ? (activeUser?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
+            {isConnected ? ((user as any)?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
           </span>
         </div>
 
@@ -224,9 +170,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
                         Connecté
                       </span>
-                      {activeUser?.email && (
+                      {user?.email && (
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
-                          • {activeUser.email}
+                          • {user.email}
                         </span>
                       )}
                     </div>
@@ -238,11 +184,11 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
-                activeUser?.isPro
+                (user as any)?.isPro
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
                   : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
               }`}>
-                {activeUser?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
+                {(user as any)?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
               </span>
             </div>
 
@@ -267,7 +213,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               )}
 
               {/* 🛡️ Console Administrateur (Visible pour créateur/admin) */}
-              {authService.isAdmin(activeUser) && (
+              {authService.isAdmin(user as any) && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -332,7 +278,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                <span className="font-bold text-xs">{activeUser?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+                <span className="font-bold text-xs">{(user as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />

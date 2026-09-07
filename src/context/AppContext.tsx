@@ -14,6 +14,7 @@ import {
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { authService } from '../services/authService';
 import { supabase, signInWithGoogle } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   // Quota & AI
@@ -139,6 +140,8 @@ export const formatUser = (rawUser: any): UserProfile => {
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user: authUser, session: authSession, signOut: authSignOut } = useAuth();
+
   // 1. API Settings loaded from localStorage keys with env fallbacks
   const [apiSettings, setApiSettings] = useState<ApiSettings>(() => {
     const tmdb = localStorage.getItem('cinéia_tmdb_key') || localStorage.getItem('cineia_tmdb_key') || '';
@@ -462,11 +465,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     cleanOAuthUrl();
   };
 
-  // 11. Supabase Session Lifecycle & Realtime onAuthStateChange
+  // 11. Nettoyage sécurisé des fragments et paramètres OAuth au chargement
   useEffect(() => {
-    let isMounted = true;
-
-    // Traitement propre et non-bloquant des paramètres d'erreur ou fragments OAuth au chargement
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       if (url.searchParams.has('error') || url.hash.includes('error=')) {
@@ -474,45 +474,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cleanOAuthUrl();
       }
     }
-
-    // Récupération initiale de la session au démarrage
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (!isMounted) return;
-      if (error) {
-        console.warn('[Supabase getSession error]', error);
-      }
-      if (session?.user) {
-        setUser(formatUser(session.user));
-        setIsAuthModalOpen(false);
-      }
-      setLoading(false);
-    }).catch((err) => {
-      console.warn('[Supabase getSession exception]', err);
-      if (isMounted) setLoading(false);
-    });
-
-    // Écoute dynamique de l'état d'authentification Supabase (OAuth redirect, sign in, sign out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event:', event, session?.user?.email);
-      if (!isMounted) return;
-
-      if (session?.user) {
-        setUser(formatUser(session.user));
-        setIsAuthModalOpen(false);
-        cleanOAuthUrl();
-      } else {
-        setUser(null);
-        try {
-          localStorage.removeItem('cineia_user');
-        } catch (e) {}
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, []);
+
+  // 12. Synchronisation réactive avec AuthContext
+  useEffect(() => {
+    if (authUser) {
+      setUser(prev => ({
+        ...formatUser({
+          ...authUser,
+          token: authSession?.access_token
+        }),
+        isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || false
+      }));
+      setIsAuthModalOpen(false);
+      cleanOAuthUrl();
+    } else {
+      setUser(null);
+    }
+    setLoading(false);
+  }, [authUser, authSession]);
 
   // Quota Management - Bypassed for unlimited exploration
   const useAiQuota = (): boolean => {
@@ -608,9 +588,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await authSignOut();
     } catch (e) {
-      console.warn('[Supabase signOut error]', e);
+      console.warn('[authSignOut error]', e);
     }
     setUser(null);
     authService.logout();
