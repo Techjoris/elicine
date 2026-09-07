@@ -1,6 +1,6 @@
 import { Movie, StreamingProvider } from '../types';
 import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
-import { getCachedCountryCode } from './geoService';
+import { getCachedCountryCode, MOBILE_MONEY_COUNTRIES } from './geoService';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -85,6 +85,7 @@ export async function fetchMovieDetails(
 export function getTmdbApiKey(explicitKey?: string): string {
   return (
     explicitKey ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TMDB_API_KEY) ||
     (typeof localStorage !== 'undefined' ? (
       localStorage.getItem('tmdb_api_key') ||
       localStorage.getItem('elicine_tmdb_key') ||
@@ -97,7 +98,7 @@ export function getTmdbApiKey(explicitKey?: string): string {
 }
 
 /**
- * Proxy universel vers l'endpoint serveur /api/tmdb
+ * Proxy universel vers l'endpoint serveur /api/tmdb avec secours direct
  */
 export async function fetchTmdbEndpoint(
   endpoint: string,
@@ -118,7 +119,34 @@ export async function fetchTmdbEndpoint(
     searchParams.set('api_key', key);
   }
 
-  return fetch(`/api/tmdb?${searchParams.toString()}`);
+  try {
+    const res = await fetch(`/api/tmdb?${searchParams.toString()}`);
+    if (res.ok) return res;
+    // Si le proxy local/serveur renvoie une erreur mais qu'une clé TMDB est disponible, fallback direct TMDB
+    if (key) {
+      const directParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '') {
+          directParams.set(k, String(v));
+        }
+      }
+      directParams.set('api_key', key);
+      return fetch(`https://api.themoviedb.org/3/${endpoint}?${directParams.toString()}`);
+    }
+    return res;
+  } catch (err) {
+    if (key) {
+      const directParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '') {
+          directParams.set(k, String(v));
+        }
+      }
+      directParams.set('api_key', key);
+      return fetch(`https://api.themoviedb.org/3/${endpoint}?${directParams.toString()}`);
+    }
+    throw err;
+  }
 }
 
 export async function fetchTrendingMovies(apiKey?: string, language?: string): Promise<Movie[]> {
@@ -241,47 +269,25 @@ export async function fetchMoviesByPlatform({
   language,
   watchRegion
 }: PlatformFilterOptions): Promise<{ movies: Movie[]; totalPages: number }> {
-  const key = getTmdbApiKey(apiKey);
   const lang = getActiveTmdbLanguage(language);
   const rawRegion = watchRegion || (typeof window !== 'undefined' ? getCachedCountryCode() : 'FR') || 'FR';
   const cleanRegion = (rawRegion || 'FR').toUpperCase().slice(0, 2);
-  // Pour Canal+ (providerId: 381), si la région n'est pas la France, forcer 'FR' car l'essentiel de l'offre Canal+ y réside
-  const region = providerId === PLATFORM_PROVIDER_IDS.CANAL && cleanRegion !== 'FR' ? 'FR' : cleanRegion;
 
-  if (!key) {
-    let filtered = FALLBACK_MOVIES.filter(m => 
-      m.providers?.flatrate?.some((p: any) => p.provider_id === providerId) ||
-      (providerId === PLATFORM_PROVIDER_IDS.NETFLIX && m.primary_platform?.toLowerCase().includes('netflix')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.PRIME && m.primary_platform?.toLowerCase().includes('prime')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.DISNEY && m.primary_platform?.toLowerCase().includes('disney')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.APPLE_TV && m.primary_platform?.toLowerCase().includes('apple')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.MAX && m.primary_platform?.toLowerCase().includes('max')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.CANAL && m.primary_platform?.toLowerCase().includes('canal')) ||
-      (providerId === PLATFORM_PROVIDER_IDS.PARAMOUNT && m.primary_platform?.toLowerCase().includes('paramount'))
-    );
-
-    if (mediaType === 'movie') {
-      filtered = filtered.filter(m => m.media_type === 'FILM');
-    } else if (mediaType === 'tv') {
-      filtered = filtered.filter(m => m.media_type === 'SÉRIE');
-    }
-
-    if (platformName) {
-      filtered = filtered.map(m => ({ ...m, primary_platform: platformName }));
-    }
-
-    return { movies: filtered, totalPages: 10 };
-  }
+  // Pour Canal+ (providerId: 381), l'offre réside en France, forcer 'FR'
+  const primaryRegion = providerId === PLATFORM_PROVIDER_IDS.CANAL ? 'FR' : cleanRegion;
+  // Si la région fait partie des pays non couverts par JustWatch sur TMDB, utiliser 'FR' par défaut
+  const region = MOBILE_MONEY_COUNTRIES.includes(primaryRegion) ? 'FR' : primaryRegion;
 
   const todayIso = new Date().toISOString().split('T')[0];
 
-  try {
-    const fetchEndpoints: Array<Promise<any>> = [];
+  const executeDiscover = async (targetRegion: string) => {
+    const endpoints: Array<Promise<any>> = [];
 
     if (mediaType === 'all' || mediaType === 'movie') {
       const movieParams: Record<string, any> = {
         with_watch_providers: providerId,
-        watch_region: region,
+        watch_region: targetRegion,
+        with_watch_monetization_types: 'flatrate',
         sort_by: sortBy,
         page,
         language: lang,
@@ -294,13 +300,14 @@ export async function fetchMoviesByPlatform({
         movieParams['primary_release_date.lte'] = todayIso;
         movieParams['vote_count.gte'] = 5;
       } else {
-        movieParams['vote_count.gte'] = 30;
+        movieParams['vote_count.gte'] = 10;
       }
 
-      fetchEndpoints.push(
+      endpoints.push(
         fetchTmdbEndpoint('discover/movie', movieParams, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })
           .then(d => ({ ...d, results: (d.results || []).map((m: any) => ({ ...m, media_type: 'movie' })) }))
+          .catch(() => ({ results: [], total_pages: 1 }))
       );
     }
 
@@ -308,7 +315,8 @@ export async function fetchMoviesByPlatform({
       const tvSortBy = sortBy === 'primary_release_date.desc' ? 'first_air_date.desc' : sortBy;
       const tvParams: Record<string, any> = {
         with_watch_providers: providerId,
-        watch_region: region,
+        watch_region: targetRegion,
+        with_watch_monetization_types: 'flatrate',
         sort_by: tvSortBy,
         page,
         language: lang,
@@ -316,27 +324,28 @@ export async function fetchMoviesByPlatform({
       };
 
       if (sortBy === 'vote_average.desc') {
-        tvParams['vote_count.gte'] = 200;
+        tvParams['vote_count.gte'] = 100;
       } else if (sortBy === 'primary_release_date.desc') {
         tvParams['first_air_date.lte'] = todayIso;
         tvParams['vote_count.gte'] = 5;
       } else {
-        tvParams['vote_count.gte'] = 30;
+        tvParams['vote_count.gte'] = 10;
       }
 
-      fetchEndpoints.push(
+      endpoints.push(
         fetchTmdbEndpoint('discover/tv', tvParams, apiKey)
           .then(r => r.ok ? r.json() : { results: [], total_pages: 1 })
           .then(d => ({ ...d, results: (d.results || []).map((m: any) => ({ ...m, media_type: 'tv' })) }))
+          .catch(() => ({ results: [], total_pages: 1 }))
       );
     }
 
-    const responses = await Promise.all(fetchEndpoints);
+    const responses = await Promise.all(endpoints);
     let combinedResults: any[] = [];
     let maxPages = 1;
 
     responses.forEach(data => {
-      if (data?.results) {
+      if (data?.results && Array.isArray(data.results)) {
         combinedResults.push(...data.results);
       }
       if (data?.total_pages && data.total_pages > maxPages) {
@@ -344,7 +353,22 @@ export async function fetchMoviesByPlatform({
       }
     });
 
-    // If both movie and tv are fetched, sort the combined set
+    return { combinedResults, maxPages };
+  };
+
+  try {
+    let { combinedResults, maxPages } = await executeDiscover(region);
+
+    // Filet de sécurité anti-page vide : si la région initiale renvoie 0 résultat et n'est pas 'FR', repli automatique sur 'FR'
+    if (combinedResults.length === 0 && region !== 'FR') {
+      const fallbackFR = await executeDiscover('FR');
+      if (fallbackFR.combinedResults.length > 0) {
+        combinedResults = fallbackFR.combinedResults;
+        maxPages = fallbackFR.maxPages;
+      }
+    }
+
+    // Si les deux types (films et séries) sont récupérés, trier l'ensemble combiné selon sortBy
     if (mediaType === 'all') {
       if (sortBy === 'vote_average.desc') {
         combinedResults.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
@@ -363,13 +387,23 @@ export async function fetchMoviesByPlatform({
     if (platformName) {
       formatted.forEach(m => {
         m.primary_platform = platformName;
+        m.providers = {
+          flatrate: [
+            {
+              provider_id: providerId,
+              provider_name: platformName,
+              logo_path: null,
+              deep_link: undefined
+            }
+          ]
+        };
       });
     }
 
-    return { movies: formatted, totalPages: maxPages };
+    return { movies: formatted, totalPages: Math.min(maxPages, 500) };
   } catch (error) {
-    console.warn('TMDB discover error:', error);
-    return { movies: FALLBACK_MOVIES, totalPages: 1 };
+    console.warn('[TMDB Discover] Erreur fetchMoviesByPlatform:', error);
+    return { movies: [], totalPages: 1 };
   }
 }
 

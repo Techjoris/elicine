@@ -37,7 +37,7 @@ export function useInfiniteCatalog<T extends { id: number }>(
     setPage(1);
     setTotal(500);
     setHasMore(true);
-    setLoading(false);
+    setLoading(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 

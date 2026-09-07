@@ -80,7 +80,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       </div>
 
       {/* Grid — seamlessly renders movies + skeletons when loading more */}
-      {movies.length === 0 && !isLoadingMore ? (
+      {movies.length === 0 && !isLoadingMore && !hasMore ? (
         <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b] shadow-sm">
           <p className="text-slate-700 dark:text-slate-300 font-semibold text-sm">Aucun résultat trouvé pour cette recherche.</p>
         </div>
@@ -97,6 +97,14 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
               <MovieCardSkeleton />
               <MovieCardSkeleton />
               <MovieCardSkeleton />
+              {movies.length === 0 && (
+                <>
+                  <MovieCardSkeleton />
+                  <MovieCardSkeleton />
+                  <MovieCardSkeleton />
+                  <MovieCardSkeleton />
+                </>
+              )}
             </>
           )}
         </div>
