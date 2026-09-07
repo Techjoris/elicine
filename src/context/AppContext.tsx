@@ -466,101 +466,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
-    // Au démarrage :
-    const checkAuth = async () => {
-      // 0. Prise en charge préalable du Callback OAuth PKCE (?code=...)
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        const code = url.searchParams.get('code');
-        if (code) {
-          try {
-            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            if (!error && data?.session?.user && isMounted) {
-              console.log("Utilisateur connecté détecté :", data.session.user.email);
-              setUser(formatUser(data.session.user));
-              syncSupabaseUser(data.session, 'SIGNED_IN');
-              setLoading(false);
-              return;
-            }
-          } catch (exchangeErr) {
-            console.warn('[Supabase] exchangeCodeForSession error:', exchangeErr);
-          }
-        }
+    // Traitement propre et non-bloquant des paramètres d'erreur ou fragments OAuth au chargement
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('error') || url.hash.includes('error=')) {
+        console.warn('[OAuth Callback Error]', url.searchParams.get('error_description') || url.searchParams.get('error'));
+        cleanOAuthUrl();
       }
+    }
 
-      // 1. Tenter la récupération standard
-      const { data: { session } } = await supabase.auth.getSession();
-      
+    // Récupération initiale de la session au démarrage
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!isMounted) return;
+      if (error) {
+        console.warn('[Supabase getSession error]', error);
+      }
       if (session?.user) {
-        if (isMounted) {
-          console.log("Utilisateur connecté détecté :", session.user.email);
-          setUser(formatUser(session.user));
-          syncSupabaseUser(session, 'INITIAL_SESSION');
-          setLoading(false);
-        }
-        return;
+        setUser(formatUser(session.user));
+        setIsAuthModalOpen(false);
       }
+      setLoading(false);
+    }).catch((err) => {
+      console.warn('[Supabase getSession exception]', err);
+      if (isMounted) setLoading(false);
+    });
 
-      // 2. Secours direct (Fallback LocalStorage) si getSession() renvoie null :
-      try {
-        if (typeof window !== 'undefined') {
-          const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
-          if (authKey) {
-            const rawData = localStorage.getItem(authKey);
-            if (rawData) {
-              const parsed = JSON.parse(rawData);
-              const token = parsed?.access_token || parsed?.currentSession?.access_token;
-              const refreshToken = parsed?.refresh_token || parsed?.currentSession?.refresh_token;
-
-              if (token && refreshToken) {
-                const { data, error } = await supabase.auth.setSession({
-                  access_token: token,
-                  refresh_token: refreshToken
-                });
-                if (data?.session?.user && isMounted) {
-                  console.log("Session restaurée avec succès via setSession :", data.session.user.email);
-                  setUser(formatUser(data.session.user));
-                  syncSupabaseUser(data.session, 'INITIAL_SESSION');
-                  setLoading(false);
-                  return;
-                }
-              }
-              
-              if (parsed?.user || parsed?.currentSession?.user) {
-                // Si l'objet user est directement stocké
-                const storedUser = parsed?.user || parsed?.currentSession?.user;
-                if (isMounted) {
-                  console.log("Session restaurée depuis LocalStorage user :", storedUser.email);
-                  setUser(formatUser(storedUser));
-                  syncSupabaseUser({ user: storedUser, access_token: token }, 'INITIAL_SESSION');
-                  setLoading(false);
-                  return;
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Erreur lecture token localStorage:", err);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    checkAuth();
-
-    // 2. Écoute dynamique (OAuth redirect, sign in, sign out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth event:', _event, session?.user?.email);
+    // Écoute dynamique de l'état d'authentification Supabase (OAuth redirect, sign in, sign out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event, session?.user?.email);
       if (!isMounted) return;
 
       if (session?.user) {
-        console.log("Utilisateur connecté détecté :", session.user.email);
         setUser(formatUser(session.user));
-        syncSupabaseUser(session, _event);
-      } else if (_event === 'SIGNED_OUT') {
+        setIsAuthModalOpen(false);
+        cleanOAuthUrl();
+      } else {
         setUser(null);
         try {
           localStorage.removeItem('cineia_user');
@@ -645,7 +585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: false, error: res.error || "Erreur lors de l'inscription." };
   };
 
-  const loginWithGoogle = async (mockUser?: { email?: string; name?: string; avatar?: string }) => {
+  const loginWithGoogle = async (_options?: any) => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -655,29 +595,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (error) {
-        console.warn('[Supabase OAuth error]', error);
-        // Fallback local fluide si Supabase n'est pas encore provisionné avec les clés de prod
-        const res = await authService.loginWithGoogle(mockUser);
-        if (res.success && res.user) {
-          setUser(res.user);
-          setIsAuthModalOpen(false);
-          showToast(`👋 Bienvenue, ${res.user.name} !`);
-          return { success: true };
-        }
+        console.error('[Supabase OAuth error]', error);
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (err: any) {
-      console.warn('[Supabase OAuth exception]', err);
-      // Fallback
-      const res = await authService.loginWithGoogle(mockUser);
-      if (res.success && res.user) {
-        setUser(res.user);
-        setIsAuthModalOpen(false);
-        showToast(`👋 Bienvenue, ${res.user.name} !`);
-        return { success: true };
-      }
+      console.error('[Supabase OAuth exception]', err);
       return { success: false, error: err?.message || 'Erreur lors de la connexion Google.' };
     }
   };

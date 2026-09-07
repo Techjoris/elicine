@@ -47,12 +47,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         }
       });
       if (error) {
-        console.warn('[Google OAuth error in SubscriptionModal, falling back]', error);
-        await loginWithGoogle();
+        console.error('[Google OAuth error in SubscriptionModal]', error);
       }
     } catch (err) {
-      console.warn('[Google OAuth exception in SubscriptionModal, falling back]', err);
-      await loginWithGoogle();
+      console.error('[Google OAuth exception in SubscriptionModal]', err);
     } finally {
       setIsGoogleLoading(false);
     }

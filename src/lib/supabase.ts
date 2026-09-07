@@ -22,16 +22,8 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
-// Client Supabase avec persistance automatique de session (LocalStorage / PWA mobile)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined
-  }
-});
-
+// Client Supabase UNIQUE singleton (Support Vite & PWA mobile)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export const supabaseClient = supabase;
 export default supabase;
 
