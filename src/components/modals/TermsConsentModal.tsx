@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ExternalLink, Check, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ElicineLogo } from '../ElicineLogo';
 
 export const TermsConsentModal: React.FC = () => {
   const { activeView } = useApp();
   const [isOpen, setIsOpen] = useState(false);
-  const [hasAccepted, setHasAccepted] = useState(true); // default true until verified to avoid flash
+  const [hasAccepted, setHasAccepted] = useState(true);
   const [isChecked, setIsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -18,7 +17,6 @@ export const TermsConsentModal: React.FC = () => {
         setIsOpen(false);
       } else {
         setHasAccepted(false);
-        // Si l'utilisateur n'est pas déjà sur /terms, afficher la modale
         if (activeView !== 'terms') {
           setIsOpen(true);
         } else {
@@ -43,14 +41,14 @@ export const TermsConsentModal: React.FC = () => {
       setHasAccepted(true);
       setIsOpen(false);
       setIsClosing(false);
-    }, 250);
+    }, 180);
   };
 
   if (!isOpen || hasAccepted) return null;
 
   return (
     <div 
-      className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md transition-opacity duration-200 select-none ${
+      className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity duration-200 select-none ${
         isClosing ? 'opacity-0' : 'opacity-100 animate-fade-in'
       }`}
       role="dialog"
@@ -58,73 +56,54 @@ export const TermsConsentModal: React.FC = () => {
       aria-labelledby="terms-gate-title"
     >
       <div 
-        className={`relative w-full max-w-lg bg-[#0b0f19] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl text-white space-y-6 transition-all duration-200 transform ${
-          isClosing ? 'scale-95' : 'scale-100 animate-scale-in'
+        className={`w-full max-w-md bg-[#0D0D0E] border border-white/10 rounded-xl p-6 sm:p-7 shadow-2xl text-white space-y-5 transition-all duration-200 transform ${
+          isClosing ? 'scale-95' : 'scale-100'
         }`}
       >
-        {/* Glow effect */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+        {/* En-tête minimaliste : Logo Éliciné */}
+        <div className="flex items-center justify-between">
+          <ElicineLogo variant="full" size="sm" />
+        </div>
 
-        {/* Header: Logo & Badge */}
-        <div className="flex flex-col items-center text-center space-y-3 pt-1">
-          <ElicineLogo variant="full" size="md" />
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-cyan-400 text-[11px] font-bold uppercase tracking-wider">
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Protection &amp; Transparence</span>
-          </div>
-
+        {/* Hiérarchie typographique sobre */}
+        <div className="space-y-2">
           <h2 
             id="terms-gate-title"
-            className="text-xl sm:text-2xl font-black tracking-tight text-white"
+            className="text-base sm:text-lg font-semibold text-white tracking-tight"
           >
-            Bienvenue sur Éliciné
+            Conditions &amp; Confidentialité
           </h2>
-
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
+          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
             Pour profiter de la découverte cinématographique intelligente et de nos recommandations personnalisées, veuillez accepter nos conditions d'utilisation et notre politique de protection des données.
           </p>
         </div>
 
-        {/* Link to full legal document */}
-        <div className="p-3.5 rounded-2xl bg-[#0f1523] border border-slate-800 text-center">
+        {/* Simple lien souligné en gris clair */}
+        <div>
           <a
             href="/terms"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 underline underline-offset-4 transition-colors cursor-pointer"
+            className="text-xs text-zinc-300 hover:text-white underline underline-offset-4 transition-colors inline-block"
           >
-            <span>Consulter l'intégralité des CGU et de la Politique de Confidentialité</span>
-            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+            Consulter l'intégralité des CGU et de la Politique de Confidentialité
           </a>
         </div>
 
-        {/* Checkbox and Accept Action */}
+        {/* Case à cocher & Bouton principal sobre */}
         <div className="space-y-4 pt-1">
           <label 
             htmlFor="cgu-checkbox"
-            className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors cursor-pointer"
+            className="flex items-start gap-3 cursor-pointer select-none group"
           >
-            <div className="relative flex items-center justify-center flex-shrink-0 mt-0.5">
-              <input
-                id="cgu-checkbox"
-                type="checkbox"
-                checked={isChecked}
-                onChange={(e) => setIsChecked(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div 
-                className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                  isChecked 
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-2 ring-blue-500/30' 
-                    : 'bg-slate-900/80 border-slate-700 peer-focus:border-cyan-400'
-                }`}
-              >
-                {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-              </div>
-            </div>
-
-            <span className="text-xs text-slate-300 leading-snug">
+            <input
+              id="cgu-checkbox"
+              type="checkbox"
+              checked={isChecked}
+              onChange={(e) => setIsChecked(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-white accent-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-xs text-zinc-300 group-hover:text-zinc-200 leading-snug">
               J'ai lu et j'accepte les Conditions Générales d'Utilisation et la Politique de Confidentialité.
             </span>
           </label>
@@ -133,22 +112,10 @@ export const TermsConsentModal: React.FC = () => {
             type="button"
             onClick={handleAccept}
             disabled={!isChecked}
-            className={`w-full py-3.5 px-6 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all shadow-lg ${
-              isChecked
-                ? 'bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-400 hover:from-blue-500 hover:to-teal-300 text-slate-950 shadow-cyan-500/25 cursor-pointer transform hover:-translate-y-0.5'
-                : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60'
-            }`}
+            className="w-full py-2.5 px-4 rounded-lg bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed font-medium text-xs sm:text-sm transition-colors cursor-pointer text-center select-none"
           >
-            <Sparkles className={`w-4 h-4 ${isChecked ? 'text-slate-950' : 'text-slate-500'}`} />
-            <span>Accepter et continuer</span>
+            Accepter et continuer
           </button>
-        </div>
-
-        {/* Micro reassurance footer */}
-        <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
-          <span>🔒 Authentification Google OAuth</span>
-          <span>•</span>
-          <span>Zéro revente de données</span>
         </div>
       </div>
     </div>
