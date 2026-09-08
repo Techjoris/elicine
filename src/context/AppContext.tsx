@@ -29,7 +29,7 @@ interface AppContextType {
   login: (emailOrUser: string | UserProfile, name?: string) => void;
   loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  loginWithGoogle: (mockUser?: { email?: string; name?: string; avatar?: string }) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
 
@@ -98,16 +98,6 @@ interface AppContextType {
   triggerApkDownload: () => void;
 }
 
-const DEFAULT_USER: UserProfile = {
-  id: 'usr_default',
-  email: 'invite@cineai.app',
-  name: 'Cinéphile',
-  isPro: true,
-  proPlanType: 'yearly',
-  proPlanExpiresAt: 'Actif (Renouvellement annuel)',
-  referralCode: 'CINEAI-VIP',
-  createdAt: new Date().toISOString()
-};
 
 const DEFAULT_QUOTA: AIQuota = {
   remaining: 999,
@@ -184,16 +174,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return DEFAULT_QUOTA;
   });
 
-  // 3. User Profile - Lecture directe immédiate du token / session au montage
+  // 3. User Profile - Lecture stricte et exclusive de la session Supabase au montage
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('cineia_user');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.email) return formatUser(parsed);
-        }
-
         // Lecture immédiate d'un token Supabase existant dans LocalStorage
         const authKey = Object.keys(localStorage).find(key => key.includes('auth-token') || key.startsWith('sb-'));
         if (authKey) {
@@ -212,7 +196,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       } catch (e) {
-        console.error('Erreur extraction session locale:', e);
+        console.error('Erreur extraction session Supabase locale:', e);
       }
     }
     return null;
@@ -495,18 +479,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       setIsAuthModalOpen(false);
     } else {
-      const stored = authService.getStoredUser();
-      if (stored && stored.email) {
-        setUser(stored);
-      } else {
-        setUser(null);
-      }
+      setUser(null);
+      try {
+        localStorage.removeItem('cineia_user');
+      } catch (_) {}
     }
     setLoading(false);
   }, [authUser, authSession]);
 
-  // Quota Management - Bypassed for unlimited exploration
+  // Quota Management
   const useAiQuota = (): boolean => {
+    if ((user as any)?.isPro) return true;
+
+    if (quota.remaining <= 0) {
+      setIsProModalOpen(true);
+      return false;
+    }
+
+    setQuota(prev => ({
+      ...prev,
+      remaining: Math.max(0, prev.remaining - 1)
+    }));
     return true;
   };
 
@@ -517,128 +510,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // User Actions
   const login = (emailOrUser: string | UserProfile, name?: string) => {
-    if (typeof emailOrUser === 'object') {
-      setUser(emailOrUser);
-      setAuthUser(emailOrUser);
-      try {
-        localStorage.setItem('cineia_user', JSON.stringify(emailOrUser));
-      } catch (_) {}
-      if (emailOrUser.myList && emailOrUser.myList.length > 0) {
-        setWatchlist(emailOrUser.myList);
-      }
-      setIsAuthModalOpen(false);
-      showToast(`👋 Bienvenue sur Éliciné, ${emailOrUser.name} !`);
-      return;
-    }
-
-    const refCode = 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase();
-    const referredBy = localStorage.getItem('cineia_referred_by') || undefined;
-    const finalName = name || emailOrUser.split('@')[0];
-    const newUser: UserProfile = {
-      id: 'usr_' + Date.now(),
-      email: emailOrUser,
-      name: finalName,
-      isPro: false,
-      referralCode: refCode,
-      referredBy,
-      createdAt: new Date().toISOString(),
-      myList: watchlist
-    };
-    setUser(newUser);
-    setAuthUser(newUser);
-    try {
-      localStorage.setItem('cineia_user', JSON.stringify(newUser));
-    } catch (_) {}
-    authService.saveLocalAccount(newUser);
-    setIsAuthModalOpen(false);
-    showToast(`👋 Bienvenue sur Éliciné, ${finalName} !`);
+    // Cette fonction de simulation est dépréciée et volontairement bloquée.
+    // L'application DOIT passer par loginWithCredentials et Supabase.
+    throw new Error("L'authentification simulée a été bloquée pour des raisons de sécurité. Veuillez utiliser Supabase auth.");
   };
 
   const loginWithCredentials = async (identifier: string, password: string) => {
     const cleanId = identifier.trim();
-
-    // 1. Tenter la connexion native Supabase si l'identifiant est un email
-    if (cleanId.includes('@')) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanId,
-          password
-        });
-        if (!error && data?.user) {
-          setIsAuthModalOpen(false);
-          showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email} !`);
-          return { success: true };
-        }
-      } catch (sbErr) {
-        console.warn('[Supabase signInWithPassword fallback]', sbErr);
-      }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cleanId || !emailRegex.test(cleanId)) {
+      return { success: false, error: "Veuillez saisir une adresse email valide." };
     }
 
-    // 2. Repli API / local si Supabase échoue ou s'il s'agit d'un nom d'utilisateur
-    const res = await authService.login(cleanId, password);
-    if (res.success && res.user) {
-      // Persister dans localStorage AVANT setAuthUser pour survivre à la race condition getSession()
-      try {
-        localStorage.setItem('cineia_user', JSON.stringify(res.user));
-      } catch (_) {}
-      setUser(res.user);
-      setAuthUser(res.user);
-      if (res.user.myList && res.user.myList.length > 0) {
-        setWatchlist(res.user.myList);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanId,
+        password
+      });
+
+      if (error) {
+        return { success: false, error: "Erreur de connexion : " + error.message };
       }
-      setIsAuthModalOpen(false);
-      showToast(`👋 Bon retour sur Éliciné, ${res.user.name} !`);
-      return { success: true };
+
+      if (data?.user) {
+        setIsAuthModalOpen(false);
+        showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email} !`);
+        return { success: true };
+      }
+    } catch (sbErr: any) {
+      return { success: false, error: "Erreur de connexion : " + (sbErr.message || "Erreur réseau") };
     }
-    return { success: false, error: res.error || 'Identifiant ou mot de passe incorrect.' };
+    
+    return { success: false, error: 'Erreur inattendue lors de la connexion.' };
   };
 
   const registerWithCredentials = async (username: string, email: string, password: string) => {
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: "Veuillez fournir une adresse email valide." };
+    }
 
-    // 1. Tenter l'inscription native Supabase si un email est fourni
-    if (cleanEmail && cleanEmail.includes('@')) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              full_name: username.trim()
-            }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            full_name: username.trim()
           }
-        });
-        if (!error && data?.user) {
-          setIsAuthModalOpen(false);
-          showToast(`🎉 Bienvenue sur Éliciné, ${username} !`);
-          return { success: true };
         }
-      } catch (sbErr) {
-        console.warn('[Supabase signUp fallback]', sbErr);
+      });
+
+      if (error) {
+        return { success: false, error: "Erreur d'inscription : " + error.message };
       }
+
+      if (data?.user) {
+        // Détecter si l'utilisateur existe déjà (identities vide)
+        if (data.user.identities && data.user.identities.length === 0) {
+          return { success: false, error: "Cette adresse email est déjà utilisée." };
+        }
+
+        setIsAuthModalOpen(false);
+        showToast(`🎉 Bienvenue sur Éliciné, ${username.trim()} !`);
+        return { success: true };
+      }
+    } catch (sbErr: any) {
+      return { success: false, error: "Erreur d'inscription : " + (sbErr.message || "Erreur réseau") };
     }
 
-    // 2. Repli API / local
-    const res = await authService.register(username, email, password);
-    if (res.success && res.user) {
-      const userWithList: UserProfile = {
-        ...res.user,
-        myList: watchlist
-      };
-      setUser(userWithList);
-      setAuthUser(userWithList);
-      try {
-        localStorage.setItem('cineia_user', JSON.stringify(userWithList));
-      } catch (_) {}
-      authService.saveUserWatchlist(res.user.id, watchlist);
-      setIsAuthModalOpen(false);
-      showToast(`🎉 Bienvenue sur Éliciné, ${res.user.name} !`);
-      return { success: true };
-    }
-    return { success: false, error: res.error || "Erreur lors de l'inscription." };
+    return { success: false, error: "Erreur inattendue lors de l'inscription." };
   };
 
-  const loginWithGoogle = async (_options?: any) => {
+  const loginWithGoogle = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

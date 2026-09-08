@@ -72,7 +72,9 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
       return;
     }
 
-    useAiQuota();
+    if (!useAiQuota()) {
+      return;
+    }
 
     if (onSearch) {
       onSearch(q);

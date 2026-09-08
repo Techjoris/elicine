@@ -33,24 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // B. Profil local / email synchronisé
-        const localUserRaw = localStorage.getItem('cineia_user');
-        if (localUserRaw) {
-          const parsedLocal = JSON.parse(localUserRaw);
-          if (parsedLocal?.email || parsedLocal?.id) {
-            return {
-              id: parsedLocal.id,
-              email: parsedLocal.email,
-              user_metadata: {
-                full_name: parsedLocal.name,
-                name: parsedLocal.name,
-                avatar_url: parsedLocal.avatar,
-                isPro: parsedLocal.isPro
-              },
-              ...parsedLocal
-            };
-          }
-        }
       } catch (_) {}
     }
     return null;
@@ -122,7 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithPassword = async (email: string, password: string) => {
-    const res = await supabase.auth.signInWithPassword({ email, password });
+    const cleanEmail = (email || '').trim();
+    const res = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (res.data?.user) {
       setUser(res.data.user);
       setSession(res.data.session);
@@ -131,11 +114,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUpWithPassword = async (email: string, password: string, fullName?: string) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
     const res = await supabase.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
-        data: fullName ? { full_name: fullName } : undefined
+        data: fullName ? { full_name: fullName.trim() } : undefined
       }
     });
     if (res.data?.user) {

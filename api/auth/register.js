@@ -1,11 +1,16 @@
-import crypto from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 
-// In-memory user store for serverless runtime instance
-const runtimeUsers = new Map();
+const supabaseUrl = 
+  process.env.VITE_SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
 
-function hashPassword(password, salt) {
-  return crypto.scryptSync(password, salt, 32).toString('hex');
-}
+const supabaseAnonKey = 
+  process.env.VITE_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  '';
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req, res) {
   // CORS headers
@@ -23,60 +28,41 @@ export default async function handler(req, res) {
 
   try {
     const { username, email, password } = req.body || {};
-
-    const cleanUsername = (username || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanPassword = typeof password === 'string' ? password : '';
 
-    // Identifier validation
-    if (!cleanUsername && !cleanEmail) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       return res.status(400).json({ 
-        error: "Veuillez fournir une adresse email ou un nom d'utilisateur." 
+        error: "Veuillez fournir une adresse email valide." 
       });
     }
 
-    // Flexible Netflix-style password validation: min 4, max 60 characters
-    if (cleanPassword.length < 4 || cleanPassword.length > 60) {
-      return res.status(400).json({ 
-        error: 'Le mot de passe doit contenir entre 4 et 60 caractères.' 
-      });
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: password || '',
+      options: {
+        data: {
+          full_name: (username || '').trim()
+        }
+      }
+    });
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
     }
 
-    // Generate Salt & Hash
-    const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = hashPassword(cleanPassword, salt);
-    const token = crypto.randomBytes(32).toString('hex');
-
-    const displayName = cleanUsername || cleanEmail.split('@')[0] || 'Cinéphile';
-    const finalEmail = cleanEmail || `${cleanUsername.toLowerCase()}@elicine.app`;
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const referralCode = `CINE-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-
-    const newUser = {
-      id: userId,
-      username: cleanUsername || cleanEmail.split('@')[0],
-      email: finalEmail,
-      name: displayName,
-      isPro: false,
-      referralCode,
-      createdAt: new Date().toISOString(),
-      myList: []
-    };
-
-    // Store in runtime cache
-    runtimeUsers.set(finalEmail, { ...newUser, salt, passwordHash });
-    if (cleanUsername) {
-      runtimeUsers.set(cleanUsername.toLowerCase(), { ...newUser, salt, passwordHash });
+    if (data?.user?.identities && data.user.identities.length === 0) {
+      return res.status(400).json({ error: "Cette adresse email est déjà utilisée." });
     }
 
     return res.status(200).json({
       success: true,
       message: 'Inscription réussie ! Bienvenue sur Éliciné.',
-      token,
-      user: newUser
+      user: data.user,
+      session: data.session
     });
   } catch (err) {
     console.error('Erreur API Register:', err);
-    return res.status(500).json({ error: 'Erreur interne du serveur lors de la création du compte.' });
+    return res.status(500).json({ error: err.message || 'Erreur interne du serveur lors de la création du compte.' });
   }
 }

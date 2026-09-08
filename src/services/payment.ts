@@ -316,3 +316,49 @@ export async function verifyNotchPayPayment(reference: string): Promise<{
     return { status: 'pending' };
   }
 }
+
+/**
+ * Initialise un paiement Moneroo pour le Pass Pro
+ */
+export const handleMonerooPayment = async (userEmail: string, userName: string) => {
+  const monerooKey = import.meta.env.VITE_MONEROO_API_KEY;
+  if (!monerooKey) {
+    console.error("Clé API Moneroo manquante (VITE_MONEROO_API_KEY)");
+    return { success: false, message: "Configuration de paiement incomplète." };
+  }
+
+  try {
+    const res = await fetch('https://api.moneroo.io/v1/payments/initialize', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${monerooKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: 1.99,
+        currency: 'USD',
+        description: 'Abonnement Pass Pro Éliciné',
+        customer: {
+          email: userEmail || 'contact@elicine.com',
+          name: userName || 'Cinéphile'
+        },
+        return_url: `${window.location.origin}/payment-success`
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.data?.checkout_url) {
+        window.location.href = data.data.checkout_url;
+        return { success: true };
+      }
+    }
+    
+    const errText = await res.text();
+    console.error("[Moneroo] Erreur d'initialisation:", errText);
+    return { success: false, message: "Erreur lors de l'initialisation du paiement." };
+  } catch (error) {
+    console.error("[Moneroo] Exception:", error);
+    return { success: false, message: "Erreur réseau avec le service de paiement." };
+  }
+};

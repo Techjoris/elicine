@@ -55,8 +55,10 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
       return;
     }
 
-    // Check & decrement quota (bypassed)
-    useAiQuota();
+    // Check & decrement quota
+    if (!useAiQuota()) {
+      return;
+    }
 
     setIsLoading(true);
     try {

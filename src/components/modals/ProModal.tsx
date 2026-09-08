@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
-import { processNotchPayCheckout } from '../../services/payment';
+import { handleMonerooPayment } from '../../services/payment';
 import { Currency, PricingBillingCycle } from '../../types';
 
 export const ProModal: React.FC = () => {
@@ -16,52 +16,18 @@ export const ProModal: React.FC = () => {
 
   if (!isProModalOpen) return null;
 
-  const handleOpenNotchPay = async ({ currency, amount, plan }: CheckoutPayload) => {
-    try {
-      const numAmount = currency === 'XAF' || currency === 'XOF' 
-        ? (plan === 'yearly' ? 22000 : 2500)
-        : (plan === 'yearly' ? (currency === 'EUR' ? 32 : 34) : (currency === 'EUR' ? 3.8 : 4));
-
-      const result = await processNotchPayCheckout({
-        amount: numAmount,
-        currency: (currency as Currency) || 'XAF',
-        paymentType: 'pro',
-        paymentMethod: 'mobile',
-        billingCycle: plan as PricingBillingCycle,
-        email: user?.email || 'contact@elicine.com',
-        name: user?.name || 'Cinéphile',
-        description: `Éliciné Pass Pro — Formule ${plan === 'yearly' ? 'Annuelle' : 'Mensuelle'} (Mobile Money NotchPay)`,
-        publicKey: apiSettings.notchPayPublicKey,
-        hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false,
-        onSuccessRedirect: () => upgradeToPro(plan as PricingBillingCycle)
-      });
-
-      if (result.paymentUrl) {
-        showToast('Redirection sécurisée vers Notch Pay...');
-        if (typeof window !== 'undefined') {
-          window.location.href = result.paymentUrl;
-        }
-      } else {
-        showToast(result.message);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erreur lors de la redirection vers Notch Pay.');
-    }
-  };
-
-  const handleOpenPayPal = ({ currency, amount, plan }: CheckoutPayload) => {
-    showToast('Ouverture du paiement sécurisé PayPal Pro...');
-    window.open('https://www.paypal.com/ncp/payment/JMKSFXQKQPV82', '_blank', 'noopener,noreferrer');
+  const handleCheckout = async () => {
+    showToast('Initialisation du paiement sécurisé Moneroo...');
+    const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
+    await handleMonerooPayment(user?.email || 'contact@elicine.com', name);
   };
 
   return (
     <SubscriptionModal
       isOpen={isProModalOpen}
       onClose={() => setIsProModalOpen(false)}
-      onOpenNotchPay={handleOpenNotchPay}
-      onOpenPayPal={handleOpenPayPal}
+      onOpenNotchPay={handleCheckout}
+      onOpenPayPal={handleCheckout}
     />
   );
 };

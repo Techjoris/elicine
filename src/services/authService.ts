@@ -1,4 +1,5 @@
 import { UserProfile, Movie, AdminUserData } from '../types';
+import { supabase } from '../lib/supabase';
 
 export const ADMIN_EMAILS = [
   'techjoris@gmail.com',
@@ -163,7 +164,15 @@ export const authService = {
   },
 
   /**
-   * Inscription d'un nouvel utilisateur
+   * Validation stricte du format email
+   */
+  isValidEmail(email: string): boolean {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test((email || '').trim());
+  },
+
+  /**
+   * Inscription d'un nouvel utilisateur (Strict Supabase)
    */
   async register(
     username: string,
@@ -178,96 +187,58 @@ export const authService = {
     const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanUsername && !cleanEmail) {
-      return { success: false, error: "Veuillez fournir un nom d'utilisateur ou un email." };
+    if (!cleanEmail || !this.isValidEmail(cleanEmail)) {
+      return { success: false, error: "Veuillez fournir une adresse email valide (ex: utilisateur@domaine.com)." };
     }
 
-    // 1. Tenter l'appel API Vercel /api/auth/register si disponible
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: cleanUsername,
-          email: cleanEmail,
-          password
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          if (data.token) {
-            localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-          }
-          // Sauvegarder aussi localement pour persistance hors-ligne
-          await this.saveLocalAccount(data.user, password);
-          return { success: true, user: data.user, token: data.token };
-        }
-      } else {
-        const errData = await res.json().catch(() => null);
-        if (errData?.error && res.status !== 404) {
-          return { success: false, error: errData.error };
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        data: {
+          full_name: cleanUsername
         }
       }
-    } catch {
-      // Ignorer l'erreur réseau / hors-ligne pour basculer sur le stockage local
+    });
+
+    if (error) {
+      return { success: false, error: "Erreur d'inscription : " + error.message };
     }
 
-    // 2. Gestion locale (Offline / Capacitor Android / Preview)
-    const accounts = getStoredAccounts();
-    const exists = accounts.some(
-      acc =>
-        (cleanEmail && acc.email.toLowerCase() === cleanEmail) ||
-        (cleanUsername && acc.username.toLowerCase() === cleanUsername.toLowerCase())
-    );
+    if (data?.user?.identities && data.user.identities.length === 0) {
+      return { success: false, error: "Cette adresse email est déjà utilisée." };
+    }
 
-    if (exists) {
-      return {
-        success: false,
-        error: 'Un compte existe déjà avec cette adresse email ou ce pseudo.'
+    if (data?.user) {
+      const fullUser: UserProfile = {
+        id: data.user.id,
+        username: cleanUsername || data.user.email?.split('@')[0],
+        email: data.user.email || cleanEmail,
+        name: cleanUsername || (data.user.email ? data.user.email.split('@')[0] : 'Cinéphile'),
+        avatar: undefined,
+        provider: 'credentials',
+        isPro: false,
+        referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+        createdAt: data.user.created_at || new Date().toISOString(),
+        myList: [],
+        token: data.session?.access_token
       };
+
+      if (data.session?.access_token) {
+        localStorage.setItem(SESSION_TOKEN_KEY, data.session.access_token);
+      }
+
+      return { success: true, user: fullUser, token: data.session?.access_token };
     }
 
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const referralCode = `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    const displayName = cleanUsername || cleanEmail.split('@')[0];
-    const finalEmail = cleanEmail || `${cleanUsername.toLowerCase()}@elicine.app`;
-
-    const salt = userId;
-    const passwordHash = await hashPassword(password, salt);
-    const token = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-
-    const newProfile: UserProfile = {
-      id: userId,
-      username: cleanUsername || cleanEmail.split('@')[0],
-      email: finalEmail,
-      name: displayName,
-      provider: 'credentials',
-      isPro: false,
-      referralCode,
-      createdAt: new Date().toISOString(),
-      myList: [],
-      token
-    };
-
-    const newAccount: StoredAccount = {
-      ...newProfile,
-      passwordHash
-    };
-
-    accounts.push(newAccount);
-    saveStoredAccounts(accounts);
-    localStorage.setItem(SESSION_TOKEN_KEY, token);
-
-    return { success: true, user: newProfile, token };
+    return { success: false, error: "Erreur inattendue lors de l'inscription." };
   },
 
   /**
-   * Connexion d'un utilisateur par Email ou Nom d'utilisateur
+   * Connexion d'un utilisateur par Email et Mot de passe (Strict Supabase)
    */
   async login(
-    identifier: string,
+    email: string,
     password: string
   ): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
     const pwdCheck = this.validatePassword(password);
@@ -275,205 +246,68 @@ export const authService = {
       return { success: false, error: pwdCheck.error };
     }
 
-    const cleanIdentifier = identifier.trim();
-    if (!cleanIdentifier) {
-      return { success: false, error: "Veuillez saisir votre email ou nom d'utilisateur." };
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !this.isValidEmail(cleanEmail)) {
+      return { success: false, error: "Veuillez saisir une adresse email valide." };
     }
 
-    // 1. Tenter l'appel API Vercel /api/auth/login
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: cleanIdentifier,
-          password
-        })
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: password
+    });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          if (data.token) {
-            localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-          }
-          // Restaurer la liste locale associée à l'utilisateur
-          const savedList = this.getUserWatchlist(data.user.id);
-          const fullUser: UserProfile = {
-            ...data.user,
-            myList: savedList
-          };
-          return { success: true, user: fullUser, token: data.token };
-        }
-      } else {
-        const errData = await res.json().catch(() => null);
-        if (errData?.error && res.status !== 404) {
-          return { success: false, error: errData.error };
-        }
-      }
-    } catch {
-      // Ignorer l'erreur réseau pour continuer vers le fallback local
+    if (error) {
+      return { success: false, error: "Erreur de connexion : " + error.message };
     }
 
-    // 2. Vérification locale (Offline / Capacitor)
-    const accounts = getStoredAccounts();
-    const match = accounts.find(
-      acc =>
-        acc.email.toLowerCase() === cleanIdentifier.toLowerCase() ||
-        acc.username.toLowerCase() === cleanIdentifier.toLowerCase()
-    );
-
-    if (match) {
-      const salt = match.id;
-      const expectedHash = await hashPassword(password, salt);
-      if (match.passwordHash !== expectedHash) {
-        return { success: false, error: 'Mot de passe incorrect.' };
-      }
-
-      const token = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      localStorage.setItem(SESSION_TOKEN_KEY, token);
-
-      const userProfile: UserProfile = {
-        id: match.id,
-        username: match.username,
-        email: match.email,
-        name: match.name,
-        avatar: match.avatar,
-        provider: match.provider || 'credentials',
-        isPro: match.isPro,
-        proPlanType: match.proPlanType,
-        proPlanExpiresAt: match.proPlanExpiresAt,
-        referralCode: match.referralCode,
-        createdAt: match.createdAt,
-        myList: this.getUserWatchlist(match.id),
-        token
-      };
-
-      return { success: true, user: userProfile, token };
+    if (!data?.user) {
+      return { success: false, error: "Erreur de connexion : Session introuvable." };
     }
 
-    // 3. Frictionless Netflix fallback: si c'est un compte non encore inscrit,
-    // création automatique ou connexion fluide si identifiant valide
-    const isEmail = cleanIdentifier.includes('@');
-    const autoUsername = isEmail ? cleanIdentifier.split('@')[0] : cleanIdentifier;
-    const autoEmail = isEmail ? cleanIdentifier.toLowerCase() : `${cleanIdentifier.toLowerCase()}@elicine.app`;
-    const autoName = autoUsername.charAt(0).toUpperCase() + autoUsername.slice(1);
-
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const referralCode = `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    const token = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-
-    const autoUser: UserProfile = {
-      id: userId,
-      username: autoUsername,
-      email: autoEmail,
-      name: autoName,
+    const savedList = this.getUserWatchlist(data.user.id);
+    const fullUser: UserProfile = {
+      id: data.user.id,
+      username: data.user.email?.split('@')[0] || cleanEmail.split('@')[0],
+      email: data.user.email || cleanEmail,
+      name: data.user.user_metadata?.full_name || (data.user.email ? data.user.email.split('@')[0] : 'Cinéphile'),
+      avatar: data.user.user_metadata?.avatar_url || undefined,
       provider: 'credentials',
       isPro: false,
-      referralCode,
-      createdAt: new Date().toISOString(),
-      myList: [],
-      token
+      proPlanType: undefined,
+      proPlanExpiresAt: undefined,
+      referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+      createdAt: data.user.created_at || new Date().toISOString(),
+      myList: savedList,
+      token: data.session?.access_token
     };
 
-    await this.saveLocalAccount(autoUser, password);
-    localStorage.setItem(SESSION_TOKEN_KEY, token);
+    if (data.session?.access_token) {
+      localStorage.setItem(SESSION_TOKEN_KEY, data.session.access_token);
+    }
 
-    return { success: true, user: autoUser, token };
+    return { success: true, user: fullUser, token: data.session?.access_token };
   },
 
   /**
-   * Connexion sécurisée avec Google (One-Tap / OAuth ou Fallback fluide)
+   * Connexion sécurisée avec Google (OAuth Supabase strict - aucun simulateur local)
    */
-  async loginWithGoogle(mockGoogleUser?: {
-    email?: string;
-    name?: string;
-    avatar?: string;
-  }): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
-    // 1. Tenter l'appel API Vercel /api/auth/google
+  async loginWithGoogle(): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
     try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mockGoogleUser || {})
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? window.location.origin : ''
+        }
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          if (data.token) {
-            localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-          }
-          const savedList = this.getUserWatchlist(data.user.id);
-          const fullUser: UserProfile = {
-            ...data.user,
-            avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-            provider: 'google',
-            myList: savedList
-          };
-          await this.saveLocalAccount(fullUser);
-          return { success: true, user: fullUser, token: data.token };
-        }
+      if (error) {
+        return { success: false, error: error.message };
       }
-    } catch {
-      // Basculer sur le stockage local sécurisé
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Erreur lors de la connexion avec Google.' };
     }
-
-    // 2. Traitement local / hors-ligne / Capacitor Android
-    const email = (mockGoogleUser?.email || 'cinéphile.google@gmail.com').trim().toLowerCase();
-    const name = (mockGoogleUser?.name || 'Cinéphile Google').trim();
-    const avatar = mockGoogleUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
-    const username = email.split('@')[0];
-
-    const accounts = getStoredAccounts();
-    const existing = accounts.find(a => a.email.toLowerCase() === email || a.provider === 'google');
-
-    if (existing) {
-      const token = `tok_google_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      localStorage.setItem(SESSION_TOKEN_KEY, token);
-
-      const userProfile: UserProfile = {
-        id: existing.id,
-        username: existing.username || username,
-        email: existing.email,
-        name: existing.name || name,
-        avatar: existing.avatar || avatar,
-        provider: 'google',
-        isPro: existing.isPro,
-        proPlanType: existing.proPlanType,
-        proPlanExpiresAt: existing.proPlanExpiresAt,
-        referralCode: existing.referralCode,
-        createdAt: existing.createdAt,
-        myList: this.getUserWatchlist(existing.id),
-        token
-      };
-
-      await this.saveLocalAccount(userProfile);
-      return { success: true, user: userProfile, token };
-    }
-
-    const userId = `usr_google_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const referralCode = `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    const token = `tok_google_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-
-    const newUser: UserProfile = {
-      id: userId,
-      username,
-      email,
-      name,
-      avatar,
-      provider: 'google',
-      isPro: false,
-      referralCode,
-      createdAt: new Date().toISOString(),
-      myList: [],
-      token
-    };
-
-    await this.saveLocalAccount(newUser);
-    localStorage.setItem(SESSION_TOKEN_KEY, token);
-
-    return { success: true, user: newUser, token };
   },
 
   /**

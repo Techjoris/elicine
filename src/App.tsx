@@ -10,6 +10,7 @@ import { WatchlistView } from './components/views/WatchlistView';
 import { AlertsView } from './components/views/AlertsView';
 import { AdminView } from './components/views/AdminView';
 import { TermsView } from './components/views/TermsView';
+import { ResetPasswordView } from './components/views/ResetPasswordView';
 import { Footer } from './components/layout/Footer';
 
 // Modals
@@ -192,6 +193,8 @@ export const AppContent: React.FC = () => {
       const path = typeof window !== 'undefined' ? window.location.pathname : '';
       if (path === '/terms' || path === '/terms/') {
         setActiveView('terms');
+      } else if (path === '/reset-password' || path === '/reset-password/') {
+        setActiveView('reset-password');
       }
     };
 
@@ -293,6 +296,7 @@ export const AppContent: React.FC = () => {
           {activeView === 'alerts' && <AlertsView />}
           {activeView === 'admin' && <AdminView />}
           {activeView === 'terms' && <TermsView />}
+          {activeView === 'reset-password' && <ResetPasswordView />}
 
         </main>
       </div>

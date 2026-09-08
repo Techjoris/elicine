@@ -1,4 +1,16 @@
-import crypto from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 
+  process.env.VITE_SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
+
+const supabaseAnonKey = 
+  process.env.VITE_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  '';
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req, res) {
   // CORS headers
@@ -15,52 +27,33 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { identifier, password } = req.body || {};
+    const { identifier, email, password } = req.body || {};
+    const cleanEmail = (email || identifier || '').trim();
 
-    const cleanIdentifier = (identifier || '').trim();
-    const cleanPassword = typeof password === 'string' ? password : '';
-
-    if (!cleanIdentifier) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       return res.status(400).json({ 
-        error: "Veuillez saisir votre adresse email ou nom d'utilisateur." 
+        error: "Veuillez saisir une adresse email valide." 
       });
     }
 
-    if (cleanPassword.length < 4 || cleanPassword.length > 60) {
-      return res.status(400).json({ 
-        error: 'Le mot de passe doit contenir entre 4 et 60 caractères.' 
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: password || '',
+    });
+
+    if (error) {
+      return res.status(401).json({ error: error.message });
     }
-
-    const isEmail = cleanIdentifier.includes('@');
-    const username = isEmail ? cleanIdentifier.split('@')[0] : cleanIdentifier;
-    const email = isEmail ? cleanIdentifier.toLowerCase() : `${cleanIdentifier.toLowerCase()}@elicine.app`;
-    const displayName = username.charAt(0).toUpperCase() + username.slice(1);
-
-    // Generate session token
-    const token = crypto.randomBytes(32).toString('hex');
-    const referralCode = `CINE-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-
-    // Return user profile
-    const userProfile = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      username,
-      email,
-      name: displayName,
-      isPro: false,
-      referralCode,
-      createdAt: new Date().toISOString(),
-      myList: []
-    };
 
     return res.status(200).json({
       success: true,
-      message: `Connexion réussie. Bon retour, ${displayName} !`,
-      token,
-      user: userProfile
+      message: `Connexion réussie.`,
+      user: data.user,
+      session: data.session
     });
   } catch (err) {
     console.error('Erreur API Login:', err);
-    return res.status(500).json({ error: 'Erreur lors de la connexion.' });
+    return res.status(500).json({ error: err.message || 'Erreur lors de la connexion.' });
   }
 }

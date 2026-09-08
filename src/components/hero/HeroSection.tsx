@@ -237,7 +237,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       return;
     }
 
-    useAiQuota();
+    if (!useAiQuota()) {
+      return;
+    }
 
     setIsAiLoading(true);
     if (onAiSearchStart) {

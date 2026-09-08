@@ -20,14 +20,13 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { handleMonerooPayment } from '../../services/payment';
 
 export const AuthModal: React.FC = () => {
   const { 
     isAuthModalOpen, 
     setIsAuthModalOpen, 
     user, 
-    loginWithCredentials,
-    registerWithCredentials,
     loginWithGoogle,
     logout, 
     setIsProModalOpen, 
@@ -37,7 +36,6 @@ export const AuthModal: React.FC = () => {
   } = useApp();
 
   const [isSignUp, setIsSignUp] = useState(false);
-  const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,11 +43,13 @@ export const AuthModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
   const handleSwitchMode = (signup: boolean) => {
     setIsSignUp(signup);
+    setIsForgotPassword(false);
     setErrorMessage(null);
   };
 
@@ -75,17 +75,41 @@ export const AuthModal: React.FC = () => {
     }
   };
 
+  const isValidEmail = (val: string): boolean => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(val.trim());
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      const msg = "Veuillez saisir votre adresse email.";
+      alert(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    if (!isValidEmail(cleanEmail)) {
+      const msg = "Format d'adresse email invalide (ex: utilisateur@domaine.com).";
+      alert(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
     // Password validation rule: min 4, max 60 chars
     if (!password || password.length < 4) {
-      setErrorMessage('Le mot de passe doit contenir au moins 4 caractères.');
+      const msg = 'Le mot de passe doit contenir au moins 4 caractères.';
+      alert(msg);
+      setErrorMessage(msg);
       return;
     }
     if (password.length > 60) {
-      setErrorMessage('Le mot de passe ne doit pas dépasser 60 caractères.');
+      const msg = 'Le mot de passe ne doit pas dépasser 60 caractères.';
+      alert(msg);
+      setErrorMessage(msg);
       return;
     }
 
@@ -93,35 +117,104 @@ export const AuthModal: React.FC = () => {
 
     try {
       if (isSignUp) {
-        if (!username.trim() && !email.trim()) {
-          setErrorMessage("Veuillez renseigner un nom d'utilisateur ou un email.");
-          setIsLoading(false);
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: password,
+          options: {
+            data: {
+              full_name: username.trim()
+            }
+          }
+        });
+
+        if (error) {
+          alert("Erreur d'inscription : " + error.message);
+          setErrorMessage(error.message);
           return;
         }
-        const res = await registerWithCredentials(username.trim(), email.trim(), password);
-        if (!res.success) {
-          setErrorMessage(res.error || "Erreur lors de la création du compte.");
-        } else {
+
+        if (data?.user) {
+          if (data.user.identities && data.user.identities.length === 0) {
+            alert("Cette adresse email est déjà utilisée.");
+            setErrorMessage("Cette adresse email est déjà utilisée.");
+            return;
+          }
+          setIsAuthModalOpen(false);
+          showToast(`🎉 Bienvenue sur Éliciné, ${username.trim() || cleanEmail} !`);
           setPassword('');
           setUsername('');
           setEmail('');
         }
       } else {
-        if (!identifier.trim()) {
-          setErrorMessage("Veuillez saisir votre email ou nom d'utilisateur.");
-          setIsLoading(false);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: password,
+        });
+
+        if (error) {
+          alert("Erreur de connexion : " + error.message);
+          setErrorMessage("Erreur de connexion : " + error.message);
+          return; // Bloque net l'accès en cas d'échec ou de mauvais mot de passe
+        }
+
+        if (!data?.user) {
+          alert("Erreur de connexion : Session introuvable.");
+          setErrorMessage("Erreur de connexion : Session introuvable.");
           return;
         }
-        const res = await loginWithCredentials(identifier.trim(), password);
-        if (!res.success) {
-          setErrorMessage(res.error || "Identifiant ou mot de passe incorrect.");
-        } else {
-          setPassword('');
-          setIdentifier('');
-        }
+
+        // Si pas d'erreur et utilisateur valide, la connexion est confirmée par le serveur Supabase
+        setIsAuthModalOpen(false);
+        showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email || 'Bienvenue'} !`);
+        setPassword('');
+        setEmail('');
       }
-    } catch {
-      setErrorMessage("Une erreur inattendue est survenue.");
+    } catch (err: any) {
+      const msg = err?.message || "Une erreur inattendue est survenue.";
+      alert("Erreur de connexion : " + msg);
+      setErrorMessage(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      const msg = "Veuillez saisir votre adresse email.";
+      alert(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    if (!isValidEmail(cleanEmail)) {
+      const msg = "Format d'adresse email invalide (ex: utilisateur@domaine.com).";
+      alert(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        alert("Erreur : " + error.message);
+        setErrorMessage("Erreur : " + error.message);
+      } else {
+        alert("Un e-mail de réinitialisation sécurisé vous a été envoyé.");
+        showToast("Un e-mail de réinitialisation sécurisé vous a été envoyé.");
+        setIsForgotPassword(false);
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Une erreur inattendue est survenue.";
+      alert("Erreur : " + msg);
+      setErrorMessage("Erreur : " + msg);
     } finally {
       setIsLoading(false);
     }
@@ -250,9 +343,9 @@ export const AuthModal: React.FC = () => {
               {!user.isPro && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAuthModalOpen(false);
-                    setIsProModalOpen(true);
+                  onClick={async () => {
+                    const name = user.name || (user as any).user_metadata?.full_name || 'Cinéphile';
+                    await handleMonerooPayment(user.email, name);
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-zinc-950 font-black text-xs uppercase tracking-wider shadow-neon-gold flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
@@ -287,6 +380,72 @@ export const AuthModal: React.FC = () => {
                 <span>Se déconnecter</span>
               </button>
             </div>
+          </div>
+        ) : isForgotPassword ? (
+          /* FORGOT PASSWORD VIEW */
+          <div className="space-y-4">
+            <div className="text-center space-y-1">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Mot de passe oublié ?
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Saisissez votre adresse email pour recevoir un lien de réinitialisation sécurisé via Supabase.
+              </p>
+            </div>
+
+            {/* Error Banner */}
+            {errorMessage && (
+              <div className="p-2.5 rounded-xl bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2 animate-shake">
+                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  Adresse Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    placeholder="vous@exemple.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Envoi en cours...</span>
+                  </>
+                ) : (
+                  <span>Envoyer l'e-mail de réinitialisation</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setErrorMessage(null);
+                }}
+                className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer text-center block"
+              >
+                ← Retour à la connexion
+              </button>
+            </form>
           </div>
         ) : (
           /* NOT LOGGED IN: VALUE PROPOSITION + GOOGLE AUTH + FLEXIBLE CREDENTIALS */
@@ -445,6 +604,8 @@ export const AuthModal: React.FC = () => {
                       <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
                       <input
                         type="email"
+                        required
+                        autoComplete="email"
                         placeholder="vous@exemple.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -454,19 +615,20 @@ export const AuthModal: React.FC = () => {
                   </div>
                 </>
               ) : (
-                /* Identifier (Email ou Pseudo) */
+                /* Identifier (Email) */
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                    Email ou nom d'utilisateur
+                    Adresse Email
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                    <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
                     <input
-                      type="text"
+                      type="email"
                       required
-                      placeholder="Email ou pseudo"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
+                      autoComplete="email"
+                      placeholder="vous@exemple.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
                     />
                   </div>
@@ -479,9 +641,23 @@ export const AuthModal: React.FC = () => {
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
                     Mot de passe
                   </label>
-                  <span className="text-[10px] text-zinc-400">
-                    Min. 4 caractères (règle souple)
-                  </span>
+                  {isSignUp ? (
+                    <span className="text-[10px] text-zinc-400">
+                      Min. 4 caractères (règle souple)
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsForgotPassword(true);
+                        setErrorMessage(null);
+                      }}
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      Mot de passe oublié ?
+                    </button>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
