@@ -16,7 +16,8 @@ import {
   Smartphone,
   History,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  HelpCircle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
@@ -44,12 +45,14 @@ export const AuthModal: React.FC = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [showBenefitsPopover, setShowBenefitsPopover] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
   const handleSwitchMode = (signup: boolean) => {
     setIsSignUp(signup);
     setIsForgotPassword(false);
+    setShowBenefitsPopover(false);
     setErrorMessage(null);
   };
 
@@ -234,13 +237,14 @@ export const AuthModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-fade-in overflow-y-auto">
       
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#0e0e0e] border border-white/10 shadow-2xl overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
+      <div className="relative w-full max-w-md rounded-2xl bg-[#0e0e0e] border border-white/10 shadow-2xl overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
         
         {/* Close Button */}
         <button
           type="button"
           onClick={() => {
             setErrorMessage(null);
+            setShowBenefitsPopover(false);
             setIsAuthModalOpen(false);
           }}
           className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/10 transition-all cursor-pointer z-10"
@@ -448,49 +452,100 @@ export const AuthModal: React.FC = () => {
             </form>
           </div>
         ) : (
-          /* NOT LOGGED IN: VALUE PROPOSITION + GOOGLE AUTH + FLEXIBLE CREDENTIALS */
+          /* NOT LOGGED IN: STREAMLINED MINIMALIST AUTHENTICATION */
           <div className="space-y-4">
-            
+
+            {/* CONTEXTUAL BENEFITS MODAL/POPOVER */}
+            {showBenefitsPopover && (
+              <div className="absolute inset-0 z-30 bg-[#0e0e0e]/98 backdrop-blur-xl p-5 sm:p-7 rounded-2xl flex flex-col justify-between animate-fade-in shadow-2xl">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                    <div className="flex items-center gap-2 text-white font-bold text-xs sm:text-sm uppercase tracking-wider">
+                      <CheckCircle2 className="w-4 h-4 text-[#e50914]" />
+                      <span>Pourquoi créer un compte gratuit ?</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowBenefitsPopover(false)}
+                      className="p-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                      title="Fermer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5 py-4 text-xs">
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                      <Smartphone className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-white">Synchronisation multi-écrans</p>
+                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                          Retrouvez vos sélections instantanément sur smartphone, tablette et PC.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                      <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-white">Ma Liste permanente</p>
+                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                          Sauvegardez vos films et séries favoris à regarder plus tard sans limite.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                      <History className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-white">Historique &amp; Recommandations</p>
+                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                          Conservez vos découvertes et vos requêtes cinématographiques personnalisées.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#141414] border border-white/5 text-[11px] text-zinc-400">
+                      <Info className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                      <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong>Pass Pro</strong>.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBenefitsPopover(false)}
+                  className="w-full py-2.5 rounded-xl bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all cursor-pointer shadow-sm"
+                >
+                  Fermer
+                </button>
+              </div>
+            )}
+
             {/* Header Title */}
             <div className="text-center space-y-1">
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-                {isSignUp ? 'Créer votre Compte Gratuit' : 'Connexion à Éliciné'}
+                {isSignUp ? 'Créer un Compte' : 'Connexion'}
               </h2>
               <p className="text-xs text-zinc-400">
-                Débloquez la synchronisation multi-appareils et conservez vos découvertes.
+                {isSignUp 
+                  ? 'Rejoignez Éliciné et synchronisez vos favoris.' 
+                  : 'Accédez à votre espace cinéma personnalisé.'}
               </p>
-            </div>
-
-            {/* Benefit Showcase Card (Zero false promises) */}
-            <div className="p-3.5 rounded-xl bg-[#141414] border border-white/10 space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#e50914]" />
-                <span>Avantages exclusifs de votre compte gratuit :</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-zinc-300">
-                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
-                  <Smartphone className="w-4 h-4 text-zinc-300 flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Multi-écrans :</strong> Synchro tous appareils</span>
-                </div>
-                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
-                  <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Ma Liste :</strong> Sauvegarde de vos favoris</span>
-                </div>
-                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
-                  <History className="w-4 h-4 text-zinc-300 flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Historique :</strong> Vos découvertes et IA</span>
-                </div>
-              </div>
-              
-              {/* Clear distinction regarding Premium AI credits */}
-              <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 pt-1 border-t border-white/5">
-                <Info className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong>Pass Pro</strong>.</span>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowBenefitsPopover(true)}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer group pt-0.5"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-[#e50914] group-hover:scale-110 transition-transform" />
+                  <span className="underline underline-offset-2">Pourquoi créer un compte ?</span>
+                </button>
               </div>
             </div>
 
-            {/* PRIMARY ACTION: Continuer avec Google */}
-            <div className="space-y-2">
+            {/* PRIMARY ACTION: Continuer avec Google (en haut, bien visible) */}
+            <div className="space-y-2 pt-1">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -540,32 +595,6 @@ export const AuthModal: React.FC = () => {
               <div className="border-t border-white/10 w-full" />
             </div>
 
-            {/* Cinema-Style Tab Switcher */}
-            <div className="flex rounded-xl bg-black/60 p-1 border border-white/10 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => handleSwitchMode(false)}
-                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
-                  !isSignUp
-                    ? 'bg-white text-black font-extrabold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Se connecter
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchMode(true)}
-                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
-                  isSignUp
-                    ? 'bg-white text-black font-extrabold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Créer un compte
-              </button>
-            </div>
-
             {/* Error Banner */}
             {errorMessage && (
               <div className="p-2.5 rounded-xl bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2 animate-shake">
@@ -576,64 +605,42 @@ export const AuthModal: React.FC = () => {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-3">
-              {isSignUp ? (
-                <>
-                  {/* Pseudo / Nom */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                      Nom d'utilisateur ou pseudo
-                    </label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
-                      <input
-                        type="text"
-                        placeholder="Ex: SarahCine"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Email */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                      Adresse Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
-                      <input
-                        type="email"
-                        required
-                        autoComplete="email"
-                        placeholder="vous@exemple.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* Identifier (Email) */
+              {isSignUp && (
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                    Adresse Email
+                    Nom d'utilisateur ou pseudo
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                    <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
                     <input
-                      type="email"
-                      required
-                      autoComplete="email"
-                      placeholder="vous@exemple.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      type="text"
+                      placeholder="Ex: SarahCine"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                     />
                   </div>
                 </div>
               )}
+
+              {/* Email */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  Adresse Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    placeholder="vous@exemple.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                  />
+                </div>
+              </div>
 
               {/* Mot de passe avec toggle de visibilité */}
               <div>
@@ -700,16 +707,16 @@ export const AuthModal: React.FC = () => {
             </form>
 
             {/* Bottom Quick Switch */}
-            <div className="text-center pt-1 border-t border-white/10">
+            <div className="text-center pt-2 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => handleSwitchMode(!isSignUp)}
                 className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
                 {isSignUp ? (
-                  <span>Déjà inscrit ? <strong className="text-white underline">Se connecter</strong></span>
+                  <span>Déjà inscrit ? <strong className="text-white underline underline-offset-2 ml-1">Se connecter</strong></span>
                 ) : (
-                  <span>Nouveau sur Éliciné ? <strong className="text-white underline">Créer un compte gratuit</strong></span>
+                  <span>Nouveau sur Éliciné ? <strong className="text-white underline underline-offset-2 ml-1">Créer un compte gratuit</strong></span>
                 )}
               </button>
             </div>
