@@ -31,8 +31,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
   };
 
   return (
-    <footer className="w-full mt-auto border-t border-slate-200/80 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-md transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500 dark:text-zinc-500">
+    <footer className="w-full mt-auto border-t border-white/10 bg-[#0a0a0a] transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-zinc-400">
         
         {/* Left: Brand + Attribution */}
         <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
@@ -43,9 +43,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
           >
             <ElicineLogo size="sm" variant="full" />
           </div>
-          <span className="hidden sm:inline text-slate-300 dark:text-zinc-700">•</span>
-          <p className="text-[11px] leading-relaxed max-w-sm">
-            Guide de cinéma propulsé par l'intelligence artificielle. Données et visuels fournis par TMDB.
+          <span className="hidden sm:inline text-zinc-700">•</span>
+          <p className="text-[11px] leading-relaxed max-w-sm text-zinc-400">
+            Plateforme cinéphile propulsée par l'intelligence artificielle. Données et visuels fournis par TMDB.
           </p>
         </div>
 
@@ -54,38 +54,38 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
           <button
             type="button"
             onClick={() => handleGoToTerms()}
-            className="hover:text-slate-900 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none flex items-center gap-1.5"
+            className="text-zinc-400 hover:text-white transition-colors cursor-pointer select-none flex items-center gap-1.5"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-500/80" />
+            <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
             <span>Conditions &amp; Confidentialité</span>
           </button>
 
-          <span className="text-slate-300 dark:text-zinc-700">•</span>
+          <span className="text-zinc-700">•</span>
 
           <button
             type="button"
             onClick={() => setIsProModalOpen(true)}
-            className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer select-none"
+            className="text-zinc-400 hover:text-amber-400 transition-colors cursor-pointer select-none"
           >
             Pass Pro
           </button>
 
-          <span className="text-slate-300 dark:text-zinc-700">•</span>
+          <span className="text-zinc-700">•</span>
 
           <button
             type="button"
             onClick={() => setIsTipModalOpen(true)}
-            className="hover:text-amber-500 transition-colors cursor-pointer select-none flex items-center gap-1"
+            className="text-zinc-400 hover:text-white transition-colors cursor-pointer select-none flex items-center gap-1"
           >
             <span>☕ Soutenir</span>
           </button>
 
-          <span className="text-slate-300 dark:text-zinc-700">•</span>
+          <span className="text-zinc-700">•</span>
 
           <button
             type="button"
             onClick={() => handleGoToTerms('contact')}
-            className="hover:text-slate-900 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none"
+            className="text-zinc-400 hover:text-white transition-colors cursor-pointer select-none"
           >
             Contact
           </button>
@@ -94,7 +94,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
       </div>
 
       {/* Micro Copyright Bar */}
-      <div className="border-t border-slate-100 dark:border-zinc-900 py-3 text-center text-[10px] text-slate-400 dark:text-zinc-600">
+      <div className="border-t border-white/5 py-3 text-center text-[10px] text-zinc-600">
         © 2026 Éliciné. Tous droits réservés.
       </div>
     </footer>

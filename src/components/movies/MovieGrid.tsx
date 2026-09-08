@@ -16,17 +16,17 @@ interface MovieGridProps {
   hasMore?: boolean;
 }
 
-/** Discreet dark blue/slate animated skeleton card */
+/** Discreet dark cinema animated skeleton card */
 const MovieCardSkeleton: React.FC = () => (
-  <div className="flex flex-col rounded-2xl bg-[#0f141f]/70 border border-[#1e293b]/60 overflow-hidden animate-pulse shadow-md">
-    <div className="aspect-[2/3] w-full bg-slate-800/40 relative">
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0f141f] via-slate-800/10 to-transparent" />
+  <div className="flex flex-col rounded-xl bg-[#121212] border border-white/[0.06] overflow-hidden animate-pulse">
+    <div className="aspect-[2/3] w-full bg-zinc-900/60 relative">
+      <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-transparent" />
     </div>
     <div className="p-3.5 space-y-2.5">
-      <div className="h-3.5 bg-slate-800/80 rounded-md w-3/4" />
+      <div className="h-3.5 bg-zinc-800/80 rounded w-3/4" />
       <div className="flex items-center justify-between pt-1">
-        <div className="h-2.5 bg-slate-800/50 rounded-md w-1/3" />
-        <div className="h-2.5 bg-slate-800/50 rounded-md w-1/4" />
+        <div className="h-2.5 bg-zinc-800/50 rounded w-1/3" />
+        <div className="h-2.5 bg-zinc-800/50 rounded w-1/4" />
       </div>
     </div>
   </div>
@@ -44,48 +44,48 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   hasMore = false
 }) => {
   return (
-    <section id="results-section" className="w-full space-y-5">
+    <section id="results-section" className="w-full space-y-6">
 
-      {/* AI Thought Banner */}
+      {/* AI Thought Banner Épuré */}
       {aiThought && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-white/90 dark:bg-gradient-to-r dark:from-blue-950/60 dark:via-[#0f141f] dark:to-slate-900 border border-slate-200 dark:border-[#1e293b] shadow-sm dark:shadow-neon-blue space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+        <div className="p-4 sm:p-6 rounded-2xl bg-[#121212] border border-white/10 space-y-2.5 shadow-xl">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-[#e50914]" />
               Vision &amp; Recommandation Cinéphile IA
             </span>
             {aiMood && (
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30 font-semibold">
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 border border-white/10 font-medium">
                 Atmosphère : {aiMood}
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed italic">
+          <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed italic">
             "{aiThought}"
           </p>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+      {/* Section Header - Typographie asymétrique imposante */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pt-2 border-b border-white/[0.06] pb-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight uppercase">
             {title}
           </h2>
-          {subtitle && <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-zinc-400 mt-0.5">{subtitle}</p>}
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-[#1e293b] text-slate-600 dark:text-slate-400 font-semibold self-start sm:self-auto">
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 text-zinc-400 font-medium self-start sm:self-auto">
           {movies.length} titre{movies.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      {/* Grid — seamlessly renders movies + skeletons when loading more */}
+      {/* Grid — posters immersifs */}
       {movies.length === 0 && !isLoadingMore && !hasMore ? (
-        <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b] shadow-sm">
-          <p className="text-slate-700 dark:text-slate-300 font-semibold text-sm">Aucun résultat trouvé pour cette recherche.</p>
+        <div className="text-center py-16 px-4 rounded-2xl bg-[#121212] border border-white/[0.08]">
+          <p className="text-zinc-400 font-medium text-sm">Aucun résultat trouvé pour cette sélection.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">
           {movies.map((movie) => (
             <MovieCard key={`${movie.media_type || 'item'}-${movie.id}`} movie={movie} showAiMatch={showAiMatch} />
           ))}
@@ -114,7 +114,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       {sentinelRef && (
         <div ref={sentinelRef} className="h-6 w-full -mt-2">
           {!hasMore && movies.length > 0 && !isLoadingMore && (
-            <p className="text-xs text-slate-600 font-medium text-center py-6">
+            <p className="text-xs text-zinc-600 font-medium text-center py-6">
               — Fin du catalogue —
             </p>
           )}

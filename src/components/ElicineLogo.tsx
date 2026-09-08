@@ -34,25 +34,22 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
       className={`${currentSize.box} flex-shrink-0 transition-transform duration-300 group-hover:scale-105 select-none rounded-xl shadow-sm ring-1 ring-slate-900/10 dark:ring-white/10`}
     >
       <defs>
-        {/* Cyan Refraction Gradient for Play Triangle */}
+        {/* Cinema Crimson Refraction Gradient for Play Triangle */}
         <linearGradient id={`${idPrefix}-play`} x1="0%" y1="50%" x2="100%" y2="50%">
-          <stop offset="0%" stopColor="#00b4d8" />
-          <stop offset="50%" stopColor="#00d2ff" />
-          <stop offset="100%" stopColor="#67e8f9" />
+          <stop offset="0%" stopColor="#e50914" />
+          <stop offset="100%" stopColor="#ff2e3b" />
         </linearGradient>
 
-        {/* Star Accent Gradient */}
+        {/* Crisp White/Silver Accent Gradient */}
         <linearGradient id={`${idPrefix}-star`} x1="50%" y1="0%" x2="50%" y2="100%">
           <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="45%" stopColor="#ffffff" />
-          <stop offset="80%" stopColor="#7dd3fc" />
-          <stop offset="100%" stopColor="#00d2ff" />
+          <stop offset="100%" stopColor="#d4d4d8" />
         </linearGradient>
       </defs>
 
-      {/* 1. Deep Slate Canvas with Precision Squircle (rx=120) */}
-      <rect width="512" height="512" rx="120" fill="#090b10" />
-      <rect x="1" y="1" width="510" height="510" rx="119" stroke="rgba(255, 255, 255, 0.12)" strokeWidth="2" />
+      {/* 1. Deep Cinema Canvas with Precision Squircle (rx=120) */}
+      <rect width="512" height="512" rx="120" fill="#0d0d0d" />
+      <rect x="1" y="1" width="510" height="510" rx="119" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="2" />
 
       {/* 2. The Architectural 'É' Spine and Arms (Solid Optical White #FFFFFF) */}
       <path
@@ -74,7 +71,7 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
         fill="#FFFFFF"
       />
 
-      {/* 3. Dynamic Play Wedge / Triangle (Luminous Cyan #00d2ff) */}
+      {/* 3. Dynamic Play Wedge / Triangle (Cinema Crimson #E50914) */}
       <path
         d="M 212 230
            C 216 226 222 229 226 232
@@ -124,13 +121,11 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
       {/* Typographie intégrée : "Éliciné" haute précision */}
       <div className="flex items-baseline leading-none tracking-tight">
         <span className={`${currentSize.text} font-black tracking-tight font-sans flex items-baseline`}>
-          <span className="text-slate-900 dark:text-white">É</span>
-          <span className="text-slate-900 dark:text-white">li</span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-sky-500 dark:from-sky-400 dark:via-cyan-300 dark:to-sky-200">
-            ciné
-          </span>
+          <span className="text-white">É</span>
+          <span className="text-white">li</span>
+          <span className="text-white font-black">ciné</span>
         </span>
-        <span className={`${currentSize.dot} rounded-full bg-cyan-500 dark:bg-cyan-400 ml-1.5 shadow-[0_0_8px_#00d2ff] animate-pulse`}></span>
+        <span className={`${currentSize.dot} rounded-full bg-[#e50914] ml-1.5`}></span>
       </div>
     </div>
   );

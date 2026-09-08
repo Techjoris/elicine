@@ -92,7 +92,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
           (activeUser as any)?.isPro
             ? 'ring-1 ring-amber-400/60'
-            : 'ring-1 ring-slate-300 dark:ring-slate-700'
+            : 'ring-1 ring-white/10'
         }`}>
           {displayAvatar && !imgError ? (
             <img 
@@ -104,8 +104,8 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${
               (activeUser as any)?.isPro
-                ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 font-black'
-                : 'bg-gradient-to-tr from-sky-600 to-cyan-500 text-white'
+                ? 'bg-[#1a1500] text-amber-300 border border-amber-500/40 font-black'
+                : 'bg-[#1e1e1e] text-zinc-200 border border-white/10'
             }`}>
               {initials}
             </div>
@@ -113,15 +113,15 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         </div>
 
         <div className="hidden xl:flex flex-col text-left leading-none max-w-[100px]">
-          <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-950 dark:group-hover:text-white transition-colors">
+          <span className="text-[11px] font-bold text-zinc-200 truncate group-hover:text-white transition-colors">
             {displayName}
           </span>
-          <span className="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">
+          <span className="text-[9px] text-zinc-400 mt-0.5">
             {isConnected ? ((activeUser as any)?.isPro ? '👑 Pro' : '⚡ Connecté') : 'Invité'}
           </span>
         </div>
 
-        <ChevronDown className={`hidden sm:block w-3 h-3 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`hidden sm:block w-3 h-3 text-zinc-400 group-hover:text-white transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown Card */}
@@ -129,7 +129,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         <>
           {/* Backdrop overlay for outside tap/click closing */}
           <div 
-            className="fixed inset-0 z-[105] bg-black/25 md:bg-transparent"
+            className="fixed inset-0 z-[105] bg-black/40 md:bg-transparent"
             onClick={(e) => {
               e.stopPropagation();
               setOpen(false);
@@ -138,48 +138,48 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           />
 
           <div 
-            className="absolute right-0 mt-2 w-64 sm:w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl shadow-slate-900/15 dark:shadow-black/70 p-2 z-[110] animate-in fade-in zoom-in-95 duration-150"
+            className="absolute right-0 mt-2 w-64 sm:w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-[#121212] border border-white/10 shadow-2xl p-2 z-[110] animate-in fade-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
             
             {/* User Info & Quota Header */}
-            <div className="p-3 bg-slate-50 dark:bg-zinc-850/80 dark:bg-[#181a24] rounded-xl border border-slate-200 dark:border-zinc-800 mb-2 flex items-center justify-between gap-2">
+            <div className="p-3 bg-[#18181b] rounded-xl border border-white/10 mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 {displayAvatar && !imgError ? (
                   <img 
                     src={displayAvatar} 
                     alt={displayName} 
-                    className="w-8 h-8 rounded-xl object-cover ring-1 ring-cyan-500/40 flex-shrink-0" 
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-white/15 flex-shrink-0" 
                     onError={() => setImgError(true)}
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 text-white font-black text-xs flex items-center justify-center flex-shrink-0 ring-1 ring-cyan-500/40">
+                  <div className="w-8 h-8 rounded-lg bg-[#27272a] text-white font-black text-xs flex items-center justify-center flex-shrink-0 ring-1 ring-white/10">
                     {initials}
                   </div>
                 )}
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
                     <span>{displayName}</span>
                     {isGoogle && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-zinc-800 text-cyan-600 dark:text-cyan-300 border border-cyan-400/30 font-semibold">Google</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-zinc-300 border border-white/10 font-semibold">Google</span>
                     )}
                   </p>
                   {isConnected ? (
                     <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                      <span className="text-[10px] text-zinc-400 font-semibold truncate">
                         Connecté
                       </span>
                       {activeUser?.email && (
-                        <span className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                        <span className="text-[10px] text-zinc-500 truncate">
                           • {activeUser.email}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                    <p className="text-[10px] text-zinc-400 truncate">
                       Non connecté
                     </p>
                   )}
@@ -187,10 +187,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               </div>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap flex items-center gap-1 flex-shrink-0 ${
                 (activeUser as any)?.isPro
-                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 shadow-neon-gold'
-                  : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  : 'bg-white/10 text-zinc-300 border-white/10'
               }`}>
-                {(activeUser as any)?.isPro ? '👑 PRO' : (isConnected ? '✅ Connecté' : '⚡ Invité')}
+                {(activeUser as any)?.isPro ? '👑 PRO' : (isConnected ? '✅ Actif' : '⚡ Invité')}
               </span>
             </div>
 
@@ -207,9 +207,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                     setOpen(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors text-left cursor-pointer"
                 >
-                  <User className="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" />
+                  <User className="w-4 h-4 text-zinc-400 flex-shrink-0" />
                   <span className="font-semibold text-xs">Mon Profil</span>
                 </button>
               )}
@@ -224,9 +224,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                     setOpen(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 transition-colors text-left cursor-pointer font-bold border border-cyan-500/30 dark:border-cyan-500/20"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#e50914] hover:bg-[#e50914]/10 transition-colors text-left cursor-pointer font-bold border border-[#e50914]/20"
                 >
-                  <Shield className="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" />
+                  <Shield className="w-4 h-4 text-[#e50914] flex-shrink-0" />
                   <span className="text-xs">Console Admin</span>
                 </button>
               )}
@@ -240,14 +240,14 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   setOpen(false);
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors text-left cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <Heart className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0" />
+                  <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0" />
                   <span className="font-medium text-xs">Ma Liste</span>
                 </div>
                 {watchlist.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-md bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-[#e50914]/15 text-[#e50914] text-[10px] font-bold">
                     {watchlist.length}
                   </span>
                 )}
@@ -262,9 +262,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   setOpen(false);
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition-colors text-left cursor-pointer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors text-left cursor-pointer"
               >
-                <Settings className="w-4 h-4 text-slate-500 dark:text-zinc-400 flex-shrink-0" />
+                <Settings className="w-4 h-4 text-zinc-400 flex-shrink-0" />
                 <span className="font-medium text-xs">Paramètres</span>
               </button>
 
@@ -282,13 +282,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors text-left cursor-pointer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
               >
-                <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                <Crown className="w-4 h-4 text-amber-400 flex-shrink-0" />
                 <span className="font-bold text-xs">{(activeUser as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
-              <div className="my-1 border-t border-slate-200 dark:border-zinc-800" />
+              <div className="my-1 border-t border-white/10" />
 
               {/* 🚪 Connexion / Déconnexion */}
               {isConnected ? (
@@ -296,9 +296,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   type="button"
                   onClick={handleLogout}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer font-semibold"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-zinc-400 hover:text-[#e50914] hover:bg-[#e50914]/10 transition-colors text-left cursor-pointer font-semibold"
                 >
-                  <LogOut className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <LogOut className="w-4 h-4 flex-shrink-0" />
                   <span className="text-xs">Se déconnecter</span>
                 </button>
               ) : (
@@ -310,10 +310,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                     setOpen(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-blue-600 dark:text-sky-400 hover:text-blue-700 dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-sky-950/30 transition-colors text-left cursor-pointer font-bold"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white text-black font-extrabold hover:bg-zinc-200 transition-colors text-left cursor-pointer"
                 >
-                  <LogIn className="w-4 h-4 text-blue-600 dark:text-sky-400 flex-shrink-0" />
-                  <span className="text-xs">Se connecter / S'inscrire</span>
+                  <LogIn className="w-4 h-4 text-black flex-shrink-0" />
+                  <span className="text-xs">Se connecter</span>
                 </button>
               )}
 

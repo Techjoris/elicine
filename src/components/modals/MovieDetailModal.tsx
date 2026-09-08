@@ -236,7 +236,7 @@ export const MovieDetailModal: React.FC = () => {
       
       {/* Modal Card */}
       <div 
-        className="relative w-full max-w-4xl min-h-[calc(100vh-4rem)] sm:min-h-0 sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl bg-[#0e1424] border-t sm:border border-white/15 shadow-2xl overflow-hidden text-slate-100 flex flex-col"
+        className="relative w-full max-w-4xl min-h-[calc(100vh-4rem)] sm:min-h-0 sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-[#0e0e0e] border-t sm:border border-white/10 shadow-2xl overflow-hidden text-zinc-100 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -246,7 +246,7 @@ export const MovieDetailModal: React.FC = () => {
             e.stopPropagation();
             setSelectedMovie(null);
           }}
-          className="absolute top-3 right-3 z-50 p-2.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg active:scale-95 transition-all cursor-pointer"
+          className="absolute top-3 right-3 z-50 p-2.5 rounded-full bg-black/70 hover:bg-black text-white backdrop-blur-md border border-white/20 shadow-lg active:scale-95 transition-all cursor-pointer"
           title="Fermer"
           aria-label="Fermer"
         >
@@ -256,7 +256,7 @@ export const MovieDetailModal: React.FC = () => {
         {/* Media Hero: Video Trailer or Backdrop (Ratio standard 16/9 propre) */}
         <div 
           ref={mediaHeroRef}
-          className="relative w-full aspect-video bg-slate-950 flex items-center justify-center overflow-hidden flex-shrink-0"
+          className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden flex-shrink-0"
         >
           {isPlayingTrailer ? (
             trailerKey ? (
@@ -281,13 +281,13 @@ export const MovieDetailModal: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 aspect-video w-full">
-                <AlertCircle className="w-10 h-10 text-amber-400" />
-                <p className="text-sm text-slate-300 max-w-md">
+                <AlertCircle className="w-10 h-10 text-zinc-400" />
+                <p className="text-sm text-zinc-300 max-w-md">
                   Aucune bande-annonce officielle intégrable disponible directement pour ce titre.
                 </p>
                 <button
                   onClick={openYouTubeFallback}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg transition-all cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs font-bold shadow-lg transition-all cursor-pointer"
                 >
                   <Youtube className="w-4 h-4" />
                   <span>Rechercher sur YouTube</span>
@@ -301,19 +301,19 @@ export const MovieDetailModal: React.FC = () => {
                 alt={selectedMovie.title}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0e1424] via-[#0e1424]/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-[#0e0e0e]/40 to-transparent" />
 
               {/* Play Trailer Overlay Button */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={handleWatchTrailer}
-                  className="group flex items-center gap-3 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-blue-600/90 hover:bg-blue-500 text-white font-bold shadow-neon-blue backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  className="group flex items-center gap-3 px-6 py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-bold shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white text-blue-600 flex items-center justify-center shadow">
-                    <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-blue-600 ml-0.5" />
+                  <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center shadow">
+                    <Play className="w-4 h-4 fill-white ml-0.5" />
                   </div>
-                  <span className="text-xs sm:text-sm uppercase tracking-wider font-bold">Bande-annonce</span>
+                  <span className="text-xs sm:text-sm uppercase tracking-wider font-extrabold">Bande-annonce</span>
                 </button>
               </div>
             </div>
@@ -327,24 +327,24 @@ export const MovieDetailModal: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold">
-                  100% FICHE GRATUITE
+                <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-zinc-300 border border-white/10 text-xs font-semibold">
+                  Fiche Détaillée
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-zinc-400">
                   {selectedMovie.release_date}
                 </span>
                 {selectedMovie.runtime && (
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                  <span className="text-xs text-zinc-400 flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {selectedMovie.runtime} min
                   </span>
                 )}
               </div>
 
-              <h2 className="text-2xl sm:text-4xl font-black text-white">
+              <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase">
                 {displayTitle}
               </h2>
               {displayOriginalTitle && displayOriginalTitle !== displayTitle && (
-                <p className="text-xs text-slate-400 italic">
+                <p className="text-xs text-zinc-400 italic">
                   Titre original : {displayOriginalTitle}
                 </p>
               )}
@@ -352,11 +352,11 @@ export const MovieDetailModal: React.FC = () => {
 
             {/* Quick Actions */}
             <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-              {/* Bouton d'action principal bien visible "▶ Bande-annonce" (juste avant "Ma Liste") */}
+              {/* Bouton d'action principal bien visible "▶ Bande-annonce" */}
               <button
                 type="button"
                 onClick={handleWatchTrailer}
-                className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer select-none whitespace-nowrap"
+                className="px-4 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer select-none whitespace-nowrap"
                 title="Regarder la bande-annonce"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
@@ -368,11 +368,11 @@ export const MovieDetailModal: React.FC = () => {
                 onClick={() => toggleWatchlist(selectedMovie)}
                 className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer select-none whitespace-nowrap ${
                   inWatchlist
-                    ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                    ? 'bg-white text-black border-white'
+                    : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
-                {inWatchlist ? <Check className="w-4 h-4 text-emerald-400" /> : <Bookmark className="w-4 h-4" />}
+                {inWatchlist ? <Check className="w-4 h-4 text-black stroke-[3]" /> : <Bookmark className="w-4 h-4" />}
                 <span>{inWatchlist ? `${t.myListBtn} ✓` : t.myListBtn}</span>
               </button>
 
@@ -381,8 +381,8 @@ export const MovieDetailModal: React.FC = () => {
                 onClick={() => addAlert(selectedMovie)}
                 className={`p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                   alertActive
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-amber-300'
+                    ? 'bg-[#e50914] border-[#e50914] text-white'
+                    : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
                 }`}
                 title={t.alertBtn}
               >
@@ -392,7 +392,7 @@ export const MovieDetailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleShare}
-                className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-all cursor-pointer"
+                className="p-2 rounded-xl bg-zinc-900 border border-white/15 text-zinc-200 hover:bg-zinc-800 transition-all cursor-pointer"
                 title="Partager"
               >
                 <Share2 className="w-4 h-4" />
@@ -402,37 +402,37 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* AI Match Insight if available */}
           {selectedMovie.ai_match_reason && (
-            <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-start gap-3 text-sm text-blue-200">
-              <Sparkles className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-xl bg-zinc-900/90 border border-white/10 flex items-start gap-3 text-sm text-zinc-200">
+              <Sparkles className="w-5 h-5 text-[#e50914] flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-amber-400 text-xs uppercase tracking-wider block mb-1">
+                <span className="font-bold text-white text-xs uppercase tracking-wider block mb-1">
                   {t.critiqueTitle}
                 </span>
-                <p className="leading-relaxed text-xs sm:text-sm">
+                <p className="leading-relaxed text-xs sm:text-sm text-zinc-300">
                   {selectedMovie.ai_match_reason}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Genres & Rating (DÉDUPLICATION DU BADGE SÉRIE) */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-black">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+          {/* Genres & Rating */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/[0.05] text-white border border-white/10 text-xs font-bold">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{selectedMovie.vote_average.toFixed(1)} / 10</span>
               {selectedMovie.vote_count && (
-                <span className="text-[10px] text-slate-400 font-normal">({selectedMovie.vote_count.toLocaleString()} avis)</span>
+                <span className="text-[10px] text-zinc-400 font-normal">({selectedMovie.vote_count.toLocaleString()} avis)</span>
               )}
             </div>
 
             {/* Badge Type Unique (Film ou Série) */}
-            <span className="px-3 py-1 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-bold uppercase">
+            <span className="px-3 py-1 rounded-lg bg-white/[0.05] text-zinc-300 border border-white/10 text-xs font-semibold uppercase tracking-wider">
               {mediaTypeBadge === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
             </span>
 
-            {/* Genres dédupliqués (sans répéter "Série" ou "Film") */}
+            {/* Genres dédupliqués */}
             {uniqueGenres.map(g => (
-              <span key={g.id} className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700 text-xs font-semibold text-slate-300">
+              <span key={g.id} className="px-3 py-1 rounded-lg bg-white/[0.03] border border-white/10 text-xs font-medium text-zinc-300">
                 {g.name}
               </span>
             ))}
@@ -450,17 +450,17 @@ export const MovieDetailModal: React.FC = () => {
             return (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                     {t.synopsisTitle}
                   </h3>
                   {isAiEnrichedSynopsis && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold animate-fade-in shadow-sm">
-                      <Sparkles className="w-3 h-3 text-cyan-400" />
-                      <span>Synopsis optimisé par Éliciné AI</span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 text-[10px] font-semibold animate-fade-in">
+                      <Sparkles className="w-3 h-3 text-[#e50914]" />
+                      <span>Synopsis enrichi par l'IA</span>
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-slate-200 leading-relaxed font-normal">
+                <p className="text-sm text-zinc-200 leading-relaxed font-normal">
                   {displayOverview}
                 </p>
               </div>
@@ -468,17 +468,17 @@ export const MovieDetailModal: React.FC = () => {
           })()}
 
           {/* 1. SECTION STREAMING ILLIMITÉ (SVOD) */}
-          <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col gap-3">
+          <div className="p-4 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <Tv className="w-4 h-4 text-cyan-400" />
-                <span>📺 {t.streamingSection}</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <Tv className="w-4 h-4 text-[#e50914]" />
+                <span>{t.streamingSection}</span>
               </span>
             </div>
 
             {isLoadingProviders ? (
-              <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-                <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
+              <div className="flex items-center gap-2 text-xs text-zinc-400 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
                 <span>Vérification des disponibilités en streaming...</span>
               </div>
             ) : (
@@ -494,11 +494,11 @@ export const MovieDetailModal: React.FC = () => {
                           e.stopPropagation();
                           redirectToStreamingProvider(selectedMovie, p, showToast);
                         }}
-                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 hover:border-sky-500 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black border border-white/15 hover:border-white/40 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
                         title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                       >
                         {p.logo && <img src={p.logo} alt={p.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />}
-                        <span className="text-xs font-semibold text-white group-hover:text-sky-300 transition-colors">
+                        <span className="text-xs font-semibold text-white group-hover:text-zinc-200 transition-colors">
                           Regarder sur {p.name} ↗
                         </span>
                       </button>
@@ -506,11 +506,11 @@ export const MovieDetailModal: React.FC = () => {
                   </div>
                 )}
 
-                {/* Cas étranger : VPN STRICTEMENT ICI */}
+                {/* Cas étranger : VPN */}
                 {providerData.svod.status === 'vpn_needed' && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/60 p-3.5 rounded-xl border border-white/10">
                     <div>
-                      <p className="text-xs text-amber-300 font-medium">
+                      <p className="text-xs text-zinc-300 font-medium">
                         {t.vpnNeededDesc} <strong>{providerData.svod.flag} {providerData.svod.targetCountry}</strong> :
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
@@ -522,7 +522,7 @@ export const MovieDetailModal: React.FC = () => {
                               e.stopPropagation();
                               redirectToStreamingProvider(selectedMovie, p, showToast);
                             }}
-                            className="flex items-center gap-1.5 text-xs text-slate-200 bg-slate-950 hover:border-sky-500 px-2.5 py-1 rounded-lg border border-slate-800 cursor-pointer transition-all"
+                            className="flex items-center gap-1.5 text-xs text-zinc-200 bg-zinc-900 hover:border-white/40 px-2.5 py-1 rounded-lg border border-white/10 cursor-pointer transition-all"
                             title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                           >
                             {p.logo && <img src={p.logo} alt="" className="w-4 h-4 rounded object-cover" />}
@@ -535,16 +535,16 @@ export const MovieDetailModal: React.FC = () => {
                       href={getVpnAffiliateUrl('nordvpn')}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold whitespace-nowrap shadow-md shadow-sky-500/20 text-center transition-all hover:scale-105 flex-shrink-0"
+                      className="px-3.5 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs font-bold whitespace-nowrap shadow-md text-center transition-all hover:scale-105 flex-shrink-0"
                     >
                       {t.vpnButton} ⚡
                     </a>
                   </div>
                 )}
 
-                {/* Cas absent du SVOD : AUCUN BOUTON VPN */}
+                {/* Cas absent du SVOD */}
                 {providerData.svod.status === 'none' && (
-                  <p className="text-xs text-slate-400 italic">
+                  <p className="text-xs text-zinc-400 italic">
                     {t.vodOnlyMessage}
                   </p>
                 )}
@@ -554,8 +554,8 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* 2. SECTION ACHAT & LOCATION NUMÉRIQUE (VOD) */}
           {!isLoadingProviders && providerData.vod && providerData.vod.length > 0 && (
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col gap-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                 💳 {t.vodSection}
               </span>
               <div className="flex flex-wrap gap-2">
@@ -566,12 +566,12 @@ export const MovieDetailModal: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all text-xs text-slate-300 hover:text-white"
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-black border border-white/10 hover:border-white/30 transition-all text-xs text-zinc-300 hover:text-white"
                     title={`Louer ou acheter sur ${item.name}`}
                   >
                     {item.logo && <img src={item.logo} alt={item.name} className="w-4 h-4 rounded object-cover flex-shrink-0" />}
                     <span>{item.name}</span>
-                    <span className="text-[10px] text-slate-500">↗</span>
+                    <span className="text-[10px] text-zinc-500">↗</span>
                   </a>
                 ))}
               </div>
@@ -581,13 +581,13 @@ export const MovieDetailModal: React.FC = () => {
           {/* Cast */}
           {selectedMovie.cast && selectedMovie.cast.length > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 <Users className="w-4 h-4" />
                 <span>Acteurs Principaux</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {selectedMovie.cast.slice(0, 4).map(actor => (
-                  <div key={actor.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div key={actor.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-zinc-900/60 border border-white/10">
                     <img
                       src={actor.profile_path ? `https://image.tmdb.org/t/p/w185${actor.profile_path}` : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80'}
                       alt={actor.name}
@@ -595,7 +595,7 @@ export const MovieDetailModal: React.FC = () => {
                     />
                     <div className="overflow-hidden">
                       <p className="text-xs font-bold text-white truncate">{actor.name}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{actor.character}</p>
+                      <p className="text-[10px] text-zinc-400 truncate">{actor.character}</p>
                     </div>
                   </div>
                 ))}

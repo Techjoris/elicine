@@ -290,7 +290,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   };
 
   return (
-    <div className="relative w-full rounded-3xl overflow-hidden border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(14,165,233,0.2)] bg-slate-950 min-h-[520px] sm:min-h-[580px] md:min-h-[640px] flex flex-col justify-between px-3.5 py-6 sm:p-10 md:p-12 transition-all duration-700">
+    <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
       
       {/* ─── 1. ARRIÈRE-PLAN CINÉMATOGRAPHIQUE IMMERSIF (Backdrop) ─── */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
@@ -299,56 +299,54 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
             key={currentMovie.id}
             src={currentMovie.backdrop_path || currentMovie.poster_path || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&q=80'}
             alt={currentMovie.title}
-            className="w-full h-full object-cover object-center opacity-70 md:opacity-80 filter brightness-105 contrast-105 saturate-110 scale-105 transition-opacity duration-700"
+            className="w-full h-full object-cover object-center opacity-60 md:opacity-75 filter brightness-95 contrast-110 saturate-105 scale-105 transition-opacity duration-700"
             loading="eager"
           />
         )}
 
-        {/* ─── 2. DÉGRADÉ VIGNETTE MULTI-COUCHES (Pour protéger les textes) ─── */}
-        {/* Couche 1 : Fondu vertical doux du bas vers le haut transparent */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-[#07090e]/50 to-transparent" />
-        {/* Couche 2 : Contraste radial subtil */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#07090e]/25 to-[#07090e]/60" />
+        {/* ─── 2. DÉGRADÉ VIGNETTE MULTI-COUCHES NOIR PROFOND ─── */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/30" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#0a0a0a]/40 to-[#0a0a0a]" />
       </div>
 
-      {/* ─── 3. CONTENU ENTIÈREMENT CENTRALISÉ (Text-Center & Z-Index) ─── */}
+      {/* ─── 3. CONTENU CENTRAL ÉDITORIAL & ASYMÉTRIQUE ─── */}
       <div className="relative z-10 flex flex-col items-center justify-center text-center max-w-3xl mx-auto my-auto w-full">
         
-        {/* a) Badge Supérieur */}
-        <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1 sm:py-1.5 rounded-full bg-slate-950/80 border border-sky-500/40 backdrop-blur-md shadow-lg shadow-black/50 mb-2.5 sm:mb-4 animate-fade-in">
-          <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-          <span className="text-xs font-semibold text-slate-200">{t.aiAnalysisBadge}</span>
+        {/* a) Kicker Éditorial avec point d'accent rouge cinéma */}
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-black/60 border border-white/10 backdrop-blur-md mb-3 sm:mb-5 animate-fade-in">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#e50914]" />
+          <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.aiAnalysisBadge}</span>
         </div>
 
-        {/* b) Marque & Accroche (Logo central doublon supprimé pour remonter la recherche de ~35px) */}
-        <div className="flex flex-col items-center justify-center mb-1.5 sm:mb-3 animate-fade-in">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+        {/* b) Titre Majestueux & Serré (High Contrast) */}
+        <div className="flex flex-col items-center justify-center mb-2 sm:mb-3 animate-fade-in">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)] uppercase">
             {t.tagline}
           </h1>
         </div>
-        <p className="text-xs sm:text-sm md:text-base text-slate-200 max-w-xl mx-auto font-normal leading-relaxed mb-4 sm:mb-6 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] px-2">
+        <p className="text-xs sm:text-sm md:text-base text-zinc-300 max-w-xl mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] px-2">
           L'algorithme intelligent d'Éliciné trouve la perle rare selon vos envies.
         </p>
 
-        {/* c) Barre de Recherche Unifiée "Floating Glass" auto-extensible compacte (min-h-[48px]) */}
+        {/* c) Barre de Recherche Unifiée "Floating Glass" Minimaliste */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
             handleSearch(searchPrompt);
           }}
-          className="relative flex items-end min-h-[48px] w-full max-w-2xl mx-auto rounded-2xl border border-white/15 dark:border-zinc-700/80 bg-zinc-900/85 dark:bg-zinc-950/85 backdrop-blur-xl px-2.5 sm:px-3 py-1.5 shadow-2xl focus-within:border-cyan-500/80 transition-all"
+          className="relative flex items-end min-h-[48px] w-full max-w-2xl mx-auto rounded-xl sm:rounded-2xl border border-white/15 bg-zinc-950/85 backdrop-blur-2xl px-3 py-1.5 shadow-2xl focus-within:border-white/40 transition-all"
         >
-          {/* Search icon - Aligné au centre vertical de la première ligne */}
-          <div className="pl-1 pr-2 text-zinc-400 flex-shrink-0 self-start mt-2">
+          {/* Search icon */}
+          <div className="pl-1 pr-2 text-zinc-500 flex-shrink-0 self-start mt-2">
             <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          {/* Textarea auto-extensible (1 ligne par défaut, scrollHeight jusqu'à max 120px) */}
+          {/* Textarea auto-extensible */}
           <textarea
             ref={textareaRef}
             id="main-ai-search"
             rows={1}
-            className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
+            className="flex-1 w-full bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
             placeholder="Décrivez une ambiance, une émotion..."
             value={searchPrompt}
             onChange={(e) => {
@@ -358,9 +356,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
             onKeyDown={handleKeyDown}
           />
 
-          {/* Integrated Quota Badge + Explorer Button inside the pill - Alignés en bas */}
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
-            {/* Quota Badge - Icône ⚡ seule sur mobile, texte "Illimité" masqué sous 640px */}
+          {/* Integrated Quota Badge + Explorer Button with Cinema Accent */}
+          <div className="flex items-center gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+            {/* Quota Badge */}
             <button
               type="button"
               onClick={(e) => {
@@ -368,13 +366,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 setIsProModalOpen(true);
               }}
               title="Exploration IA illimitée"
-              className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+              className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
             >
               <span>⚡</span>
               <span className="hidden sm:inline font-bold">Illimité</span>
             </button>
 
-            {/* Explorer Button - Compact sur mobile */}
+            {/* Action Submit Button - Rouge Cinéma #e50914 */}
             <button
               type="submit"
               disabled={isAiLoading}
@@ -382,7 +380,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 e.preventDefault();
                 handleSearch(searchPrompt);
               }}
-              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1 sm:gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+              className="px-3.5 sm:px-5 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex-shrink-0"
             >
               {isAiLoading ? (
                 <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
@@ -398,30 +396,30 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
 
         {/* Banner de chargement IA */}
         {isAiLoading && (
-          <div className="mt-3 p-3 rounded-xl bg-sky-950/80 backdrop-blur-md border border-sky-500/30 text-sky-300 text-xs font-semibold flex items-center justify-center gap-2.5 animate-pulse max-w-xl w-full">
-            <Loader2 className="w-4 h-4 animate-spin text-sky-400 flex-shrink-0" />
+          <div className="mt-3 p-3 rounded-xl bg-zinc-900/90 backdrop-blur-md border border-white/10 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-2.5 animate-pulse max-w-xl w-full">
+            <Loader2 className="w-4 h-4 animate-spin text-white flex-shrink-0" />
             <span>✨ {t.aiAnalysisBadge} (Routage Hybride TMDB / IA)...</span>
           </div>
         )}
 
         {/* Message d'erreur explicatif */}
         {errorMessage && (
-          <div className="mt-3 p-3 rounded-xl bg-red-950/80 backdrop-blur-md border border-red-500/40 text-red-200 text-xs font-semibold flex items-center justify-between gap-3 animate-slide-up max-w-xl w-full text-left">
+          <div className="mt-3 p-3 rounded-xl bg-red-950/90 backdrop-blur-md border border-red-500/30 text-red-200 text-xs font-semibold flex items-center justify-between gap-3 animate-slide-up max-w-xl w-full text-left">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
               <span className="line-clamp-1">{errorMessage}</span>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="px-2.5 py-1 rounded-lg bg-red-900/60 hover:bg-red-800 text-white text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-red-900/80 hover:bg-red-800 text-white text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer"
             >
               Fermer
             </button>
           </div>
         )}
 
-        {/* d) Filtres Rapides (Pills) - Aérés et confortables */}
-        <div className="flex items-center justify-center gap-2.5 sm:gap-3 mt-4 sm:mt-5 mb-5 sm:mb-6 px-2">
+        {/* d) Filtres Rapides (Pills Monochromes) */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3 mt-4 sm:mt-5 mb-5 sm:mb-6 px-2">
           {[
             { type: 'Tous' as const, label: t.filterAll },
             { type: 'Films' as const, label: t.filterMovies },
@@ -433,10 +431,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 key={type}
                 type="button"
                 onClick={() => setSelectedTypeFilter(type)}
-                className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm ${
+                className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.5)] border border-sky-400 scale-105'
-                    : 'bg-slate-900/85 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
+                    ? 'bg-white text-black font-bold border border-white scale-105 shadow-sm'
+                    : 'bg-black/60 text-zinc-400 hover:text-white border border-white/10 hover:border-white/25'
                 }`}
               >
                 {label}
@@ -448,26 +446,26 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
         {/* e) Encart "À l'Affiche" & Actions du Film */}
         {currentMovie && (
           <div className="pt-1 sm:pt-2 pb-1 space-y-2.5 sm:space-y-3">
-            <p className="text-xs uppercase tracking-widest text-sky-300 font-extrabold drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
-              {t.featuredBadge} : {currentMovie.title}
+            <p className="text-[11px] sm:text-xs uppercase tracking-[0.25em] text-zinc-400 font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+              {t.featuredBadge} : <span className="text-white font-black">{currentMovie.title}</span>
             </p>
             <div className="flex items-center justify-center gap-2 sm:gap-2.5">
               
-              {/* [▶ Bande-annonce] - Bouton prioritaire visible */}
+              {/* [▶ Bande-annonce] - Minimaliste blanc & noir pur */}
               <button
                 onClick={() => setSelectedMovie(currentMovie)}
-                className="bg-sky-500 hover:bg-sky-400 text-white font-semibold text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-full flex items-center gap-2 shadow-md shadow-sky-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                className="bg-white hover:bg-zinc-200 text-black font-bold text-xs sm:text-sm px-5 py-2 sm:py-2.5 rounded-full flex items-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>{t.trailerBtn}</span>
               </button>
 
-              {/* [+ Ma Liste] - Bouton circulaire compact sur mobile, étendu sur desktop */}
+              {/* [+ Ma Liste] */}
               <button
                 onClick={() => toggleWatchlist(currentMovie)}
                 title={inWatchlist ? `${t.myListBtn} (Ajouté)` : t.myListBtn}
                 aria-label={t.myListBtn}
-                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-black/50 ${
+                className={`backdrop-blur-md bg-black/70 border border-white/20 hover:border-white/40 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md ${
                   inWatchlist ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/20' : ''
                 }`}
               >
@@ -475,12 +473,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                 <span className="hidden sm:inline">{inWatchlist ? `${t.myListBtn} ✓` : t.myListBtn}</span>
               </button>
 
-              {/* [🔔 Alerte] - Bouton circulaire compact sur mobile, étendu sur desktop */}
+              {/* [🔔 Alerte] */}
               <button
                 onClick={() => addAlert(currentMovie)}
                 title={alertActive ? `${t.alertBtn} (Active)` : t.alertBtn}
                 aria-label={t.alertBtn}
-                className={`backdrop-blur-md bg-slate-900/85 border border-slate-700/80 hover:bg-slate-800/90 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-black/50 ${
+                className={`backdrop-blur-md bg-black/70 border border-white/20 hover:border-white/40 text-white text-xs p-2.5 sm:px-4 sm:py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md ${
                   alertActive ? 'border-amber-500/50 text-amber-300 bg-amber-500/20' : ''
                 }`}
               >
@@ -494,17 +492,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
 
       </div>
 
-      {/* ─── f) Indicateurs du Carrousel (Dots) ─── */}
+      {/* ─── f) Indicateurs du Carrousel (Barres minimalistes) ─── */}
       {trendingHeroMovies && trendingHeroMovies.length > 0 && (
         <div className="relative z-10 flex items-center justify-center gap-2 pt-4">
           {trendingHeroMovies.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setFeaturedIndex(idx)}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+              className={`h-1 rounded-full transition-all duration-300 cursor-pointer ${
                 idx === featuredIndex 
-                  ? 'w-6 bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.7)]' 
-                  : 'w-2 bg-slate-600 hover:bg-slate-400'
+                  ? 'w-7 bg-white' 
+                  : 'w-2 bg-white/25 hover:bg-white/50'
               }`}
               title={`Tendance ${idx + 1}`}
             />

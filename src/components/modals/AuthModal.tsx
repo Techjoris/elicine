@@ -234,7 +234,7 @@ export const AuthModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-fade-in overflow-y-auto">
       
-      <div className="relative w-full max-w-lg rounded-3xl bg-zinc-950/95 border border-white/10 shadow-2xl overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
+      <div className="relative w-full max-w-lg rounded-2xl bg-[#0e0e0e] border border-white/10 shadow-2xl overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
         
         {/* Close Button */}
         <button
@@ -243,7 +243,7 @@ export const AuthModal: React.FC = () => {
             setErrorMessage(null);
             setIsAuthModalOpen(false);
           }}
-          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-all cursor-pointer z-10"
+          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/10 transition-all cursor-pointer z-10"
           title="Fermer"
         >
           <X className="w-5 h-5" />
@@ -257,23 +257,23 @@ export const AuthModal: React.FC = () => {
                 <img 
                   src={user.avatar} 
                   alt={user.name} 
-                  className="w-16 h-16 rounded-2xl object-cover mx-auto shadow-lg ring-2 ring-cyan-400/50" 
+                  className="w-16 h-16 rounded-2xl object-cover mx-auto shadow-lg ring-1 ring-white/20" 
                 />
               ) : (
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black mx-auto shadow-lg ${
                   user.isPro
-                    ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-zinc-950 shadow-amber-500/20 ring-2 ring-amber-400/50'
-                    : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white shadow-cyan-500/20'
+                    ? 'bg-[#1a1500] text-amber-300 border border-amber-500/40 shadow-amber-500/10'
+                    : 'bg-[#18181b] text-white border border-white/10'
                 }`}>
                   {userInitials}
                 </div>
               )}
 
               <div>
-                <h2 className="text-2xl font-black text-white flex items-center justify-center gap-2">
+                <h2 className="text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
                   <span>{user.name}</span>
                   {user.provider === 'google' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-cyan-300 border border-cyan-500/30" title="Connecté avec Google">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 border border-white/10" title="Connecté avec Google">
                       Google
                     </span>
                   )}
@@ -283,12 +283,12 @@ export const AuthModal: React.FC = () => {
 
               <div className="pt-0.5 flex justify-center">
                 {user.isPro ? (
-                  <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 shadow-neon-gold">
-                    <Crown className="w-3.5 h-3.5" />
+                  <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
                     Membre Pass Pro VIP
                   </span>
                 ) : (
-                  <span className="px-3 py-1 rounded-full bg-zinc-900 text-zinc-300 border border-zinc-800 text-xs font-semibold">
+                  <span className="px-3 py-1 rounded-full bg-[#161616] text-zinc-300 border border-white/10 text-xs font-semibold">
                     Compte Gratuit (3 recherches IA / jour)
                   </span>
                 )}
@@ -302,14 +302,14 @@ export const AuthModal: React.FC = () => {
                 setIsAuthModalOpen(false);
                 setActiveView('watchlist');
               }}
-              className="w-full p-3 rounded-2xl bg-zinc-900/90 hover:bg-zinc-850 border border-zinc-800 flex items-center justify-between transition-all cursor-pointer group"
+              className="w-full p-3 rounded-xl bg-[#141414] hover:bg-[#1c1c1c] border border-white/10 flex items-center justify-between transition-all cursor-pointer group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
-                  <Heart className="w-4 h-4 fill-red-500/20" />
+                <div className="w-8 h-8 rounded-lg bg-[#e50914]/10 border border-[#e50914]/20 flex items-center justify-center text-[#e50914]">
+                  <Heart className="w-4 h-4 fill-[#e50914]/20" />
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
+                  <p className="text-xs font-bold text-white group-hover:text-zinc-200 transition-colors">
                     Ma Liste Personnelle
                   </p>
                   <p className="text-[11px] text-zinc-400">
@@ -321,16 +321,16 @@ export const AuthModal: React.FC = () => {
             </button>
 
             {/* Referral Info */}
-            <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1.5">
+            <div className="p-3.5 rounded-xl bg-[#141414] border border-white/10 space-y-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 Votre Code de Parrainage
               </span>
-              <div className="flex items-center justify-between bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                <span className="font-mono text-sm font-bold text-amber-400">{user.referralCode}</span>
+              <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-lg border border-white/10">
+                <span className="font-mono text-sm font-bold text-zinc-200">{user.referralCode}</span>
                 <button
                   type="button"
                   onClick={copyReferral}
-                  className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                  className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Share2 className="w-3 h-3" />
                   <span>Copier</span>
@@ -347,7 +347,7 @@ export const AuthModal: React.FC = () => {
                     const name = user.name || (user as any).user_metadata?.full_name || 'Cinéphile';
                     await handleMonerooPayment(user.email, name);
                   }}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-zinc-950 font-black text-xs uppercase tracking-wider shadow-neon-gold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Crown className="w-4 h-4" />
                   <span>Passer au Pass Pro VIP</span>
@@ -374,9 +374,9 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={logout}
-                className="w-full py-2.5 rounded-xl bg-red-950/30 hover:bg-red-950/60 border border-red-500/30 text-red-300 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4 text-zinc-400" />
                 <span>Se déconnecter</span>
               </button>
             </div>
@@ -385,7 +385,7 @@ export const AuthModal: React.FC = () => {
           /* FORGOT PASSWORD VIEW */
           <div className="space-y-4">
             <div className="text-center space-y-1">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
                 Mot de passe oublié ?
               </h2>
               <p className="text-xs text-zinc-400">
@@ -415,7 +415,7 @@ export const AuthModal: React.FC = () => {
                     placeholder="vous@exemple.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                   />
                 </div>
               </div>
@@ -423,7 +423,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -453,7 +453,7 @@ export const AuthModal: React.FC = () => {
             
             {/* Header Title */}
             <div className="text-center space-y-1">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
                 {isSignUp ? 'Créer votre Compte Gratuit' : 'Connexion à Éliciné'}
               </h2>
               <p className="text-xs text-zinc-400">
@@ -462,30 +462,30 @@ export const AuthModal: React.FC = () => {
             </div>
 
             {/* Benefit Showcase Card (Zero false promises) */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-b from-zinc-900/90 to-zinc-900/50 border border-white/10 space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="p-3.5 rounded-xl bg-[#141414] border border-white/10 space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#e50914]" />
                 <span>Avantages exclusifs de votre compte gratuit :</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-zinc-300">
-                <div className="flex items-start gap-1.5 p-2 rounded-xl bg-zinc-950/60 border border-white/5">
-                  <Smartphone className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Multi-écrans :</strong> Synchro smartphone, tablette et PC</span>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
+                  <Smartphone className="w-4 h-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug"><strong>Multi-écrans :</strong> Synchro tous appareils</span>
                 </div>
-                <div className="flex items-start gap-1.5 p-2 rounded-xl bg-zinc-950/60 border border-white/5">
-                  <Heart className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Ma Liste :</strong> Sauvegarde permanente de vos favoris</span>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
+                  <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug"><strong>Ma Liste :</strong> Sauvegarde de vos favoris</span>
                 </div>
-                <div className="flex items-start gap-1.5 p-2 rounded-xl bg-zinc-950/60 border border-white/5">
-                  <History className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <span className="leading-snug"><strong>Historique :</strong> Vos découvertes et recherches IA</span>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-black/50 border border-white/5">
+                  <History className="w-4 h-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug"><strong>Historique :</strong> Vos découvertes et IA</span>
                 </div>
               </div>
               
               {/* Clear distinction regarding Premium AI credits */}
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 pt-1 border-t border-white/5">
-                <Info className="w-3.5 h-3.5 text-amber-400/80 flex-shrink-0" />
-                <span>Note : Les quotas de recherche IA étendus/illimités restent réservés aux membres <strong>Pass Pro</strong>.</span>
+                <Info className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong>Pass Pro</strong>.</span>
               </div>
             </div>
 
@@ -523,7 +523,7 @@ export const AuthModal: React.FC = () => {
                   href="/terms" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                  className="text-zinc-300 hover:text-white underline underline-offset-2"
                 >
                   Conditions Générales d'Utilisation
                 </a>
@@ -533,21 +533,21 @@ export const AuthModal: React.FC = () => {
 
             {/* Divider: "ou par identifiant" */}
             <div className="relative flex items-center justify-center py-1">
-              <div className="border-t border-zinc-800 w-full" />
-              <span className="bg-zinc-950 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              <div className="border-t border-white/10 w-full" />
+              <span className="bg-[#0e0e0e] px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
                 ou par identifiant
               </span>
-              <div className="border-t border-zinc-800 w-full" />
+              <div className="border-t border-white/10 w-full" />
             </div>
 
-            {/* Netflix-Style Tab Switcher */}
-            <div className="flex rounded-xl bg-zinc-900/90 p-1 border border-zinc-800 text-xs font-bold">
+            {/* Cinema-Style Tab Switcher */}
+            <div className="flex rounded-xl bg-black/60 p-1 border border-white/10 text-xs font-bold">
               <button
                 type="button"
                 onClick={() => handleSwitchMode(false)}
                 className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
                   !isSignUp
-                    ? 'bg-zinc-800 text-white shadow-sm'
+                    ? 'bg-white text-black font-extrabold shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -558,7 +558,7 @@ export const AuthModal: React.FC = () => {
                 onClick={() => handleSwitchMode(true)}
                 className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
                   isSignUp
-                    ? 'bg-zinc-800 text-white shadow-sm'
+                    ? 'bg-white text-black font-extrabold shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -590,7 +590,7 @@ export const AuthModal: React.FC = () => {
                         placeholder="Ex: SarahCine"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                       />
                     </div>
                   </div>
@@ -609,7 +609,7 @@ export const AuthModal: React.FC = () => {
                         placeholder="vous@exemple.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                       />
                     </div>
                   </div>
@@ -629,7 +629,7 @@ export const AuthModal: React.FC = () => {
                       placeholder="vous@exemple.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                     />
                   </div>
                 </div>
@@ -643,7 +643,7 @@ export const AuthModal: React.FC = () => {
                   </label>
                   {isSignUp ? (
                     <span className="text-[10px] text-zinc-400">
-                      Min. 4 caractères (règle souple)
+                      Min. 4 caractères
                     </span>
                   ) : (
                     <button
@@ -652,7 +652,7 @@ export const AuthModal: React.FC = () => {
                         setIsForgotPassword(true);
                         setErrorMessage(null);
                       }}
-                      className="text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                      className="text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
                       tabIndex={-1}
                     >
                       Mot de passe oublié ?
@@ -669,7 +669,7 @@ export const AuthModal: React.FC = () => {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700/80 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
                   />
                   <button
                     type="button"
@@ -686,7 +686,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || isGoogleLoading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -700,11 +700,11 @@ export const AuthModal: React.FC = () => {
             </form>
 
             {/* Bottom Quick Switch */}
-            <div className="text-center pt-1 border-t border-zinc-800/80">
+            <div className="text-center pt-1 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => handleSwitchMode(!isSignUp)}
-                className="text-xs text-zinc-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
                 {isSignUp ? (
                   <span>Déjà inscrit ? <strong className="text-white underline">Se connecter</strong></span>

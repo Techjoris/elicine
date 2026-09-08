@@ -87,54 +87,51 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   }, [movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey, movie]);
 
   return (
-    <div className="group relative flex flex-col rounded-2xl bg-white dark:bg-[#0f141f] border border-slate-200/80 dark:border-[#1e293b] hover:border-blue-500/60 dark:hover:border-[#0ea5e9]/60 transition-all duration-300 overflow-hidden shadow-sm dark:shadow-lg hover:shadow-md dark:hover:shadow-neon-cyan hover:-translate-y-1">
+    <div 
+      onClick={() => setSelectedMovie(movie)}
+      className="group relative flex flex-col rounded-xl bg-[#121212] border border-white/[0.07] hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-2xl"
+    >
       
       {/* Poster Image Container */}
-      <div 
-        onClick={() => setSelectedMovie(movie)}
-        className="relative aspect-[2/3] w-full overflow-hidden cursor-pointer bg-slate-100 dark:bg-[#07090e]"
-      >
+      <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#0a0a0a]">
         <img
           src={movie.poster_path || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80'}
           alt={movie.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out"
           loading="lazy"
         />
 
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 dark:from-[#0f141f] via-transparent to-black/50 opacity-85 group-hover:opacity-60 transition-opacity" />
-        {/* Top-Left: Type Badge + Platform Badge + Match Rate Badge */}
-        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5 items-start">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-white text-[10px] font-black tracking-wider uppercase">
+        {/* Gradient Overlay Cinématographique */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/20 to-black/40 opacity-75 group-hover:opacity-40 transition-opacity duration-500" />
+        
+        {/* Top-Left: Type & Match Rate */}
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
+          <div className="flex items-center gap-1">
+            <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
               {mediaType === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
             </span>
-            {movie.primary_platform && (
-              <span className={`px-2 py-0.5 rounded-md backdrop-blur-md border text-[10px] font-black tracking-wider uppercase shadow-sm ${getPlatformBadgeStyle(movie.primary_platform)}`}>
-                {movie.primary_platform}
+            {movie.match_rate !== undefined && movie.match_rate > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-medium tracking-wide">
+                {movie.match_rate}%
               </span>
             )}
           </div>
-          {movie.match_rate !== undefined && movie.match_rate > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 backdrop-blur-md shadow-sm">
-              🎯 {movie.match_rate}% match
-            </span>
-          )}
         </div>
 
         {/* Top-Right: Quick Actions */}
-        <div className="absolute top-2.5 right-2.5 z-10 flex flex-col gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 sm:opacity-80 sm:group-hover:opacity-100 transition-opacity">
           
           {/* Watchlist Toggle */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               toggleWatchlist(movie);
             }}
-            className={`p-1.5 rounded-lg backdrop-blur-md border transition-all ${
+            className={`p-1.5 rounded-full backdrop-blur-md border transition-all active:scale-90 cursor-pointer ${
               inWatchlist 
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400' 
-                : 'bg-black/60 text-white border-white/20 hover:bg-blue-600'
+                ? 'bg-white text-black border-white' 
+                : 'bg-black/60 text-white border-white/20 hover:bg-black hover:border-white/50'
             }`}
             title={inWatchlist ? 'Retirer de ma liste' : 'Ajouter à ma liste'}
           >
@@ -143,14 +140,15 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
 
           {/* Alert Toggle */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               addAlert(movie);
             }}
-            className={`p-1.5 rounded-lg backdrop-blur-md border transition-all ${
+            className={`p-1.5 rounded-full backdrop-blur-md border transition-all active:scale-90 cursor-pointer ${
               alertActive 
-                ? 'bg-amber-500 text-slate-950 border-amber-400' 
-                : 'bg-black/60 text-white border-white/20 hover:bg-amber-500 hover:text-slate-950'
+                ? 'bg-[#e50914] text-white border-[#e50914]' 
+                : 'bg-black/60 text-white border-white/20 hover:bg-black hover:border-white/50'
             }`}
             title="Activer une alerte"
           >
@@ -160,135 +158,48 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
 
         {/* Center Hover Play Icon */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md dark:shadow-neon-blue scale-90 group-hover:scale-100 transition-transform">
-            <Play className="w-4 h-4 fill-white ml-0.5" />
+          <div className="w-10 h-10 rounded-full bg-white/95 text-black flex items-center justify-center shadow-2xl scale-90 group-hover:scale-100 transition-transform duration-300">
+            <Play className="w-4 h-4 fill-black ml-0.5" />
           </div>
         </div>
 
       </div>
 
       {/* Info Under Poster */}
-      <div 
-        onClick={() => setSelectedMovie(movie)}
-        className="p-3 flex-1 flex flex-col justify-between cursor-pointer space-y-1.5"
-      >
+      <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
         <div>
           {/* Title */}
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-[#0ea5e9] transition-colors line-clamp-1">
+          <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight line-clamp-1 group-hover:text-zinc-200 transition-colors">
             {movie.title}
           </h3>
 
-          {/* Year and Rating with Golden Star */}
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+          {/* Year and Rating */}
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium pt-0.5">
             <span>{releaseYear}</span>
-            <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
+            <div className="flex items-center gap-1 text-zinc-300">
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span>{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
+              <span className="font-semibold text-white">{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
             </div>
           </div>
         </div>
 
-        {/* Section Streaming Découplée (Catalogue 100% universel, action contextualisée) */}
-        {isLoadingProviders ? (
-          <div className="h-7 w-24 rounded-lg bg-slate-200 dark:bg-slate-800/60 animate-pulse mt-2" />
-        ) : streamingAction?.type === 'DIRECT' ? (
-          <div className="flex flex-col gap-1.5 mt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Disponible chez vous ({streamingAction.providers.length}) :
-              </span>
-            </div>
-            
-            {/* Grille fluide de badges plateformes locales */}
-            <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
-              {streamingAction.providers.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    redirectToStreamingProvider(movie, p, showToast);
-                  }}
-                  className="group/badge relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm cursor-pointer select-none"
-                  title={`Regarder "${movie.title}" sur ${p.name}`}
-                >
-                  {p.logo ? (
-                    <img
-                      src={p.logo}
-                      alt={p.name}
-                      className="w-4 h-4 rounded object-cover flex-shrink-0"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <span className="w-4 h-4 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300 text-[9px] font-bold flex items-center justify-center">
-                      {p.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                  <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200 group-hover/badge:text-emerald-950 dark:group-hover/badge:text-white transition-colors truncate max-w-[130px]">
-                    Regarder sur {p.name} ↗
-                  </span>
-                </button>
-              ))}
-            </div>
+        {/* Section Streaming Épurée (Indicateur discret en 1 ligne) */}
+        {streamingAction?.type === 'DIRECT' && streamingAction.providers.length > 0 ? (
+          <div className="pt-1.5 border-t border-white/[0.06] flex items-center gap-1.5 text-[10px] text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#e50914] flex-shrink-0" />
+            <span className="truncate">Sur {streamingAction.providers[0].name}{streamingAction.providers.length > 1 ? ` +${streamingAction.providers.length - 1}` : ''}</span>
           </div>
         ) : streamingAction?.type === 'VPN_REQUIRED' ? (
-          <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 flex flex-col gap-2 transition-colors hover:border-slate-300 dark:hover:border-slate-700">
-            
-            {/* En-tête discret */}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="text-xs">{streamingAction.marketFlag || '🇺🇸'}</span> {t.vpnNeededTitle} ({streamingAction.marketLabel || 'USA'})
-              </span>
-              <a
-                href={streamingAction.vpnUrl || getVpnAffiliateUrl('nordvpn')}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="group/vpn flex items-center gap-1 text-[10px] text-blue-600 dark:text-sky-400 hover:text-blue-700 dark:hover:text-sky-300 font-medium transition-colors"
-              >
-                <span>{t.vpnButton}</span>
-                <span className="group-hover/vpn:translate-x-0.5 transition-transform">↗</span>
-              </a>
-            </div>
-
-            {/* Liste horizontale compacte des plateformes disponibles */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-none">
-              {streamingAction.providers.map((p, idx) => {
-                const cleanName = p.name.replace(/\s*\([^)]*\)/, '') || p.name;
-                return (
-                  <a
-                    key={p.id || idx}
-                    href={p.vpnUrl || streamingAction.vpnUrl || getVpnAffiliateUrl('nordvpn')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 hover:border-blue-500/40 transition-all flex-shrink-0 shadow-sm"
-                    title={`${t.availableOn} ${cleanName} (${streamingAction.marketLabel})`}
-                  >
-                    {p.logo && (
-                      <img src={p.logo} alt={cleanName} className="w-3.5 h-3.5 rounded object-cover" />
-                    )}
-                    <span className="text-[10px] text-slate-700 dark:text-slate-300 font-normal">
-                      {cleanName}
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
-
+          <div className="pt-1.5 border-t border-white/[0.06] flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <span>{streamingAction.marketFlag || '🇺🇸'}</span>
+            <span className="truncate">Stream {streamingAction.marketLabel || 'US'}</span>
           </div>
-        ) : (
-          <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500 italic flex items-center gap-1">
-            <span>ℹ️</span> {t.vodSection}
-          </div>
-        )}
+        ) : null}
 
         {/* AI Match Reason Pill if active */}
         {showAiMatch && movie.ai_match_reason && (
-          <p className="mt-1 text-[11px] text-blue-800 dark:text-cyan-300/80 bg-blue-50/80 dark:bg-[#07090e] border border-blue-200 dark:border-[#1e293b] rounded-lg p-1.5 leading-tight flex items-start gap-1 line-clamp-2">
-            <Sparkles className="w-3 h-3 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <span>{movie.ai_match_reason}</span>
+          <p className="mt-1 text-[10px] text-zinc-400 bg-white/[0.03] border border-white/[0.06] rounded-md p-1.5 leading-tight line-clamp-2">
+            <span className="text-[#e50914] mr-1">●</span>{movie.ai_match_reason}
           </p>
         )}
 

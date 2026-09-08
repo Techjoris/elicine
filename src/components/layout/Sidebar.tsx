@@ -99,20 +99,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
             title="Masquer la barre latérale"
           >
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Primary Action Button: + Nouvelle Recherche IA (Bright Blue Full Width Pill) */}
+        {/* Primary Action Button: + Nouvelle Recherche IA (Épuré Haute Couture) */}
         <button
           onClick={handleNewAiSearch}
-          className="w-full py-2.5 px-4 rounded-full bg-gradient-to-r from-blue-600 via-[#2563eb] to-[#0ea5e9] hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xs shadow-md dark:shadow-neon-blue hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs transition-all flex items-center justify-center gap-2 select-none shadow-sm cursor-pointer"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
-          <span>+ Nouvelle Recherche IA</span>
+          <span>+ Nouvelle Recherche</span>
         </button>
 
         {/* Menu Navigation */}
@@ -124,19 +124,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 group ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 group cursor-pointer ${
                   isActive
-                    ? 'bg-blue-500/10 dark:bg-blue-600/20 text-blue-600 dark:text-[#0ea5e9] border border-blue-500/30 font-bold shadow-sm dark:shadow-neon-blue'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#0f141f] hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white/[0.08] text-white border border-white/15 font-bold'
+                    : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-blue-600 dark:text-[#0ea5e9]' : 'text-slate-400 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'}`} />
+                  <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-[#e50914]' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
                   <span>{item.label}</span>
                 </div>
 
                 {item.count !== null && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-600 dark:text-cyan-300 border border-blue-500/30">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-white/10 text-zinc-200 border border-white/10">
                     {item.count}
                   </span>
                 )}
@@ -146,15 +146,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Section HISTORIQUE IA */}
-        <div className="pt-4 border-t border-slate-200 dark:border-[#1e293b]/80 space-y-2">
+        <div className="pt-4 border-t border-white/[0.08] space-y-2">
           <div className="flex items-center justify-between px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              HISTORIQUE IA
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Historique
             </span>
             {searchHistory.length > 0 && (
               <button
                 onClick={clearHistory}
-                className="text-[11px] font-medium text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors"
+                className="text-[10px] font-medium text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
               >
                 Vider
               </button>
@@ -163,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
             {searchHistory.length === 0 ? (
-              <p className="px-1 text-xs text-slate-400 dark:text-slate-500 italic">Aucune recherche récente</p>
+              <p className="px-1 text-xs text-zinc-500 italic">Aucune recherche récente</p>
             ) : (
               searchHistory.map((item) => {
                 const formattedQuery = item.query.startsWith('#') ? item.query : `# ${item.query}`;
@@ -174,7 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       handleNavClick('home');
                       showToast(`Recherche : "${item.query}"`);
                     }}
-                    className="px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-cyan-300 hover:bg-slate-100 dark:hover:bg-[#0f141f] cursor-pointer transition-colors truncate"
+                    className="px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white hover:bg-white/[0.04] cursor-pointer transition-colors truncate"
                     title={item.query}
                   >
                     {formattedQuery}
@@ -188,19 +188,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Bottom Section: Quota & User Profile */}
-      <div className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-[#1e293b]">
+      <div className="space-y-2.5 pt-3 border-t border-white/[0.08]">
         
         {/* Quota Badge */}
         <div 
           onClick={() => setIsProModalOpen(true)}
-          className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b] flex items-center justify-between cursor-pointer hover:border-amber-500/40 transition-all"
+          className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between cursor-pointer hover:border-white/20 transition-all"
         >
           <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Crédits IA</span>
+            <Zap className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-xs font-semibold text-zinc-300">Crédits IA</span>
           </div>
-          <span className="text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
-            ⚡ Illimité
+          <span className="text-xs font-bold text-zinc-200 bg-white/[0.08] border border-white/10 px-2 py-0.5 rounded-full">
+            Illimité
           </span>
         </div>
 
@@ -214,25 +214,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             if (onOpenSupport) onOpenSupport();
             setIsMobileMenuOpen(false);
           }}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer select-none"
-          title="Faire un don via PayPal"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] transition-all cursor-pointer select-none"
+          title="Faire un don"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm">☕</span>
             <span>Soutenir le projet</span>
           </div>
-          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
-            PayPal
+          <span className="text-[10px] text-zinc-400 font-bold bg-white/[0.06] px-1.5 py-0.5 rounded">
+            Don
           </span>
         </button>
 
         {/* Sélecteur de langue (accessible dans le menu tiroir mobile) */}
-        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0f141f] border border-slate-200 dark:border-[#1e293b]">
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Langue</span>
+        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08]">
+          <span className="text-xs font-semibold text-zinc-300">Langue</span>
           <LanguageSelector compact={true} />
         </div>
 
-        {/* User Profile Card (Uniquement lorsque connecté) */}
         {/* Carte Profil Utilisateur Connecté */}
         {(() => {
           const activeUser = user || appUser;
@@ -245,35 +244,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   setIsAuthModalOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
-                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-[#0f141f] hover:bg-slate-100 dark:hover:bg-slate-850 border border-slate-200 dark:border-[#1e293b] hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer transition-all flex items-center justify-between group select-none"
+                className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/20 cursor-pointer transition-all flex items-center justify-between group select-none"
                 title="Gérer mon profil"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {/* Round Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
                     (activeUser as any)?.isPro
-                      ? 'bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 ring-1 ring-amber-400/50'
-                      : 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white'
+                      ? 'bg-amber-400 text-black ring-1 ring-amber-400/50'
+                      : 'bg-zinc-800 text-white border border-white/10'
                   }`}>
                     {(activeUser as any)?.user_metadata?.full_name 
                       ? (activeUser as any).user_metadata.full_name.slice(0, 2).toUpperCase() 
-                      : (activeUser.email ? activeUser.email.slice(0, 2).toUpperCase() : 'IJ')}
+                      : (activeUser.email ? activeUser.email.slice(0, 2).toUpperCase() : 'EC')}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-cyan-300 transition-colors">
-                      {(activeUser as any)?.user_metadata?.full_name || activeUser.email || (activeUser as any)?.name || 'Ivan Joris'}
+                    <span className="text-xs font-bold text-white truncate group-hover:text-zinc-200 transition-colors">
+                      {(activeUser as any)?.user_metadata?.full_name || activeUser.email || (activeUser as any)?.name || 'Cinéphile'}
                     </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                    <span className="text-[10px] text-zinc-500 truncate">
                       {activeUser.email}
                     </span>
                   </div>
                 </div>
 
                 {/* Badge */}
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 flex-shrink-0 ${
                   (activeUser as any)?.isPro
-                    ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/40 shadow-neon-gold'
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'bg-white/[0.06] text-zinc-400 border border-white/10'
                 }`}>
                   {(activeUser as any)?.isPro && <Crown className="w-2.5 h-2.5" />}
                   {(activeUser as any)?.isPro ? 'Pro' : 'Gratuit'}
@@ -290,16 +289,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   setIsAuthModalOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-700 dark:text-cyan-300 hover:text-cyan-800 dark:hover:text-white border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer select-none"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all cursor-pointer select-none"
               >
-                <LogIn className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-                <span>Se connecter / S'inscrire</span>
+                <LogIn className="w-3.5 h-3.5 text-black" />
+                <span>Se connecter</span>
               </button>
             </div>
           );
         })()}
 
-        {/* CONTRÔLE VISIBILITÉ DEV : Mettre à false lors de la mise en production */}
+        {/* CONTRÔLE VISIBILITÉ DEV */}
         {SHOW_DEV_PANEL && (
           <button
             type="button"
@@ -307,11 +306,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onOpenDevModal) onOpenDevModal();
               setIsMobileMenuOpen(false);
             }}
-            className="w-full flex items-center gap-2 px-3 py-2 mt-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-300 text-xs font-semibold transition-all cursor-pointer select-none"
+            className="w-full flex items-center gap-2 px-3 py-2 mt-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-all cursor-pointer select-none"
           >
             <span>🛠️</span>
             <span>Console Développeur</span>
-            <span className="ml-auto text-[9px] bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-600 dark:text-amber-400 font-bold">DEV</span>
+            <span className="ml-auto text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-zinc-300 font-bold">DEV</span>
           </button>
         )}
 
@@ -327,7 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
               setIsMobileMenuOpen(false);
             }}
-            className="text-[11px] text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors cursor-pointer select-none"
+            className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer select-none"
           >
             Conditions &amp; Confidentialité
           </button>
@@ -341,7 +340,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop Fixed Sidebar */}
-      <aside className="w-64 flex-shrink-0 hidden md:flex flex-col border-r border-slate-200/80 dark:border-[#1e293b] bg-white/90 dark:bg-[#07090e]/95 backdrop-blur-2xl p-4 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto transition-colors">
+      <aside className="w-64 flex-shrink-0 hidden md:flex flex-col border-r border-white/[0.08] bg-[#0a0a0a]/95 backdrop-blur-2xl p-4 sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto transition-colors">
         {sidebarBody}
       </aside>
 
@@ -350,9 +349,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="fixed inset-0 z-50 md:hidden flex animate-fade-in">
           <div 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
           />
-          <div className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-[#07090e] border-r border-slate-200 dark:border-[#1e293b] p-4 z-10 overflow-y-auto shadow-2xl transition-colors">
+          <div className="relative w-72 max-w-[85vw] h-full bg-[#0a0a0a] border-r border-white/[0.08] p-4 z-10 overflow-y-auto shadow-2xl transition-colors">
             {sidebarBody}
           </div>
         </div>

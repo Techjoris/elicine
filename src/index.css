@@ -10,69 +10,54 @@
 }
 
 body {
-  background-color: #07090e;
-  color: #f1f5f9;
+  background-color: #0a0a0a;
+  color: #ffffff;
   overflow-x: hidden;
   font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  letter-spacing: -0.01em;
 }
 
 /* Custom Cinema Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #07090e;
+  background: #0a0a0a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #262626;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #3f3f46;
 }
 
-/* Glassmorphism helpers */
+/* Cinema Glass & Surface helpers */
 .glass-panel {
-  background: rgba(15, 20, 31, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-card {
-  background: #0f141f;
-  border: 1px solid #1e293b;
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .neon-border-cyan {
-  box-shadow: 0 0 15px rgba(14, 165, 233, 0.35);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .neon-border-gold {
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);
+  border-color: rgba(212, 175, 55, 0.3);
 }
 
 .font-cinzel {
   font-family: 'Cinzel', serif;
-}
-
-/* Pulse animation for unconfigured API keys button */
-.api-key-pulse {
-  animation: apiKeyPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes apiKeyPulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
-    border-color: rgba(245, 158, 11, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 14px 2px rgba(245, 158, 11, 0.7);
-    border-color: rgba(245, 158, 11, 0.9);
-  }
 }
 
