@@ -31,7 +31,7 @@ export const TrendingView: React.FC = () => {
           <Flame className="w-3.5 h-3.5 text-[#e50914] fill-[#e50914]" />
           <span>Cinéma &amp; Streaming en Direct</span>
         </div>
-        <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">Films Tendances du Moment</h1>
+        <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">Films Tendances du Moment — Test Live Éliciné</h1>
         <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mt-1.5">
           Défilement infini automatique — synchronisé chaque semaine avec le catalogue mondial TMDB.
         </p>
