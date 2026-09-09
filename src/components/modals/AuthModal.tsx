@@ -235,9 +235,9 @@ export const AuthModal: React.FC = () => {
     : (user?.email ? user.email.slice(0, 2).toUpperCase() : 'ÉC');
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/90 animate-fade-in overflow-y-auto">
       
-      <div className="relative w-full max-w-md rounded-2xl bg-[#0e0e0e] border border-white/10 shadow-2xl overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
+      <div className="relative w-full max-w-md rounded-2xl bg-[#121212] border border-zinc-800 overflow-hidden text-zinc-100 p-5 sm:p-7 space-y-4 my-auto">
         
         {/* Close Button */}
         <button
@@ -247,7 +247,7 @@ export const AuthModal: React.FC = () => {
             setShowBenefitsPopover(false);
             setIsAuthModalOpen(false);
           }}
-          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/10 transition-all cursor-pointer z-10"
+          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer z-10"
           title="Fermer"
         >
           <X className="w-5 h-5" />
@@ -261,13 +261,13 @@ export const AuthModal: React.FC = () => {
                 <img 
                   src={user.avatar} 
                   alt={user.name} 
-                  className="w-16 h-16 rounded-2xl object-cover mx-auto shadow-lg ring-1 ring-white/20" 
+                  className="w-16 h-16 rounded-2xl object-cover mx-auto border border-zinc-700" 
                 />
               ) : (
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black mx-auto shadow-lg ${
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black mx-auto ${
                   user.isPro
-                    ? 'bg-[#1a1500] text-amber-300 border border-amber-500/40 shadow-amber-500/10'
-                    : 'bg-[#18181b] text-white border border-white/10'
+                    ? 'bg-[#1e1704] text-amber-300 border border-amber-500/50'
+                    : 'bg-[#1e1e1e] text-white border border-zinc-700'
                 }`}>
                   {userInitials}
                 </div>
@@ -277,12 +277,12 @@ export const AuthModal: React.FC = () => {
                 <h2 className="text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
                   <span>{user.name}</span>
                   {user.provider === 'google' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 border border-white/10" title="Connecté avec Google">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700" title="Connecté avec Google">
                       Google
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-zinc-400">{user.email}</p>
+                <p className="text-xs text-zinc-300 font-medium">{user.email}</p>
               </div>
 
               <div className="pt-0.5 flex justify-center">
@@ -292,7 +292,7 @@ export const AuthModal: React.FC = () => {
                     Membre Pass Pro VIP
                   </span>
                 ) : (
-                  <span className="px-3 py-1 rounded-full bg-[#161616] text-zinc-300 border border-white/10 text-xs font-semibold">
+                  <span className="px-3 py-1 rounded-full bg-[#181818] text-zinc-200 border border-zinc-800 text-xs font-semibold">
                     Compte Gratuit (3 recherches IA / jour)
                   </span>
                 )}
@@ -306,35 +306,35 @@ export const AuthModal: React.FC = () => {
                 setIsAuthModalOpen(false);
                 setActiveView('watchlist');
               }}
-              className="w-full p-3 rounded-xl bg-[#141414] hover:bg-[#1c1c1c] border border-white/10 flex items-center justify-between transition-all cursor-pointer group"
+              className="w-full p-3 rounded-xl bg-[#181818] hover:bg-[#202020] border border-zinc-800 flex items-center justify-between transition-colors cursor-pointer group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#e50914]/10 border border-[#e50914]/20 flex items-center justify-center text-[#e50914]">
-                  <Heart className="w-4 h-4 fill-[#e50914]/20" />
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#e50914]">
+                  <Heart className="w-4 h-4 fill-current" />
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-bold text-white group-hover:text-zinc-200 transition-colors">
+                  <p className="text-xs font-bold text-white group-hover:text-zinc-100 transition-colors">
                     Ma Liste Personnelle
                   </p>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-zinc-300 font-medium">
                     {watchlist.length} film{watchlist.length > 1 ? 's' : ''} synchronisé{watchlist.length > 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
             </button>
 
             {/* Referral Info */}
-            <div className="p-3.5 rounded-xl bg-[#141414] border border-white/10 space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            <div className="p-3.5 rounded-xl bg-[#181818] border border-zinc-800 space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                 Votre Code de Parrainage
               </span>
-              <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-lg border border-white/10">
-                <span className="font-mono text-sm font-bold text-zinc-200">{user.referralCode}</span>
+              <div className="flex items-center justify-between bg-black/80 p-2.5 rounded-lg border border-zinc-800">
+                <span className="font-mono text-sm font-bold text-white">{user.referralCode}</span>
                 <button
                   type="button"
                   onClick={copyReferral}
-                  className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                  className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 border border-zinc-700 transition-colors cursor-pointer"
                 >
                   <Share2 className="w-3 h-3" />
                   <span>Copier</span>
@@ -351,7 +351,7 @@ export const AuthModal: React.FC = () => {
                     const name = user.name || (user as any).user_metadata?.full_name || 'Cinéphile';
                     await handleMonerooPayment(user.email, name);
                   }}
-                  className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <Crown className="w-4 h-4" />
                   <span>Passer au Pass Pro VIP</span>
@@ -363,7 +363,7 @@ export const AuthModal: React.FC = () => {
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isGoogleLoading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md select-none disabled:opacity-60"
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs flex items-center justify-center gap-2.5 transition-colors cursor-pointer border border-zinc-300 select-none disabled:opacity-60"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -378,9 +378,9 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={logout}
-                className="w-full py-2.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                <LogOut className="w-4 h-4 text-zinc-400" />
+                <LogOut className="w-4 h-4 text-zinc-300" />
                 <span>Se déconnecter</span>
               </button>
             </div>
@@ -392,26 +392,26 @@ export const AuthModal: React.FC = () => {
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
                 Mot de passe oublié ?
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-300 leading-relaxed">
                 Saisissez votre adresse email pour recevoir un lien de réinitialisation sécurisé via Supabase.
               </p>
             </div>
 
             {/* Error Banner */}
             {errorMessage && (
-              <div className="p-2.5 rounded-xl bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2 animate-shake">
+              <div className="p-2.5 rounded-xl bg-[#220a0d] border border-red-700 text-red-200 text-xs flex items-center gap-2 animate-shake">
                 <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <span>{errorMessage}</span>
+                <span className="font-medium">{errorMessage}</span>
               </div>
             )}
 
             <form onSubmit={handleForgotPassword} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-200 mb-1.5">
                   Adresse Email
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <Mail className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                   <input
                     type="email"
                     required
@@ -419,7 +419,7 @@ export const AuthModal: React.FC = () => {
                     placeholder="vous@exemple.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#181818] border border-zinc-700 text-xs text-white placeholder-zinc-400 outline-none focus:border-zinc-300 transition-colors"
                   />
                 </div>
               </div>
@@ -427,7 +427,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -445,7 +445,7 @@ export const AuthModal: React.FC = () => {
                   setIsForgotPassword(false);
                   setErrorMessage(null);
                 }}
-                className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer text-center block"
+                className="w-full py-2 text-xs text-zinc-300 hover:text-white font-medium transition-colors cursor-pointer text-center block"
               >
                 ← Retour à la connexion
               </button>
@@ -457,9 +457,9 @@ export const AuthModal: React.FC = () => {
 
             {/* CONTEXTUAL BENEFITS MODAL/POPOVER */}
             {showBenefitsPopover && (
-              <div className="absolute inset-0 z-30 bg-[#0e0e0e]/98 backdrop-blur-xl p-5 sm:p-7 rounded-2xl flex flex-col justify-between animate-fade-in shadow-2xl">
+              <div className="absolute inset-0 z-30 bg-[#121212] p-5 sm:p-7 rounded-2xl flex flex-col justify-between animate-fade-in border border-zinc-800">
                 <div>
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                     <div className="flex items-center gap-2 text-white font-bold text-xs sm:text-sm uppercase tracking-wider">
                       <CheckCircle2 className="w-4 h-4 text-[#e50914]" />
                       <span>Pourquoi créer un compte gratuit ?</span>
@@ -467,7 +467,7 @@ export const AuthModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowBenefitsPopover(false)}
-                      className="p-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
                       title="Fermer"
                     >
                       <X className="w-4 h-4" />
@@ -475,39 +475,39 @@ export const AuthModal: React.FC = () => {
                   </div>
 
                   <div className="space-y-2.5 py-4 text-xs">
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-[#181818] border border-zinc-800">
                       <Smartphone className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold text-white">Synchronisation multi-écrans</p>
-                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                        <p className="font-bold text-white text-xs">Synchronisation multi-écrans</p>
+                        <p className="text-zinc-300 text-xs mt-0.5 leading-relaxed">
                           Retrouvez vos sélections instantanément sur smartphone, tablette et PC.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-[#181818] border border-zinc-800">
                       <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold text-white">Ma Liste permanente</p>
-                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                        <p className="font-bold text-white text-xs">Ma Liste permanente</p>
+                        <p className="text-zinc-300 text-xs mt-0.5 leading-relaxed">
                           Sauvegardez vos films et séries favoris à regarder plus tard sans limite.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-[#181818] border border-zinc-800">
                       <History className="w-4 h-4 text-[#e50914] flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold text-white">Historique &amp; Recommandations</p>
-                        <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">
+                        <p className="font-bold text-white text-xs">Historique &amp; Recommandations</p>
+                        <p className="text-zinc-300 text-xs mt-0.5 leading-relaxed">
                           Conservez vos découvertes et vos requêtes cinématographiques personnalisées.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#141414] border border-white/5 text-[11px] text-zinc-400">
-                      <Info className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                      <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong>Pass Pro</strong>.</span>
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181818] border border-zinc-800 text-xs text-zinc-300">
+                      <Info className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+                      <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong className="text-white">Pass Pro</strong>.</span>
                     </div>
                   </div>
                 </div>
@@ -515,7 +515,7 @@ export const AuthModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowBenefitsPopover(false)}
-                  className="w-full py-2.5 rounded-xl bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all cursor-pointer shadow-sm"
+                  className="w-full py-2.5 rounded-xl bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors cursor-pointer"
                 >
                   Fermer
                 </button>
@@ -527,7 +527,7 @@ export const AuthModal: React.FC = () => {
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
                 {isSignUp ? 'Créer un Compte' : 'Connexion'}
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-300 font-medium">
                 {isSignUp 
                   ? 'Rejoignez Éliciné et synchronisez vos favoris.' 
                   : 'Accédez à votre espace cinéma personnalisé.'}
@@ -536,7 +536,7 @@ export const AuthModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowBenefitsPopover(true)}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer group pt-0.5"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-300 hover:text-white transition-colors cursor-pointer group pt-0.5"
                 >
                   <HelpCircle className="w-3.5 h-3.5 text-[#e50914] group-hover:scale-110 transition-transform" />
                   <span className="underline underline-offset-2">Pourquoi créer un compte ?</span>
@@ -544,13 +544,13 @@ export const AuthModal: React.FC = () => {
               </div>
             </div>
 
-            {/* PRIMARY ACTION: Continuer avec Google (en haut, bien visible) */}
+            {/* PRIMARY ACTION: Continuer avec Google */}
             <div className="space-y-2 pt-1">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleLoading || isLoading}
-                className="w-full py-3 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs flex items-center justify-center gap-3 transition-all cursor-pointer shadow-md hover:shadow-lg disabled:opacity-60 select-none"
+                className="w-full py-3 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs flex items-center justify-center gap-3 transition-colors cursor-pointer border border-zinc-300 disabled:opacity-60 select-none"
               >
                 {isGoogleLoading ? (
                   <>
@@ -572,13 +572,13 @@ export const AuthModal: React.FC = () => {
               </button>
 
               {/* Mentions légales CGU sous le bouton Google */}
-              <p className="text-[11px] text-zinc-400 text-center leading-tight">
+              <p className="text-xs text-zinc-300 text-center leading-normal">
                 En continuant, vous confirmez votre accord avec nos{' '}
                 <a 
                   href="/terms" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="text-zinc-300 hover:text-white underline underline-offset-2"
+                  className="text-white hover:underline underline-offset-2 font-medium"
                 >
                   Conditions Générales d'Utilisation
                 </a>
@@ -588,18 +588,18 @@ export const AuthModal: React.FC = () => {
 
             {/* Divider: "ou par identifiant" */}
             <div className="relative flex items-center justify-center py-1">
-              <div className="border-t border-white/10 w-full" />
-              <span className="bg-[#0e0e0e] px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              <div className="border-t border-zinc-800 w-full" />
+              <span className="bg-[#121212] px-3 text-[11px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                 ou par identifiant
               </span>
-              <div className="border-t border-white/10 w-full" />
+              <div className="border-t border-zinc-800 w-full" />
             </div>
 
             {/* Error Banner */}
             {errorMessage && (
-              <div className="p-2.5 rounded-xl bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2 animate-shake">
+              <div className="p-2.5 rounded-xl bg-[#220a0d] border border-red-700 text-red-200 text-xs flex items-center gap-2 animate-shake">
                 <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <span>{errorMessage}</span>
+                <span className="font-medium">{errorMessage}</span>
               </div>
             )}
 
@@ -607,17 +607,17 @@ export const AuthModal: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-3">
               {isSignUp && (
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-200 mb-1.5">
                     Nom d'utilisateur ou pseudo
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                    <User className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                     <input
                       type="text"
                       placeholder="Ex: SarahCine"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#181818] border border-zinc-700 text-xs text-white placeholder-zinc-400 outline-none focus:border-zinc-300 transition-colors"
                     />
                   </div>
                 </div>
@@ -625,11 +625,11 @@ export const AuthModal: React.FC = () => {
 
               {/* Email */}
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-200 mb-1.5">
                   Adresse Email
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <Mail className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                   <input
                     type="email"
                     required
@@ -637,19 +637,19 @@ export const AuthModal: React.FC = () => {
                     placeholder="vous@exemple.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#181818] border border-zinc-700 text-xs text-white placeholder-zinc-400 outline-none focus:border-zinc-300 transition-colors"
                   />
                 </div>
               </div>
 
               {/* Mot de passe avec toggle de visibilité */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-200">
                     Mot de passe
                   </label>
                   {isSignUp ? (
-                    <span className="text-[10px] text-zinc-400">
+                    <span className="text-[11px] text-zinc-300 font-medium">
                       Min. 4 caractères
                     </span>
                   ) : (
@@ -659,7 +659,7 @@ export const AuthModal: React.FC = () => {
                         setIsForgotPassword(true);
                         setErrorMessage(null);
                       }}
-                      className="text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs text-zinc-300 hover:text-white font-medium transition-colors cursor-pointer"
                       tabIndex={-1}
                     >
                       Mot de passe oublié ?
@@ -667,7 +667,7 @@ export const AuthModal: React.FC = () => {
                   )}
                 </div>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <Lock className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
@@ -676,12 +676,12 @@ export const AuthModal: React.FC = () => {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#181818] border border-zinc-700 text-xs text-white placeholder-zinc-400 outline-none focus:border-zinc-300 transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                    className="absolute right-3.5 top-3 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -693,7 +693,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || isGoogleLoading}
-                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -707,11 +707,11 @@ export const AuthModal: React.FC = () => {
             </form>
 
             {/* Bottom Quick Switch */}
-            <div className="text-center pt-2 border-t border-white/10">
+            <div className="text-center pt-2 border-t border-zinc-800">
               <button
                 type="button"
                 onClick={() => handleSwitchMode(!isSignUp)}
-                className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                className="text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer"
               >
                 {isSignUp ? (
                   <span>Déjà inscrit ? <strong className="text-white underline underline-offset-2 ml-1">Se connecter</strong></span>
