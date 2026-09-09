@@ -66,16 +66,16 @@ export const CatalogView: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
 
       {/* Header + Controls */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-[#121212] border border-white/10 space-y-6">
+      <div className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 space-y-6 shadow-sm transition-colors">
         <div>
           <div className="flex items-center gap-2 text-[#e50914] text-[11px] font-bold uppercase tracking-widest mb-2">
             <Film className="w-3.5 h-3.5 text-[#e50914]" />
             <span>Catalogue Éliciné</span>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
             Explorer les Œuvres
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 mt-1.5">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 mt-1.5">
             Défilement infini — Films, Séries &amp; Recherche mondiale en temps réel.
           </p>
         </div>
@@ -88,8 +88,8 @@ export const CatalogView: React.FC = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-white text-black font-extrabold shadow-sm'
-                  : 'bg-[#18181b] border border-white/10 text-zinc-300 hover:text-white hover:border-white/20'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-black font-extrabold shadow-sm'
+                  : 'bg-slate-100 dark:bg-[#18181b] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20'
               }`}
             >
               {tab.label}
@@ -101,14 +101,14 @@ export const CatalogView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative flex gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3.5 top-3" />
               <input
                 type="text"
                 placeholder="Rechercher par titre, genre, mot-clé..."
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#18181b] border border-white/10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white focus:ring-1 focus:ring-white/20 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#18181b] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-slate-400 dark:focus:border-white focus:ring-1 focus:ring-slate-300 dark:focus:ring-white/20 transition-all"
               />
             </div>
             <button
@@ -120,9 +120,9 @@ export const CatalogView: React.FC = () => {
           </div>
 
           {/* Rating filter */}
-          <div className="flex items-center gap-3 bg-[#18181b] px-4 py-2 rounded-xl border border-white/10">
-            <Star className="w-4 h-4 text-amber-400 fill-amber-400 flex-shrink-0" />
-            <span className="text-xs text-zinc-300 font-semibold whitespace-nowrap">
+          <div className="flex items-center gap-3 bg-slate-100 dark:bg-[#18181b] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10">
+            <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400 flex-shrink-0" />
+            <span className="text-xs text-slate-700 dark:text-zinc-300 font-semibold whitespace-nowrap">
               Note : {minRating > 0 ? `${minRating}+ /10` : 'Toutes'}
             </span>
             <input

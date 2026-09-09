@@ -89,11 +89,11 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   return (
     <div 
       onClick={() => setSelectedMovie(movie)}
-      className="group relative flex flex-col rounded-xl bg-[#121212] border border-white/[0.07] hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-2xl"
+      className="group relative flex flex-col rounded-xl bg-white dark:bg-[#121212] border border-slate-200/80 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-md dark:hover:shadow-2xl"
     >
       
       {/* Poster Image Container */}
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#0a0a0a]">
+      <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-100 dark:bg-[#0a0a0a]">
         <img
           src={movie.poster_path || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80'}
           alt={movie.title}
@@ -102,7 +102,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
         />
 
         {/* Gradient Overlay Cinématographique */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/20 to-black/40 opacity-75 group-hover:opacity-40 transition-opacity duration-500" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent dark:from-[#121212] dark:via-[#121212]/20 dark:to-black/40 opacity-75 group-hover:opacity-40 transition-opacity duration-500" />
         
         {/* Top-Left: Type & Match Rate */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
@@ -169,28 +169,28 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
       <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
         <div>
           {/* Title */}
-          <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight line-clamp-1 group-hover:text-zinc-200 transition-colors">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-[#e50914] dark:group-hover:text-zinc-200 transition-colors">
             {movie.title}
           </h3>
 
           {/* Year and Rating */}
-          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium pt-0.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-medium pt-0.5">
             <span>{releaseYear}</span>
-            <div className="flex items-center gap-1 text-zinc-300">
+            <div className="flex items-center gap-1 text-slate-700 dark:text-zinc-300">
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span className="font-semibold text-white">{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
             </div>
           </div>
         </div>
 
         {/* Section Streaming Épurée (Indicateur discret en 1 ligne) */}
         {streamingAction?.type === 'DIRECT' && streamingAction.providers.length > 0 ? (
-          <div className="pt-1.5 border-t border-white/[0.06] flex items-center gap-1.5 text-[10px] text-zinc-400">
+          <div className="pt-1.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-zinc-400">
             <span className="w-1.5 h-1.5 rounded-full bg-[#e50914] flex-shrink-0" />
             <span className="truncate">Sur {streamingAction.providers[0].name}{streamingAction.providers.length > 1 ? ` +${streamingAction.providers.length - 1}` : ''}</span>
           </div>
         ) : streamingAction?.type === 'VPN_REQUIRED' ? (
-          <div className="pt-1.5 border-t border-white/[0.06] flex items-center gap-1.5 text-[10px] text-zinc-500">
+          <div className="pt-1.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-zinc-500">
             <span>{streamingAction.marketFlag || '🇺🇸'}</span>
             <span className="truncate">Stream {streamingAction.marketLabel || 'US'}</span>
           </div>
@@ -198,7 +198,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
 
         {/* AI Match Reason Pill if active */}
         {showAiMatch && movie.ai_match_reason && (
-          <p className="mt-1 text-[10px] text-zinc-400 bg-white/[0.03] border border-white/[0.06] rounded-md p-1.5 leading-tight line-clamp-2">
+          <p className="mt-1 text-[10px] text-slate-600 dark:text-zinc-400 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-md p-1.5 leading-tight line-clamp-2">
             <span className="text-[#e50914] mr-1">●</span>{movie.ai_match_reason}
           </p>
         )}

@@ -201,20 +201,20 @@ export const AdminView: React.FC = () => {
   if (!isAuthorized) {
     return (
       <div className="min-h-[75vh] flex items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-3xl bg-zinc-950/90 border border-red-500/30 p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-fade-in">
+        <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-950/90 border border-red-500/30 p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-fade-in">
           
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-400 shadow-lg shadow-red-500/10">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-500 dark:text-red-400 shadow-lg shadow-red-500/10">
             <ShieldAlert className="w-8 h-8 animate-pulse" />
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+            <span className="text-[11px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
               403 • Accès Refusé
             </span>
-            <h1 className="text-2xl font-black text-white pt-1">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white pt-1">
               Espace Administrateur
             </h1>
-            <p className="text-xs text-zinc-400 max-w-xs mx-auto">
+            <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-xs mx-auto">
               Cette console est strictement réservée au créateur d'Éliciné. Veuillez vous identifier ou saisir la clé secrète.
             </p>
           </div>
@@ -222,7 +222,7 @@ export const AdminView: React.FC = () => {
           {/* Passcode Unlock Form */}
           <form onSubmit={handleUnlockWithPasscode} className="space-y-3 pt-2">
             <div className="relative">
-              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+              <Lock className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3.5 top-3" />
               <input
                 type="password"
                 placeholder="Code secret administrateur..."
@@ -231,10 +231,10 @@ export const AdminView: React.FC = () => {
                   setPasscode(e.target.value);
                   setPasscodeError(false);
                 }}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border text-xs text-white placeholder-zinc-500 outline-none transition-all ${
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 outline-none transition-all ${
                   passcodeError 
                     ? 'border-red-500 ring-1 ring-red-500/40' 
-                    : 'border-zinc-800 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40'
+                    : 'border-slate-200 dark:border-zinc-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40'
                 }`}
               />
             </div>
@@ -249,25 +249,25 @@ export const AdminView: React.FC = () => {
           </form>
 
           {/* Fallback actions */}
-          <div className="pt-2 border-t border-zinc-900 space-y-2 text-xs">
+          <div className="pt-2 border-t border-slate-200 dark:border-zinc-900 space-y-2 text-xs">
             {!user ? (
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="text-cyan-400 hover:underline block w-full text-center"
+                className="text-cyan-600 dark:text-cyan-400 hover:underline block w-full text-center"
               >
                 Se connecter avec un compte admin
               </button>
             ) : (
-              <p className="text-[11px] text-zinc-500">
-                Connecté en tant que : <strong className="text-zinc-300">{user.email}</strong>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-500">
+                Connecté en tant que : <strong className="text-slate-800 dark:text-zinc-300">{user.email}</strong>
               </p>
             )}
 
             <button
               type="button"
               onClick={() => setActiveView('home')}
-              className="text-zinc-400 hover:text-white flex items-center justify-center gap-1.5 mx-auto pt-1 transition-colors cursor-pointer"
+              className="text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white flex items-center justify-center gap-1.5 mx-auto pt-1 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Retour à l'accueil</span>

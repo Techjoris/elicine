@@ -236,7 +236,7 @@ export const TipModal: React.FC = () => {
       }}
     >
       <div 
-        className="relative w-full max-w-md min-w-[320px] mx-4 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden text-slate-100 p-6 sm:p-7 space-y-5 z-50 my-auto"
+        className="relative w-full max-w-md min-w-[320px] mx-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden text-slate-800 dark:text-slate-100 p-6 sm:p-7 space-y-5 z-50 my-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -249,7 +249,7 @@ export const TipModal: React.FC = () => {
             setIsTipModalOpen(false);
           }}
           aria-label="Fermer"
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white border border-white/10 hover:border-white/25 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-white/10 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
           <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
@@ -264,15 +264,15 @@ export const TipModal: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 Paiement en cours de validation
               </h3>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-sm leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-sm leading-relaxed">
                 Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money)...
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-300 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
               <span>Vérification automatique en cours...</span>
             </div>
@@ -283,7 +283,7 @@ export const TipModal: React.FC = () => {
                 if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                 setIsWaitingConfirmation(false);
               }}
-              className="text-xs text-slate-400 hover:text-white underline transition-colors cursor-pointer pt-2"
+              className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white underline transition-colors cursor-pointer pt-2"
             >
               Annuler ou modifier le don
             </button>
@@ -293,21 +293,21 @@ export const TipModal: React.FC = () => {
 
         {/* Title */}
         <div className="text-center space-y-2 w-full">
-          <div className="w-12 h-12 rounded-2xl bg-orange-600/20 text-orange-400 border border-orange-500/30 flex items-center justify-center mx-auto shadow-inner">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 flex items-center justify-center mx-auto shadow-inner">
             <Coffee className="w-6 h-6" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">
-            Offrez un café à <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">Éliciné</span> ☕
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+            Offrez un café à <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">Éliciné</span> ☕
           </h2>
-          <p className="text-xs text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
             Votre soutien permet de maintenir les serveurs et l'intelligence artificielle 100% gratuits et sans publicité intrusive.
           </p>
           {/* Geo Badge */}
           {!geoLoading && geoCountry && (
             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
               mobileMoneyEnabled
-                ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-300'
-                : 'bg-blue-900/30 border-blue-500/40 text-blue-300'
+                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                : 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300'
             }`}>
               <MapPin className="w-3 h-3" />
               <span>
@@ -321,13 +321,13 @@ export const TipModal: React.FC = () => {
         </div>
 
         {/* Currency Tabs */}
-        <div className="flex items-center justify-center gap-1 p-1 rounded-full bg-slate-900 border border-slate-800">
+        <div className="flex items-center justify-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60">
           {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
             <button
               key={c}
               onClick={() => setCurrency(c)}
               className={`flex-1 py-1 rounded-full text-xs font-bold transition-all ${
-                currency === c ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                currency === c ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               {c}
@@ -337,7 +337,7 @@ export const TipModal: React.FC = () => {
 
         {/* Preset Amounts */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Choisir un montant
           </label>
           <div className="grid grid-cols-5 gap-1.5">
@@ -351,7 +351,7 @@ export const TipModal: React.FC = () => {
                   className={`py-2 px-1 rounded-xl text-xs font-black border transition-all text-center ${
                     isSelected
                       ? 'bg-orange-500 border-orange-400 text-white shadow-md scale-105'
-                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-850'
+                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
                   {amt} {isAfrica ? 'F' : currentConfig.symbol}
@@ -365,9 +365,9 @@ export const TipModal: React.FC = () => {
               placeholder={isAfrica ? "Montant libre (en FCFA)..." : `Montant libre (en ${currentConfig.symbol})...`}
               value={customAmount}
               onChange={(e) => setCustomAmount(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 outline-none focus:border-orange-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-orange-500"
             />
-            <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-400">
+            <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
               {isAfrica ? 'FCFA' : currentConfig.symbol}
             </span>
           </div>
@@ -375,14 +375,14 @@ export const TipModal: React.FC = () => {
 
         {/* Payment Methods — geo-filtered */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-orange-400" />
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <CreditCard className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400" />
             Mode de Paiement
           </label>
 
           {geoLoading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-              <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
+              <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
               <span>Détection de votre région...</span>
             </div>
           ) : (
@@ -395,22 +395,22 @@ export const TipModal: React.FC = () => {
                     onClick={() => handleSelectMethod(method.id)}
                     className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
                       isSelected
-                        ? 'bg-orange-500/20 border-orange-500 text-white shadow-sm'
-                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-850'
+                        ? 'bg-orange-50 dark:bg-orange-500/20 border-orange-500 text-slate-900 dark:text-white shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       {method.category === 'mobile' ? (
-                        <Smartphone className="w-4 h-4 text-amber-400" />
+                        <Smartphone className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                       ) : method.id === 'paypal' ? (
-                        <Sparkles className="w-4 h-4 text-sky-400" />
+                        <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400" />
                       ) : (
-                        <CreditCard className="w-4 h-4 text-blue-400" />
+                        <CreditCard className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                       )}
                       <span className="text-xs font-bold">{method.name}</span>
                     </div>
                     <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                      isSelected ? 'border-orange-400 bg-orange-500' : 'border-slate-600'
+                      isSelected ? 'border-orange-400 bg-orange-500' : 'border-slate-300 dark:border-slate-600'
                     }`}>
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
@@ -423,8 +423,8 @@ export const TipModal: React.FC = () => {
 
         {/* Minimum card threshold warning */}
         {isUnderCardThreshold && (
-          <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs flex items-start gap-2.5 animate-fade-in">
-            <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-2.5 animate-fade-in">
+            <Info className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="leading-relaxed">
                 Le paiement par Carte Bancaire nécessite un montant minimum de <strong>{cardMin} FCFA</strong> pour couvrir les frais de traitement bancaire international.
@@ -432,7 +432,7 @@ export const TipModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setSelectedPreset(cardMin); setCustomAmount(''); }}
-                className="text-[11px] font-bold text-amber-400 underline hover:text-amber-300"
+                className="text-[11px] font-bold text-amber-700 dark:text-amber-400 underline hover:text-amber-800 dark:hover:text-amber-300"
               >
                 Ajuster automatiquement à {cardMin} FCFA
               </button>
@@ -441,14 +441,14 @@ export const TipModal: React.FC = () => {
         )}
 
         {/* Converted Summary */}
-        <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center">
-          <span className="text-[11px] text-slate-400 block">
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-center">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
             {selectedMethod === 'paypal' ? 'Montant du don via PayPal :' : 'Total à régler :'}
           </span>
-          <div className="text-lg font-black text-orange-400 font-mono mt-0.5">
+          <div className="text-lg font-black text-orange-600 dark:text-orange-400 font-mono mt-0.5">
             {convertedValue} {currentConfig.symbol}
             {!isAfrica && (
-              <span className="text-xs text-slate-400 font-normal ml-1.5">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-normal ml-1.5">
                 (~{activeAmountFcfa.toLocaleString()} FCFA)
               </span>
             )}
@@ -470,8 +470,8 @@ export const TipModal: React.FC = () => {
           )}
         </button>
 
-        <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
           <span>Paiement crypté SSL — certifié Notch Pay</span>
         </div>
 

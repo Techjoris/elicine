@@ -234,7 +234,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white">
+    <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white transition-colors duration-200">
       
       {/* Fixed Header */}
       <Header onGoHome={handleResetHome} />
@@ -307,7 +307,7 @@ export const AppContent: React.FC = () => {
       {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#141414] border border-white/10 text-white text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-[#141414] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-xl">
             <Sparkles className="w-4 h-4 text-[#e50914] flex-shrink-0" />
             <span>{toastMessage}</span>
           </div>

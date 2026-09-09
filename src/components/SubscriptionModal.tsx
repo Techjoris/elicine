@@ -91,14 +91,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-lg rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 shadow-2xl p-6 sm:p-8 text-slate-200 flex flex-col gap-6 relative"
+        className="w-full max-w-lg rounded-3xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 text-slate-800 dark:text-slate-200 flex flex-col gap-6 relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Bouton Fermer */}
         <button 
           type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
         >
           ✕
         </button>
@@ -106,22 +106,22 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         {/* 1. Header Minimaliste */}
         <div className="text-center flex flex-col items-center gap-2 pt-1">
           <ElicineLogo variant="full" size="md" />
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-bold uppercase tracking-wider mt-1">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold uppercase tracking-wider mt-1">
             👑 Pass Pro Illimité
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             Vivez le cinéma sans aucune limite
           </h2>
-          <p className="text-xs text-slate-400 max-w-sm">
+          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm">
             Recommandations IA en temps réel, alertes de disponibilité et accès aux catalogues du monde entier.
           </p>
         </div>
 
         {/* Bouton officiel Continuer avec Google lors de l'accès au Pass Pro */}
         {!user ? (
-          <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-center sm:text-left">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 space-y-2 text-center sm:text-left">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
-              <span className="text-xs font-semibold text-slate-300">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Associez votre compte pour retrouver votre Pass Pro sur tous vos écrans :
               </span>
             </div>
@@ -129,7 +129,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isGoogleLoading}
-              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md select-none disabled:opacity-60"
+              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-zinc-900 border border-slate-200 dark:border-transparent font-bold text-xs flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm select-none disabled:opacity-60"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -139,13 +139,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </svg>
               <span>{isGoogleLoading ? 'Connexion en cours...' : 'Continuer avec Google'}</span>
             </button>
-            <p className="text-[10px] text-slate-400 text-center leading-tight pt-0.5">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-tight pt-0.5">
               En continuant, vous confirmez votre accord avec nos{' '}
               <a 
                 href="/terms" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                className="text-cyan-600 dark:text-cyan-400 hover:underline underline-offset-2"
               >
                 Conditions Générales d'Utilisation
               </a>
@@ -153,21 +153,21 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             </p>
           </div>
         ) : (
-          <div className="flex items-center justify-between p-2.5 px-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
+          <div className="flex items-center justify-between p-2.5 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-xs">
             <div className="flex items-center gap-2 min-w-0">
               {user.avatar ? (
                 <img src={user.avatar} alt={user.name} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                   {user.name.slice(0, 2).toUpperCase()}
                 </span>
               )}
-              <span className="text-slate-300 truncate">
+              <span className="text-slate-700 dark:text-slate-300 truncate">
                 Compte : <strong>{user.email || user.name}</strong>
               </span>
             </div>
             {user.provider === 'google' ? (
-              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 flex-shrink-0">
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 flex-shrink-0">
                 ✓ Google lié
               </span>
             ) : (
@@ -175,7 +175,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleLoading}
-                className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer flex-shrink-0"
+                className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:text-sky-500 dark:hover:text-sky-300 flex items-center gap-1 cursor-pointer flex-shrink-0"
               >
                 Lier Google ↗
               </button>
@@ -186,7 +186,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         {/* 2. Sélecteur de Devise & Fréquence */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
           {/* Devises */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 w-full sm:w-auto justify-center">
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
             {(['XAF', 'XOF', 'EUR', 'USD'] as const).map((c) => (
               <button
                 key={c}
@@ -195,7 +195,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currency === c 
                     ? 'bg-sky-500 text-white shadow-sm' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {c}
@@ -204,12 +204,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
 
           {/* Cycle (Mensuel / Annuel) */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 w-full sm:w-auto justify-center">
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
             <button
               type="button"
               onClick={() => setBillingCycle('monthly')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                !isYearly ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
+                !isYearly ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               Mensuel
@@ -218,11 +218,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               type="button"
               onClick={() => setBillingCycle('yearly')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                isYearly ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
+                isYearly ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <span>Annuel</span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded-md">
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded-md">
                 -30%
               </span>
             </button>
@@ -230,26 +230,26 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         </div>
 
         {/* 3. Carte Tarif Récapitulative */}
-        <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-4 flex items-center justify-between">
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-400 block">Formule {isYearly ? 'Annuelle' : 'Mensuelle'}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 block">Formule {isYearly ? 'Annuelle' : 'Mensuelle'}</span>
             <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="text-2xl sm:text-3xl font-black text-white">{amountToPay}</span>
-              <span className="text-xs text-sky-400 font-bold">{currentPrice.symbol}</span>
-              <span className="text-xs text-slate-400">/{isYearly ? 'an' : 'mois'}</span>
+              <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{amountToPay}</span>
+              <span className="text-xs text-sky-500 dark:text-sky-400 font-bold">{currentPrice.symbol}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">/{isYearly ? 'an' : 'mois'}</span>
             </div>
           </div>
           {isYearly && (
             <div className="text-right">
-              <span className="text-[11px] text-emerald-400 font-medium block">Économisez 30%</span>
-              <span className="text-[10px] text-slate-400">Soit {currentPrice.perMonthYearly} {currentPrice.symbol}/mois</span>
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium block">Économisez 30%</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Soit {currentPrice.perMonthYearly} {currentPrice.symbol}/mois</span>
             </div>
           )}
         </div>
 
         {/* 4. Sélection du Mode de Paiement (2 choix nets) */}
         <div className="flex flex-col gap-2.5">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Sélectionnez votre mode de règlement
           </label>
           
@@ -259,22 +259,22 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               onClick={() => setPaymentMethod('mobile_money')}
               className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
                 paymentMethod === 'mobile_money'
-                  ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-75'
+                  ? 'bg-sky-500/10 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
+                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-lg">📱</span>
                 <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-600'
+                  paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
                 }`}>
                   {paymentMethod === 'mobile_money' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-white">Mobile Money</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave</p>
-                <span className="text-[9px] text-slate-400 mt-1 block">Propulsé par NotchPay</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave</p>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block">Propulsé par NotchPay</span>
               </div>
             </div>
 
@@ -283,8 +283,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               onClick={() => setPaymentMethod('paypal_card')}
               className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
                 paymentMethod === 'paypal_card'
-                  ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-75'
+                  ? 'bg-sky-500/10 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
+                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -293,15 +293,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   <span className="text-xs font-bold text-[#0079C1]">PayPal</span>
                 </div>
                 <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-600'
+                  paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
                 }`}>
                   {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-white">PayPal & Cartes</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Visa, Mastercard, Compte PayPal</p>
-                <span className="text-[9px] text-slate-400 mt-1 block">Paiement international sécurisé</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">PayPal & Cartes</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Compte PayPal</p>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block">Paiement international sécurisé</span>
               </div>
             </div>
           </div>

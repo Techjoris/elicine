@@ -35,14 +35,14 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
 
   return (
     <div className="sticky top-0 z-[60] w-full flex flex-col">
-      {/* Main Top Navbar - Minimaliste & Cinématographique */}
-      <header className="sticky top-0 z-50 w-full h-14 px-3 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-[#0a0a0a]/90 border-b border-white/[0.08] transition-colors">
+      {/* Main Top Navbar - Adaptative Clair & Sombre */}
+      <header className="sticky top-0 z-50 w-full h-14 px-3 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-[#0a0a0a]/90 border-b border-slate-200/80 dark:border-white/[0.08] transition-colors">
         {/* ZONE GAUCHE: Burger + Logo */}
         <div className="flex items-center justify-start gap-2 min-w-0 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
+            className="md:hidden p-1.5 rounded-lg text-slate-700 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
             title="Menu"
             aria-label="Ouvrir le menu"
           >
@@ -63,11 +63,11 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           {/* 1. Bouton PWA "Installer" */}
           <InstallAppButton variant="header" />
 
-          {/* 2. Bouton Soutenir Discret */}
+          {/* 2. Bouton Soutenir */}
           <button
             type="button"
             onClick={handleOpenTip}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-300 hover:text-white hover:bg-white/[0.08] font-medium text-xs transition-all cursor-pointer select-none flex-shrink-0 whitespace-nowrap"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.08] font-medium text-xs transition-all cursor-pointer select-none flex-shrink-0 whitespace-nowrap"
             title="Soutenir le projet Éliciné"
             aria-label="Soutenir le projet"
           >
@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             <LanguageSelector compact={true} />
           </div>
 
-          {/* 4. Profil si connecté, ou Bouton Connexion Minimaliste */}
+          {/* 4. Profil si connecté, ou Bouton Connexion */}
           {isConnected ? (
             <div className="flex-shrink-0">
               <ProfileMenu
@@ -92,10 +92,10 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
             <button
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all cursor-pointer select-none shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-zinc-200 dark:text-black text-xs font-bold transition-all cursor-pointer select-none shadow-sm"
               title="Se connecter ou s'inscrire"
             >
-              <LogIn className="w-3.5 h-3.5 text-black" />
+              <LogIn className="w-3.5 h-3.5 text-current" />
               <span>Connexion</span>
             </button>
           )}

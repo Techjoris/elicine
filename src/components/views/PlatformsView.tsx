@@ -130,17 +130,17 @@ export const PlatformsView: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
 
       {/* Controls Header */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-[#121212] border border-white/10 space-y-6">
+      <div className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 space-y-6 shadow-sm transition-colors">
 
         <div>
           <div className="flex items-center gap-2 text-[#e50914] text-[11px] font-bold uppercase tracking-widest mb-2">
             <Tv className="w-3.5 h-3.5 text-[#e50914]" />
             <span>Catalogue par Fournisseur</span>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
             Classement par Plateforme
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 mt-1.5">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 mt-1.5">
             Explorez les sélections exclusives par service de streaming avec défilement continu.
           </p>
         </div>
@@ -156,12 +156,12 @@ export const PlatformsView: React.FC = () => {
                 onClick={() => setSelectedPlatform(p)}
                 className={`flex-shrink-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer select-none ${
                   isSel
-                    ? 'bg-white border-white text-black font-extrabold shadow-md'
-                    : 'bg-[#18181b] border-white/10 text-zinc-300 hover:text-white hover:border-white/20'
+                    ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-black font-extrabold shadow-md'
+                    : 'bg-slate-100 dark:bg-[#18181b] border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20'
                 }`}
                 title={`Explorer le catalogue ${p.name}`}
               >
-                <span className={`w-5 h-5 rounded text-[10px] font-black flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-black text-white' : `${p.badgeBg} ${p.badgeText}`}`}>
+                <span className={`w-5 h-5 rounded text-[10px] font-black flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-white text-slate-900 dark:bg-black dark:text-white' : `${p.badgeBg} ${p.badgeText}`}`}>
                   {p.symbol}
                 </span>
                 <span className="whitespace-nowrap">{p.name}</span>
@@ -171,10 +171,10 @@ export const PlatformsView: React.FC = () => {
         </div>
 
         {/* Filter & Sort Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-200 dark:border-white/10">
 
           {/* Media type filter pills */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-black/60 border border-white/10 text-xs font-semibold self-start">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-black/60 border border-slate-200 dark:border-white/10 text-xs font-semibold self-start">
             {([
               { id: 'all',   label: 'Tous',    icon: Clapperboard },
               { id: 'movie', label: 'Films',   icon: Film         },
@@ -188,7 +188,7 @@ export const PlatformsView: React.FC = () => {
                   type="button"
                   onClick={() => setMediaFilter(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer select-none ${
-                    isSel ? 'bg-white text-black font-extrabold shadow-sm' : 'text-zinc-400 hover:text-white'
+                    isSel ? 'bg-white dark:bg-white text-slate-950 dark:text-black font-extrabold shadow-sm' : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -200,14 +200,14 @@ export const PlatformsView: React.FC = () => {
 
           {/* Sort dropdown */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <span className="text-xs text-zinc-400 flex items-center gap-1 font-medium whitespace-nowrap">
-              <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-xs text-slate-600 dark:text-zinc-400 flex items-center gap-1 font-medium whitespace-nowrap">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />
               Trier par :
             </span>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortOption)}
-              className="bg-[#18181b] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-semibold outline-none focus:border-white cursor-pointer"
+              className="bg-slate-100 dark:bg-[#18181b] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-semibold outline-none focus:border-slate-400 dark:focus:border-white cursor-pointer"
             >
               <option value="popularity.desc">🔥 Populaires</option>
               <option value="vote_average.desc">⭐ Mieux notés</option>

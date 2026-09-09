@@ -6,15 +6,33 @@
 
 :root {
   font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+:root.dark,
+:root:not(.light) {
   color-scheme: dark;
 }
 
+:root.light {
+  color-scheme: light;
+}
+
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
   overflow-x: hidden;
   font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
   letter-spacing: -0.01em;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body.light {
+  background-color: #f8f9fc;
+  color: #0f172a;
+}
+
+body.dark,
+body:not(.light) {
+  background-color: #0a0a0a;
+  color: #ffffff;
 }
 
 /* Custom Cinema Scrollbar */
@@ -24,16 +42,27 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+.dark ::-webkit-scrollbar-thumb,
+body:not(.light) ::-webkit-scrollbar-thumb {
   background: #262626;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.dark ::-webkit-scrollbar-thumb:hover,
+body:not(.light) ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Cinema Glass & Surface helpers */
@@ -44,9 +73,19 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.light .glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .glass-card {
   background: #141414;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.light .glass-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .neon-border-cyan {
@@ -60,4 +99,5 @@ body {
 .font-cinzel {
   font-family: 'Cinzel', serif;
 }
+
 

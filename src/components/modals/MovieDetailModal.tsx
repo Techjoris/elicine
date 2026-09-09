@@ -236,7 +236,7 @@ export const MovieDetailModal: React.FC = () => {
       
       {/* Modal Card */}
       <div 
-        className="relative w-full max-w-4xl min-h-[calc(100vh-4rem)] sm:min-h-0 sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-[#0e0e0e] border-t sm:border border-white/10 shadow-2xl overflow-hidden text-zinc-100 flex flex-col"
+        className="relative w-full max-w-4xl min-h-[calc(100vh-4rem)] sm:min-h-0 sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-[#0e0e0e] border-t sm:border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden text-slate-800 dark:text-zinc-100 flex flex-col transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -321,30 +321,31 @@ export const MovieDetailModal: React.FC = () => {
         </div>
 
         {/* Scrollable Content Body */}
+        {/* Scrollable Content Body */}
         <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
           
           {/* Header Row */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-zinc-300 border border-white/10 text-xs font-semibold">
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 text-xs font-semibold">
                   Fiche Détaillée
                 </span>
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-slate-500 dark:text-zinc-400">
                   {selectedMovie.release_date}
                 </span>
                 {selectedMovie.runtime && (
-                  <span className="text-xs text-zinc-400 flex items-center gap-1">
+                  <span className="text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {selectedMovie.runtime} min
                   </span>
                 )}
               </div>
 
-              <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase">
+              <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
                 {displayTitle}
               </h2>
               {displayOriginalTitle && displayOriginalTitle !== displayTitle && (
-                <p className="text-xs text-zinc-400 italic">
+                <p className="text-xs text-slate-500 dark:text-zinc-400 italic">
                   Titre original : {displayOriginalTitle}
                 </p>
               )}
@@ -368,11 +369,11 @@ export const MovieDetailModal: React.FC = () => {
                 onClick={() => toggleWatchlist(selectedMovie)}
                 className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer select-none whitespace-nowrap ${
                   inWatchlist
-                    ? 'bg-white text-black border-white'
-                    : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-black border-slate-900 dark:border-white'
+                    : 'bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-white/15 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800'
                 }`}
               >
-                {inWatchlist ? <Check className="w-4 h-4 text-black stroke-[3]" /> : <Bookmark className="w-4 h-4" />}
+                {inWatchlist ? <Check className="w-4 h-4 stroke-[3]" /> : <Bookmark className="w-4 h-4" />}
                 <span>{inWatchlist ? `${t.myListBtn} ✓` : t.myListBtn}</span>
               </button>
 
@@ -382,7 +383,7 @@ export const MovieDetailModal: React.FC = () => {
                 className={`p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                   alertActive
                     ? 'bg-[#e50914] border-[#e50914] text-white'
-                    : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
+                    : 'bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-white/15 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800'
                 }`}
                 title={t.alertBtn}
               >
@@ -392,7 +393,7 @@ export const MovieDetailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleShare}
-                className="p-2 rounded-xl bg-zinc-900 border border-white/15 text-zinc-200 hover:bg-zinc-800 transition-all cursor-pointer"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-white/15 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-all cursor-pointer"
                 title="Partager"
               >
                 <Share2 className="w-4 h-4" />
@@ -402,13 +403,13 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* AI Match Insight if available */}
           {selectedMovie.ai_match_reason && (
-            <div className="p-4 rounded-xl bg-zinc-900/90 border border-white/10 flex items-start gap-3 text-sm text-zinc-200">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex items-start gap-3 text-sm text-slate-800 dark:text-zinc-200">
               <Sparkles className="w-5 h-5 text-[#e50914] flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-white text-xs uppercase tracking-wider block mb-1">
+                <span className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider block mb-1">
                   {t.critiqueTitle}
                 </span>
-                <p className="leading-relaxed text-xs sm:text-sm text-zinc-300">
+                <p className="leading-relaxed text-xs sm:text-sm text-slate-600 dark:text-zinc-300">
                   {selectedMovie.ai_match_reason}
                 </p>
               </div>
@@ -417,22 +418,22 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* Genres & Rating */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/[0.05] text-white border border-white/10 text-xs font-bold">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 text-xs font-bold">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{selectedMovie.vote_average.toFixed(1)} / 10</span>
               {selectedMovie.vote_count && (
-                <span className="text-[10px] text-zinc-400 font-normal">({selectedMovie.vote_count.toLocaleString()} avis)</span>
+                <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({selectedMovie.vote_count.toLocaleString()} avis)</span>
               )}
             </div>
 
             {/* Badge Type Unique (Film ou Série) */}
-            <span className="px-3 py-1 rounded-lg bg-white/[0.05] text-zinc-300 border border-white/10 text-xs font-semibold uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 text-xs font-semibold uppercase tracking-wider">
               {mediaTypeBadge === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
             </span>
 
             {/* Genres dédupliqués */}
             {uniqueGenres.map(g => (
-              <span key={g.id} className="px-3 py-1 rounded-lg bg-white/[0.03] border border-white/10 text-xs font-medium text-zinc-300">
+              <span key={g.id} className="px-3 py-1 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-zinc-300">
                 {g.name}
               </span>
             ))}
@@ -450,17 +451,17 @@ export const MovieDetailModal: React.FC = () => {
             return (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                     {t.synopsisTitle}
                   </h3>
                   {isAiEnrichedSynopsis && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 text-[10px] font-semibold animate-fade-in">
+                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 text-[10px] font-semibold animate-fade-in">
                       <Sparkles className="w-3 h-3 text-[#e50914]" />
                       <span>Synopsis enrichi par l'IA</span>
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-zinc-200 leading-relaxed font-normal">
+                <p className="text-sm text-slate-700 dark:text-zinc-200 leading-relaxed font-normal">
                   {displayOverview}
                 </p>
               </div>
@@ -468,17 +469,17 @@ export const MovieDetailModal: React.FC = () => {
           })()}
 
           {/* 1. SECTION STREAMING ILLIMITÉ (SVOD) */}
-          <div className="p-4 rounded-xl bg-zinc-900/90 border border-white/10 flex flex-col gap-3">
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                 <Tv className="w-4 h-4 text-[#e50914]" />
                 <span>{t.streamingSection}</span>
               </span>
             </div>
 
             {isLoadingProviders ? (
-              <div className="flex items-center gap-2 text-xs text-zinc-400 py-2">
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-700 dark:text-white" />
                 <span>Vérification des disponibilités en streaming...</span>
               </div>
             ) : (
@@ -494,11 +495,11 @@ export const MovieDetailModal: React.FC = () => {
                           e.stopPropagation();
                           redirectToStreamingProvider(selectedMovie, p, showToast);
                         }}
-                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black border border-white/15 hover:border-white/40 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-black border border-slate-200 dark:border-white/15 hover:border-slate-400 dark:hover:border-white/40 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
                         title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                       >
                         {p.logo && <img src={p.logo} alt={p.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />}
-                        <span className="text-xs font-semibold text-white group-hover:text-zinc-200 transition-colors">
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white group-hover:text-slate-950 dark:group-hover:text-zinc-200 transition-colors">
                           Regarder sur {p.name} ↗
                         </span>
                       </button>
@@ -508,9 +509,9 @@ export const MovieDetailModal: React.FC = () => {
 
                 {/* Cas étranger : VPN */}
                 {providerData.svod.status === 'vpn_needed' && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/60 p-3.5 rounded-xl border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-100 dark:bg-black/60 p-3.5 rounded-xl border border-slate-200 dark:border-white/10">
                     <div>
-                      <p className="text-xs text-zinc-300 font-medium">
+                      <p className="text-xs text-slate-700 dark:text-zinc-300 font-medium">
                         {t.vpnNeededDesc} <strong>{providerData.svod.flag} {providerData.svod.targetCountry}</strong> :
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
@@ -522,7 +523,7 @@ export const MovieDetailModal: React.FC = () => {
                               e.stopPropagation();
                               redirectToStreamingProvider(selectedMovie, p, showToast);
                             }}
-                            className="flex items-center gap-1.5 text-xs text-zinc-200 bg-zinc-900 hover:border-white/40 px-2.5 py-1 rounded-lg border border-white/10 cursor-pointer transition-all"
+                            className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 hover:border-slate-300 dark:hover:border-white/40 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 cursor-pointer transition-all"
                             title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
                           >
                             {p.logo && <img src={p.logo} alt="" className="w-4 h-4 rounded object-cover" />}
@@ -544,7 +545,7 @@ export const MovieDetailModal: React.FC = () => {
 
                 {/* Cas absent du SVOD */}
                 {providerData.svod.status === 'none' && (
-                  <p className="text-xs text-zinc-400 italic">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 italic">
                     {t.vodOnlyMessage}
                   </p>
                 )}
@@ -554,8 +555,8 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* 2. SECTION ACHAT & LOCATION NUMÉRIQUE (VOD) */}
           {!isLoadingProviders && providerData.vod && providerData.vod.length > 0 && (
-            <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/10 flex flex-col gap-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-white/10 flex flex-col gap-2.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                 💳 {t.vodSection}
               </span>
               <div className="flex flex-wrap gap-2">
@@ -566,12 +567,12 @@ export const MovieDetailModal: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-black border border-white/10 hover:border-white/30 transition-all text-xs text-zinc-300 hover:text-white"
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-black border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/30 transition-all text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
                     title={`Louer ou acheter sur ${item.name}`}
                   >
                     {item.logo && <img src={item.logo} alt={item.name} className="w-4 h-4 rounded object-cover flex-shrink-0" />}
                     <span>{item.name}</span>
-                    <span className="text-[10px] text-zinc-500">↗</span>
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">↗</span>
                   </a>
                 ))}
               </div>
@@ -581,21 +582,21 @@ export const MovieDetailModal: React.FC = () => {
           {/* Cast */}
           {selectedMovie.cast && selectedMovie.cast.length > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                 <Users className="w-4 h-4" />
                 <span>Acteurs Principaux</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {selectedMovie.cast.slice(0, 4).map(actor => (
-                  <div key={actor.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-zinc-900/60 border border-white/10">
+                  <div key={actor.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-white/10">
                     <img
                       src={actor.profile_path ? `https://image.tmdb.org/t/p/w185${actor.profile_path}` : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80'}
                       alt={actor.name}
                       className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                     />
                     <div className="overflow-hidden">
-                      <p className="text-xs font-bold text-white truncate">{actor.name}</p>
-                      <p className="text-[10px] text-zinc-400 truncate">{actor.character}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{actor.name}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">{actor.character}</p>
                     </div>
                   </div>
                 ))}

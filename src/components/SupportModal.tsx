@@ -156,7 +156,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       }}
     >
       <div 
-        className="relative w-full max-w-md min-w-[320px] max-h-[90vh] overflow-y-auto mx-4 bg-slate-900 text-white rounded-2xl p-6 shadow-2xl border border-white/10 z-50 my-auto flex flex-col gap-5"
+        className="relative w-full max-w-md min-w-[320px] max-h-[90vh] overflow-y-auto mx-4 bg-white dark:bg-slate-900 text-slate-800 dark:text-white rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-white/10 z-50 my-auto flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -167,7 +167,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           type="button"
           onClick={handleClose}
           aria-label="Fermer la boîte de dialogue"
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white border border-white/10 hover:border-white/25 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-white/10 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
           <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
@@ -182,15 +182,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 Paiement en cours de validation
               </h3>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-sm leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-sm leading-relaxed">
                 Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money)...
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-300 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
               <span>Vérification automatique en cours...</span>
             </div>
@@ -201,7 +201,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                 setIsWaitingConfirmation(false);
               }}
-              className="text-xs text-slate-400 hover:text-white underline transition-colors cursor-pointer pt-2"
+              className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white underline transition-colors cursor-pointer pt-2"
             >
               Annuler ou modifier le don
             </button>
@@ -212,23 +212,23 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         {/* En-tête : Titre et Description avec largeur protégée */}
         <div className="flex flex-col items-center text-center gap-2 pt-1 w-full">
           <ElicineLogo variant="icon" size="lg" />
-          <h3 id="support-modal-title" className="text-lg sm:text-xl font-black text-white tracking-wide">
+          <h3 id="support-modal-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-wide">
             Soutenez le projet Éliciné
           </h3>
-          <p className="text-xs text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
             Soutenez le développement indépendant et les serveurs IA d'Éliciné. Votre don libre finance les requêtes d'intelligence artificielle et l'hébergement du moteur indépendant.
           </p>
         </div>
 
         {/* Sélecteur de méthode (PayPal vs Mobile Money) */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950/80 border border-slate-800 w-full">
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 w-full">
           <button
             type="button"
             onClick={() => setActiveTab('paypal')}
             className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'paypal'
                 ? 'bg-[#0079C1] text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <span>💳</span>
@@ -241,7 +241,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'momo'
                 ? 'bg-sky-500 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <span>📱</span>
@@ -254,25 +254,25 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           <div className="w-full flex flex-col items-center text-center animate-in fade-in duration-150 py-1">
             {/* Badges des moyens de paiement acceptés */}
             <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              <span className="px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-700 dark:text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                 <span>💳</span>
                 <span>Carte bancaire (Visa, Mastercard, etc.)</span>
               </span>
-              <span className="px-3 py-1.5 rounded-xl bg-[#ffc439]/10 border border-[#ffc439]/30 text-[#ffc439] text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1.5 rounded-xl bg-[#ffc439]/15 border border-[#ffc439]/40 text-[#a06800] dark:text-[#ffc439] text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                 <span className="italic font-black">P</span>
                 <span>PayPal</span>
               </span>
             </div>
 
             {/* Explication claire pour le donateur */}
-            <div className="w-full bg-slate-800/60 border border-white/10 rounded-2xl p-4 sm:p-5 mb-4 text-center">
-              <p className="text-sm sm:text-base font-semibold text-white mb-2 leading-snug">
+            <div className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 mb-4 text-center">
+              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-2 leading-snug">
                 Paiement direct et sécurisé sur la page officielle PayPal d'Éliciné
               </p>
-              <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
                 Sur la page suivante, vous pourrez <strong>choisir librement votre montant</strong> de soutien et régler au choix par <strong>Carte bancaire</strong> (sans obligation de créer un compte) ou via <strong>PayPal</strong>.
               </p>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                 Votre contribution permet de financer directement les coûts des serveurs et les requêtes des modèles d'intelligence artificielle.
               </p>
             </div>
@@ -287,7 +287,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 <span>Continuer vers le paiement sécurisé (PayPal ou Carte) →</span>
               </button>
 
-              <p className="w-full text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+              <p className="w-full text-center text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
                 <span>🔒</span>
                 <span>Paiement sécurisé et crypté SSL via les serveurs officiels certifiés PayPal.</span>
               </p>
@@ -300,7 +300,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           <form onSubmit={handleMobileMoneySubmit} className="flex flex-col gap-4 animate-in fade-in duration-150 w-full">
             {/* Choix de la région FCFA */}
             <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Votre région (Zone Franc CFA)
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -309,12 +309,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   onClick={() => setCfaZone('XAF')}
                   className={`py-2 px-2.5 rounded-xl text-[11px] font-semibold border transition-all text-left flex flex-col cursor-pointer ${
                     cfaZone === 'XAF'
-                      ? 'bg-sky-500/15 border-sky-500 text-white shadow-sm'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-sky-500/15 border-sky-500 text-slate-900 dark:text-white shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   <span className="font-bold">🇨🇲 Centrale (XAF)</span>
-                  <span className="text-[9px] text-slate-400">Cameroun, Gabon, Congo</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400">Cameroun, Gabon, Congo</span>
                 </button>
 
                 <button
@@ -322,12 +322,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   onClick={() => setCfaZone('XOF')}
                   className={`py-2 px-2.5 rounded-xl text-[11px] font-semibold border transition-all text-left flex flex-col cursor-pointer ${
                     cfaZone === 'XOF'
-                      ? 'bg-sky-500/15 border-sky-500 text-white shadow-sm'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-sky-500/15 border-sky-500 text-slate-900 dark:text-white shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   <span className="font-bold">🇨🇮 Ouest (XOF)</span>
-                  <span className="text-[9px] text-slate-400">Côte d'Ivoire, Sénégal...</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400">Côte d'Ivoire, Sénégal...</span>
                 </button>
               </div>
             </div>
@@ -335,10 +335,10 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             {/* Champ Montant */}
             <div className="w-full">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Montant de votre don libre
                 </label>
-                <span className="text-[10px] text-amber-400">Montant libre dès 1 FCFA</span>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400">Montant libre dès 1 FCFA</span>
               </div>
               <div className="relative flex items-center w-full">
                 <input
@@ -349,9 +349,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   value={freeAmount}
                   onChange={(e) => setFreeAmount(e.target.value)}
                   placeholder="Ex: 500"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl px-4 py-3 text-base sm:text-lg font-black text-white focus:outline-none pr-20 transition-all shadow-inner font-mono"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-amber-500 rounded-xl px-4 py-3 text-base sm:text-lg font-black text-slate-900 dark:text-white focus:outline-none pr-20 transition-all shadow-inner font-mono"
                 />
-                <span className="absolute right-4 text-xs font-extrabold text-amber-400 select-none">
+                <span className="absolute right-4 text-xs font-extrabold text-amber-600 dark:text-amber-400 select-none">
                   {cfaZone}
                 </span>
               </div>
@@ -364,7 +364,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   key={preset}
                   type="button"
                   onClick={() => setFreeAmount(preset.toString())}
-                  className="flex-1 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium transition-all cursor-pointer"
+                  className="flex-1 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer"
                 >
                   {preset.toLocaleString()}
                 </button>
@@ -377,15 +377,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             >
               <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {cfaZone} via Mobile Money →</span>
             </button>
-            <p className="text-[10px] text-slate-400 text-center">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
               Orange Money, MTN MoMo, Wave • Sécurisé par NotchPay
             </p>
           </form>
         )}
 
         {/* Pied de boîte de dialogue */}
-        <div className="pt-2 border-t border-slate-800/80 text-center w-full">
-          <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 text-center w-full">
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
             <span>🔒</span> Transaction chiffrée SSL • Éliciné 100% Indépendant
           </p>
         </div>
