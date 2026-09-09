@@ -1,2 +1,2 @@
-export * from './SubscriptionModal';
-export { default } from './SubscriptionModal';
+export * from './SubscriptionModal.tsx';
+export { default } from './SubscriptionModal.tsx';

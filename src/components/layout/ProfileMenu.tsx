@@ -12,7 +12,6 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
-import { handleMonerooPayment } from '../../services/payment';
 
 interface ProfileMenuProps {
   onOpenSettings: () => void;
@@ -271,15 +270,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {/* 👑 Passer à Éliciné Pro */}
               <button
                 type="button"
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation();
                   setOpen(false);
-                  if (!(activeUser as any)?.isPro) {
-                    const name = activeUser?.name || (activeUser as any)?.user_metadata?.full_name || 'Cinéphile';
-                    await handleMonerooPayment(activeUser?.email, name);
-                  } else {
-                    onOpenPro();
-                  }
+                  onOpenPro();
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"

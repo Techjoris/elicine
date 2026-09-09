@@ -273,7 +273,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money</p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave</p>
-                <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block">Propulsé par NotchPay</span>
+                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Toutes devises acceptées • NotchPay</span>
               </div>
             </div>
 
