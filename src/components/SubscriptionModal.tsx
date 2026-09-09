@@ -3,6 +3,8 @@ import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
+import { Currency } from '../types';
+
 export interface CheckoutPayload {
   currency: string;
   amount: string;
@@ -16,11 +18,12 @@ export interface SubscriptionModalProps {
   onOpenPayPal?: (payload: CheckoutPayload) => void;
 }
 
-const PRICING = {
-  XAF: { symbol: 'FCFA', monthly: '2 500', yearly: '22 000', perMonthYearly: '1 830' },
-  XOF: { symbol: 'FCFA', monthly: '2 500', yearly: '22 000', perMonthYearly: '1 830' },
-  EUR: { symbol: '€', monthly: '3,80', yearly: '32,00', perMonthYearly: '2,66' },
-  USD: { symbol: '$', monthly: '4.00', yearly: '34.00', perMonthYearly: '2.83' },
+const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: string; perMonthYearly: string }> = {
+  XAF: { symbol: 'FCFA', monthly: '2 500', yearly: '20 000', perMonthYearly: '1 667' },
+  XOF: { symbol: 'FCFA', monthly: '2 500', yearly: '20 000', perMonthYearly: '1 667' },
+  EUR: { symbol: '€', monthly: '3,80', yearly: '30,00', perMonthYearly: '2,50' },
+  USD: { symbol: '$', monthly: '4.10', yearly: '33.00', perMonthYearly: '2.75' },
+  CAD: { symbol: 'CA$', monthly: '5.50', yearly: '44.00', perMonthYearly: '3.66' },
 };
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
@@ -30,7 +33,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onOpenPayPal 
 }) => {
   const { user, loginWithGoogle } = useApp();
-  const [currency, setCurrency] = useState<'XAF' | 'XOF' | 'EUR' | 'USD'>('XAF');
+  const [currency, setCurrency] = useState<Currency>('XAF');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -62,13 +65,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const isYearly = billingCycle === 'yearly';
   const amountToPay = isYearly ? currentPrice.yearly : currentPrice.monthly;
 
-  const handleCurrencyChange = (newCurr: 'XAF' | 'XOF' | 'EUR' | 'USD') => {
+  // L'utilisateur peut librement choisir parmi toutes les devises phares (USD, EUR, etc.) sans verrouiller le mode de paiement
+  const handleCurrencyChange = (newCurr: Currency) => {
     setCurrency(newCurr);
-    if (newCurr === 'XAF' || newCurr === 'XOF') {
-      setPaymentMethod('mobile_money');
-    } else {
-      setPaymentMethod('paypal_card');
-    }
   };
 
   const handleCheckout = () => {
@@ -187,7 +186,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
           {/* Devises */}
           <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
-            {(['XAF', 'XOF', 'EUR', 'USD'] as const).map((c) => (
+            {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
               <button
                 key={c}
                 type="button"

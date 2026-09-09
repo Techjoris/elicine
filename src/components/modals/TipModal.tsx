@@ -73,10 +73,7 @@ export const TipModal: React.FC = () => {
     getUserGeoData().then((geo) => {
       setGeoCountry(geo.countryCode);
       const canUseMobile = isMobileMoneyAvailable(geo.countryCode);
-      setMobileMoneyEnabled(canUseMobile);
-      if (!canUseMobile) {
-        setSelectedMethod('card');
-      }
+      setMobileMoneyEnabled(true);
       const suggested = getSuggestedCurrencyForCountry(geo.countryCode, geo.currency);
       if (suggested !== currency) {
         setCurrency(suggested as Currency);
@@ -134,11 +131,7 @@ export const TipModal: React.FC = () => {
       category: 'paypal' as const,
       color: '#0079c1'
     },
-    ...PAYMENT_METHODS.filter(m => {
-      if (m.category !== 'mobile') return false;
-      if (!mobileMoneyEnabled && !isAfrica) return false;
-      return true;
-    })
+    ...PAYMENT_METHODS.filter(m => m.category === 'mobile')
   ];
 
   const handleSendTip = async () => {
@@ -162,7 +155,8 @@ export const TipModal: React.FC = () => {
     setIsProcessing(true);
     try {
       const channelMode: 'card' | 'mobile' = selectedMethod === 'card' ? 'card' : 'mobile';
-      const paymentCurrency: Currency = channelMode === 'mobile' ? (isAfrica ? currency : 'XAF') : currency;
+      // L'utilisateur peut choisir parmi toutes les devises (USD, EUR, etc.) en Mobile Money
+      const paymentCurrency: Currency = currency;
 
       const res = await processNotchPayCheckout({
         amount: convertedValue,

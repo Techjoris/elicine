@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
-import { processNotchPayCheckout, verifyNotchPayPayment } from '../services/payment';
+import { processNotchPayCheckout, verifyNotchPayPayment, CURRENCY_CONFIGS } from '../services/payment';
+import { Currency } from '../types';
 
 export interface NotchPayTipPayload {
   amount: number;
@@ -21,14 +22,28 @@ declare global {
   }
 }
 
+const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: number }> = {
+  XAF: { amounts: [250, 500, 1000, 2500, 5000], defaultAmount: 1000 },
+  XOF: { amounts: [250, 500, 1000, 2500, 5000], defaultAmount: 1000 },
+  EUR: { amounts: [1, 2, 5, 10, 20], defaultAmount: 2 },
+  USD: { amounts: [1, 2, 5, 10, 20], defaultAmount: 2 },
+  CAD: { amounts: [2, 5, 10, 15, 25], defaultAmount: 5 }
+};
+
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenNotchPay }) => {
   const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
-  const [cfaZone, setCfaZone] = useState<'XAF' | 'XOF'>('XAF');
-  const [freeAmount, setFreeAmount] = useState('500');
+  const [momoCurrency, setMomoCurrency] = useState<Currency>('XAF');
+  const [freeAmount, setFreeAmount] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const pollingIntervalRef = useRef<any>(null);
+
+  const handleCurrencyChange = (newCurr: Currency) => {
+    setMomoCurrency(newCurr);
+    const def = presetsByCurrency[newCurr]?.defaultAmount || 2;
+    setFreeAmount(def.toString());
+  };
 
   // 1. Nettoyage du timer à la fermeture ou démontage
   useEffect(() => {
@@ -86,12 +101,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
     try {
       const res = await processNotchPayCheckout({
         amount,
-        currency: cfaZone,
+        currency: momoCurrency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
-        description: `Soutien Éliciné (${amount} FCFA)`,
+        description: `Soutien Éliciné (${amount} ${momoCurrency})`,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
         isTestMode: false,
@@ -298,37 +313,26 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         {/* ONGLET 2 : MOBILE MONEY (NotchPay) */}
         {activeTab === 'momo' && (
           <form onSubmit={handleMobileMoneySubmit} className="flex flex-col gap-4 animate-in fade-in duration-150 w-full">
-            {/* Choix de la région FCFA */}
+            {/* Choix de la devise pour Mobile Money */}
             <div className="flex flex-col gap-1.5 w-full">
               <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Votre région (Zone Franc CFA)
+                Devise du paiement Mobile Money
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCfaZone('XAF')}
-                  className={`py-2 px-2.5 rounded-xl text-[11px] font-semibold border transition-all text-left flex flex-col cursor-pointer ${
-                    cfaZone === 'XAF'
-                      ? 'bg-sky-500/15 border-sky-500 text-slate-900 dark:text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <span className="font-bold">🇨🇲 Centrale (XAF)</span>
-                  <span className="text-[9px] text-slate-500 dark:text-slate-400">Cameroun, Gabon, Congo</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCfaZone('XOF')}
-                  className={`py-2 px-2.5 rounded-xl text-[11px] font-semibold border transition-all text-left flex flex-col cursor-pointer ${
-                    cfaZone === 'XOF'
-                      ? 'bg-sky-500/15 border-sky-500 text-slate-900 dark:text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <span className="font-bold">🇨🇮 Ouest (XOF)</span>
-                  <span className="text-[9px] text-slate-500 dark:text-slate-400">Côte d'Ivoire, Sénégal...</span>
-                </button>
+              <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full justify-center gap-1">
+                {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleCurrencyChange(c)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                      momoCurrency === c
+                        ? 'bg-sky-500 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -338,35 +342,41 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Montant de votre don libre
                 </label>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400">Montant libre dès 1 FCFA</span>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                  Montant libre en {CURRENCY_CONFIGS[momoCurrency]?.name || momoCurrency}
+                </span>
               </div>
               <div className="relative flex items-center w-full">
                 <input
                   type="number"
                   min="1"
-                  step="1"
+                  step="any"
                   required
                   value={freeAmount}
                   onChange={(e) => setFreeAmount(e.target.value)}
-                  placeholder="Ex: 500"
+                  placeholder="Ex: 5"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-amber-500 rounded-xl px-4 py-3 text-base sm:text-lg font-black text-slate-900 dark:text-white focus:outline-none pr-20 transition-all shadow-inner font-mono"
                 />
                 <span className="absolute right-4 text-xs font-extrabold text-amber-600 dark:text-amber-400 select-none">
-                  {cfaZone}
+                  {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency}
                 </span>
               </div>
             </div>
 
-            {/* Suggestions rapides de montants */}
+            {/* Suggestions rapides de montants adaptées à la devise choisie */}
             <div className="flex items-center justify-between gap-1.5 w-full">
-              {[100, 250, 500, 1000].map((preset) => (
+              {(presetsByCurrency[momoCurrency] || presetsByCurrency.XAF).amounts.map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setFreeAmount(preset.toString())}
-                  className="flex-1 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer"
+                  className={`flex-1 py-1 rounded-lg border text-[11px] font-medium transition-all cursor-pointer ${
+                    freeAmount === preset.toString()
+                      ? 'bg-sky-500 text-white border-sky-400 shadow-sm'
+                      : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
                 >
-                  {preset.toLocaleString()}
+                  {preset.toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency}
                 </button>
               ))}
             </div>
@@ -375,7 +385,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               type="submit"
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer mt-1"
             >
-              <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {cfaZone} via Mobile Money →</span>
+              <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency} via Mobile Money →</span>
             </button>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
               Orange Money, MTN MoMo, Wave • Sécurisé par NotchPay
