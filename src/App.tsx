@@ -182,6 +182,15 @@ export const AppContent: React.FC = () => {
 
       console.log("REPONSE MONEROO :", data);
 
+      if (!data || data.success === false) {
+        const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[App] Échec Moneroo :', exactError, data);
+        showToast(exactError);
+        alert(`Erreur Moneroo : ${exactError}`);
+        return;
+      }
+
       const urlTrouvee = 
         data?.checkout_url ||
         data?.link ||
@@ -197,12 +206,19 @@ export const AppContent: React.FC = () => {
           window.location.href = urlTrouvee;
         }
       } else {
-        console.error('[App] Erreur retournée par Moneroo :', data);
-        showToast(data?.message || "Erreur lors de l'initialisation de Moneroo");
+        const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
+        const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
+        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        console.error('[App]', missingLinkError);
+        showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
+        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
       }
     } catch (e: any) {
       console.error('[App] Exception initialisation Moneroo :', e);
-      showToast(e?.message || "Échec de l'initialisation du paiement Moneroo");
+      const exactError = e?.message || String(e) || "Échec de l'initialisation du paiement Moneroo.";
+      showToast(`Erreur : ${exactError}`);
+      alert(`Erreur de paiement Moneroo :\n${exactError}`);
     }
   };
 

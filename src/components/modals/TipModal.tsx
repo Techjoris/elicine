@@ -35,12 +35,14 @@ export const TipModal: React.FC = () => {
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currency || 'XAF');
   const [amount, setAmount] = useState<string>('1000');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const pollingIntervalRef = useRef<any>(null);
 
   // Sync initial currency and amount based on user geolocation on open
   useEffect(() => {
     if (!isTipModalOpen) return;
+    setErrorMessage(null);
 
     getUserGeoData().then((geo) => {
       const suggested = (getSuggestedCurrencyForCountry(geo.countryCode, geo.currency) as Currency) || 'EUR';
@@ -82,6 +84,7 @@ export const TipModal: React.FC = () => {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    setErrorMessage(null);
     setIsWaitingConfirmation(false);
     setIsTipModalOpen(false);
   };
@@ -89,6 +92,7 @@ export const TipModal: React.FC = () => {
   const handleCurrencyChange = (newCurr: Currency) => {
     setSelectedCurrency(newCurr);
     setCurrency(newCurr);
+    setErrorMessage(null);
     const def = presetsByCurrency[newCurr]?.defaultAmount || 5;
     setAmount(def.toString());
   };
@@ -108,6 +112,7 @@ export const TipModal: React.FC = () => {
       return;
     }
 
+    setErrorMessage(null);
     setIsProcessing(true);
     try {
       console.log('[TipModal] Initialisation paiement Moneroo :', {
@@ -130,6 +135,18 @@ export const TipModal: React.FC = () => {
       // 1. Structure exacte reçue dans la console du navigateur (F12)
       console.log("REPONSE MONEROO :", data);
 
+      // Si la réponse n'est pas un succès
+      if (!data || data.success === false) {
+        const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[TipModal] Échec Moneroo :', exactError, data);
+        setErrorMessage(exactError);
+        showToast(exactError);
+        alert(`Erreur Moneroo : ${exactError}`);
+        setIsProcessing(false);
+        return;
+      }
+
       // 2. Extraction correcte de l'URL peu importe sa structure (data.checkout_url, data.link, ou data.data.checkout_url)
       const urlTrouvee = 
         data?.checkout_url ||
@@ -143,23 +160,34 @@ export const TipModal: React.FC = () => {
         (data as any)?.rawResponse?.data?.checkout_url ||
         extractMonerooRedirectUrl(data);
 
+      // S'assure que si checkout_url ou link est absent, l'application lève une erreur claire listant les propriétés reçues
+      if (!urlTrouvee) {
+        const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
+        const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
+        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        
+        console.error('[TipModal]', missingLinkError);
+        setErrorMessage(missingLinkError);
+        showToast(`Lien manquant. Propriétés reçues : [${receivedProps}]`);
+        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        setIsProcessing(false);
+        return;
+      }
+
       // Force immédiatement le window.location.href = urlTrouvee
-      if (urlTrouvee) {
-        console.log("URL MONEROO TROUVEE :", urlTrouvee);
-        showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
-        setIsProcessing(false);
-        if (typeof window !== 'undefined') {
-          window.location.href = urlTrouvee;
-        }
-      } else {
-        console.error('[TipModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', data);
-        const errorMsg = data?.message || (data as any)?.error || "Erreur lors de l'initialisation du paiement Moneroo.";
-        showToast(errorMsg);
-        setIsProcessing(false);
+      console.log("URL MONEROO TROUVEE :", urlTrouvee);
+      showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
+      setIsProcessing(false);
+      if (typeof window !== 'undefined') {
+        window.location.href = urlTrouvee;
       }
     } catch (err: any) {
       console.error('[TipModal] Exception initialisation Moneroo :', err);
-      showToast(err?.message || "Échec de l'initialisation du paiement.");
+      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement Moneroo.";
+      setErrorMessage(exactError);
+      showToast(`Erreur : ${exactError}`);
+      alert(`Erreur de paiement Moneroo :\n${exactError}`);
       setIsProcessing(false);
     }
   };
@@ -380,6 +408,17 @@ export const TipModal: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* Message d'erreur explicite dans l'interface */}
+                {errorMessage && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-fade-in break-words">
+                    <span className="text-base flex-shrink-0">⚠️</span>
+                    <div className="flex-1">
+                      <p className="font-bold">Erreur de paiement Moneroo :</p>
+                      <p className="text-[11px] mt-0.5 opacity-90 break-all">{errorMessage}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Bouton d'action Mobile Money */}
                 <button

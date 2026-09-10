@@ -37,11 +37,13 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   const [momoCurrency, setMomoCurrency] = useState<Currency>('XAF');
   const [freeAmount, setFreeAmount] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const pollingIntervalRef = useRef<any>(null);
 
   const handleCurrencyChange = (newCurr: Currency) => {
     setMomoCurrency(newCurr);
+    setErrorMessage(null);
     const def = presetsByCurrency[newCurr]?.defaultAmount || 2;
     setFreeAmount(def.toString());
   };
@@ -61,6 +63,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    setErrorMessage(null);
     setIsWaitingConfirmation(false);
     onClose();
   };
@@ -68,6 +71,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   // 2. Gestion de la fermeture par touche Échap (Escape) et verrouillage du défilement
   useEffect(() => {
     if (!isOpen) return;
+    setErrorMessage(null);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -98,6 +102,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       return;
     }
 
+    setErrorMessage(null);
     setIsProcessing(true);
     try {
       console.log('[SupportModal] Initialisation Moneroo avec :', {
@@ -120,6 +125,18 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       // 1. Structure exacte reçue dans la console du navigateur (F12)
       console.log("REPONSE MONEROO :", data);
 
+      // Si la réponse n'est pas un succès
+      if (!data || data.success === false) {
+        const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[SupportModal] Échec Moneroo :', exactError, data);
+        setErrorMessage(exactError);
+        showToast(exactError);
+        alert(`Erreur Moneroo : ${exactError}`);
+        setIsProcessing(false);
+        return;
+      }
+
       // 2. Extraction correcte de l'URL peu importe sa structure (data.checkout_url, data.link, ou data.data.checkout_url)
       const urlTrouvee = 
         data?.checkout_url ||
@@ -133,23 +150,34 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         (data as any)?.rawResponse?.data?.checkout_url ||
         extractMonerooRedirectUrl(data);
 
+      // S'assure que si checkout_url ou link est absent, l'application lève une erreur claire listant les propriétés reçues
+      if (!urlTrouvee) {
+        const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
+        const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
+        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        
+        console.error('[SupportModal]', missingLinkError);
+        setErrorMessage(missingLinkError);
+        showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
+        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        setIsProcessing(false);
+        return;
+      }
+
       // Force immédiatement le window.location.href = urlTrouvee
-      if (urlTrouvee) {
-        console.log("URL MONEROO TROUVEE :", urlTrouvee);
-        showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
-        setIsProcessing(false);
-        if (typeof window !== 'undefined') {
-          window.location.href = urlTrouvee;
-        }
-      } else {
-        console.error('[SupportModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', data);
-        const errorMsg = data?.message || (data as any)?.error || "Impossible de récupérer le lien de paiement Moneroo.";
-        showToast(errorMsg);
-        setIsProcessing(false);
+      console.log("URL MONEROO TROUVEE :", urlTrouvee);
+      showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
+      setIsProcessing(false);
+      if (typeof window !== 'undefined') {
+        window.location.href = urlTrouvee;
       }
     } catch (err: any) {
       console.error('[SupportModal] Exception initialisation Moneroo :', err);
-      showToast(err?.message || "Échec de l'initialisation du paiement Moneroo.");
+      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement Moneroo.";
+      setErrorMessage(exactError);
+      showToast(`Erreur : ${exactError}`);
+      alert(`Erreur de paiement Moneroo :\n${exactError}`);
       setIsProcessing(false);
     }
   };
@@ -375,6 +403,17 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 </button>
               ))}
             </div>
+
+            {/* Message d'erreur explicite dans l'interface */}
+            {errorMessage && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-fade-in break-words">
+                <span className="text-base flex-shrink-0">⚠️</span>
+                <div className="flex-1">
+                  <p className="font-bold">Erreur de paiement Moneroo :</p>
+                  <p className="text-[11px] mt-0.5 opacity-90 break-all">{errorMessage}</p>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"

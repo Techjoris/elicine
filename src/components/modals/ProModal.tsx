@@ -36,6 +36,15 @@ export const ProModal: React.FC = () => {
 
       console.log("REPONSE MONEROO :", data);
 
+      if (!data || data.success === false) {
+        const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[ProModal] Échec Moneroo :', exactError, data);
+        showToast(exactError);
+        alert(`Erreur Moneroo : ${exactError}`);
+        return;
+      }
+
       const urlTrouvee = 
         data?.checkout_url || 
         data?.link || 
@@ -51,11 +60,19 @@ export const ProModal: React.FC = () => {
           window.location.href = urlTrouvee;
         }
       } else {
-        showToast(data.message || "Impossible de générer le lien de paiement Moneroo.");
+        const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+        const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
+        const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
+        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        console.error('[ProModal]', missingLinkError);
+        showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
+        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
       }
     } catch (err: any) {
       console.error('[ProModal Moneroo]', err);
-      showToast("Erreur lors de l'initialisation du paiement Moneroo.");
+      const exactError = err?.message || String(err) || "Erreur lors de l'initialisation du paiement Moneroo.";
+      showToast(`Erreur : ${exactError}`);
+      alert(`Erreur de paiement Moneroo :\n${exactError}`);
     }
   };
 

@@ -194,6 +194,7 @@ export interface MonerooCheckoutParams {
 export interface MonerooCheckoutResult {
   success: boolean;
   message: string;
+  error?: string;
   paymentUrl?: string;
   checkout_url?: string;
   link?: string;
@@ -433,7 +434,10 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       };
     }
 
-    const finalErrMsg = data?.error || data?.message || lastError || "L'API Moneroo n'a renvoyé aucun lien de redirection valide.";
+    const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
+    const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
+    const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
+    const finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}.`;
     console.error('[Moneroo Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
     return {
       success: false,
@@ -442,10 +446,11 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       rawResponse: data
     };
   } catch (e: any) {
-    console.error('[Moneroo] Erreur critique initialisation:', e?.message || e);
+    const errorMsg = e?.message || "Erreur lors de l'initialisation du paiement sécurisé Moneroo.";
+    console.error('[Moneroo] Erreur critique initialisation:', errorMsg, e);
     return {
       success: false,
-      message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé Moneroo."
+      message: errorMsg
     };
   }
 }
