@@ -324,13 +324,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.aiAnalysisBadge}</span>
         </div>
 
-        {/* b) Titre Majestueux & Serré (High Contrast) */}
-        <div className="flex flex-col items-center justify-center mb-2 sm:mb-3 animate-fade-in">
-          <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)] uppercase">
+        {/* b) Titre Majestueux, Moderne & Épuré */}
+        <div className="flex flex-col items-center justify-center mb-2.5 sm:mb-3.5 animate-fade-in">
+          <h1 className="font-jakarta text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold sm:font-extrabold tracking-tight leading-tight sm:leading-[1.18] text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
             {t.tagline}
           </h1>
         </div>
-        <p className="text-xs sm:text-sm md:text-base text-zinc-300 max-w-xl mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] px-2">
+        <p className="text-xs sm:text-sm md:text-base text-zinc-400 sm:text-zinc-400/90 max-w-lg mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-sm px-2">
           L'algorithme intelligent d'Éliciné trouve la perle rare selon vos envies.
         </p>
 

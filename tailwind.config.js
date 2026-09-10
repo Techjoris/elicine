@@ -7,6 +7,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        jakarta: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+        inter: ['Inter', '"Plus Jakarta Sans"', 'sans-serif'],
+      },
       screens: {
         'xs': '420px',
       },
