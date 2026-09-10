@@ -94,12 +94,17 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
     const amount = Math.max(1, Math.round(Number(freeAmount)));
 
     if (!amount || amount < 1) {
-      alert("Veuillez entrer un montant valide.");
+      showToast("Veuillez entrer un montant valide supérieur à 0.");
       return;
     }
 
     setIsProcessing(true);
     try {
+      console.log('[SupportModal] Initialisation Moneroo avec :', {
+        amount,
+        currency: momoCurrency
+      });
+
       const res = await processMonerooCheckout({
         amount,
         currency: momoCurrency,
@@ -114,7 +119,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       const redirectUrl = res.checkout_url || res.paymentUrl;
 
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo...');
+        showToast('Redirection vers Moneroo en cours...');
+        setTimeout(() => setIsProcessing(false), 4000);
         if (typeof window !== 'undefined') {
           window.location.href = redirectUrl;
         }
@@ -148,13 +154,17 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           }, 3000);
         }
       } else {
-        showToast(res.message || "Erreur lors de l'initialisation de Moneroo");
+        console.error('[SupportModal] Échec initialisation Moneroo :', res);
+        const errorMsg = res.message || "Erreur lors de l'initialisation de Moneroo.";
+        showToast(errorMsg);
+        setIsProcessing(false);
       }
-    } catch (err) {
-      console.error(err);
-      showToast("Échec de l'initialisation du paiement.");
-    } finally {
+    } catch (err: any) {
+      console.error('[SupportModal] Exception initialisation Moneroo :', err);
+      showToast(err?.message || "Échec de l'initialisation du paiement Moneroo.");
       setIsProcessing(false);
+    } finally {
+      setTimeout(() => setIsProcessing(false), 600);
     }
   };
 
@@ -382,9 +392,17 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
             <button
               type="submit"
-              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer mt-1"
+              disabled={isProcessing || !freeAmount || Number(freeAmount) < 1}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer mt-1 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
-              <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency} via Mobile Money →</span>
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
+                  <span>Initialisation du paiement...</span>
+                </>
+              ) : (
+                <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency} via Mobile Money →</span>
+              )}
             </button>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
               Orange Money, MTN MoMo, Wave • Sécurisé par Moneroo

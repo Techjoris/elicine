@@ -158,6 +158,7 @@ export const AppContent: React.FC = () => {
 
   const handleSupportMoneroo = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
+      console.log('[App] Initialisation soutien Moneroo :', { amount, currency });
       const result = await processMonerooCheckout({
         amount,
         currency: (currency as any) || 'XAF',
@@ -174,16 +175,17 @@ export const AppContent: React.FC = () => {
 
       const redirectUrl = result.checkout_url || result.paymentUrl;
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo...');
+        showToast('Redirection vers Moneroo en cours...');
         if (typeof window !== 'undefined') {
           window.location.href = redirectUrl;
         }
       } else {
+        console.error('[App] Erreur retournée par Moneroo :', result);
         showToast(result.message || "Erreur lors de l'initialisation de Moneroo");
       }
-    } catch (e) {
-      console.error(e);
-      showToast("Échec de l'initialisation du paiement Moneroo");
+    } catch (e: any) {
+      console.error('[App] Exception initialisation Moneroo :', e);
+      showToast(e?.message || "Échec de l'initialisation du paiement Moneroo");
     }
   };
 

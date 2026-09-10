@@ -104,12 +104,17 @@ export const TipModal: React.FC = () => {
     const cleanAmount = Math.max(1, Math.round(Number(amount)));
 
     if (!cleanAmount || cleanAmount < 1) {
-      showToast('Veuillez entrer un montant valide.');
+      showToast('Veuillez entrer un montant valide supérieur à 0.');
       return;
     }
 
     setIsProcessing(true);
     try {
+      console.log('[TipModal] Initialisation paiement Moneroo :', {
+        amount: cleanAmount,
+        currency: selectedCurrency
+      });
+
       const res = await processMonerooCheckout({
         amount: cleanAmount,
         currency: selectedCurrency,
@@ -124,7 +129,8 @@ export const TipModal: React.FC = () => {
       const redirectUrl = res.checkout_url || res.paymentUrl;
 
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo...');
+        showToast('Redirection vers Moneroo en cours...');
+        setTimeout(() => setIsProcessing(false), 4000);
         if (typeof window !== 'undefined') {
           window.location.href = redirectUrl;
         }
@@ -158,13 +164,17 @@ export const TipModal: React.FC = () => {
           }, 3000);
         }
       } else {
-        showToast(res.message || "Erreur lors de l'initialisation.");
+        console.error('[TipModal] Échec initialisation Moneroo :', res);
+        const errorMsg = res.message || "Erreur lors de l'initialisation du paiement Moneroo.";
+        showToast(errorMsg);
+        setIsProcessing(false);
       }
-    } catch (err) {
-      console.error(err);
-      showToast('Erreur lors du traitement.');
-    } finally {
+    } catch (err: any) {
+      console.error('[TipModal] Exception initialisation Moneroo :', err);
+      showToast(err?.message || "Échec de l'initialisation du paiement.");
       setIsProcessing(false);
+    } finally {
+      setTimeout(() => setIsProcessing(false), 600);
     }
   };
 
@@ -394,7 +404,7 @@ export const TipModal: React.FC = () => {
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Initialisation sécurisée...</span>
+                      <span>Initialisation du paiement...</span>
                     </>
                   ) : (
                     <span>Payer {Number(amount || 0).toLocaleString()} {currentConfig.symbol} via Mobile Money →</span>

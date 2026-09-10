@@ -206,12 +206,20 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
   const secretKey = getMonerooSecretKey();
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
-  const successCallbackUrl = params.returnUrl || `${origin}/?payment_status=success&type=${type}`;
+  const successCallbackUrl = (params.returnUrl || `${origin}/?payment_status=success&type=${type}`).trim();
 
-  const formattedCurrency = params.currency === 'XOF' || params.currency === 'XAF' ? 'XAF' : params.currency.toString().toUpperCase();
-  const finalAmount = formattedCurrency === 'XAF' ? Math.round(Number(params.amount)) : Number(params.amount);
+  const formattedCurrency = String(params.currency || 'XAF').trim().toUpperCase();
+  const rawNumAmount = Number(params.amount);
+  const finalAmount = (formattedCurrency === 'XAF' || formattedCurrency === 'XOF') ? Math.round(rawNumAmount) : Number(rawNumAmount);
 
-  const nameParts = (params.name || 'Cinéphile').trim().split(/\s+/);
+  if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
+    return {
+      success: false,
+      message: 'Montant de paiement invalide.'
+    };
+  }
+
+  const nameParts = (params.name || 'Cinéphile').trim().split(/\s+/).filter(Boolean);
   const firstName = nameParts[0] || 'Cinéphile';
   const lastName = nameParts.slice(1).join(' ') || firstName;
 
@@ -220,72 +228,79 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     currency: formattedCurrency,
     description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
     customer: {
-      email: params.email || 'contact@elicine.com',
+      email: (params.email || '').trim() || 'contact@elicine.com',
       first_name: firstName,
       last_name: lastName
     },
-    return_url: successCallbackUrl
+    return_url: successCallbackUrl,
+    redirect_url: successCallbackUrl
   };
 
   const authHeader = secretKey ? `Bearer ${secretKey}` : '';
 
   try {
     let data: any = null;
+    let lastError = '';
 
-    // 1. Appel principal à l'endpoint Moneroo
+    // 1. Appel principal à la route serveur /api/moneroo (recommandée, sans blocage CORS)
     try {
-      const res = await fetch('https://api.moneroo.io/v1/payments/initialize', {
+      const serverRes = await fetch('/api/moneroo', {
         method: 'POST',
         headers: {
-          'Authorization': authHeader,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(authHeader ? { 'Authorization': authHeader } : {})
         },
         body: JSON.stringify(payload)
       });
 
-      if (res.ok) {
-        data = await res.json();
-      } else {
-        // En cas d'erreur ou blocage CORS, tentative de secours via le handler /api/moneroo
-        const fallbackRes = await fetch('/api/moneroo', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...(authHeader ? { 'Authorization': authHeader } : {})
-          },
-          body: JSON.stringify(payload)
-        });
-        if (fallbackRes.ok) {
-          data = await fallbackRes.json();
-        } else {
-          const errText = await res.text();
-          console.error('[Moneroo API] Erreur initialisation:', errText);
-        }
-      }
-    } catch (directErr) {
-      // Fallback via /api/moneroo si le navigateur restreint les requêtes cross-origin
+      const resText = await serverRes.text();
       try {
-        const fallbackRes = await fetch('/api/moneroo', {
+        data = JSON.parse(resText);
+      } catch (_) {
+        data = { message: resText };
+      }
+
+      if (!serverRes.ok) {
+        lastError = data?.error || data?.message || `Erreur serveur Moneroo (${serverRes.status})`;
+        console.warn('[Moneroo] Échec /api/moneroo :', lastError);
+      }
+    } catch (serverErr: any) {
+      lastError = serverErr?.message || 'Erreur réseau vers /api/moneroo';
+      console.warn('[Moneroo] Exception /api/moneroo, tentative directe :', lastError);
+    }
+
+    // 2. Secours direct vers l'API Moneroo si nécessaire et si une clé secrète existe
+    if (!data?.checkout_url && !data?.data?.checkout_url && authHeader) {
+      try {
+        const directRes = await fetch('https://api.moneroo.io/v1/payments/initialize', {
           method: 'POST',
           headers: {
+            'Authorization': authHeader,
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...(authHeader ? { 'Authorization': authHeader } : {})
+            'Accept': 'application/json'
           },
           body: JSON.stringify(payload)
         });
-        if (fallbackRes.ok) {
-          data = await fallbackRes.json();
+
+        const directText = await directRes.text();
+        try {
+          const directData = JSON.parse(directText);
+          if (directRes.ok) {
+            data = directData;
+          } else {
+            lastError = directData?.message || directData?.error || `Erreur Moneroo direct (${directRes.status})`;
+          }
+        } catch (_) {
+          lastError = directText || `Erreur HTTP ${directRes.status}`;
         }
-      } catch (proxyErr) {
-        console.error('[Moneroo API] Erreur proxy fallback:', proxyErr);
+      } catch (directErr: any) {
+        lastError = directErr?.message || 'Erreur réseau API directe Moneroo';
       }
     }
 
-    const checkoutUrl = data?.data?.checkout_url || data?.checkout_url;
-    const paymentId = data?.data?.id || data?.id || data?.reference;
+    const checkoutUrl = data?.checkout_url || data?.data?.checkout_url;
+    const paymentId = data?.reference || data?.data?.id || data?.id;
 
     if (checkoutUrl) {
       if (params.openInNewTab && typeof window !== 'undefined') {
@@ -303,13 +318,14 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       };
     }
 
-    const errMsg = data?.error || data?.message || "Échec de l'initialisation du paiement Moneroo.";
+    const finalErrMsg = data?.error || data?.message || lastError || "Échec de l'initialisation du paiement Moneroo.";
+    console.error('[Moneroo Checkout Error]', finalErrMsg, data);
     return {
       success: false,
-      message: errMsg
+      message: finalErrMsg
     };
   } catch (e: any) {
-    console.error('[Moneroo] Erreur initialisation:', e?.message || e);
+    console.error('[Moneroo] Erreur critique initialisation:', e?.message || e);
     return {
       success: false,
       message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé Moneroo."
