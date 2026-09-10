@@ -17,11 +17,23 @@ export default async function handler(req, res) {
   let finalMessages = messages;
   if ((!finalMessages || finalMessages.length === 0) && (req.body?.query || req.body?.prompt)) {
     const userQ = String(req.body.query || req.body.prompt).trim();
+    const cleanLower = userQ.toLowerCase();
+
+    // Détection de spécificité côté backend
+    const isUltra = /\b(twist|fin où|il était mort|schizophrène|piégé|enfermé|cercueil|cabine téléphonique|île psychiatrique|hopital psychiatrique|asile|pianiste juif|ghetto|sniper|magiciens rivaux)\b/i.test(cleanLower);
+    const isBroad = !isUltra && /\b(films d|films de|films avec|films des|années 80|années 90|années 2000|comédie|science-fiction|action|horreur|thriller|western|coréen|français|américain)\b/i.test(cleanLower);
+
+    let sysContent = `Tu es le moteur de recommandation cinématographique expert d'Éliciné.`;
+    if (isUltra) {
+      sysContent += `\nL'utilisateur effectue une recherche ultra-ciblée. Identifie STRICTEMENT la ou les 1 à 2 œuvres exactes correspondant à l'ensemble des critères d'intrigue, sans aucun film de remplissage.\nRéponds EXCLUSIVEMENT avec un objet JSON :\n{\n  "movies": ["Titre exact"]\n}`;
+    } else if (isBroad) {
+      sysContent += `\nL'utilisateur effectue une recherche large. Fournis une sélection complète, variée et riche de 14 à 16 films ou séries incontournables et emblématiques.\nRéponds EXCLUSIVEMENT avec un objet JSON :\n{\n  "movies": ["Titre 1", "Titre 2", ...]\n}`;
+    } else {
+      sysContent += `\nPour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 6 à 8 titres de films ou séries exacts et pertinents.\nExemple de format attendu :\n{\n  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]\n}`;
+    }
+
     finalMessages = [
-      {
-        role: 'system',
-        content: `Tu es le moteur de recommandation de films d'Éliciné.\nPour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 5 à 8 titres de films ou séries exacts et pertinents.\nExemple de format attendu :\n{\n  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]\n}`
-      },
+      { role: 'system', content: sysContent },
       { role: 'user', content: userQ }
     ];
   }

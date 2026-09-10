@@ -261,7 +261,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
         });
       }
 
-      showToast(`✨ ${res.recommendedMovies.length} films trouvés par l'algorithme !`);
+      if (res.recommendedMovies.length <= 2) {
+        showToast(`🎯 ${res.recommendedMovies.length} correspondance${res.recommendedMovies.length > 1 ? 's' : ''} exacte${res.recommendedMovies.length > 1 ? 's' : ''} identifiée${res.recommendedMovies.length > 1 ? 's' : ''} !`);
+      } else if (res.recommendedMovies.length >= 10) {
+        showToast(`🎬 Sélection élargie de ${res.recommendedMovies.length} œuvres trouvées !`);
+      } else {
+        showToast(`✨ ${res.recommendedMovies.length} films trouvés par l'algorithme !`);
+      }
       
       const resultsEl = document.getElementById('results-section');
       if (resultsEl) {

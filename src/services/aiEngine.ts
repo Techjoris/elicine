@@ -4,8 +4,8 @@ import {
   searchMovieExactByTitleAndYear,
   FALLBACK_MOVIES 
 } from './tmdb';
-import { analyzeSearchIntent } from './searchRouterService';
-import { unifiedAiSearch } from './unifiedAiSearch';
+import { analyzeSearchIntent, analyzeQuerySpecificity, SpecificityAnalysis } from './searchRouterService';
+import { unifiedAiSearch, analyzeQuerySpecificity as analyzeQuerySpecificityExport } from './unifiedAiSearch';
 
 export interface AIRecommendationResult {
   thought: string;
@@ -34,10 +34,50 @@ export {
   AI_PROVIDERS, 
   GROQ_MODELS,
   ACTIVE_GROQ_MODELS,
-  getApiKey 
+  getApiKey,
+  analyzeQuerySpecificity
 } from './unifiedAiSearch';
 
-const UNIFIED_SYSTEM_PROMPT = `Tu es l'algorithme cinématographique expert d'Éliciné.
+function getUnifiedSystemPrompt(specificity: SpecificityAnalysis): string {
+  if (specificity.level === 'ultra_targeted') {
+    return `Tu es l'algorithme cinématographique de haute précision d'Éliciné.
+L'utilisateur effectue une recherche ULTRA-CIBLÉE avec des détails narratifs précis (intrigue, acteur, lieu, twist).
+Identifie STRICTEMENT la ou les 1 à 2 œuvres exactes qui correspondent à tous ces critères. N'inclus aucun film approximatif ni suggestion superflue.
+Réponds STRICTEMENT sous la forme d'un objet JSON pur :
+{
+  "provider_used": "Nom du modèle",
+  "movies": [
+    {
+      "title": "Titre exact du film",
+      "year": 2024,
+      "match_rate": 99,
+      "reason": "Correspondance exacte avec les critères"
+    }
+  ]
+}
+Note : 1 ou 2 films maximum.`;
+  }
+
+  if (specificity.level === 'broad') {
+    return `Tu es l'algorithme cinématographique expert d'Éliciné.
+L'utilisateur effectue une recherche LARGE (genre, acteur, époque, catégorie).
+Recommande une sélection ÉLARGIE et COMPLÈTE d'environ 14 à 16 films ou séries incontournables et emblématiques correspondants.
+Réponds STRICTEMENT sous la forme d'un objet JSON pur :
+{
+  "provider_used": "Nom du modèle",
+  "movies": [
+    {
+      "title": "Titre exact du film",
+      "year": 2024,
+      "match_rate": 96,
+      "reason": "Référence incontournable de cette catégorie"
+    }
+  ]
+}
+Note : Fournis entre 14 et 16 films.`;
+  }
+
+  return `Tu es l'algorithme cinématographique expert d'Éliciné.
 À partir de la demande de l'utilisateur, recommande entre 6 et 8 films ou séries existants et pertinents.
 Réponds STRICTEMENT sous la forme d'un objet JSON pur, sans texte d'introduction ni conclusion.
 Format JSON requis :
@@ -53,6 +93,17 @@ Format JSON requis :
   ]
 }
 Note : "match_rate" doit être un nombre entier compris entre 75 et 99 reflétant l'affinité avec la demande.`;
+}
+
+export const UNIFIED_SYSTEM_PROMPT = getUnifiedSystemPrompt({
+  level: 'moderate',
+  targetCount: 6,
+  minResults: 5,
+  maxResults: 8,
+  strictFiltering: false,
+  score: 0,
+  reason: 'Prompt par défaut'
+});
 
 /**
  * Auto-détection dynamique des modèles actifs sur le compte Groq
@@ -87,6 +138,10 @@ async function callGroqApi(
   model?: string
 ): Promise<{ provider_used: string; movies: RawAiMovieItem[] }> {
   const selectedModel = model || 'llama-3.3-70b-versatile';
+  const specificity = analyzeQuerySpecificity(query);
+  const systemPrompt = getUnifiedSystemPrompt(specificity);
+  const maxTokens = specificity.level === 'broad' ? 1200 : (specificity.level === 'ultra_targeted' ? 250 : 700);
+
   const response = await fetch('/api/ai', {
     method: 'POST',
     headers: {
@@ -96,9 +151,10 @@ async function callGroqApi(
     body: JSON.stringify({
       provider: 'groq',
       model: selectedModel,
-      temperature: 0.2,
+      temperature: specificity.level === 'ultra_targeted' ? 0.0 : 0.2,
+      max_tokens: maxTokens,
       messages: [
-        { role: 'system', content: UNIFIED_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: query }
       ],
       response_format: { type: 'json_object' }
@@ -124,6 +180,10 @@ async function callQwenApi(
   model: 'qwen-turbo' | 'qwen-plus' = 'qwen-plus'
 ): Promise<{ provider_used: string; movies: RawAiMovieItem[] }> {
   try {
+    const specificity = analyzeQuerySpecificity(query);
+    const systemPrompt = getUnifiedSystemPrompt(specificity);
+    const maxTokens = specificity.level === 'broad' ? 1200 : (specificity.level === 'ultra_targeted' ? 250 : 700);
+
     const response = await fetch('/api/ai', {
       method: 'POST',
       headers: {
@@ -134,11 +194,12 @@ async function callQwenApi(
         provider: 'qwen',
         model,
         messages: [
-          { role: 'system', content: UNIFIED_SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: query }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.2
+        temperature: specificity.level === 'ultra_targeted' ? 0.0 : 0.2,
+        max_tokens: maxTokens
       })
     });
 

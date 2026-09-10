@@ -1,6 +1,6 @@
 import { Movie, ApiSettings } from '../types';
 import { searchMoviesTmdb, formatTmdbResults } from './tmdb';
-import { analyzeSearchIntent } from './searchRouterService';
+import { analyzeSearchIntent, analyzeQuerySpecificity, SpecificityAnalysis } from './searchRouterService';
 
 export interface RawAiMovieItem {
   title: string;
@@ -77,11 +77,40 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
 };
 
 /**
- * 1. QUERY AI (Groq first, fallback Qwen)
- * Prompt épuré : "Liste 5 films pour: [query]. Réponds UNIQUEMENT avec les titres séparés par des virgules."
+ * 1. QUERY AI DYNAMIQUE (Groq first, fallback Qwen)
+ * - Requête Large : demande 16 titres variés et emblématiques (liste complète).
+ * - Requête Ultra-Ciblée : exige strictement 1 à 2 titres exacts sans aucun remplissage.
+ * - Requête Thématique : demande 6 à 8 titres pertinents.
  */
-export async function queryAiTitles(query: string, apiKey?: string): Promise<{ titles: string[]; provider: string }> {
-  const prompt = `Liste 5 films pour: ${query}. Réponds UNIQUEMENT avec les titres séparés par des virgules.`;
+export async function queryAiTitles(
+  query: string,
+  apiKey?: string,
+  specificity?: SpecificityAnalysis
+): Promise<{ titles: string[]; provider: string }> {
+  const spec = specificity || analyzeQuerySpecificity(query);
+
+  let prompt = '';
+  let maxTokens = 300;
+  let temperature = 0.2;
+
+  if (spec.level === 'ultra_targeted') {
+    prompt = `IDENTIFICATION ULTRA-CIBLÉE : L'utilisateur recherche une œuvre précise d'après des détails narratifs stricts : "${query}".
+Identifie avec une exactitude absolue UNIQUEMENT la ou les 1 à 2 œuvres réelles qui correspondent à l'ENSEMBLE de ces détails (aucun film approximatif, aucune recommandation large, aucun film de remplissage).
+Réponds EXCLUSIVEMENT avec le ou les titres exacts séparés par des virgules (1 ou 2 titres maximum).`;
+    maxTokens = 100;
+    temperature = 0.0;
+  } else if (spec.level === 'broad') {
+    prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection large et complète pour : "${query}".
+Propose une liste riche et diversifiée d'environ 15 à 18 films ou séries incontournables et emblématiques qui correspondent parfaitement à cette catégorie (mélange de classiques et de références modernes).
+Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans numérotation ni texte additionnel.`;
+    maxTokens = 650;
+    temperature = 0.3;
+  } else {
+    prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants et pertinents pour l'ambiance ou le thème : "${query}".
+Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
+    maxTokens = 250;
+    temperature = 0.2;
+  }
 
   // TENTATIVE 1 : GROQ (Llama 3.3 70B / 8B Instant)
   for (const model of ACTIVE_GROQ_MODELS) {
@@ -98,8 +127,8 @@ export async function queryAiTitles(query: string, apiKey?: string): Promise<{ t
           messages: [
             { role: 'user', content: prompt }
           ],
-          temperature: 0.2,
-          max_tokens: 200
+          temperature,
+          max_tokens: maxTokens
         })
       });
 
@@ -131,8 +160,8 @@ export async function queryAiTitles(query: string, apiKey?: string): Promise<{ t
           messages: [
             { role: 'user', content: prompt }
           ],
-          temperature: 0.2,
-          max_tokens: 200
+          temperature,
+          max_tokens: maxTokens
         })
       });
 
@@ -200,20 +229,24 @@ export function parseAIResponse(rawText: string): RawAiMovieItem[] {
 }
 
 export async function queryGroq(userQuery: string, apiKey?: string): Promise<RawAiMovieItem[]> {
-  const { titles } = await queryAiTitles(userQuery, apiKey);
-  return titles.map((t, idx) => ({
+  const specificity = analyzeQuerySpecificity(userQuery);
+  const { titles } = await queryAiTitles(userQuery, apiKey, specificity);
+  const limit = specificity.maxResults;
+  return titles.slice(0, limit).map((t, idx) => ({
     title: t,
-    match_rate: Math.max(78, 98 - idx * 3),
-    reason: 'Recommandé par Éliciné'
+    match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 96) : Math.max(78, 98 - idx * 3),
+    reason: specificity.level === 'ultra_targeted' ? 'Correspondance exacte identifiée' : 'Recommandé par Éliciné'
   }));
 }
 
 export async function queryQwen(userQuery: string, apiKey?: string): Promise<RawAiMovieItem[]> {
-  const { titles } = await queryAiTitles(userQuery, apiKey);
-  return titles.map((t, idx) => ({
+  const specificity = analyzeQuerySpecificity(userQuery);
+  const { titles } = await queryAiTitles(userQuery, apiKey, specificity);
+  const limit = specificity.maxResults;
+  return titles.slice(0, limit).map((t, idx) => ({
     title: t,
-    match_rate: Math.max(78, 98 - idx * 3),
-    reason: 'Recommandé par Éliciné'
+    match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 96) : Math.max(78, 98 - idx * 3),
+    reason: specificity.level === 'ultra_targeted' ? 'Correspondance exacte identifiée' : 'Recommandé par Éliciné'
   }));
 }
 
@@ -242,11 +275,11 @@ export async function fetchTmdbDetails(
 }
 
 /**
- * 3. & 4. PIPELINE END-TO-END :
- * - Query AI (Groq first, fallback Qwen)
- * - Extract Titles Safely
- * - Fetch from TMDB
- * - Return Hydrated Movies (Jamais de résultat vide si TMDB match)
+ * 3. & 4. PIPELINE END-TO-END AVEC ADAPTATION DE DENSITÉ ET VOLUME :
+ * - Analyse de spécificité (Large vs Ultra-Ciblée vs Modérée)
+ * - Query AI adaptée (prompts spécialisés, volume ciblé)
+ * - Fetch TMDB en parallèle pour le volume exact attendu
+ * - Restriction stricte des résultats si ultra-ciblée (1-2 titres) ou expansion riche si large (14-16 titres)
  */
 export async function executeCinoraSearch(
   query: string,
@@ -257,19 +290,22 @@ export async function executeCinoraSearch(
   const cleanQuery = query.trim();
   const tmdbKey = getApiKey('tmdb', apiSettings);
   const groqKey = getGroqKey(apiSettings);
+  const specificity = analyzeQuerySpecificity(cleanQuery);
+
+  console.log(`[Éliciné AI] Spécificité détectée pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, score: ${specificity.score})`);
 
   // Recherche directe TMDB si titre direct évident
   const route = analyzeSearchIntent(cleanQuery);
   if (route.intent === 'direct_tmdb') {
     const results = await searchMoviesTmdb(cleanQuery, tmdbKey, 'fr-FR');
-    const movies = (results || []).slice(0, 8).map((m, idx) => ({
+    const movies = (results || []).slice(0, 6).map((m, idx) => ({
       ...m,
-      match_rate: Math.max(78, 98 - idx * 3),
-      ai_match_reason: `Recherche directe titre : "${m.title}"`
+      match_rate: Math.max(82, 99 - idx * 4),
+      ai_match_reason: idx === 0 ? `Titre exact : "${m.title}"` : `Œuvre associée : "${m.title}"`
     }));
 
     return {
-      thought: `🎬 Recherche directe TMDB : ${movies.length} résultats trouvés`,
+      thought: `🎬 Titre direct identifié : "${movies[0]?.title || cleanQuery}"`,
       moodDetected: cleanQuery,
       recommendedMovies: movies,
       isFallbackMode: false,
@@ -283,14 +319,17 @@ export async function executeCinoraSearch(
     };
   }
 
-  // 1 & 2. Interrogation de l'IA et extraction des titres
-  let { titles, provider } = await queryAiTitles(cleanQuery, groqKey);
-  console.log(`[Éliciné AI] Titres extraits (${provider}) :`, titles);
+  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité
+  let { titles, provider } = await queryAiTitles(cleanQuery, groqKey, specificity);
+  console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
-  // 3. Hydratation depuis TMDB
+  // 3. Hydratation depuis TMDB selon le volume adéquat
   let resolvedMovies: Movie[] = [];
   if (titles.length > 0) {
-    const moviePromises = titles.slice(0, 8).map(async (title) => {
+    // Restreindre strictement pour les requêtes ultra-ciblées (max 2 ou 3) ou élargir pour les requêtes larges (max 16)
+    const titlesToFetch = titles.slice(0, specificity.maxResults);
+
+    const moviePromises = titlesToFetch.map(async (title) => {
       try {
         const url = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
         const res = await fetch(url);
@@ -304,11 +343,24 @@ export async function executeCinoraSearch(
 
     const rawTmdbList = (await Promise.all(moviePromises)).filter(Boolean);
     if (rawTmdbList.length > 0) {
-      resolvedMovies = formatTmdbResults(rawTmdbList).map((m, idx) => ({
-        ...m,
-        match_rate: Math.max(78, 98 - idx * 3),
-        ai_match_reason: `Sélection cinématographique pour "${cleanQuery}"`
-      }));
+      resolvedMovies = formatTmdbResults(rawTmdbList).map((m, idx) => {
+        let matchRate = Math.max(78, 98 - idx * 3);
+        let matchReason = `Sélection cinématographique pour "${cleanQuery}"`;
+
+        if (specificity.level === 'ultra_targeted') {
+          matchRate = idx === 0 ? 99 : (idx === 1 ? 96 : 92);
+          matchReason = `Correspondance exacte avec vos critères narratifs précis`;
+        } else if (specificity.level === 'broad') {
+          matchRate = Math.max(80, 99 - idx * 2);
+          matchReason = `Sélection incontournable pour la catégorie "${cleanQuery}"`;
+        }
+
+        return {
+          ...m,
+          match_rate: matchRate,
+          ai_match_reason: matchReason
+        };
+      });
     }
   }
 
@@ -317,15 +369,18 @@ export async function executeCinoraSearch(
   if (resolvedMovies.length === 0) {
     console.log(`[Éliciné AI] Fallback direct TMDB avec "${cleanQuery}"`);
     try {
+      const fallbackLimit = specificity.maxResults;
       const fallbackUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(cleanQuery)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
       const fallbackRes = await fetch(fallbackUrl);
       if (fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();
         if (fallbackData.results && fallbackData.results.length > 0) {
-          resolvedMovies = formatTmdbResults(fallbackData.results.slice(0, 8)).map((m, idx) => ({
+          resolvedMovies = formatTmdbResults(fallbackData.results.slice(0, fallbackLimit)).map((m, idx) => ({
             ...m,
-            match_rate: Math.max(75, 95 - idx * 3),
-            ai_match_reason: `Correspondance TMDB pour "${cleanQuery}"`
+            match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
+            ai_match_reason: specificity.level === 'ultra_targeted' 
+              ? `Correspondance TMDB directe pour "${cleanQuery}"`
+              : `Sélection TMDB pour "${cleanQuery}"`
           }));
         }
       }
@@ -336,11 +391,11 @@ export async function executeCinoraSearch(
         const multiRes = await fetch(multiUrl);
         if (multiRes.ok) {
           const multiData = await multiRes.json();
-          const valid = (multiData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 8);
+          const valid = (multiData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, fallbackLimit);
           if (valid.length > 0) {
             resolvedMovies = formatTmdbResults(valid).map((m, idx) => ({
               ...m,
-              match_rate: Math.max(75, 95 - idx * 3),
+              match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
               ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
             }));
           }
@@ -351,9 +406,18 @@ export async function executeCinoraSearch(
     }
   }
 
-  // 4. Retour des films hydratés directement à l'UI
+  // 4. Formulation du message d'explication selon la spécificité
+  let thoughtMessage = `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`;
+  if (specificity.level === 'ultra_targeted') {
+    thoughtMessage = resolvedMovies.length === 1
+      ? `🎯 Œuvre exacte identifiée selon vos critères stricts pour "${cleanQuery}"`
+      : `🎯 Correspondance ultra-ciblée (${resolvedMovies.length} œuvres exactes trouvées) pour "${cleanQuery}"`;
+  } else if (specificity.level === 'broad') {
+    thoughtMessage = `🎬 Sélection élargie (${resolvedMovies.length} œuvres trouvées) pour explorer "${cleanQuery}"`;
+  }
+
   return {
-    thought: `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`,
+    thought: thoughtMessage,
     moodDetected: cleanQuery,
     recommendedMovies: resolvedMovies,
     isFallbackMode: titles.length === 0 || resolvedMovies.length === 0,
@@ -369,6 +433,7 @@ export async function executeCinoraSearch(
 
 export const executeElicineSearch = executeCinoraSearch;
 export const unifiedAiSearch = executeElicineSearch;
+export { analyzeQuerySpecificity };
 export const AI_PROVIDERS = [
   {
     name: 'Llama 3.3 70B (Groq)',

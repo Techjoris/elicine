@@ -70,7 +70,13 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         mood: result.moodDetected,
         suggestedPrompts: result.suggestedPrompts
       });
-      showToast(`✨ CinéIA a trouvé ${result.recommendedMovies.length} correspondances parfaites !`);
+      if (result.recommendedMovies.length <= 2) {
+        showToast(`🎯 ${result.recommendedMovies.length} correspondance${result.recommendedMovies.length > 1 ? 's' : ''} exacte${result.recommendedMovies.length > 1 ? 's' : ''} identifiée${result.recommendedMovies.length > 1 ? 's' : ''} !`);
+      } else if (result.recommendedMovies.length >= 10) {
+        showToast(`🎬 Sélection élargie de ${result.recommendedMovies.length} œuvres trouvées !`);
+      } else {
+        showToast(`✨ Éliciné a trouvé ${result.recommendedMovies.length} correspondances parfaites !`);
+      }
     } catch (err: any) {
       console.error(err);
       showToast('Une erreur est survenue lors de la recherche.');
