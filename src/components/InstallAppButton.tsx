@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Download, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { AppContext } from '../context/AppContext';
+import { IosInstallModal, detectIsIOS } from './pwa';
 
 export interface InstallAppButtonProps {
   className?: string;
@@ -15,7 +16,7 @@ export const detectOS = () => {
   }
   const ua = navigator.userAgent || '';
   const isAndroid = /android/i.test(ua);
-  const isIOS = /iphone|ipad|ipod/i.test(ua);
+  const isIOS = detectIsIOS();
   const isDesktop = !isAndroid && !isIOS;
   return { isIOS, isAndroid, isDesktop };
 };
@@ -31,6 +32,7 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
     deferredPrompt
   } = usePWAInstall();
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showIosModal, setShowIosModal] = useState(false);
 
   // Masquer uniquement si déjà en mode standalone PWA (application installée)
   if (isStandalone) {
@@ -41,6 +43,13 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
   const isSidebarMode = variant === 'sidebar' || variant === 'link';
 
   const handleDirectInstall = async () => {
+    // Sur iOS (Safari / WebKit mobile), l'API beforeinstallprompt n'est pas supportée nativement.
+    // Afficher directement la modale explicative Safari pour l'ajout à l'écran d'accueil :
+    if (isIOS) {
+      setShowIosModal(true);
+      return;
+    }
+
     // Si deferredPrompt est disponible (Android/Desktop/Chrome avec prompt ready) :
     if (deferredPrompt) {
       try {
@@ -54,7 +63,7 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
       }
     }
 
-    // Si deferredPrompt n'est pas encore disponible ou sur iOS Safari :
+    // Si deferredPrompt n'est pas encore disponible :
     // Afficher la boîte de dialogue explicative courte et le toast
     setShowGuideModal(true);
     if (appContext?.showToast) {
@@ -128,6 +137,7 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
           </span>
         </button>
         {guideModal}
+        <IosInstallModal isOpen={showIosModal} onClose={() => setShowIosModal(false)} />
       </>
     );
   }
@@ -148,6 +158,7 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
         <span className="hidden sm:inline">Installer</span>
       </button>
       {guideModal}
+      <IosInstallModal isOpen={showIosModal} onClose={() => setShowIosModal(false)} />
     </>
   );
 };
