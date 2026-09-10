@@ -26,6 +26,7 @@ export interface SidebarProps {
   onGoHome?: () => void;
   onOpenDevModal?: () => void;
   onOpenSupport?: () => void;
+  onOpenTip?: () => void;
   onNavigateTerms?: (section?: string) => void;
 }
 
@@ -33,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onGoHome, 
   onOpenDevModal, 
   onOpenSupport,
+  onOpenTip,
   onNavigateTerms 
 }) => {
   const { user } = useAuth();
@@ -47,9 +49,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     showToast,
     setIsProModalOpen,
     setIsAuthModalOpen,
+    setIsTipModalOpen,
     isMobileMenuOpen,
     setIsMobileMenuOpen
   } = useApp();
+
+  const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
 
   const SHOW_DEV_PANEL = (import.meta as any).env?.DEV || (typeof localStorage !== 'undefined' && localStorage.getItem('elicine_show_dev') === 'true');
 
@@ -207,15 +212,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Bouton Installer l'application (PWA & APK) */}
         <InstallAppButton variant="sidebar" className="w-full" />
 
-        {/* Bouton Soutenir le projet (PayPal) */}
+        {/* Bouton Soutenir le projet (Don unifié) */}
         <button
           type="button"
           onClick={() => {
-            if (onOpenSupport) onOpenSupport();
+            handleOpenTip();
             setIsMobileMenuOpen(false);
           }}
           className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none"
-          title="Faire un don"
+          title="Soutenir le projet Éliciné"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm">☕</span>

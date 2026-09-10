@@ -22,10 +22,11 @@ interface ProfileMenuProps {
 
 export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenSettings,
-  onOpenPro
+  onOpenPro,
+  onOpenTip
 }) => {
   const { user, loading, signOut } = useAuth();
-  const { user: appUser, setIsAuthModalOpen, setActiveView, watchlist } = useApp();
+  const { user: appUser, setIsAuthModalOpen, setActiveView, watchlist, setIsTipModalOpen } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -280,6 +281,22 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
                 <span className="font-bold text-xs">{(activeUser as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+              </button>
+
+              {/* ☕ Soutenir le projet */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  if (onOpenTip) onOpenTip();
+                  else setIsTipModalOpen(true);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-left cursor-pointer"
+              >
+                <span className="text-sm leading-none flex-shrink-0">☕</span>
+                <span className="font-medium text-xs">Soutenir le projet</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-white/10" />

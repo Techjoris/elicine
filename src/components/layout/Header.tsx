@@ -86,6 +86,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
               <ProfileMenu
                 onOpenSettings={handleOpenSettings}
                 onOpenPro={() => setIsProModalOpen(true)}
+                onOpenTip={handleOpenTip}
               />
             </div>
           ) : (

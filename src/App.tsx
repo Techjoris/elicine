@@ -48,7 +48,8 @@ export const AppContent: React.FC = () => {
     isThankYouModalOpen,
     setIsThankYouModalOpen,
     isProSuccessModalOpen,
-    setIsProSuccessModalOpen
+    setIsProSuccessModalOpen,
+    setIsTipModalOpen
   } = useApp();
 
   const { t } = useTranslation();
@@ -237,7 +238,7 @@ export const AppContent: React.FC = () => {
     <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white transition-colors duration-200">
       
       {/* Fixed Header */}
-      <Header onGoHome={handleResetHome} />
+      <Header onGoHome={handleResetHome} onOpenTip={() => setIsTipModalOpen(true)} />
 
       {/* Main Body Layout (Sidebar + Content) */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
@@ -246,7 +247,8 @@ export const AppContent: React.FC = () => {
         <Sidebar 
           onGoHome={handleResetHome} 
           onOpenDevModal={() => setIsDevModalOpen(true)} 
-          onOpenSupport={() => setIsSupportOpen(true)} 
+          onOpenSupport={() => setIsTipModalOpen(true)} 
+          onOpenTip={() => setIsTipModalOpen(true)}
           onNavigateTerms={handleNavigateTerms}
         />
 
