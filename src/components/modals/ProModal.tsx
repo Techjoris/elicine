@@ -30,25 +30,25 @@ export const ProModal: React.FC = () => {
         name,
         description: `Pass Pro Éliciné (${cleanAmount} ${cleanCurrency} - ${payload?.plan === 'yearly' ? 'Annuel' : 'Mensuel'})`,
         returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro`,
-        openInNewTab: false
+        openInNewTab: false,
+        skipRedirect: true
       });
 
       console.log('[ProModal] Objet JSON Moneroo reçu :', result);
 
       const redirectUrl = 
+        (result as any)?.data?.checkout_url || 
         result.checkout_url || 
         result.link || 
+        (result as any)?.data?.link || 
         result.url || 
         result.paymentUrl || 
-        (result as any)?.data?.checkout_url || 
-        (result as any)?.data?.link || 
-        (result as any)?.data?.url ||
         extractMonerooRedirectUrl(result);
 
       if (redirectUrl) {
         showToast('Redirection vers la passerelle de paiement Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.assign(redirectUrl);
+          window.location.href = redirectUrl;
         }
       } else {
         showToast(result.message || "Impossible de générer le lien de paiement Moneroo.");

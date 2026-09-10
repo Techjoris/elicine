@@ -74,14 +74,28 @@ export default async function handler(req, res) {
 
   // 4. POST : Initialisation de paiement Moneroo
   if (req.method === 'POST') {
-    if (!secretKey) {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (_) {
+        body = {};
+      }
+    }
+    body = body || {};
+
+    const effectiveSecretKey = (
+      secretKey ||
+      body?.secretKey ||
+      ''
+    ).trim();
+
+    if (!effectiveSecretKey) {
       console.error('[Moneroo API] Clé secrète absente dans process.env.MONEROO_SECRET_KEY');
       return res.status(500).json({ 
         error: 'Clé secrète MONEROO_SECRET_KEY non configurée sur le serveur. Veuillez définir MONEROO_SECRET_KEY dans les variables d’environnement.' 
       });
     }
-
-    const body = req.body || {};
     const {
       amount,
       currency = 'XAF',
@@ -149,7 +163,7 @@ export default async function handler(req, res) {
       const response = await fetch('https://api.moneroo.io/v1/payments/initialize', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${secretKey}`,
+          'Authorization': `Bearer ${effectiveSecretKey}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -236,7 +250,11 @@ export default async function handler(req, res) {
         paymentUrl: checkoutUrl,
         url: checkoutUrl,
         reference: data?.data?.id || data?.id || data?.data?.reference || data?.reference,
-        data: data.data || data,
+        data: {
+          ...(typeof data.data === 'object' && data.data !== null ? data.data : {}),
+          checkout_url: checkoutUrl,
+          link: checkoutUrl
+        },
         raw: data
       });
     } catch (err) {

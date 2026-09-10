@@ -184,6 +184,7 @@ export interface MonerooCheckoutParams {
   description?: string;
   returnUrl?: string;
   openInNewTab?: boolean;
+  skipRedirect?: boolean;
   publicKey?: string;
   hashKey?: string;
   isTestMode?: boolean;
@@ -217,10 +218,10 @@ export function extractMonerooRedirectUrl(res: any): string | null {
 
   console.log('[Moneroo API] Analyse de l\'objet réponse pour extraction du lien :', res);
 
-  // 1. Chemins directs prioritaires
+  // 1. Chemins prioritaires rigoureux (comme spécifié par l'API Moneroo)
   const directCandidates = [
-    res?.checkout_url,
     res?.data?.checkout_url,
+    res?.checkout_url,
     res?.link,
     res?.data?.link,
     res?.paymentUrl,
@@ -337,7 +338,10 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
           'Accept': 'application/json',
           ...(authHeader ? { 'Authorization': authHeader } : {})
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...payload,
+          secretKey: secretKey || undefined
+        })
       });
 
       const resText = await serverRes.text();
@@ -394,11 +398,13 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     const paymentId = data?.reference || data?.data?.id || data?.id || data?.data?.reference;
 
     if (checkoutUrl) {
-      console.log('[Moneroo Service] ✓ Redirection vers :', checkoutUrl);
-      if (params.openInNewTab && typeof window !== 'undefined') {
-        window.open(checkoutUrl, '_blank');
-      } else if (typeof window !== 'undefined') {
-        window.location.assign(checkoutUrl);
+      console.log('[Moneroo Service] ✓ Checkout URL extraite :', checkoutUrl);
+      if (!params.skipRedirect) {
+        if (params.openInNewTab && typeof window !== 'undefined') {
+          window.open(checkoutUrl, '_blank');
+        } else if (typeof window !== 'undefined') {
+          window.location.href = checkoutUrl;
+        }
       }
 
       return {
@@ -409,7 +415,11 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         link: checkoutUrl,
         url: checkoutUrl,
         reference: paymentId,
-        data: data?.data || data,
+        data: {
+          ...(typeof data?.data === 'object' && data?.data !== null ? data.data : {}),
+          checkout_url: checkoutUrl,
+          link: checkoutUrl
+        },
         rawResponse: data
       };
     }

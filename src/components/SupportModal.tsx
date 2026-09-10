@@ -105,7 +105,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         currency: momoCurrency
       });
 
-      const res = await processMonerooCheckout({
+      const response = await processMonerooCheckout({
         amount,
         currency: momoCurrency,
         paymentType: 'tip',
@@ -113,48 +113,46 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description: `Soutien Éliciné (${amount} ${momoCurrency})`,
-        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
+        skipRedirect: true
       });
 
-      // 1. Affichage & analyse précise de l'objet JSON retourné par Moneroo
-      console.log('[SupportModal] Objet JSON complet retourné par Moneroo :', res);
+      // 1. Affiche ou analyse précisément l'objet JSON retourné par Moneroo lors de l'initialisation du paiement
+      console.log('[Moneroo API] Objet JSON complet retourné lors de l\'initialisation :', response);
+      console.log('[Moneroo API] JSON stringify :', JSON.stringify(response, null, 2));
+      console.log('[Moneroo API] response.data.checkout_url :', (response as any)?.data?.checkout_url);
+      console.log('[Moneroo API] response.checkout_url :', (response as any)?.checkout_url);
+      console.log('[Moneroo API] response.link :', (response as any)?.link);
 
-      // 2. Extraction du lien de redirection en vérifiant rigoureusement tous les chemins :
-      // - response.data.checkout_url
-      // - response.checkout_url
-      // - response.link
-      // - response.data.link
-      // - response.paymentUrl / response.url
+      // Récupération du lien de redirection (vérifie précisément les chemins comme response.data.checkout_url, response.checkout_url ou response.link)
       const redirectUrl = 
-        res?.checkout_url ||
-        res?.link ||
-        res?.url ||
-        res?.paymentUrl ||
-        (res?.data as any)?.checkout_url ||
-        (res?.data as any)?.link ||
-        (res?.data as any)?.url ||
-        (res?.rawResponse as any)?.data?.checkout_url ||
-        (res?.rawResponse as any)?.checkout_url ||
-        (res?.rawResponse as any)?.link ||
-        (res?.rawResponse as any)?.data?.link ||
-        extractMonerooRedirectUrl(res);
+        (response as any)?.data?.checkout_url ||
+        (response as any)?.checkout_url ||
+        (response as any)?.link ||
+        (response as any)?.data?.link ||
+        (response as any)?.paymentUrl ||
+        (response as any)?.url ||
+        (response as any)?.rawResponse?.data?.checkout_url ||
+        (response as any)?.rawResponse?.checkout_url ||
+        (response as any)?.rawResponse?.link ||
+        (response as any)?.rawResponse?.data?.link ||
+        extractMonerooRedirectUrl(response);
 
+      // 2. Redirige immédiatement l'utilisateur vers cette URL une fois reçue au lieu de laisser le bouton figé
       if (redirectUrl) {
-        console.log('[SupportModal] ✓ Lien de redirection Moneroo validé :', redirectUrl);
-        showToast('Redirection immédiate vers le paiement Moneroo...');
+        console.log('[SupportModal] ✓ URL de redirection Moneroo obtenue avec succès :', redirectUrl);
+        showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
         
-        // Redirection immédiate vers la page de paiement sécurisée
-        if (typeof window !== 'undefined') {
-          window.location.assign(redirectUrl);
-        }
+        // Débloquer immédiatement le bouton pour ne jamais le laisser figé
+        setIsProcessing(false);
 
-        // Déverrouillage de secours au bout de quelques secondes si la page ne s'est pas encore déchargée
-        setTimeout(() => {
-          setIsProcessing(false);
-        }, 3000);
+        // Redirection immédiate vers l'URL Moneroo
+        if (typeof window !== 'undefined') {
+          window.location.href = redirectUrl;
+        }
       } else {
-        console.error('[SupportModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', res);
-        const errorMsg = res?.message || "Impossible de récupérer le lien de paiement Moneroo.";
+        console.error('[SupportModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', response);
+        const errorMsg = response?.message || (response as any)?.error || "Impossible de récupérer le lien de paiement Moneroo.";
         showToast(errorMsg);
         setIsProcessing(false);
       }
@@ -162,11 +160,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       console.error('[SupportModal] Exception initialisation Moneroo :', err);
       showToast(err?.message || "Échec de l'initialisation du paiement Moneroo.");
       setIsProcessing(false);
-    } finally {
-      // Déblocage garanti du bouton
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 2500);
     }
   };
 

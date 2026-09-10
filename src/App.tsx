@@ -183,19 +183,18 @@ export const AppContent: React.FC = () => {
       console.log('[App] Objet JSON Moneroo reçu :', result);
 
       const redirectUrl = 
+        (result as any)?.data?.checkout_url ||
         result?.checkout_url ||
         result?.link ||
+        (result as any)?.data?.link ||
         result?.url ||
         result?.paymentUrl ||
-        (result as any)?.data?.checkout_url ||
-        (result as any)?.data?.link ||
-        (result as any)?.data?.url ||
         extractMonerooRedirectUrl(result);
 
       if (redirectUrl) {
         showToast('Redirection immédiate vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.assign(redirectUrl);
+          window.location.href = redirectUrl;
         }
       } else {
         console.error('[App] Erreur retournée par Moneroo :', result);
