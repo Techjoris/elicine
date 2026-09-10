@@ -1,6 +1,30 @@
 {
   "rewrites": [
     {
+      "source": "/api/auth/:action*",
+      "destination": "/api/auth?action=:action*"
+    },
+    {
+      "source": "/api/groq",
+      "destination": "/api/ai"
+    },
+    {
+      "source": "/api/recommend",
+      "destination": "/api/ai"
+    },
+    {
+      "source": "/api/moneroo/verify",
+      "destination": "/api/moneroo"
+    },
+    {
+      "source": "/api/notchpay/(.*)",
+      "destination": "/api/moneroo"
+    },
+    {
+      "source": "/api/notchpay",
+      "destination": "/api/moneroo"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

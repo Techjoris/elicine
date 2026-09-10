@@ -758,10 +758,11 @@ export async function testAiApiKey(provider: 'groq' | 'openai', key?: string): P
       if (key && key.trim()) {
         headers['Authorization'] = `Bearer ${key.trim()}`;
       }
-      const res = await fetch('/api/groq', {
+      const res = await fetch('/api/ai', {
         method: 'POST',
         headers,
         body: JSON.stringify({
+          provider: 'groq',
           model: 'llama-3.3-70b-versatile',
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 5

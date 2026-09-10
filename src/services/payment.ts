@@ -349,8 +349,8 @@ export async function verifyMonerooPayment(reference: string): Promise<{
       };
     }
 
-    // Fallback vers /api/moneroo/verify
-    const fallbackRes = await fetch(`/api/moneroo/verify?id=${encodeURIComponent(reference)}`);
+    // Fallback vers /api/moneroo
+    const fallbackRes = await fetch(`/api/moneroo?id=${encodeURIComponent(reference)}`);
     if (fallbackRes.ok) {
       const fbData = await fallbackRes.json();
       return {

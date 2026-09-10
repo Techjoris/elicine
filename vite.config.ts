@@ -43,8 +43,8 @@ export default defineConfig(({ mode }) => {
               });
             };
 
-            // 1. ROUTE /api/ai ET /api/groq
-            if ((pathname === '/api/ai' || pathname === '/api/groq') && req.method === 'POST') {
+            // 1. ROUTE /api/ai (et alias /api/groq, /api/recommend)
+            if ((pathname === '/api/ai' || pathname === '/api/groq' || pathname === '/api/recommend') && req.method === 'POST') {
               adaptResponse();
               (req as any).body = await getBody();
               try {
@@ -93,6 +93,28 @@ export default defineConfig(({ mode }) => {
                 const fileUrl = pathToFileURL(path.resolve('./api/moneroo.js')).href;
                 const monerooHandler = (await import(/* @vite-ignore */ fileUrl)).default;
                 return await monerooHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
+            // 4. ROUTE /api/auth (login, register, send-verification, google)
+            if (pathname.startsWith('/api/auth')) {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              const subpath = pathname.replace(/^\/api\/auth\/?/, '');
+              if (subpath) query.action = subpath;
+              (req as any).query = query;
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/auth.js')).href;
+                const authHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await authHandler(req, res);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
