@@ -1,7 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
-import { processMonerooCheckout, verifyMonerooPayment, extractMonerooRedirectUrl, CURRENCY_CONFIGS } from '../services/payment';
+import { 
+  processMonerooCheckout, 
+  verifyMonerooPayment, 
+  extractMonerooRedirectUrl, 
+  CURRENCY_CONFIGS,
+  getMonerooDefaultCurrency,
+  convertToMonerooCurrency,
+  isAfricanCurrency
+} from '../services/payment';
 import { Currency } from '../types';
 
 export interface MonerooTipPayload {
@@ -33,8 +41,9 @@ const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: nu
 
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenMoneroo, onOpenNotchPay }) => {
   const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
+  const defaultMonerooCurr = getMonerooDefaultCurrency();
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
-  const [momoCurrency, setMomoCurrency] = useState<Currency>('XAF');
+  const [momoCurrency, setMomoCurrency] = useState<Currency>(defaultMonerooCurr);
   const [freeAmount, setFreeAmount] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,7 +53,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   const handleCurrencyChange = (newCurr: Currency) => {
     setMomoCurrency(newCurr);
     setErrorMessage(null);
-    const def = presetsByCurrency[newCurr]?.defaultAmount || 2;
+    const def = presetsByCurrency[newCurr]?.defaultAmount || (isAfricanCurrency(newCurr) ? 1000 : 2);
     setFreeAmount(def.toString());
   };
 
@@ -95,29 +104,36 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = Math.max(1, Math.round(Number(freeAmount)));
+    const rawNum = Number(freeAmount);
 
-    if (!amount || amount < 1) {
+    if (!rawNum || rawNum <= 0) {
       showToast("Veuillez entrer un montant valide supérieur à 0.");
       return;
     }
+
+    const { amount, currency } = convertToMonerooCurrency(
+      rawNum,
+      momoCurrency,
+      defaultMonerooCurr,
+      false
+    );
 
     setErrorMessage(null);
     setIsProcessing(true);
     try {
       console.log('[SupportModal] Initialisation Moneroo avec :', {
         amount,
-        currency: momoCurrency
+        currency
       });
 
       const data = await processMonerooCheckout({
         amount,
-        currency: momoCurrency,
+        currency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
-        description: `Soutien Éliciné (${amount} ${momoCurrency})`,
+        description: `Soutien Éliciné (${amount} ${currency})`,
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
         skipRedirect: true
       });
@@ -342,7 +358,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 Devise du paiement Mobile Money
               </label>
               <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full justify-center gap-1">
-                {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+                {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -357,6 +373,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   </button>
                 ))}
               </div>
+
+              {!isAfricanCurrency(momoCurrency) && (
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1.5 mt-1">
+                  <span>💡</span>
+                  <span>
+                    Mobile Money traite les transactions en FCFA ({defaultMonerooCurr}). Équivalent : ~{convertToMonerooCurrency(Number(freeAmount) || 1, momoCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Champ Montant */}
@@ -426,7 +451,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                   <span>Initialisation du paiement...</span>
                 </>
               ) : (
-                <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency} via Mobile Money →</span>
+                <span>
+                  Envoyer {convertToMonerooCurrency(Number(freeAmount) || 1000, momoCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA ({convertToMonerooCurrency(Number(freeAmount) || 1000, momoCurrency, defaultMonerooCurr).currency}) via Mobile Money →
+                </span>
               )}
             </button>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">

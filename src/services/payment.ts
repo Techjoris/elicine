@@ -153,6 +153,73 @@ export function isAfricanCurrency(currency: Currency): boolean {
   return currency === 'XAF' || currency === 'XOF';
 }
 
+/** Devise par défaut active pour Moneroo (défaut : XOF - Franc CFA UEMOA natif Moneroo) */
+export const DEFAULT_MONEROO_CURRENCY: Currency = 'XOF';
+
+/**
+ * Récupère la devise par défaut configurée pour Moneroo.
+ * Permet de forcer dynamiquement la devise configurée et activée dans le tableau de bord Moneroo.
+ */
+export function getMonerooDefaultCurrency(): Currency {
+  const envCurr = (
+    (import.meta as any).env?.VITE_MONEROO_DEFAULT_CURRENCY ||
+    (import.meta as any).env?.MONEROO_DEFAULT_CURRENCY ||
+    (typeof process !== 'undefined' ? (process.env?.VITE_MONEROO_DEFAULT_CURRENCY || process.env?.MONEROO_DEFAULT_CURRENCY) : '') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('cinéia_moneroo_default_currency') : '') ||
+    'XOF'
+  ).trim().toUpperCase();
+
+  return (envCurr === 'XAF' || envCurr === 'XOF') ? (envCurr as Currency) : 'XOF';
+}
+
+/**
+ * Convertit et normalise un montant et une devise selon les attentes strictes de l'API Moneroo.
+ * - Pour XOF / XAF : entier strict sans décimale, minimum 100 FCFA.
+ * - Si une devise non supportée (EUR, USD, CAD) est envoyée pour un paiement Mobile,
+ *   elle est convertie automatiquement dans la devise par défaut Moneroo (XOF).
+ */
+export function convertToMonerooCurrency(
+  amount: number,
+  currency: Currency | string,
+  targetCurrency: Currency = getMonerooDefaultCurrency(),
+  isProPlan: boolean = false,
+  isYearly: boolean = false
+): { amount: number; currency: Currency } {
+  const cleanCurr = String(currency || targetCurrency).trim().toUpperCase();
+
+  // Si c'est déjà une devise africaine conforme (XOF ou XAF)
+  if (cleanCurr === 'XOF' || cleanCurr === 'XAF') {
+    return {
+      amount: Math.max(100, Math.round(Number(amount) || 1000)),
+      currency: (cleanCurr as Currency)
+    };
+  }
+
+  // Pour le Pass Pro, appliquer le tarif officiel en FCFA (2 500 ou 20 000)
+  if (isProPlan) {
+    return {
+      amount: isYearly ? 20000 : 2500,
+      currency: targetCurrency
+    };
+  }
+
+  // Conversion de don (EUR / USD / CAD vers FCFA XOF/XAF)
+  const ratesToFcfa: Record<string, number> = {
+    EUR: 655.957,
+    USD: 610.0,
+    CAD: 450.0
+  };
+
+  const rate = ratesToFcfa[cleanCurr] || 655.957;
+  const converted = Math.max(500, Math.round((Number(amount) || 2) * rate));
+  const cleanRounded = Math.ceil(converted / 50) * 50;
+
+  return {
+    amount: cleanRounded,
+    currency: targetCurrency
+  };
+}
+
 /** Minimum amounts for card payments (FCFA) */
 export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
   tip: 1000,
@@ -292,13 +359,21 @@ export function extractMonerooRedirectUrl(res: any): string | null {
  */
 export async function processMonerooCheckout(params: MonerooCheckoutParams): Promise<MonerooCheckoutResult> {
   const secretKey = getMonerooSecretKey();
+  const defaultMonerooCurr = getMonerooDefaultCurrency();
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
+  const isPro = type === 'pro';
+  const isYearly = params.billingCycle === 'yearly';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
   const successCallbackUrl = (params.returnUrl || `${origin}/?payment_status=success&type=${type}`).trim();
 
-  const formattedCurrency = String(params.currency || 'XAF').trim().toUpperCase();
-  const rawNumAmount = Number(params.amount);
-  const finalAmount = (formattedCurrency === 'XAF' || formattedCurrency === 'XOF') ? Math.round(rawNumAmount) : Number(rawNumAmount);
+  // Normalisation stricte de la devise et du montant selon les exigences Moneroo
+  const { amount: finalAmount, currency: formattedCurrency } = convertToMonerooCurrency(
+    params.amount,
+    params.currency,
+    defaultMonerooCurr,
+    isPro,
+    isYearly
+  );
 
   if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
     return {
@@ -311,10 +386,10 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
   const firstName = nameParts[0] || 'Cinéphile';
   const lastName = nameParts.slice(1).join(' ') || firstName;
 
-  const payload = {
-    amount: finalAmount,
-    currency: formattedCurrency,
-    description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
+  const buildPayload = (curr: Currency, amt: number) => ({
+    amount: amt,
+    currency: curr,
+    description: params.description || (isPro ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
     customer: {
       email: (params.email || '').trim() || 'contact@elicine.com',
       first_name: firstName,
@@ -322,8 +397,9 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     },
     return_url: successCallbackUrl,
     redirect_url: successCallbackUrl
-  };
+  });
 
+  const payload = buildPayload(formattedCurrency, finalAmount);
   const authHeader = secretKey ? `Bearer ${secretKey}` : '';
 
   try {
@@ -352,7 +428,7 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         data = { message: resText };
       }
 
-      // 1. Structure exacte reçue de l'API Moneroo
+      // Structure exacte reçue de l'API Moneroo
       console.log("REPONSE MONEROO :", data);
 
       if (!serverRes.ok) {
@@ -367,7 +443,8 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     // 2. Secours direct vers l'API Moneroo si nécessaire et si une clé secrète existe
     const potentialUrl = extractMonerooRedirectUrl(data);
     if (!potentialUrl && authHeader) {
-      try {
+      const callDirectApi = async (reqCurr: Currency, reqAmt: number) => {
+        const directPayload = buildPayload(reqCurr, reqAmt);
         const directRes = await fetch('https://api.moneroo.io/v1/payments/initialize', {
           method: 'POST',
           headers: {
@@ -375,20 +452,38 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(directPayload)
         });
-
         const directText = await directRes.text();
+        let directJson: any = {};
         try {
-          const directData = JSON.parse(directText);
-          console.log("REPONSE MONEROO :", directData);
-          if (directRes.ok) {
-            data = directData;
-          } else {
-            lastError = directData?.message || directData?.error || `Erreur Moneroo direct (${directRes.status})`;
-          }
+          directJson = JSON.parse(directText);
         } catch (_) {
-          lastError = directText || `Erreur HTTP ${directRes.status}`;
+          directJson = { message: directText };
+        }
+        return { ok: directRes.ok, status: directRes.status, json: directJson };
+      };
+
+      try {
+        const directResult = await callDirectApi(formattedCurrency, finalAmount);
+        console.log("REPONSE MONEROO DIRECTE :", directResult.json);
+        if (directResult.ok) {
+          data = directResult.json;
+        } else {
+          lastError = directResult.json?.message || directResult.json?.error || `Erreur Moneroo direct (${directResult.status})`;
+          
+          // Repli dynamique si la devise n'est pas activée dans le compte marchand
+          const errMsg = String(lastError).toLowerCase();
+          if (errMsg.includes('no payment methods enabled') || errMsg.includes('payment methods for this currency')) {
+            const alternateCurr = formattedCurrency === 'XAF' ? 'XOF' : (formattedCurrency === 'XOF' ? 'XAF' : null);
+            if (alternateCurr) {
+              console.warn(`[Moneroo] Tentative directe de repli avec ${alternateCurr}...`);
+              const retryResult = await callDirectApi(alternateCurr, finalAmount);
+              if (retryResult.ok) {
+                data = retryResult.json;
+              }
+            }
+          }
         }
       } catch (directErr: any) {
         lastError = directErr?.message || 'Erreur réseau API directe Moneroo';
@@ -437,7 +532,12 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
     const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
     const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-    const finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}.`;
+    let finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}.`;
+
+    if (finalErrMsg.toLowerCase().includes('no payment methods enabled') || finalErrMsg.toLowerCase().includes('payment methods for this currency')) {
+      finalErrMsg = `Aucune méthode de paiement n'est activée pour la devise ${formattedCurrency} dans votre tableau de bord Moneroo. Veuillez activer vos passerelles (MTN MoMo, Moov, Orange, Wave...) sur https://app.moneroo.io > Applications > Modes de paiement, ou configurer VITE_MONEROO_DEFAULT_CURRENCY.`;
+    }
+
     console.error('[Moneroo Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
     return {
       success: false,
@@ -516,7 +616,7 @@ export const handleMonerooPayment = async (
   userEmail: string, 
   userName: string,
   amount: number = 2500,
-  currency: string = 'XAF',
+  currency: string = getMonerooDefaultCurrency(),
   description: string = 'Abonnement Pass Pro Éliciné'
 ) => {
   return processMonerooCheckout({

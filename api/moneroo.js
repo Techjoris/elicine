@@ -96,9 +96,16 @@ export default async function handler(req, res) {
         error: 'Clé secrète MONEROO_SECRET_KEY non configurée sur le serveur. Veuillez définir MONEROO_SECRET_KEY dans les variables d’environnement.' 
       });
     }
+    // Récupération de la devise par défaut configurée (défaut : XOF - Franc CFA UEMOA natif Moneroo)
+    const defaultCurrency = (
+      process.env.MONEROO_DEFAULT_CURRENCY ||
+      process.env.VITE_MONEROO_DEFAULT_CURRENCY ||
+      'XOF'
+    ).trim().toUpperCase();
+
     const {
       amount,
-      currency = 'XAF',
+      currency,
       description = 'Soutien au projet Éliciné',
       email = 'contact@elicine.com',
       name = 'Cinéphile Bienfaiteur',
@@ -108,17 +115,36 @@ export default async function handler(req, res) {
       callbackUrl
     } = body;
 
-    // Validation stricte du montant
-    const numAmount = Number(amount);
+    // Validation et conversion du montant
+    let numAmount = Number(amount);
     if (!numAmount || isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ 
-        error: 'Le montant du don doit être supérieur à 0.' 
+        error: 'Le montant du paiement doit être supérieur à 0.' 
       });
     }
 
-    // Normalisation de la devise (ISO uppercase)
-    const cleanCurrency = String(currency || 'XAF').trim().toUpperCase();
-    const finalAmount = (cleanCurrency === 'XAF' || cleanCurrency === 'XOF') ? Math.round(numAmount) : Number(numAmount);
+    // Normalisation intelligente de la devise :
+    // Si la devise demandée est EUR, USD ou CAD, convertir vers la devise par défaut Moneroo (ex: XOF)
+    // car les passerelles Mobile Money de Moneroo n'acceptent pas les devises occidentales.
+    let cleanCurrency = String(currency || defaultCurrency).trim().toUpperCase();
+    if (cleanCurrency === 'EUR' || cleanCurrency === 'USD' || cleanCurrency === 'CAD') {
+      const descLower = String(description || '').toLowerCase();
+      if (descLower.includes('pass pro') || descLower.includes('abonnement')) {
+        numAmount = descLower.includes('annuel') || descLower.includes('yearly') ? 20000 : 2500;
+      } else {
+        const rates = { EUR: 655.957, USD: 610.0, CAD: 450.0 };
+        const rate = rates[cleanCurrency] || 655.957;
+        const converted = Math.max(500, Math.round(numAmount * rate));
+        numAmount = Math.ceil(converted / 50) * 50;
+      }
+      cleanCurrency = defaultCurrency;
+    }
+
+    // Normalisation stricte du montant pour l'API Moneroo :
+    // Pour XOF/XAF, Moneroo exige un nombre entier strict sans décimale et au minimum 100 FCFA.
+    const finalAmount = (cleanCurrency === 'XAF' || cleanCurrency === 'XOF') 
+      ? Math.max(100, Math.round(numAmount)) 
+      : Number(Number(numAmount).toFixed(2));
 
     // Normalisation du nom client pour l'objet customer obligatoire de Moneroo
     const rawName = String(name || '').trim() || 'Cinéphile Bienfaiteur';
@@ -139,54 +165,86 @@ export default async function handler(req, res) {
       `${fallbackOrigin}/?payment_status=success&type=don`
     ).trim();
 
-    // Payload complet conforme aux spécifications de l'API Moneroo
-    const payload = {
-      amount: finalAmount,
-      currency: cleanCurrency,
-      description: String(description || 'Soutien au projet Éliciné').trim(),
-      customer: {
-        email: (email || '').trim() || 'contact@elicine.com',
-        first_name: firstName,
-        last_name: lastName
-      },
-      return_url: resolvedReturnUrl,
-      redirect_url: resolvedReturnUrl // Inclus pour compatibilité stricte
-    };
+    // Fonction d'envoi vers l'API Moneroo
+    const makeInitializeRequest = async (curr, amt) => {
+      const reqPayload = {
+        amount: amt,
+        currency: curr,
+        description: String(description || 'Soutien au projet Éliciné').trim(),
+        customer: {
+          email: (email || '').trim() || 'contact@elicine.com',
+          first_name: firstName,
+          last_name: lastName
+        },
+        return_url: resolvedReturnUrl,
+        redirect_url: resolvedReturnUrl
+      };
 
-    try {
       console.log(`[Moneroo Serverless] Appel initialisation POST https://api.moneroo.io/v1/payments/initialize :`, {
-        amount: payload.amount,
-        currency: payload.currency,
-        return_url: payload.return_url
+        amount: reqPayload.amount,
+        currency: reqPayload.currency,
+        return_url: reqPayload.return_url
       });
 
-      const response = await fetch('https://api.moneroo.io/v1/payments/initialize', {
+      const resp = await fetch('https://api.moneroo.io/v1/payments/initialize', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${effectiveSecretKey}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(reqPayload)
       });
 
-      const responseText = await response.text();
-      let data = {};
+      const respText = await resp.text();
+      let resJson = {};
       try {
-        data = JSON.parse(responseText);
+        resJson = JSON.parse(respText);
       } catch (_) {
-        data = { message: responseText };
+        resJson = { message: respText };
       }
+
+      return { resp, resJson, payload: reqPayload };
+    };
+
+    try {
+      let { resp: response, resJson: data, payload } = await makeInitializeRequest(cleanCurrency, finalAmount);
       console.log("REPONSE MONEROO :", data);
       console.log('[Moneroo API JSON Response]:', JSON.stringify(data, null, 2));
 
+      // Repli dynamique : si Moneroo renvoie "No payment methods enabled for this currency",
+      // tenter automatiquement avec l'autre devise CFA (XOF <-> XAF)
+      const errorText = String(data?.message || data?.error || '').toLowerCase();
+      const isPaymentMethodNotEnabled = 
+        errorText.includes('no payment methods enabled') ||
+        errorText.includes('payment methods for this currency') ||
+        errorText.includes('method not activated');
+
+      if (!response.ok && isPaymentMethodNotEnabled) {
+        const alternateCurrency = cleanCurrency === 'XAF' ? 'XOF' : (cleanCurrency === 'XOF' ? 'XAF' : null);
+        if (alternateCurrency) {
+          console.warn(`[Moneroo Serverless] Devise ${cleanCurrency} non activée dans Moneroo. Tentative automatique de repli avec ${alternateCurrency}...`);
+          const fallback = await makeInitializeRequest(alternateCurrency, finalAmount);
+          if (fallback.resp.ok) {
+            response = fallback.resp;
+            data = fallback.resJson;
+            payload = fallback.payload;
+            console.log(`[Moneroo Serverless] Repli réussi avec la devise ${alternateCurrency} !`);
+          }
+        }
+      }
+
       if (!response.ok) {
-        const errorMsg = data?.message || data?.error || (data?.errors ? JSON.stringify(data.errors) : `Erreur Moneroo (HTTP ${response.status})`);
+        let errorMsg = data?.message || data?.error || (data?.errors ? JSON.stringify(data.errors) : `Erreur Moneroo (HTTP ${response.status})`);
+        if (isPaymentMethodNotEnabled) {
+          errorMsg = `Aucune méthode de paiement n'est activée pour la devise ${payload.currency} dans votre tableau de bord Moneroo. Veuillez activer vos modes de paiement (MTN MoMo, Moov, Orange, Wave...) sur https://app.moneroo.io ou configurer MONEROO_DEFAULT_CURRENCY.`;
+        }
         console.error('[Moneroo API Error]', response.status, errorMsg, data);
         return res.status(response.status).json({
           error: errorMsg,
           message: errorMsg,
           status: response.status,
+          currency: payload.currency,
           details: data
         });
       }

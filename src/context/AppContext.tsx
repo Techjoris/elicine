@@ -212,7 +212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 4. Currency
   const [currency, setCurrencyState] = useState<Currency>(() => {
     const saved = localStorage.getItem('cineia_currency') as Currency;
-    return saved || 'XAF';
+    return saved || 'XOF';
   });
 
   // 5. Watchlist

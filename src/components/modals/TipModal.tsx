@@ -7,7 +7,15 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CURRENCY_CONFIGS, processMonerooCheckout, verifyMonerooPayment, extractMonerooRedirectUrl, isAfricanCurrency } from '../../services/payment';
+import { 
+  CURRENCY_CONFIGS, 
+  processMonerooCheckout, 
+  verifyMonerooPayment, 
+  extractMonerooRedirectUrl, 
+  isAfricanCurrency,
+  getMonerooDefaultCurrency,
+  convertToMonerooCurrency
+} from '../../services/payment';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -31,8 +39,9 @@ export const TipModal: React.FC = () => {
     setIsThankYouModalOpen
   } = useApp();
 
+  const defaultMonerooCurr = getMonerooDefaultCurrency();
   const [activeTab, setActiveTab] = useState<'paypal' | 'mobile'>('paypal');
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currency || 'XAF');
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => (isAfricanCurrency(currency) ? currency : defaultMonerooCurr));
   const [amount, setAmount] = useState<string>('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -93,8 +102,19 @@ export const TipModal: React.FC = () => {
     setSelectedCurrency(newCurr);
     setCurrency(newCurr);
     setErrorMessage(null);
-    const def = presetsByCurrency[newCurr]?.defaultAmount || 5;
+    const def = presetsByCurrency[newCurr]?.defaultAmount || (isAfricanCurrency(newCurr) ? 1000 : 5);
     setAmount(def.toString());
+  };
+
+  const handleTabChange = (tab: 'paypal' | 'mobile') => {
+    setActiveTab(tab);
+    setErrorMessage(null);
+    if (tab === 'mobile' && !isAfricanCurrency(selectedCurrency)) {
+      const defCurr = getMonerooDefaultCurrency();
+      setSelectedCurrency(defCurr);
+      setCurrency(defCurr);
+      setAmount('1000');
+    }
   };
 
   const handlePayPalCheckout = () => {
@@ -105,29 +125,37 @@ export const TipModal: React.FC = () => {
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanAmount = Math.max(1, Math.round(Number(amount)));
+    const rawNum = Number(amount);
 
-    if (!cleanAmount || cleanAmount < 1) {
+    if (!rawNum || rawNum <= 0) {
       showToast('Veuillez entrer un montant valide supérieur à 0.');
       return;
     }
+
+    // Normalisation stricte de la devise et du montant pour Moneroo
+    const { amount: cleanAmount, currency: cleanCurrency } = convertToMonerooCurrency(
+      rawNum,
+      selectedCurrency,
+      getMonerooDefaultCurrency(),
+      false
+    );
 
     setErrorMessage(null);
     setIsProcessing(true);
     try {
       console.log('[TipModal] Initialisation paiement Moneroo :', {
         amount: cleanAmount,
-        currency: selectedCurrency
+        currency: cleanCurrency
       });
 
       const data = await processMonerooCheckout({
         amount: cleanAmount,
-        currency: selectedCurrency,
+        currency: cleanCurrency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
         email: user?.email || 'contact@elicine.com',
         name: user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile',
-        description: `Soutien Éliciné (${cleanAmount} ${selectedCurrency})`,
+        description: `Soutien Éliciné (${cleanAmount} ${cleanCurrency})`,
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
         skipRedirect: true
       });
@@ -276,7 +304,7 @@ export const TipModal: React.FC = () => {
             <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-white/10 w-full">
               <button
                 type="button"
-                onClick={() => setActiveTab('paypal')}
+                onClick={() => handleTabChange('paypal')}
                 className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
                   activeTab === 'paypal'
                     ? 'bg-[#0079C1] text-white shadow-md'
@@ -289,7 +317,7 @@ export const TipModal: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setActiveTab('mobile')}
+                onClick={() => handleTabChange('mobile')}
                 className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
                   activeTab === 'mobile'
                     ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
@@ -347,7 +375,7 @@ export const TipModal: React.FC = () => {
                     <span className="text-amber-600 dark:text-amber-400 font-bold">{currentConfig.name}</span>
                   </div>
                   <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 w-full gap-1">
-                    {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+                    {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
                       <button
                         key={c}
                         type="button"
@@ -362,6 +390,15 @@ export const TipModal: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {!isAfricanCurrency(selectedCurrency) && (
+                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1.5 mt-1">
+                      <span>💡</span>
+                      <span>
+                        Mobile Money traite les transactions en FCFA ({defaultMonerooCurr}). Équivalent : ~{convertToMonerooCurrency(Number(amount) || 1, selectedCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Champ Montant & Suggestions rapides */}
@@ -432,7 +469,9 @@ export const TipModal: React.FC = () => {
                       <span>Initialisation du paiement...</span>
                     </>
                   ) : (
-                    <span>Payer {Number(amount || 0).toLocaleString()} {currentConfig.symbol} via Mobile Money →</span>
+                    <span>
+                      Payer {convertToMonerooCurrency(Number(amount) || 1000, selectedCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA ({convertToMonerooCurrency(Number(amount) || 1000, selectedCurrency, defaultMonerooCurr).currency}) via Mobile Money →
+                    </span>
                   )}
                 </button>
 

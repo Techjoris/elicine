@@ -4,6 +4,15 @@ export const MOBILE_MONEY_COUNTRIES = [
   'RW', 'ET', 'ZM', 'MW', 'MZ', 'MG'
 ];
 
+export const XOF_COUNTRIES = ['CI', 'SN', 'BF', 'ML', 'BJ', 'TG', 'NE', 'GW'];
+export const XAF_COUNTRIES = ['CM', 'GA', 'CD', 'CG', 'CF', 'TD', 'GQ'];
+
+export function getAfricanCfaCurrency(countryCode: string): 'XOF' | 'XAF' {
+  const clean = countryCode?.toUpperCase().trim();
+  if (XAF_COUNTRIES.includes(clean)) return 'XAF';
+  return 'XOF';
+}
+
 export interface GeoData {
   countryCode: string;
   country: string;
@@ -211,7 +220,7 @@ function persistCountry(code: string, countryName?: string, currency?: string, s
   const geo: GeoData = {
     countryCode: cleanCode,
     country: countryName || cleanCode,
-    currency: currency || (isMobileMoneyAvailable(cleanCode) ? 'XAF' : 'EUR'),
+    currency: currency || (isMobileMoneyAvailable(cleanCode) ? getAfricanCfaCurrency(cleanCode) : 'EUR'),
     source
   };
 
@@ -312,7 +321,7 @@ export async function getUserGeoData(): Promise<GeoData> {
     return {
       countryCode: tzCountry,
       country: tzCountry,
-      currency: isMobileMoneyAvailable(tzCountry) ? 'XAF' : 'EUR',
+      currency: isMobileMoneyAvailable(tzCountry) ? getAfricanCfaCurrency(tzCountry) : 'EUR',
       source: 'timezone'
     };
   }
@@ -329,10 +338,11 @@ export function getSuggestedCurrencyForCountry(
   countryCode: string,
   geoCurrency: string
 ): string {
-  if (isMobileMoneyAvailable(countryCode)) return 'XAF';
-  if (['GB', 'AU', 'NZ'].includes(countryCode)) return 'USD';
-  if (['CA'].includes(countryCode)) return 'CAD';
-  if (['US'].includes(countryCode)) return 'USD';
+  const clean = countryCode?.toUpperCase()?.trim();
+  if (isMobileMoneyAvailable(clean)) return getAfricanCfaCurrency(clean);
+  if (['GB', 'AU', 'NZ'].includes(clean)) return 'USD';
+  if (['CA'].includes(clean)) return 'CAD';
+  if (['US'].includes(clean)) return 'USD';
   // EU zone
   return 'EUR';
 }

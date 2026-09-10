@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
 import { Currency } from '../types';
+import { getMonerooDefaultCurrency, isAfricanCurrency } from '../services/payment';
 
 export interface CheckoutPayload {
   currency: string;
@@ -34,8 +35,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onOpenNotchPay, 
   onOpenPayPal 
 }) => {
-  const { user, loginWithGoogle } = useApp();
-  const [currency, setCurrency] = useState<Currency>('XAF');
+  const { user, currency: appCurrency, loginWithGoogle } = useApp();
+  const defaultMonerooCurr = getMonerooDefaultCurrency();
+  const [currency, setCurrency] = useState<Currency>(() => (isAfricanCurrency(appCurrency) ? appCurrency : defaultMonerooCurr));
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,10 +77,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const handleCheckout = () => {
     setIsProcessing(true);
     if (paymentMethod === 'mobile_money') {
+      const targetCurr = isAfricanCurrency(currency) ? currency : defaultMonerooCurr;
+      const targetAmt = isYearly ? '20 000' : '2 500';
       if (onOpenMoneroo) {
-        onOpenMoneroo({ currency, amount: amountToPay, plan: billingCycle });
+        onOpenMoneroo({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
       } else if (onOpenNotchPay) {
-        onOpenNotchPay({ currency, amount: amountToPay, plan: billingCycle });
+        onOpenNotchPay({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
       }
     } else {
       if (onOpenPayPal) {
@@ -244,7 +248,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
           {/* Devises */}
           <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
-            {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+            {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
               <button
                 key={c}
                 type="button"
@@ -331,7 +335,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes</p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave, Carte</p>
-                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Toutes devises acceptées • Moneroo</span>
+                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Règlement en FCFA ({defaultMonerooCurr}) • Moneroo</span>
               </div>
             </div>
 

@@ -26,7 +26,7 @@ import { DevModal } from './components/DevModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
-import { processMonerooCheckout, extractMonerooRedirectUrl } from './services/payment';
+import { processMonerooCheckout, extractMonerooRedirectUrl, getMonerooDefaultCurrency, convertToMonerooCurrency } from './services/payment';
 
 import { useApp } from './context/AppContext';
 import { useTranslation } from './context/LanguageContext';
@@ -165,10 +165,17 @@ export const AppContent: React.FC = () => {
 
   const handleSupportMoneroo = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
-      console.log('[App] Initialisation soutien Moneroo :', { amount, currency });
-      const data = await processMonerooCheckout({
+      const defaultMonerooCurr = getMonerooDefaultCurrency();
+      const { amount: cleanAmount, currency: cleanCurrency } = convertToMonerooCurrency(
         amount,
-        currency: (currency as any) || 'XAF',
+        currency,
+        defaultMonerooCurr,
+        false
+      );
+      console.log('[App] Initialisation soutien Moneroo :', { amount: cleanAmount, currency: cleanCurrency });
+      const data = await processMonerooCheckout({
+        amount: cleanAmount,
+        currency: cleanCurrency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
         email: user?.email || 'contact@elicine.com',

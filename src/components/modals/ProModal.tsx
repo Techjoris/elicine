@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
-import { processMonerooCheckout, extractMonerooRedirectUrl } from '../../services/payment';
+import { processMonerooCheckout, extractMonerooRedirectUrl, getMonerooDefaultCurrency, isAfricanCurrency } from '../../services/payment';
 import { Currency } from '../../types';
 
 export const ProModal: React.FC = () => {
@@ -18,8 +18,12 @@ export const ProModal: React.FC = () => {
     try {
       showToast('Initialisation du paiement Moneroo sécurisé...');
       const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
-      const cleanAmount = payload ? Number(payload.amount.replace(/\s+/g, '').replace(',', '.')) : 2500;
-      const cleanCurrency = (payload?.currency as Currency) || 'XAF';
+      const defaultMonerooCurr = getMonerooDefaultCurrency();
+      const isYearly = payload?.plan === 'yearly';
+
+      const reqCurrency = (payload?.currency as Currency) || defaultMonerooCurr;
+      const cleanCurrency = isAfricanCurrency(reqCurrency) ? reqCurrency : defaultMonerooCurr;
+      const cleanAmount = isYearly ? 20000 : 2500;
 
       const data = await processMonerooCheckout({
         amount: cleanAmount,
@@ -28,7 +32,7 @@ export const ProModal: React.FC = () => {
         billingCycle: payload?.plan || 'monthly',
         email: user?.email || 'contact@elicine.com',
         name,
-        description: `Pass Pro Éliciné (${cleanAmount} ${cleanCurrency} - ${payload?.plan === 'yearly' ? 'Annuel' : 'Mensuel'})`,
+        description: `Pass Pro Éliciné (${cleanAmount.toLocaleString()} FCFA - ${isYearly ? 'Annuel' : 'Mensuel'})`,
         returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro`,
         openInNewTab: false,
         skipRedirect: true
