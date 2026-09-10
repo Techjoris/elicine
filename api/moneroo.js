@@ -177,6 +177,7 @@ export default async function handler(req, res) {
       } catch (_) {
         data = { message: responseText };
       }
+      console.log("REPONSE MONEROO :", data);
       console.log('[Moneroo API JSON Response]:', JSON.stringify(data, null, 2));
 
       if (!response.ok) {

@@ -115,7 +115,7 @@ export const TipModal: React.FC = () => {
         currency: selectedCurrency
       });
 
-      const response = await processMonerooCheckout({
+      const data = await processMonerooCheckout({
         amount: cleanAmount,
         currency: selectedCurrency,
         paymentType: 'tip',
@@ -127,42 +127,33 @@ export const TipModal: React.FC = () => {
         skipRedirect: true
       });
 
-      // 1. Affiche ou analyse précisément l'objet JSON retourné par Moneroo lors de l'initialisation du paiement
-      console.log('[Moneroo API] Objet JSON complet retourné lors de l\'initialisation :', response);
-      console.log('[Moneroo API] JSON stringify :', JSON.stringify(response, null, 2));
-      console.log('[Moneroo API] response.data.checkout_url :', (response as any)?.data?.checkout_url);
-      console.log('[Moneroo API] response.checkout_url :', (response as any)?.checkout_url);
-      console.log('[Moneroo API] response.link :', (response as any)?.link);
+      // 1. Structure exacte reçue dans la console du navigateur (F12)
+      console.log("REPONSE MONEROO :", data);
 
-      // Récupération du lien de redirection (vérifie précisément les chemins comme response.data.checkout_url, response.checkout_url ou response.link)
-      const redirectUrl = 
-        (response as any)?.data?.checkout_url ||
-        (response as any)?.checkout_url ||
-        (response as any)?.link ||
-        (response as any)?.data?.link ||
-        (response as any)?.paymentUrl ||
-        (response as any)?.url ||
-        (response as any)?.rawResponse?.data?.checkout_url ||
-        (response as any)?.rawResponse?.checkout_url ||
-        (response as any)?.rawResponse?.link ||
-        (response as any)?.rawResponse?.data?.link ||
-        extractMonerooRedirectUrl(response);
+      // 2. Extraction correcte de l'URL peu importe sa structure (data.checkout_url, data.link, ou data.data.checkout_url)
+      const urlTrouvee = 
+        data?.checkout_url ||
+        data?.link ||
+        data?.data?.checkout_url ||
+        data?.data?.link ||
+        data?.paymentUrl ||
+        data?.url ||
+        (data as any)?.rawResponse?.checkout_url ||
+        (data as any)?.rawResponse?.link ||
+        (data as any)?.rawResponse?.data?.checkout_url ||
+        extractMonerooRedirectUrl(data);
 
-      // 2. Redirige immédiatement l'utilisateur vers cette URL une fois reçue au lieu de laisser le bouton figé
-      if (redirectUrl) {
-        console.log('[TipModal] ✓ URL de redirection Moneroo obtenue avec succès :', redirectUrl);
+      // Force immédiatement le window.location.href = urlTrouvee
+      if (urlTrouvee) {
+        console.log("URL MONEROO TROUVEE :", urlTrouvee);
         showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
-        
-        // Débloquer immédiatement le bouton pour ne jamais le laisser figé
         setIsProcessing(false);
-
-        // Redirection immédiate vers l'URL Moneroo
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.href = urlTrouvee;
         }
       } else {
-        console.error('[TipModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', response);
-        const errorMsg = response?.message || (response as any)?.error || "Erreur lors de l'initialisation du paiement Moneroo.";
+        console.error('[TipModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', data);
+        const errorMsg = data?.message || (data as any)?.error || "Erreur lors de l'initialisation du paiement Moneroo.";
         showToast(errorMsg);
         setIsProcessing(false);
       }

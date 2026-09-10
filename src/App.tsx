@@ -166,7 +166,7 @@ export const AppContent: React.FC = () => {
   const handleSupportMoneroo = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
       console.log('[App] Initialisation soutien Moneroo :', { amount, currency });
-      const result = await processMonerooCheckout({
+      const data = await processMonerooCheckout({
         amount,
         currency: (currency as any) || 'XAF',
         paymentType: 'tip',
@@ -180,25 +180,25 @@ export const AppContent: React.FC = () => {
         }
       });
 
-      console.log('[App] Objet JSON Moneroo reçu :', result);
+      console.log("REPONSE MONEROO :", data);
 
-      const redirectUrl = 
-        (result as any)?.data?.checkout_url ||
-        result?.checkout_url ||
-        result?.link ||
-        (result as any)?.data?.link ||
-        result?.url ||
-        result?.paymentUrl ||
-        extractMonerooRedirectUrl(result);
+      const urlTrouvee = 
+        data?.checkout_url ||
+        data?.link ||
+        data?.data?.checkout_url ||
+        data?.data?.link ||
+        data?.url ||
+        data?.paymentUrl ||
+        extractMonerooRedirectUrl(data);
 
-      if (redirectUrl) {
+      if (urlTrouvee) {
         showToast('Redirection immédiate vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.href = urlTrouvee;
         }
       } else {
-        console.error('[App] Erreur retournée par Moneroo :', result);
-        showToast(result.message || "Erreur lors de l'initialisation de Moneroo");
+        console.error('[App] Erreur retournée par Moneroo :', data);
+        showToast(data?.message || "Erreur lors de l'initialisation de Moneroo");
       }
     } catch (e: any) {
       console.error('[App] Exception initialisation Moneroo :', e);

@@ -351,7 +351,8 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         data = { message: resText };
       }
 
-      console.log('[Moneroo Service] Réponse reçue de /api/moneroo :', data);
+      // 1. Structure exacte reçue de l'API Moneroo
+      console.log("REPONSE MONEROO :", data);
 
       if (!serverRes.ok) {
         lastError = data?.error || data?.message || `Erreur serveur Moneroo (${serverRes.status})`;
@@ -379,7 +380,7 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         const directText = await directRes.text();
         try {
           const directData = JSON.parse(directText);
-          console.log('[Moneroo Service] Réponse reçue de l\'API directe Moneroo :', directData);
+          console.log("REPONSE MONEROO :", directData);
           if (directRes.ok) {
             data = directData;
           } else {
@@ -393,32 +394,40 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       }
     }
 
-    // Extraction précise et multi-chemins du lien de redirection
-    const checkoutUrl = extractMonerooRedirectUrl(data);
+    // Extraction précise et multi-chemins du lien de redirection peu importe la structure
+    const urlTrouvee = 
+      data?.checkout_url || 
+      data?.link || 
+      data?.data?.checkout_url || 
+      data?.data?.link ||
+      data?.url ||
+      data?.paymentUrl ||
+      extractMonerooRedirectUrl(data);
+
     const paymentId = data?.reference || data?.data?.id || data?.id || data?.data?.reference;
 
-    if (checkoutUrl) {
-      console.log('[Moneroo Service] ✓ Checkout URL extraite :', checkoutUrl);
+    if (urlTrouvee) {
+      console.log("URL MONEROO TROUVEE :", urlTrouvee);
       if (!params.skipRedirect) {
         if (params.openInNewTab && typeof window !== 'undefined') {
-          window.open(checkoutUrl, '_blank');
+          window.open(urlTrouvee, '_blank');
         } else if (typeof window !== 'undefined') {
-          window.location.href = checkoutUrl;
+          window.location.href = urlTrouvee;
         }
       }
 
       return {
         success: true,
         message: 'Redirection vers le paiement Moneroo...',
-        paymentUrl: checkoutUrl,
-        checkout_url: checkoutUrl,
-        link: checkoutUrl,
-        url: checkoutUrl,
+        paymentUrl: urlTrouvee,
+        checkout_url: urlTrouvee,
+        link: urlTrouvee,
+        url: urlTrouvee,
         reference: paymentId,
         data: {
           ...(typeof data?.data === 'object' && data?.data !== null ? data.data : {}),
-          checkout_url: checkoutUrl,
-          link: checkoutUrl
+          checkout_url: urlTrouvee,
+          link: urlTrouvee
         },
         rawResponse: data
       };

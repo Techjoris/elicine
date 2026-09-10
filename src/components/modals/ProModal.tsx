@@ -21,7 +21,7 @@ export const ProModal: React.FC = () => {
       const cleanAmount = payload ? Number(payload.amount.replace(/\s+/g, '').replace(',', '.')) : 2500;
       const cleanCurrency = (payload?.currency as Currency) || 'XAF';
 
-      const result = await processMonerooCheckout({
+      const data = await processMonerooCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'pro',
@@ -34,24 +34,24 @@ export const ProModal: React.FC = () => {
         skipRedirect: true
       });
 
-      console.log('[ProModal] Objet JSON Moneroo reçu :', result);
+      console.log("REPONSE MONEROO :", data);
 
-      const redirectUrl = 
-        (result as any)?.data?.checkout_url || 
-        result.checkout_url || 
-        result.link || 
-        (result as any)?.data?.link || 
-        result.url || 
-        result.paymentUrl || 
-        extractMonerooRedirectUrl(result);
+      const urlTrouvee = 
+        data?.checkout_url || 
+        data?.link || 
+        data?.data?.checkout_url || 
+        data?.data?.link || 
+        data?.url || 
+        data?.paymentUrl || 
+        extractMonerooRedirectUrl(data);
 
-      if (redirectUrl) {
+      if (urlTrouvee) {
         showToast('Redirection vers la passerelle de paiement Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.href = urlTrouvee;
         }
       } else {
-        showToast(result.message || "Impossible de générer le lien de paiement Moneroo.");
+        showToast(data.message || "Impossible de générer le lien de paiement Moneroo.");
       }
     } catch (err: any) {
       console.error('[ProModal Moneroo]', err);
