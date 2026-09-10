@@ -198,6 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Quota Badge */}
         <div 
           onClick={() => setIsProModalOpen(true)}
+          title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
           className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between cursor-pointer hover:border-slate-300 dark:hover:border-white/20 transition-all"
         >
           <div className="flex items-center gap-2">

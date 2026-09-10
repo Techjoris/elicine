@@ -146,7 +146,7 @@ export const termsEs: TermsTranslations = {
         {
           type: "subsection",
           title: "5.1. Naturaleza y alcance de la oferta",
-          text: "El usuario tiene la opción de suscribirse al plan de pago Pass Pro (tarifa de referencia: 1,99 $ USD o equivalente en moneda local al momento del pago). Esta opción elimina los límites de consulta con la IA, activa filtros de búsqueda avanzados y otorga acceso prioritario a nuevas funciones."
+          text: "El usuario tiene la opción de suscribirse al plan de pago Pass Pro (tarifa de referencia: 1,99 $ USD o equivalente en moneda local al momento del pago). Esta opción otorga las siguientes ventajas exclusivas: (1) cuotas ilimitadas de consultas con IA, (2) filtros avanzados para afinar los resultados posteriores a la búsqueda según suscripciones de plataformas o mejores valoraciones, y (3) activación de alertas personalizadas para películas y series."
         },
         {
           type: "subsection",

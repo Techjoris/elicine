@@ -146,7 +146,7 @@ export const termsEn: TermsTranslations = {
         {
           type: "subsection",
           title: "5.1. Nature and Scope of Offer",
-          text: "Users may subscribe to the optional Pass Pro plan (benchmark price: $1.99 USD or equivalent in local currency at checkout). This upgrade removes artificial intelligence query limitations, unlocks advanced search filters, and grants priority access to new features."
+          text: "Users may subscribe to the optional Pass Pro plan (benchmark price: $1.99 USD or equivalent in local currency at checkout). This upgrade unlocks the following exclusive benefits: (1) unlimited AI query quotas, (2) advanced filters to refine post-search results by platform subscriptions or top ratings, and (3) activation of personalized availability alerts for movies and series."
         },
         {
           type: "subsection",

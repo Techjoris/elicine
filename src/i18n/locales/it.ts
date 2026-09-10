@@ -140,7 +140,7 @@ export const termsIt: TermsTranslations = {
         {
           type: "subsection",
           title: "5.1. Oggetto dell'offerta",
-          text: "L'opzione Pass Pro (prezzo base: 1,99 $ USD) sblocca query illimitate con l'IA e filtri avanzati."
+          text: "L'opzione Pass Pro (prezzo base: 1,99 $ USD) sblocca i seguenti vantaggi esclusivi: (1) quote illimitate di query IA, (2) filtri avanzati per perfezionare i risultati post-ricerca in base agli abbonamenti alle piattaforme o ai voti migliori, e (3) attivazione di avvisi personalizzati per film e serie."
         },
         {
           type: "subsection",

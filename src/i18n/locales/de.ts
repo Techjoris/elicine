@@ -140,7 +140,7 @@ export const termsDe: TermsTranslations = {
         {
           type: "subsection",
           title: "5.1. Leistungsumfang",
-          text: "Nutzer können das kostenpflichtige Pass Pro-Abonnement (Referenzpreis: 1,99 $ USD) für unbegrenzte KI-Anfragen und erweiterte Filter erwerben."
+          text: "Das Pass Pro-Abonnement (Referenzpreis: 1,99 $ USD) schaltet folgende exklusive Vorteile frei: (1) unbegrenzte KI-Anfragekontingente, (2) erweiterte Filter zur Verfeinerung von Suchergebnissen nach Streaming-Abonnements oder Top-Bewertungen, und (3) Aktivierung personalisierter Verfügbarkeitsbenachrichtigungen für Filme und Serien."
         },
         {
           type: "subsection",

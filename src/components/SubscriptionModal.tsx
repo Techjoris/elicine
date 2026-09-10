@@ -90,7 +90,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-lg rounded-3xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 text-slate-800 dark:text-slate-200 flex flex-col gap-6 relative"
+        className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-3xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl p-5 sm:p-7 text-slate-800 dark:text-slate-200 flex flex-col gap-5 relative scrollbar-thin"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Bouton Fermer */}
@@ -103,7 +103,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         </button>
 
         {/* 1. Header Minimaliste */}
-        <div className="text-center flex flex-col items-center gap-2 pt-1">
+        <div className="text-center flex flex-col items-center gap-1.5 pt-1">
           <ElicineLogo variant="full" size="md" />
           <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold uppercase tracking-wider mt-1">
             👑 Pass Pro Illimité
@@ -112,8 +112,62 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             Vivez le cinéma sans aucune limite
           </h2>
           <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm">
-            Recommandations IA en temps réel, alertes de disponibilité et accès aux catalogues du monde entier.
+            Quotas IA illimités, filtres avancés (plateformes et notes) et alertes personnalisées pour tous vos films et séries.
           </p>
+        </div>
+
+        {/* Avantages exclusifs Pass Pro */}
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 p-3.5 sm:p-4 space-y-2.5 text-left">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>👑</span>
+              <span>Vos 3 avantages exclusifs Pass Pro</span>
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              Déblocage immédiat
+            </span>
+          </div>
+
+          <div className="space-y-2.5 text-xs">
+            {/* 1. Quotas illimités */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-xs">
+                ⚡
+              </div>
+              <div className="leading-tight">
+                <p className="font-bold text-slate-900 dark:text-white">Quotas illimités de requêtes IA</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Interrogez l'intelligence artificielle cinéphile sans restriction ni limite quotidienne.
+                </p>
+              </div>
+            </div>
+
+            {/* 2. Filtres avancés */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-xs">
+                🎯
+              </div>
+              <div className="leading-tight">
+                <p className="font-bold text-slate-900 dark:text-white">Filtres avancés</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Possibilité d'affiner les résultats post-recherche selon vos abonnements de plateformes ou les meilleures notes.
+                </p>
+              </div>
+            </div>
+
+            {/* 3. Alertes personnalisées */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-xs">
+                🔔
+              </div>
+              <div className="leading-tight">
+                <p className="font-bold text-slate-900 dark:text-white">Activation des alertes personnalisées</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Recevez des notifications personnalisées pour vos films et séries dès leur sortie ou disponibilité.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Bouton officiel Continuer avec Google lors de l'accès au Pass Pro */}

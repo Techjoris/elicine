@@ -314,11 +314,11 @@ export const AuthModal: React.FC = () => {
               {!user.isPro && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    const name = user.name || (user as any).user_metadata?.full_name || 'Cinéphile';
-                    await handleMonerooPayment(user.email, name);
+                  onClick={() => {
+                    setIsAuthModalOpen(false);
+                    setIsProModalOpen(true);
                   }}
-                  className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Crown className="w-4 h-4" />
                   <span>Passer au Pass Pro VIP</span>
@@ -472,9 +472,25 @@ export const AuthModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-zinc-800 text-xs text-slate-600 dark:text-zinc-300">
-                      <Info className="w-4 h-4 text-slate-500 dark:text-zinc-300 flex-shrink-0" />
-                      <span>Note : Les quotas de recherche IA étendus restent réservés aux membres <strong className="text-slate-900 dark:text-white">Pass Pro</strong>.</span>
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-zinc-800 text-xs text-slate-600 dark:text-zinc-300">
+                      <Crown className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div className="space-y-1 text-left">
+                        <span className="font-bold text-slate-900 dark:text-white block">Avantages exclusifs Pass Pro :</span>
+                        <ul className="space-y-1 text-[11px] text-slate-600 dark:text-zinc-300">
+                          <li className="flex items-start gap-1.5">
+                            <span className="text-amber-500 font-bold">•</span>
+                            <span><strong>Quotas illimités</strong> de requêtes IA</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="text-sky-500 font-bold">•</span>
+                            <span><strong>Filtres avancés</strong> (post-recherche par plateformes ou notes)</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="text-emerald-500 font-bold">•</span>
+                            <span><strong>Activation des alertes personnalisées</strong> pour les films et séries</span>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>

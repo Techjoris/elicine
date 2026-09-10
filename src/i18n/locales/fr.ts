@@ -146,7 +146,7 @@ export const termsFr: TermsTranslations = {
         {
           type: "subsection",
           title: "5.1. Nature et périmètre de l'offre",
-          text: "L'utilisateur a la faculté de souscrire à l'option payante Pass Pro (tarif de référence : 1,99 $ USD ou contre-valeur en monnaie locale lors du règlement). Cette option permet de lever les limites d'interrogations de l'intelligence artificielle, d'activer des filtres de recherche avancés et d'accéder aux fonctionnalités prioritaires."
+          text: "L'utilisateur a la faculté de souscrire à l'option payante Pass Pro (tarif de référence : 1,99 $ USD ou contre-valeur en monnaie locale lors du règlement). Cette formule débloque les avantages exclusifs suivants : (1) des quotas illimités de requêtes IA, (2) des filtres avancés permettant d'affiner les résultats post-recherche selon ses abonnements de plateformes ou les meilleures notes, et (3) l'activation des alertes personnalisées de disponibilité pour les films et séries."
         },
         {
           type: "subsection",

@@ -73,14 +73,24 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, typ
 
         {/* Détail spécifique si formule Pro */}
         {type === 'pro' && (
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2 text-left">
-            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200">
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2.5 text-left text-xs">
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold">
               <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
               <span>Pass Pro Illimité actif sur votre profil</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-              <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400 flex-shrink-0" />
-              <span>Recherches IA illimitées & accès à tout le streaming mondial débloqués</span>
+            <div className="space-y-1.5 pt-1 text-slate-700 dark:text-slate-300">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-500 font-bold flex-shrink-0">✓</span>
+                <span><strong>Quotas illimités :</strong> Vos requêtes IA sont désormais sans aucune restriction quotidienne.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-sky-500 font-bold flex-shrink-0">✓</span>
+                <span><strong>Filtres avancés :</strong> Affinez vos résultats post-recherche selon vos abonnements de plateformes ou les meilleures notes.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-500 font-bold flex-shrink-0">✓</span>
+                <span><strong>Alertes personnalisées :</strong> Suivi et notifications e-mail activés pour vos films et séries favoris.</span>
+              </div>
             </div>
           </div>
         )}
