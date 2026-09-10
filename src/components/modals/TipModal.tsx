@@ -7,7 +7,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CURRENCY_CONFIGS, processNotchPayCheckout, verifyNotchPayPayment, isAfricanCurrency } from '../../services/payment';
+import { CURRENCY_CONFIGS, processMonerooCheckout, verifyMonerooPayment, isAfricanCurrency } from '../../services/payment';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -110,7 +110,7 @@ export const TipModal: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      const res = await processNotchPayCheckout({
+      const res = await processMonerooCheckout({
         amount: cleanAmount,
         currency: selectedCurrency,
         paymentType: 'tip',
@@ -118,15 +118,15 @@ export const TipModal: React.FC = () => {
         email: user?.email || 'contact@elicine.com',
         name: user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile',
         description: `Soutien Éliciné (${cleanAmount} ${selectedCurrency})`,
-        publicKey: apiSettings.notchPayPublicKey,
-        hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false,
-        openInNewTab: true
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined
       });
 
-      if (res.paymentUrl) {
+      const redirectUrl = res.checkout_url || res.paymentUrl;
+
+      if (redirectUrl) {
+        showToast('Redirection vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.open(res.paymentUrl, '_blank');
+          window.location.href = redirectUrl;
         }
 
         if (res.reference) {
@@ -144,7 +144,7 @@ export const TipModal: React.FC = () => {
               return;
             }
 
-            const check = await verifyNotchPayPayment(ref);
+            const check = await verifyMonerooPayment(ref);
             if (check.status === 'complete') {
               if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
               setIsWaitingConfirmation(false);
@@ -156,8 +156,6 @@ export const TipModal: React.FC = () => {
               showToast("Le paiement n'a pas pu être validé ou a été annulé.");
             }
           }, 3000);
-        } else {
-          showToast('Redirection vers Notch Pay...');
         }
       } else {
         showToast(res.message || "Erreur lors de l'initialisation.");
@@ -404,7 +402,7 @@ export const TipModal: React.FC = () => {
                 </button>
 
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-                  Orange Money, MTN MoMo, Wave, Moov • Certifié NotchPay
+                  Orange Money, MTN MoMo, Wave, Moov • Certifié Moneroo
                 </p>
               </form>
             )}

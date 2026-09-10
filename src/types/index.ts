@@ -126,13 +126,12 @@ export interface ApiSettings {
   // 8. Qwen (Alibaba Cloud / DashScope)
   qwenApiKey?: string; // cinéia_qwen_api_key
 
-  // 9. Notch Pay — Clé publique
+  // 9. Moneroo — Clé secrète (Authentification Bearer)
+  monerooSecretKey?: string; // cinéia_moneroo_sk
+
+  // Notch Pay — Legacy (conservé pour compatibilité)
   notchPayPublicKey: string; // cinéia_notch_pk
-
-  // 10. Notch Pay — Clé secrète
   notchPaySecretKey: string; // cinéia_notch_sk
-
-  // 11. Notch Pay — Clé hash / signature
   notchPayHashKey: string; // cinéia_notch_hash
 
   // Options

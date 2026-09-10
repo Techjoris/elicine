@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
-import { processNotchPayCheckout, verifyNotchPayPayment, CURRENCY_CONFIGS } from '../services/payment';
+import { processMonerooCheckout, verifyMonerooPayment, CURRENCY_CONFIGS } from '../services/payment';
 import { Currency } from '../types';
 
-export interface NotchPayTipPayload {
+export interface MonerooTipPayload {
   amount: number;
   currency: string;
   description: string;
@@ -13,7 +13,8 @@ export interface NotchPayTipPayload {
 export interface SupportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenNotchPay?: (payload: NotchPayTipPayload) => void;
+  onOpenMoneroo?: (payload: MonerooTipPayload) => void;
+  onOpenNotchPay?: (payload: MonerooTipPayload) => void;
 }
 
 declare global {
@@ -30,7 +31,7 @@ const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: nu
   CAD: { amounts: [2, 5, 10, 15, 25], defaultAmount: 5 }
 };
 
-export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenNotchPay }) => {
+export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenMoneroo, onOpenNotchPay }) => {
   const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
   const [momoCurrency, setMomoCurrency] = useState<Currency>('XAF');
@@ -99,7 +100,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
 
     setIsProcessing(true);
     try {
-      const res = await processNotchPayCheckout({
+      const res = await processMonerooCheckout({
         amount,
         currency: momoCurrency,
         paymentType: 'tip',
@@ -107,15 +108,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description: `Soutien Éliciné (${amount} ${momoCurrency})`,
-        publicKey: apiSettings.notchPayPublicKey,
-        hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false,
-        openInNewTab: true
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined
       });
 
-      if (res.paymentUrl) {
+      const redirectUrl = res.checkout_url || res.paymentUrl;
+
+      if (redirectUrl) {
+        showToast('Redirection vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.open(res.paymentUrl, '_blank');
+          window.location.href = redirectUrl;
         }
 
         if (res.reference) {
@@ -129,11 +130,11 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             if (Date.now() - startTime > 90000) {
               if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
               setIsWaitingConfirmation(false);
-              showToast("Délai d'attente dépassé. Si vous avez validé le code, il sera confirmé sous peu.");
+              showToast("Délai d'attente dépassé. Si vous avez validé le paiement, il sera confirmé sous peu.");
               return;
             }
 
-            const check = await verifyNotchPayPayment(ref);
+            const check = await verifyMonerooPayment(ref);
             if (check.status === 'complete') {
               if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
               setIsWaitingConfirmation(false);
@@ -145,11 +146,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               showToast("Le paiement n'a pas pu être validé ou a été annulé.");
             }
           }, 3000);
-        } else {
-          showToast('Redirection vers Notch Pay...');
         }
       } else {
-        showToast(res.message);
+        showToast(res.message || "Erreur lors de l'initialisation de Moneroo");
       }
     } catch (err) {
       console.error(err);
@@ -310,7 +309,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           </div>
         )}
 
-        {/* ONGLET 2 : MOBILE MONEY (NotchPay) */}
+        {/* ONGLET 2 : MOBILE MONEY (Moneroo) */}
         {activeTab === 'momo' && (
           <form onSubmit={handleMobileMoneySubmit} className="flex flex-col gap-4 animate-in fade-in duration-150 w-full">
             {/* Choix de la devise pour Mobile Money */}
@@ -388,7 +387,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               <span>Envoyer {Number(freeAmount || 0).toLocaleString()} {CURRENCY_CONFIGS[momoCurrency]?.symbol || momoCurrency} via Mobile Money →</span>
             </button>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-              Orange Money, MTN MoMo, Wave • Sécurisé par NotchPay
+              Orange Money, MTN MoMo, Wave • Sécurisé par Moneroo
             </p>
           </form>
         )}

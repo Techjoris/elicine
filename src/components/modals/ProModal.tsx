@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
-import { handleMonerooPayment, processNotchPayCheckout } from '../../services/payment';
+import { processMonerooCheckout } from '../../services/payment';
 import { Currency } from '../../types';
 
 export const ProModal: React.FC = () => {
@@ -9,46 +9,42 @@ export const ProModal: React.FC = () => {
     isProModalOpen, 
     setIsProModalOpen, 
     user, 
-    apiSettings,
     showToast 
   } = useApp();
 
   if (!isProModalOpen) return null;
 
-  const handleNotchPayCheckout = async (payload?: CheckoutPayload) => {
+  const handleMonerooCheckout = async (payload?: CheckoutPayload) => {
     try {
-      showToast('Initialisation du paiement Mobile Money sécurisé...');
+      showToast('Initialisation du paiement Moneroo sécurisé...');
       const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
       const cleanAmount = payload ? Number(payload.amount.replace(/\s+/g, '').replace(',', '.')) : 2500;
       const cleanCurrency = (payload?.currency as Currency) || 'XAF';
 
-      const result = await processNotchPayCheckout({
+      const result = await processMonerooCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'pro',
-        paymentMethod: 'mobile',
         billingCycle: payload?.plan || 'monthly',
         email: user?.email || 'contact@elicine.com',
         name,
         description: `Pass Pro Éliciné (${cleanAmount} ${cleanCurrency} - ${payload?.plan === 'yearly' ? 'Annuel' : 'Mensuel'})`,
-        publicKey: apiSettings.notchPayPublicKey,
-        hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false,
-        openInNewTab: true
+        returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro`,
+        openInNewTab: false
       });
 
-      if (result.paymentUrl) {
-        showToast('Redirection vers la passerelle Mobile Money...');
+      const redirectUrl = result.checkout_url || result.paymentUrl;
+      if (redirectUrl) {
+        showToast('Redirection vers la passerelle de paiement Moneroo...');
         if (typeof window !== 'undefined') {
-          window.open(result.paymentUrl, '_blank');
+          window.location.href = redirectUrl;
         }
       } else {
-        await handleMonerooPayment(user?.email || 'contact@elicine.com', name);
+        showToast(result.message || "Impossible de générer le lien de paiement Moneroo.");
       }
-    } catch (err) {
-      console.error(err);
-      const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
-      await handleMonerooPayment(user?.email || 'contact@elicine.com', name);
+    } catch (err: any) {
+      console.error('[ProModal Moneroo]', err);
+      showToast("Erreur lors de l'initialisation du paiement Moneroo.");
     }
   };
 
@@ -61,7 +57,8 @@ export const ProModal: React.FC = () => {
     <SubscriptionModal
       isOpen={isProModalOpen}
       onClose={() => setIsProModalOpen(false)}
-      onOpenNotchPay={handleNotchPayCheckout}
+      onOpenMoneroo={handleMonerooCheckout}
+      onOpenNotchPay={handleMonerooCheckout}
       onOpenPayPal={handlePayPalCheckout}
     />
   );

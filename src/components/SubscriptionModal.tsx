@@ -14,6 +14,7 @@ export interface CheckoutPayload {
 export interface SubscriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenMoneroo?: (payload: CheckoutPayload) => void;
   onOpenNotchPay?: (payload: CheckoutPayload) => void;
   onOpenPayPal?: (payload: CheckoutPayload) => void;
 }
@@ -29,6 +30,7 @@ const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: strin
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
   isOpen, 
   onClose, 
+  onOpenMoneroo,
   onOpenNotchPay, 
   onOpenPayPal 
 }) => {
@@ -73,7 +75,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const handleCheckout = () => {
     setIsProcessing(true);
     if (paymentMethod === 'mobile_money') {
-      if (onOpenNotchPay) {
+      if (onOpenMoneroo) {
+        onOpenMoneroo({ currency, amount: amountToPay, plan: billingCycle });
+      } else if (onOpenNotchPay) {
         onOpenNotchPay({ currency, amount: amountToPay, plan: billingCycle });
       }
     } else {
@@ -307,7 +311,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </label>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* OPTION 1 : Mobile Money via NotchPay */}
+            {/* OPTION 1 : Mobile Money via Moneroo */}
             <div
               onClick={() => setPaymentMethod('mobile_money')}
               className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
@@ -325,9 +329,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave</p>
-                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Toutes devises acceptées • NotchPay</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave, Carte</p>
+                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Toutes devises acceptées • Moneroo</span>
               </div>
             </div>
 

@@ -25,7 +25,7 @@ import { TermsConsentModal } from './components/modals/TermsConsentModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { DevModal } from './components/DevModal';
 import { SupportModal } from './components/SupportModal';
-import { processNotchPayCheckout } from './services/payment';
+import { processMonerooCheckout } from './services/payment';
 
 import { useApp } from './context/AppContext';
 import { useTranslation } from './context/LanguageContext';
@@ -156,9 +156,9 @@ export const AppContent: React.FC = () => {
     }
   }, [activeView]);
 
-  const handleSupportNotchPay = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
+  const handleSupportMoneroo = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
-      const result = await processNotchPayCheckout({
+      const result = await processMonerooCheckout({
         amount,
         currency: (currency as any) || 'XAF',
         paymentType: 'tip',
@@ -166,25 +166,24 @@ export const AppContent: React.FC = () => {
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description,
-        publicKey: apiSettings.notchPayPublicKey,
-        hashKey: apiSettings.notchPayHashKey,
-        isTestMode: false,
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
         onSuccessRedirect: () => {
           showToast('Merci infiniment pour votre soutien ! ☕');
         }
       });
 
-      if (result.paymentUrl) {
-        showToast('Redirection vers Notch Pay...');
+      const redirectUrl = result.checkout_url || result.paymentUrl;
+      if (redirectUrl) {
+        showToast('Redirection vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.href = result.paymentUrl;
+          window.location.href = redirectUrl;
         }
       } else {
-        showToast(result.message);
+        showToast(result.message || "Erreur lors de l'initialisation de Moneroo");
       }
     } catch (e) {
       console.error(e);
-      showToast("Échec de l'initialisation du paiement Notch Pay");
+      showToast("Échec de l'initialisation du paiement Moneroo");
     }
   };
 
@@ -331,7 +330,8 @@ export const AppContent: React.FC = () => {
       <SupportModal
         isOpen={isSupportOpen}
         onClose={() => setIsSupportOpen(false)}
-        onOpenNotchPay={handleSupportNotchPay}
+        onOpenMoneroo={handleSupportMoneroo}
+        onOpenNotchPay={handleSupportMoneroo}
       />
       <SuccessModal
         isOpen={showThankYouModal || successModal.isOpen}

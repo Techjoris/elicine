@@ -27,6 +27,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
   const [qwenKey, setQwenKey] = useState('');
   const [preferredAi, setPreferredAi] = useState<'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai'>('qwen');
 
+  const [monerooSk, setMonerooSk] = useState('');
   const [notchPk, setNotchPk] = useState('');
   const [notchSk, setNotchSk] = useState('');
   const [notchHash, setNotchHash] = useState('');
@@ -65,6 +66,12 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
         'qwen'
       );
 
+      setMonerooSk(
+        localStorage.getItem('cinéia_moneroo_sk') || 
+        localStorage.getItem('moneroo_secret_key') || 
+        apiSettings.monerooSecretKey || 
+        ''
+      );
       setNotchPk(
         localStorage.getItem('notch_public_key') || 
         localStorage.getItem('cinéia_notch_pk') || 
@@ -138,7 +145,16 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
 
     localStorage.setItem('cinéia_preferred_ai_provider', preferredAi);
 
-    // 4. Sauvegarde NotchPay (Mode Live obligatoire)
+    // 4. Sauvegarde Moneroo & NotchPay (Mode Live obligatoire)
+    const cleanMonerooSk = monerooSk.trim();
+    if (cleanMonerooSk) {
+      localStorage.setItem('cinéia_moneroo_sk', cleanMonerooSk);
+      localStorage.setItem('moneroo_secret_key', cleanMonerooSk);
+    } else {
+      localStorage.removeItem('cinéia_moneroo_sk');
+      localStorage.removeItem('moneroo_secret_key');
+    }
+
     const rawNotchPk = notchPk.trim();
     const rawNotchSk = notchSk.trim();
     const cleanNotchPk = (rawNotchPk.startsWith('pk_test_') || rawNotchPk.startsWith('test_')) ? '' : rawNotchPk;
@@ -183,6 +199,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       groqApiKey: cleanGroq,
       qwenApiKey: cleanQwen,
       preferredAiProvider: preferredAi,
+      monerooSecretKey: cleanMonerooSk,
       notchPayPublicKey: cleanNotchPk,
       notchPaySecretKey: cleanNotchSk,
       notchPayHashKey: cleanNotchHash,
@@ -353,59 +370,36 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* SECTION 2: Paiement NotchPay */}
+        {/* SECTION 2: Passerelle de Paiement Moneroo & Mobile Money */}
         <div className="space-y-3 pt-4 border-t border-slate-800/80">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
               <CreditCard className="w-3.5 h-3.5" />
-              2. Passerelle de Paiement NotchPay
+              2. Passerelle de Paiement Moneroo (Mobile Money & Devises)
             </h3>
 
             {/* Mode Live forcé */}
             <div className="flex items-center gap-1.5 bg-emerald-500/15 px-2.5 py-1 rounded-xl border border-emerald-500/30 text-[11px] font-bold text-emerald-400 select-none">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>LIVE / PRODUCTION</span>
+              <span>LIVE / MONEROO</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1 sm:col-span-2">
-              <label className="text-[11px] font-semibold text-slate-400">
-                Clé Publique NotchPay Live (pk.live....)
-              </label>
-              <input
-                type={showKeys ? 'text' : 'password'}
-                value={notchPk}
-                onChange={(e) => setNotchPk(e.target.value)}
-                placeholder="pk.live...."
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-400">
-                Clé Secrète NotchPay Live (sk.live....)
+                Clé Secrète Moneroo (MONEROO_SECRET_KEY)
               </label>
               <input
                 type={showKeys ? 'text' : 'password'}
-                value={notchSk}
-                onChange={(e) => setNotchSk(e.target.value)}
-                placeholder="sk.live...."
+                value={monerooSk}
+                onChange={(e) => setMonerooSk(e.target.value)}
+                placeholder="Ex: msk_live_... ou sk_..."
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
               />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold text-slate-400">
-                Clé Signature / Hash
-              </label>
-              <input
-                type={showKeys ? 'text' : 'password'}
-                value={notchHash}
-                onChange={(e) => setNotchHash(e.target.value)}
-                placeholder="hsk...."
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
-              />
+              <p className="text-[10px] text-slate-500">
+                Initialise les paiements et redirige vers Moneroo (https://api.moneroo.io/v1/payments/initialize).
+              </p>
             </div>
           </div>
         </div>

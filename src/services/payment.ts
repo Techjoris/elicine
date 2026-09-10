@@ -159,206 +159,235 @@ export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
   pro: 2500
 };
 
-export async function processNotchPayCheckout(params: {
+/**
+ * Récupère la clé secrète Moneroo depuis les variables d'environnement
+ */
+export function getMonerooSecretKey(): string {
+  return (
+    (import.meta as any).env?.MONEROO_SECRET_KEY ||
+    (import.meta as any).env?.VITE_MONEROO_SECRET_KEY ||
+    (typeof process !== 'undefined' ? (process.env?.MONEROO_SECRET_KEY || process.env?.VITE_MONEROO_SECRET_KEY) : '') ||
+    (import.meta as any).env?.VITE_MONEROO_API_KEY ||
+    localStorage.getItem('cinéia_moneroo_sk') ||
+    ''
+  ).trim();
+}
+
+export interface MonerooCheckoutParams {
   amount: number;
-  currency: Currency;
+  currency: Currency | string;
   paymentType?: 'pro' | 'tip';
   paymentMethod?: 'card' | 'mobile' | 'all';
   billingCycle?: PricingBillingCycle;
-  email: string;
+  email?: string;
   name?: string;
-  description: string;
+  description?: string;
+  returnUrl?: string;
+  openInNewTab?: boolean;
   publicKey?: string;
   hashKey?: string;
   isTestMode?: boolean;
-  openInNewTab?: boolean;
   onSuccessRedirect?: () => void;
-}): Promise<{ success: boolean; message: string; paymentUrl?: string; reference?: string }> {
+}
+
+export interface MonerooCheckoutResult {
+  success: boolean;
+  message: string;
+  paymentUrl?: string;
+  checkout_url?: string;
+  reference?: string;
+}
+
+/**
+ * Initialise un paiement via l'API Moneroo (POST https://api.moneroo.io/v1/payments/initialize)
+ * et redirige vers le lien de paiement checkout_url.
+ */
+export async function processMonerooCheckout(params: MonerooCheckoutParams): Promise<MonerooCheckoutResult> {
+  const secretKey = getMonerooSecretKey();
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
-  const successCallbackUrl = 'https://elicine.vercel.app/?payment_status=success';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
+  const successCallbackUrl = params.returnUrl || `${origin}/?payment_status=success&type=${type}`;
 
-  // Priorité absolue aux variables d'environnement Live de production
-  const envPubKey = (
-    (import.meta as any).env?.VITE_NOTCHPAY_PUBLIC_KEY || 
-    (import.meta as any).env?.NEXT_PUBLIC_NOTCHPAY_PUBLIC_KEY || 
-    (import.meta as any).env?.NOTCHPAY_PUBLIC_KEY || 
-    ''
-  ).trim();
+  const formattedCurrency = params.currency === 'XOF' || params.currency === 'XAF' ? 'XAF' : params.currency.toString().toUpperCase();
+  const finalAmount = formattedCurrency === 'XAF' ? Math.round(Number(params.amount)) : Number(params.amount);
 
-  let resolvedPubKey = (
-    envPubKey ||
-    params.publicKey || 
-    localStorage.getItem('cinéia_notch_pk') || 
-    localStorage.getItem('cinéia_notch_key') || 
-    ''
-  ).trim();
+  const nameParts = (params.name || 'Cinéphile').trim().split(/\s+/);
+  const firstName = nameParts[0] || 'Cinéphile';
+  const lastName = nameParts.slice(1).join(' ') || firstName;
 
-  // Élimination stricte de toute clé de test / sandbox résiduelle
-  if (resolvedPubKey.startsWith('pk_test_') || resolvedPubKey.startsWith('test_')) {
-    resolvedPubKey = envPubKey;
-  }
+  const payload = {
+    amount: finalAmount,
+    currency: formattedCurrency,
+    description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
+    customer: {
+      email: params.email || 'contact@elicine.com',
+      first_name: firstName,
+      last_name: lastName
+    },
+    return_url: successCallbackUrl
+  };
 
-  // Log clair dans la console (mode DEV uniquement) confirmant le préfixe de la clé Live
-  if (import.meta.env?.DEV) {
-    const keyPrefix = resolvedPubKey ? `${resolvedPubKey.slice(0, 8)}...` : '(gérée par le serveur /api/notchpay)';
-    console.log(`[NotchPay LIVE] Mode PRODUCTION actif — Clé chargée : ${keyPrefix} | Sandbox : DÉSACTIVÉE`);
-  }
+  const authHeader = secretKey ? `Bearer ${secretKey}` : '';
 
   try {
-    const formattedCurrency = params.currency === 'XOF' || params.currency === 'XAF' ? 'XAF' : params.currency;
-    const finalAmount = formattedCurrency === 'XAF' ? Math.round(Number(params.amount)) : Number(params.amount);
+    let data: any = null;
 
-    const payload: any = {
-      amount: finalAmount,
-      currency: formattedCurrency,
-      email: params.email || 'contact@elicine.com',
-      name: params.name || 'Cinéphile',
-      description: params.description || (type === 'pro' ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
-      callback: successCallbackUrl,
-      callbackUrl: successCallbackUrl,
-      return_url: successCallbackUrl
-    };
+    // 1. Appel principal à l'endpoint Moneroo
+    try {
+      const res = await fetch('https://api.moneroo.io/v1/payments/initialize', {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
-    const res = await fetch('/api/notchpay', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        ...(resolvedPubKey ? { 'x-public-key': resolvedPubKey } : {})
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const authUrl = data.authorization_url || data.data?.authorization_url || data.transaction?.authorization_url;
-      const ref = data.reference || data.transaction?.reference || payload.reference;
-
-      if (authUrl) {
-        if (import.meta.env?.DEV) {
-          console.log('[NotchPay LIVE] URL de paiement :', authUrl, '| Référence :', ref);
+      if (res.ok) {
+        data = await res.json();
+      } else {
+        // En cas d'erreur ou blocage CORS, tentative de secours via le handler /api/moneroo
+        const fallbackRes = await fetch('/api/moneroo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...(authHeader ? { 'Authorization': authHeader } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+        if (fallbackRes.ok) {
+          data = await fallbackRes.json();
+        } else {
+          const errText = await res.text();
+          console.error('[Moneroo API] Erreur initialisation:', errText);
         }
-        if (params.openInNewTab && typeof window !== 'undefined') {
-          window.open(authUrl, '_blank');
-        }
-        return { 
-          success: true, 
-          message: 'Lien de paiement généré.', 
-          paymentUrl: authUrl,
-          reference: ref
-        };
       }
-      throw new Error("L'URL de paiement NotchPay n'a pas été reçue.");
-    } else {
-      const errData = await res.text();
-      console.error('[NotchPay LIVE] Réponse API erreur :', res.status, errData);
-      let errMsg = "Échec de l'initialisation du paiement NotchPay.";
+    } catch (directErr) {
+      // Fallback via /api/moneroo si le navigateur restreint les requêtes cross-origin
       try {
-        const parsed = JSON.parse(errData);
-        if (parsed.error || parsed.message) {
-          errMsg = parsed.error || parsed.message;
+        const fallbackRes = await fetch('/api/moneroo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...(authHeader ? { 'Authorization': authHeader } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+        if (fallbackRes.ok) {
+          data = await fallbackRes.json();
         }
-      } catch {}
+      } catch (proxyErr) {
+        console.error('[Moneroo API] Erreur proxy fallback:', proxyErr);
+      }
+    }
+
+    const checkoutUrl = data?.data?.checkout_url || data?.checkout_url;
+    const paymentId = data?.data?.id || data?.id || data?.reference;
+
+    if (checkoutUrl) {
+      if (params.openInNewTab && typeof window !== 'undefined') {
+        window.open(checkoutUrl, '_blank');
+      } else if (typeof window !== 'undefined') {
+        window.location.href = checkoutUrl;
+      }
+
       return {
-        success: false,
-        message: errMsg
+        success: true,
+        message: 'Redirection vers le paiement Moneroo...',
+        paymentUrl: checkoutUrl,
+        checkout_url: checkoutUrl,
+        reference: paymentId
       };
     }
-  } catch (e: any) {
-    console.error('[NotchPay LIVE] Erreur proxy paiement :', e?.message || e);
+
+    const errMsg = data?.error || data?.message || "Échec de l'initialisation du paiement Moneroo.";
     return {
       success: false,
-      message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé NotchPay."
+      message: errMsg
+    };
+  } catch (e: any) {
+    console.error('[Moneroo] Erreur initialisation:', e?.message || e);
+    return {
+      success: false,
+      message: e?.message || "Erreur lors de l'initialisation du paiement sécurisé Moneroo."
     };
   }
 }
 
 /**
- * Polling de vérification du statut d'une transaction NotchPay
+ * Polling de vérification du statut d'une transaction Moneroo
  */
-export async function verifyNotchPayPayment(reference: string): Promise<{ 
+export async function verifyMonerooPayment(reference: string): Promise<{ 
   status: 'complete' | 'pending' | 'failed'; 
   rawStatus?: string;
   transaction?: any 
 }> {
   if (!reference) return { status: 'pending' };
+  const secretKey = getMonerooSecretKey();
 
   try {
-    const res = await fetch(`/api/notchpay/verify?reference=${encodeURIComponent(reference)}`, {
+    const res = await fetch(`https://api.moneroo.io/v1/payments/${encodeURIComponent(reference)}/verify`, {
       headers: {
+        'Authorization': `Bearer ${secretKey}`,
         'Accept': 'application/json'
       }
     });
 
     if (res.ok) {
       const data = await res.json();
+      const rawStatus = data?.data?.status || data?.status;
+      const isSuccess = rawStatus === 'success' || rawStatus === 'successful' || rawStatus === 'completed';
+      const isFailed = rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'rejected';
+
       return {
-        status: data.status === 'complete' ? 'complete' : (data.status === 'failed' ? 'failed' : 'pending'),
-        rawStatus: data.rawStatus || data.status,
-        transaction: data.transaction
+        status: isSuccess ? 'complete' : (isFailed ? 'failed' : 'pending'),
+        rawStatus,
+        transaction: data?.data || data
       };
     }
 
-    // Fallback vers /api/notchpay?reference=
-    const fallbackRes = await fetch(`/api/notchpay?reference=${encodeURIComponent(reference)}`);
+    // Fallback vers /api/moneroo/verify
+    const fallbackRes = await fetch(`/api/moneroo/verify?id=${encodeURIComponent(reference)}`);
     if (fallbackRes.ok) {
       const fbData = await fallbackRes.json();
       return {
-        status: fbData.status === 'complete' ? 'complete' : (fbData.status === 'failed' ? 'failed' : 'pending'),
-        rawStatus: fbData.rawStatus || fbData.status,
-        transaction: fbData.transaction
+        status: fbData.status,
+        rawStatus: fbData.rawStatus,
+        transaction: fbData.data || fbData.transaction
       };
     }
 
     return { status: 'pending' };
   } catch (err) {
-    console.error('[NotchPay Polling] Erreur vérification statut :', err);
+    console.error('[Moneroo Polling] Erreur vérification statut :', err);
     return { status: 'pending' };
   }
 }
 
+// ─── ALIASES DE RÉTROCOMPATIBILITÉ ──────────────────────────────────────────
+export const processNotchPayCheckout = processMonerooCheckout;
+export const verifyNotchPayPayment = verifyMonerooPayment;
+
 /**
  * Initialise un paiement Moneroo pour le Pass Pro
  */
-export const handleMonerooPayment = async (userEmail: string, userName: string) => {
-  const monerooKey = import.meta.env.VITE_MONEROO_API_KEY;
-  if (!monerooKey) {
-    console.error("Clé API Moneroo manquante (VITE_MONEROO_API_KEY)");
-    return { success: false, message: "Configuration de paiement incomplète." };
-  }
-
-  try {
-    const res = await fetch('https://api.moneroo.io/v1/payments/initialize', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${monerooKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: 1.99,
-        currency: 'USD',
-        description: 'Abonnement Pass Pro Éliciné',
-        customer: {
-          email: userEmail || 'contact@elicine.com',
-          name: userName || 'Cinéphile'
-        },
-        return_url: `${window.location.origin}/payment-success`
-      })
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.data?.checkout_url) {
-        window.location.href = data.data.checkout_url;
-        return { success: true };
-      }
-    }
-    
-    const errText = await res.text();
-    console.error("[Moneroo] Erreur d'initialisation:", errText);
-    return { success: false, message: "Erreur lors de l'initialisation du paiement." };
-  } catch (error) {
-    console.error("[Moneroo] Exception:", error);
-    return { success: false, message: "Erreur réseau avec le service de paiement." };
-  }
+export const handleMonerooPayment = async (
+  userEmail: string, 
+  userName: string,
+  amount: number = 2500,
+  currency: string = 'XAF',
+  description: string = 'Abonnement Pass Pro Éliciné'
+) => {
+  return processMonerooCheckout({
+    amount,
+    currency,
+    email: userEmail,
+    name: userName,
+    description,
+    paymentType: 'pro'
+  });
 };
+
