@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { authService } from '../../services/authService';
 import { handleMonerooPayment } from '../../services/payment';
 
 export const AuthModal: React.FC = () => {
@@ -29,6 +30,8 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen, 
     user, 
     loginWithGoogle,
+    loginWithCredentials,
+    registerWithCredentials,
     logout, 
     setIsProModalOpen, 
     setActiveView,
@@ -87,32 +90,21 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      const msg = "Veuillez saisir votre adresse email.";
-      alert(msg);
-      setErrorMessage(msg);
+      setErrorMessage("Veuillez saisir votre adresse email.");
       return;
     }
 
     if (!isValidEmail(cleanEmail)) {
-      const msg = "Format d'adresse email invalide (ex: utilisateur@domaine.com).";
-      alert(msg);
-      setErrorMessage(msg);
+      setErrorMessage("Format d'adresse email invalide (ex: utilisateur@domaine.com).");
       return;
     }
 
-    // Password validation rule: min 4, max 60 chars
-    if (!password || password.length < 4) {
-      const msg = 'Le mot de passe doit contenir au moins 4 caractères.';
-      alert(msg);
-      setErrorMessage(msg);
-      return;
-    }
-    if (password.length > 60) {
-      const msg = 'Le mot de passe ne doit pas dépasser 60 caractères.';
-      alert(msg);
-      setErrorMessage(msg);
+    // Règle de mot de passe sécurisé : au moins 6 caractères, 1 majuscule et 1 chiffre
+    const pwdCheck = authService.validatePassword(password);
+    if (!pwdCheck.valid) {
+      setErrorMessage(pwdCheck.error || "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre.");
       return;
     }
 
@@ -120,61 +112,36 @@ export const AuthModal: React.FC = () => {
 
     try {
       if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: password,
-          options: {
-            data: {
-              full_name: username.trim()
-            }
-          }
-        });
+        // 1. Notification immédiate à l'utilisateur de l'envoi de l'e-mail de confirmation
+        showToast(`✉️ Un e-mail de confirmation vous a été envoyé à ${cleanEmail}. Vérifiez votre boîte de réception !`, 7000);
 
-        if (error) {
-          alert("Erreur d'inscription : " + error.message);
-          setErrorMessage(error.message);
+        // 2. Déclenchement / simulation instantané de l'envoi de l'e-mail en arrière-plan
+        void authService.sendVerificationEmail(cleanEmail, username.trim());
+
+        // 3. Enregistrement sécurisé du compte
+        const res = await registerWithCredentials(username.trim(), cleanEmail, password);
+        if (!res.success) {
+          setErrorMessage(res.error || "Erreur lors de la création du compte.");
           return;
         }
 
-        if (data?.user) {
-          if (data.user.identities && data.user.identities.length === 0) {
-            alert("Cette adresse email est déjà utilisée.");
-            setErrorMessage("Cette adresse email est déjà utilisée.");
-            return;
-          }
-          setIsAuthModalOpen(false);
-          showToast(`🎉 Bienvenue sur Éliciné, ${username.trim() || cleanEmail} !`);
-          setPassword('');
-          setUsername('');
-          setEmail('');
-        }
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: password,
-        });
-
-        if (error) {
-          alert("Erreur de connexion : " + error.message);
-          setErrorMessage("Erreur de connexion : " + error.message);
-          return; // Bloque net l'accès en cas d'échec ou de mauvais mot de passe
-        }
-
-        if (!data?.user) {
-          alert("Erreur de connexion : Session introuvable.");
-          setErrorMessage("Erreur de connexion : Session introuvable.");
-          return;
-        }
-
-        // Si pas d'erreur et utilisateur valide, la connexion est confirmée par le serveur Supabase
         setIsAuthModalOpen(false);
-        showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email || 'Bienvenue'} !`);
+        setPassword('');
+        setUsername('');
+        setEmail('');
+      } else {
+        const res = await loginWithCredentials(cleanEmail, password);
+        if (!res.success) {
+          setErrorMessage(res.error || "Identifiants invalides. Veuillez vérifier votre adresse email et mot de passe.");
+          return;
+        }
+
+        setIsAuthModalOpen(false);
         setPassword('');
         setEmail('');
       }
     } catch (err: any) {
-      const msg = err?.message || "Une erreur inattendue est survenue.";
-      alert("Erreur de connexion : " + msg);
+      const msg = err?.message || "Une erreur inattendue est survenue lors de l'authentification.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -650,7 +617,7 @@ export const AuthModal: React.FC = () => {
                   </label>
                   {isSignUp ? (
                     <span className="text-[11px] text-slate-500 dark:text-zinc-300 font-medium">
-                      Min. 4 caractères
+                      Min. 6 caractères, 1 majuscule, 1 chiffre
                     </span>
                   ) : (
                     <button
@@ -671,7 +638,7 @@ export const AuthModal: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    minLength={4}
+                    minLength={6}
                     maxLength={60}
                     placeholder="••••••••"
                     value={password}
@@ -687,6 +654,33 @@ export const AuthModal: React.FC = () => {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+
+                {/* Critères visuels interactifs de sécurité en mode inscription */}
+                {isSignUp && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
+                      password.length >= 6 
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold' 
+                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
+                    }`}>
+                      {password.length >= 6 ? '✓' : '•'} 6 car. min.
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
+                      /[A-Z]/.test(password) 
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold' 
+                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
+                    }`}>
+                      {/[A-Z]/.test(password) ? '✓' : '•'} 1 majuscule
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
+                      /[0-9]/.test(password) 
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold' 
+                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
+                    }`}>
+                      {/[0-9]/.test(password) ? '✓' : '•'} 1 chiffre
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Submit CTA */}

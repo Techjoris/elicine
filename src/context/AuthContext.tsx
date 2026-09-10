@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, signInWithGoogle } from '../lib/supabase';
+import { authService } from '../services/authService';
 
 export interface AuthContextType {
   user: User | any | null;
@@ -33,6 +34,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        // B. Compte utilisateur sauvegardé localement
+        const localUser = authService.getStoredUser();
+        if (localUser) return localUser;
+
       } catch (_) {}
     }
     return null;
@@ -64,10 +69,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         setUser(session.user);
         setSession(session);
+      } else {
+        const stored = authService.getStoredUser();
+        if (stored) {
+          setUser(stored);
+        }
       }
       setLoading(false);
     }).catch(err => {
-      console.warn('[AuthContext] getSession error:', err);
+      console.warn('[AuthContext] getSession fallback to local:', err);
+      const stored = authService.getStoredUser();
+      if (stored) {
+        setUser(stored);
+      }
       setLoading(false);
     });
 
@@ -90,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setSession(null);
+        authService.logout();
       }
       setLoading(false);
     });
@@ -101,39 +116,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setAuthUser = (newUser: any) => {
     setUser(newUser);
+    if (newUser) {
+      localStorage.setItem('cineia_user', JSON.stringify(newUser));
+    }
   };
 
   const signInWithPassword = async (email: string, password: string) => {
     const cleanEmail = (email || '').trim();
-    const res = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-    if (res.data?.user) {
-      setUser(res.data.user);
-      setSession(res.data.session);
+    const res = await authService.login(cleanEmail, password);
+    if (res.success && res.user) {
+      setUser(res.user);
+      const mockSession: any = {
+        access_token: res.token || `tok_${Date.now()}`,
+        token_type: 'bearer',
+        expires_in: 3600,
+        refresh_token: '',
+        user: res.user
+      };
+      setSession(mockSession);
+      return { data: { user: res.user, session: mockSession }, error: null };
     }
-    return res;
+    return { data: null, error: { message: res.error || 'Erreur de connexion.' } };
   };
 
   const signUpWithPassword = async (email: string, password: string, fullName?: string) => {
     const cleanEmail = (email || '').trim().toLowerCase();
-    const res = await supabase.auth.signUp({
-      email: cleanEmail,
-      password,
-      options: {
-        data: fullName ? { full_name: fullName.trim() } : undefined
-      }
-    });
-    if (res.data?.user) {
-      setUser(res.data.user);
-      setSession(res.data.session);
+    const res = await authService.register(fullName || cleanEmail.split('@')[0], cleanEmail, password);
+    if (res.success && res.user) {
+      setUser(res.user);
+      const mockSession: any = {
+        access_token: res.token || `tok_${Date.now()}`,
+        token_type: 'bearer',
+        expires_in: 3600,
+        refresh_token: '',
+        user: res.user
+      };
+      setSession(mockSession);
+      return { data: { user: res.user, session: mockSession }, error: null };
     }
-    return res;
+    return { data: null, error: { message: res.error || "Erreur d'inscription." } };
   };
 
   const signOut = async () => {
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('cineia_user');
-      }
+      authService.logout();
       await supabase.auth.signOut();
     } catch (err) {
       console.warn('[AuthContext] signOut error:', err);

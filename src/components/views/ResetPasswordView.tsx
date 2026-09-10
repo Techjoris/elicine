@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { authService } from '../../services/authService';
 import { Lock, Loader2 } from 'lucide-react';
 
 export const ResetPasswordView: React.FC = () => {
@@ -13,8 +14,9 @@ export const ResetPasswordView: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (password.length < 6) {
-      setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
+    const pwdCheck = authService.validatePassword(password);
+    if (!pwdCheck.valid) {
+      setErrorMessage(pwdCheck.error || "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre.");
       return;
     }
 

@@ -37,6 +37,12 @@ export default async function handler(req, res) {
       });
     }
 
+    if (!password || password.length < 6 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ 
+        error: "Le mot de passe doit contenir au moins 6 caractères, incluant au moins une majuscule et un chiffre." 
+      });
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: password || '',

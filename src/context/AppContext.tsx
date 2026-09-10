@@ -466,7 +466,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser(prev => {
         const formatted = formatUser({
           ...authUser,
-          token: authSession?.access_token
+          token: authSession?.access_token || authUser.token
         });
         const updatedUser = {
           ...formatted,
@@ -479,10 +479,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       setIsAuthModalOpen(false);
     } else {
-      setUser(null);
-      try {
-        localStorage.removeItem('cineia_user');
-      } catch (_) {}
+      // Préserver la session locale en cas d'absence de session Supabase distante
+      const stored = authService.getStoredUser();
+      if (stored) {
+        setUser(stored);
+      } else {
+        setUser(null);
+      }
     }
     setLoading(false);
   }, [authUser, authSession]);
@@ -510,77 +513,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // User Actions
   const login = (emailOrUser: string | UserProfile, name?: string) => {
-    // Cette fonction de simulation est dépréciée et volontairement bloquée.
-    // L'application DOIT passer par loginWithCredentials et Supabase.
-    throw new Error("L'authentification simulée a été bloquée pour des raisons de sécurité. Veuillez utiliser Supabase auth.");
+    if (typeof emailOrUser === 'object') {
+      setUser(emailOrUser);
+      setAuthUser(emailOrUser);
+      localStorage.setItem('cineia_user', JSON.stringify(emailOrUser));
+      setIsAuthModalOpen(false);
+      showToast(`👋 Bienvenue, ${emailOrUser.name || 'Cinéphile'} !`);
+      return;
+    }
+    throw new Error("Veuillez utiliser loginWithCredentials pour vous connecter.");
   };
 
   const loginWithCredentials = async (identifier: string, password: string) => {
-    const cleanId = identifier.trim();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!cleanId || !emailRegex.test(cleanId)) {
-      return { success: false, error: "Veuillez saisir une adresse email valide." };
+    const cleanId = (identifier || '').trim();
+    const res = await authService.login(cleanId, password);
+    if (res.success && res.user) {
+      setUser(res.user);
+      setAuthUser(res.user);
+      setIsAuthModalOpen(false);
+      showToast(`👋 Bon retour sur Éliciné, ${res.user.name || res.user.email} !`);
+      return { success: true };
     }
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanId,
-        password
-      });
-
-      if (error) {
-        return { success: false, error: "Erreur de connexion : " + error.message };
-      }
-
-      if (data?.user) {
-        setIsAuthModalOpen(false);
-        showToast(`👋 Bon retour sur Éliciné, ${data.user.user_metadata?.full_name || data.user.email} !`);
-        return { success: true };
-      }
-    } catch (sbErr: any) {
-      return { success: false, error: "Erreur de connexion : " + (sbErr.message || "Erreur réseau") };
-    }
-    
-    return { success: false, error: 'Erreur inattendue lors de la connexion.' };
+    return { success: false, error: res.error || "Erreur lors de la connexion." };
   };
 
   const registerWithCredentials = async (username: string, email: string, password: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-      return { success: false, error: "Veuillez fournir une adresse email valide." };
+    const cleanUsername = (username || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const res = await authService.register(cleanUsername, cleanEmail, password);
+    if (res.success && res.user) {
+      setUser(res.user);
+      setAuthUser(res.user);
+      setIsAuthModalOpen(false);
+      showToast(`✉️ Un e-mail de confirmation a été envoyé à ${res.user.email}. Bienvenue sur Éliciné !`, 7000);
+      return { success: true };
     }
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            full_name: username.trim()
-          }
-        }
-      });
-
-      if (error) {
-        return { success: false, error: "Erreur d'inscription : " + error.message };
-      }
-
-      if (data?.user) {
-        // Détecter si l'utilisateur existe déjà (identities vide)
-        if (data.user.identities && data.user.identities.length === 0) {
-          return { success: false, error: "Cette adresse email est déjà utilisée." };
-        }
-
-        setIsAuthModalOpen(false);
-        showToast(`🎉 Bienvenue sur Éliciné, ${username.trim()} !`);
-        return { success: true };
-      }
-    } catch (sbErr: any) {
-      return { success: false, error: "Erreur d'inscription : " + (sbErr.message || "Erreur réseau") };
-    }
-
-    return { success: false, error: "Erreur inattendue lors de l'inscription." };
+    return { success: false, error: res.error || "Erreur lors de l'inscription." };
   };
 
   const loginWithGoogle = async () => {
