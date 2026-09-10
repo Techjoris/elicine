@@ -140,11 +140,11 @@ export const InstallAppButton: React.FC<InstallAppButtonProps> = ({
       <button
         onClick={handleDirectInstall}
         type="button"
-        className={`text-xs font-semibold h-7 sm:h-auto w-7 sm:w-auto p-0 sm:px-2.5 sm:py-1 rounded-full bg-slate-900/90 dark:bg-zinc-800/90 hover:bg-slate-800 dark:hover:bg-zinc-700 border border-slate-700/80 dark:border-white/15 text-slate-100 dark:text-zinc-100 hover:text-white flex items-center justify-center sm:gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap ${className}`}
+        className={`text-xs font-semibold h-7 sm:h-auto w-7 sm:w-auto p-0 sm:px-2.5 sm:py-1 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800/90 dark:hover:bg-zinc-700 border border-slate-200 dark:border-white/15 text-slate-700 hover:text-slate-900 dark:text-zinc-100 dark:hover:text-white flex items-center justify-center sm:gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap ${className}`}
         title="Installer l'application Éliciné"
         aria-label="Installer l'application Éliciné"
       >
-        <Download className="w-3.5 h-3.5 text-cyan-400 dark:text-cyan-300 flex-shrink-0" />
+        <Download className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 flex-shrink-0" />
         <span className="hidden sm:inline">Installer</span>
       </button>
       {guideModal}

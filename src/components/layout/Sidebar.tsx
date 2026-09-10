@@ -91,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between px-1">
           <div 
             onClick={() => handleNavClick('home')}
-            className="cursor-pointer hover:opacity-90 transition-opacity select-none"
+            className="cursor-pointer hover:opacity-90 transition-opacity select-none text-slate-900 dark:text-white"
             title="Retour à l'accueil"
           >
             <ElicineLogo size="md" variant="full" />

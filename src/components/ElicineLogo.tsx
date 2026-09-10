@@ -4,6 +4,7 @@ export interface ElicineLogoProps {
   variant?: 'full' | 'icon';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  textColor?: string;
   onClick?: () => void;
 }
 
@@ -11,6 +12,7 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
   variant = 'full',
   size = 'md',
   className = '',
+  textColor = 'text-slate-900 dark:text-white',
   onClick
 }) => {
   const idPrefix = useId().replace(/:/g, '');
@@ -118,12 +120,12 @@ export const ElicineLogo: React.FC<ElicineLogoProps> = ({
     >
       {iconSvg}
 
-      {/* Typographie intégrée : "Éliciné" haute précision */}
+      {/* Typographie intégrée : "Éliciné" haute précision adaptable clair / sombre */}
       <div className="flex items-baseline leading-none tracking-tight">
-        <span className={`${currentSize.text} font-black tracking-tight font-sans flex items-baseline`}>
-          <span className="text-white">É</span>
-          <span className="text-white">li</span>
-          <span className="text-white font-black">ciné</span>
+        <span className={`${currentSize.text} font-black tracking-tight font-sans flex items-baseline ${textColor} transition-colors`}>
+          <span>É</span>
+          <span>li</span>
+          <span className="font-black">ciné</span>
         </span>
         <span className={`${currentSize.dot} rounded-full bg-[#e50914] ml-1.5`}></span>
       </div>

@@ -88,10 +88,10 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         className="flex items-center sm:gap-2 p-0.5 sm:p-1 sm:pl-1.5 sm:pr-2 rounded-full sm:rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer group select-none shadow-sm flex-shrink-0"
         title="Menu Profil & Paramètres"
       >
-        <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] text-white flex-shrink-0 shadow-sm ${
+        <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] flex-shrink-0 shadow-sm ${
           (activeUser as any)?.isPro
             ? 'ring-1 ring-amber-400/60'
-            : 'ring-1 ring-white/10'
+            : 'ring-1 ring-slate-900/10 dark:ring-white/10'
         }`}>
           {displayAvatar && !imgError ? (
             <img 
@@ -104,7 +104,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             <div className={`w-full h-full flex items-center justify-center ${
               (activeUser as any)?.isPro
                 ? 'bg-[#1a1500] text-amber-300 border border-amber-500/40 font-black'
-                : 'bg-[#1e1e1e] text-zinc-200 border border-white/10'
+                : 'bg-slate-100 dark:bg-[#1e1e1e] text-slate-800 dark:text-zinc-200 border border-slate-200 dark:border-white/10'
             }`}>
               {initials}
             </div>

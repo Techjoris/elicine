@@ -15,7 +15,7 @@ export default function Navbar({ onOpenSettings }) {
         {/* Bouton Paramètres rapide */}
         <button
           onClick={onOpenSettings}
-          className="w-9 h-9 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-all backdrop-blur-md cursor-pointer"
+          className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all backdrop-blur-md cursor-pointer"
           title="Paramètres de visionnage"
         >
           ⚙️

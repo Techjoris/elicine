@@ -77,7 +77,7 @@ export const CinoraLogo: React.FC<CinoraLogoProps> = ({
 
       {/* Typographie Cinora */}
       <div className="flex items-baseline tracking-tight">
-        <span className={`${textSizes[size]} font-black text-white`}>Cin</span>
+        <span className={`${textSizes[size]} font-black text-slate-900 dark:text-white transition-colors`}>Cin</span>
         <span className={`${textSizes[size]} font-extrabold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent`}>
           ora
         </span>

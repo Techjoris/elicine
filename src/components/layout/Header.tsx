@@ -51,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
 
           <div 
             onClick={onGoHome || (() => setActiveView('home'))}
-            className="flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-opacity select-none"
+            className="flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-opacity select-none text-slate-900 dark:text-white"
             title="Retour à l'accueil"
           >
             <ElicineLogo size="sm" />
