@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
-import { processMonerooCheckout, verifyMonerooPayment, CURRENCY_CONFIGS } from '../services/payment';
+import { processMonerooCheckout, verifyMonerooPayment, extractMonerooRedirectUrl, CURRENCY_CONFIGS } from '../services/payment';
 import { Currency } from '../types';
 
 export interface MonerooTipPayload {
@@ -116,46 +116,45 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined
       });
 
-      const redirectUrl = res.checkout_url || res.paymentUrl;
+      // 1. Affichage & analyse précise de l'objet JSON retourné par Moneroo
+      console.log('[SupportModal] Objet JSON complet retourné par Moneroo :', res);
+
+      // 2. Extraction du lien de redirection en vérifiant rigoureusement tous les chemins :
+      // - response.data.checkout_url
+      // - response.checkout_url
+      // - response.link
+      // - response.data.link
+      // - response.paymentUrl / response.url
+      const redirectUrl = 
+        res?.checkout_url ||
+        res?.link ||
+        res?.url ||
+        res?.paymentUrl ||
+        (res?.data as any)?.checkout_url ||
+        (res?.data as any)?.link ||
+        (res?.data as any)?.url ||
+        (res?.rawResponse as any)?.data?.checkout_url ||
+        (res?.rawResponse as any)?.checkout_url ||
+        (res?.rawResponse as any)?.link ||
+        (res?.rawResponse as any)?.data?.link ||
+        extractMonerooRedirectUrl(res);
 
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo en cours...');
-        setTimeout(() => setIsProcessing(false), 4000);
+        console.log('[SupportModal] ✓ Lien de redirection Moneroo validé :', redirectUrl);
+        showToast('Redirection immédiate vers le paiement Moneroo...');
+        
+        // Redirection immédiate vers la page de paiement sécurisée
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.assign(redirectUrl);
         }
 
-        if (res.reference) {
-          setIsWaitingConfirmation(true);
-          const ref = res.reference;
-          const startTime = Date.now();
-
-          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-
-          pollingIntervalRef.current = setInterval(async () => {
-            if (Date.now() - startTime > 90000) {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              showToast("Délai d'attente dépassé. Si vous avez validé le paiement, il sera confirmé sous peu.");
-              return;
-            }
-
-            const check = await verifyMonerooPayment(ref);
-            if (check.status === 'complete') {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              onClose();
-              setIsThankYouModalOpen(true);
-            } else if (check.status === 'failed') {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              showToast("Le paiement n'a pas pu être validé ou a été annulé.");
-            }
-          }, 3000);
-        }
+        // Déverrouillage de secours au bout de quelques secondes si la page ne s'est pas encore déchargée
+        setTimeout(() => {
+          setIsProcessing(false);
+        }, 3000);
       } else {
-        console.error('[SupportModal] Échec initialisation Moneroo :', res);
-        const errorMsg = res.message || "Erreur lors de l'initialisation de Moneroo.";
+        console.error('[SupportModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', res);
+        const errorMsg = res?.message || "Impossible de récupérer le lien de paiement Moneroo.";
         showToast(errorMsg);
         setIsProcessing(false);
       }
@@ -164,7 +163,10 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       showToast(err?.message || "Échec de l'initialisation du paiement Moneroo.");
       setIsProcessing(false);
     } finally {
-      setTimeout(() => setIsProcessing(false), 600);
+      // Déblocage garanti du bouton
+      setTimeout(() => {
+        setIsProcessing(false);
+      }, 2500);
     }
   };
 

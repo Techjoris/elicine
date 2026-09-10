@@ -22,10 +22,10 @@ import { SuccessModal } from './components/modals/SuccessModal';
 import { ProSuccessModal } from './components/modals/ProSuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
 import { TermsConsentModal } from './components/modals/TermsConsentModal';
-import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { DevModal } from './components/DevModal';
+import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
-import { processMonerooCheckout } from './services/payment';
+import { processMonerooCheckout, extractMonerooRedirectUrl } from './services/payment';
 
 import { useApp } from './context/AppContext';
 import { useTranslation } from './context/LanguageContext';
@@ -79,15 +79,18 @@ export const AppContent: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
 
     // --- PRO SUBSCRIPTION SUCCESS ---
-    // Triggered by ?subscription=pro_success OR ?payment=pro_success
+    // Triggered by ?subscription=pro_success OR ?payment=pro_success OR ?payment_status=success&type=pro
     const isProSuccess =
       params.get('subscription') === 'pro_success' ||
-      params.get('payment') === 'pro_success';
+      params.get('payment') === 'pro_success' ||
+      (params.get('payment_status') === 'success' && params.get('type') === 'pro');
 
     // --- TIP / DONATION SUCCESS ---
-    // Triggered by ?payment=success OR ?tip=success
+    // Triggered by ?payment=success OR ?tip=success OR ?payment=moneroo_success OR ?payment_status=success&type=don
     const isTipSuccess =
       (params.get('payment') === 'success' && params.get('subscription') !== 'pro_success') ||
+      params.get('payment') === 'moneroo_success' ||
+      (params.get('payment_status') === 'success' && params.get('type') === 'don') ||
       params.get('tip') === 'success';
 
     if (isProSuccess) {
@@ -173,11 +176,22 @@ export const AppContent: React.FC = () => {
         }
       });
 
-      const redirectUrl = result.checkout_url || result.paymentUrl;
+      console.log('[App] Objet JSON Moneroo reçu :', result);
+
+      const redirectUrl = 
+        result?.checkout_url ||
+        result?.link ||
+        result?.url ||
+        result?.paymentUrl ||
+        (result as any)?.data?.checkout_url ||
+        (result as any)?.data?.link ||
+        (result as any)?.data?.url ||
+        extractMonerooRedirectUrl(result);
+
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo en cours...');
+        showToast('Redirection immédiate vers Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.assign(redirectUrl);
         }
       } else {
         console.error('[App] Erreur retournée par Moneroo :', result);

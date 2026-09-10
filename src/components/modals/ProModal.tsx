@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
-import { processMonerooCheckout } from '../../services/payment';
+import { processMonerooCheckout, extractMonerooRedirectUrl } from '../../services/payment';
 import { Currency } from '../../types';
 
 export const ProModal: React.FC = () => {
@@ -33,11 +33,22 @@ export const ProModal: React.FC = () => {
         openInNewTab: false
       });
 
-      const redirectUrl = result.checkout_url || result.paymentUrl;
+      console.log('[ProModal] Objet JSON Moneroo reçu :', result);
+
+      const redirectUrl = 
+        result.checkout_url || 
+        result.link || 
+        result.url || 
+        result.paymentUrl || 
+        (result as any)?.data?.checkout_url || 
+        (result as any)?.data?.link || 
+        (result as any)?.data?.url ||
+        extractMonerooRedirectUrl(result);
+
       if (redirectUrl) {
         showToast('Redirection vers la passerelle de paiement Moneroo...');
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.assign(redirectUrl);
         }
       } else {
         showToast(result.message || "Impossible de générer le lien de paiement Moneroo.");

@@ -163,6 +163,7 @@ export default async function handler(req, res) {
       } catch (_) {
         data = { message: responseText };
       }
+      console.log('[Moneroo API JSON Response]:', JSON.stringify(data, null, 2));
 
       if (!response.ok) {
         const errorMsg = data?.message || data?.error || (data?.errors ? JSON.stringify(data.errors) : `Erreur Moneroo (HTTP ${response.status})`);
@@ -175,25 +176,68 @@ export default async function handler(req, res) {
         });
       }
 
-      const checkoutUrl = data?.data?.checkout_url || data?.checkout_url;
+      // Extraction multi-chemins exhaustive du lien de redirection selon toutes les variantes possibles :
+      // - response.data.checkout_url
+      // - response.checkout_url
+      // - response.link
+      // - response.data.link
+      // - response.payment_url / response.data.payment_url
+      // - response.url / response.data.url
+      let checkoutUrl = 
+        data?.data?.checkout_url || 
+        data?.checkout_url || 
+        data?.link || 
+        data?.data?.link || 
+        data?.payment_url || 
+        data?.data?.payment_url || 
+        data?.paymentUrl || 
+        data?.data?.paymentUrl || 
+        data?.url || 
+        data?.data?.url ||
+        data?.data?.data?.checkout_url ||
+        data?.data?.data?.link;
+
+      // Si aucun lien direct trouvé dans les propriétés standard, recherche récursive
       if (!checkoutUrl) {
-        const errorMsg = "L'API Moneroo n'a pas renvoyé d'URL de redirection (checkout_url).";
-        console.error('[Moneroo API Missing Checkout URL]:', data);
-        return res.status(500).json({
+        console.warn('[Moneroo API] Recherche récursive d\'une URL dans l\'objet JSON :', data);
+        const searchUrl = (obj, depth = 0) => {
+          if (!obj || typeof obj !== 'object' || depth > 3) return null;
+          for (const k of Object.keys(obj)) {
+            const v = obj[k];
+            if (typeof v === 'string' && v.startsWith('http') && (k.toLowerCase().includes('url') || k.toLowerCase().includes('link') || k.toLowerCase().includes('checkout'))) {
+              return v;
+            }
+            if (v && typeof v === 'object') {
+              const res = searchUrl(v, depth + 1);
+              if (res) return res;
+            }
+          }
+          return null;
+        };
+        checkoutUrl = searchUrl(data);
+      }
+
+      if (!checkoutUrl) {
+        const errorMsg = "L'API Moneroo n'a pas renvoyé d'URL de redirection valide (checkout_url, link ou url introuvable).";
+        console.error('[Moneroo API Missing Checkout URL]. Objet reçu :', data);
+        return res.status(502).json({
           error: errorMsg,
           message: errorMsg,
           details: data
         });
       }
 
-      console.log(`[Moneroo Serverless] ✓ Checkout URL générée avec succès :`, checkoutUrl);
+      console.log(`[Moneroo Serverless] ✓ Checkout URL extraite avec succès :`, checkoutUrl);
 
       return res.status(200).json({
         success: true,
         checkout_url: checkoutUrl,
+        link: checkoutUrl,
         paymentUrl: checkoutUrl,
-        reference: data?.data?.id || data?.id,
-        data: data.data || data
+        url: checkoutUrl,
+        reference: data?.data?.id || data?.id || data?.data?.reference || data?.reference,
+        data: data.data || data,
+        raw: data
       });
     } catch (err) {
       console.error('[Moneroo API Exception]:', err.message);

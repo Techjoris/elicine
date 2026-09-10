@@ -195,12 +195,98 @@ export interface MonerooCheckoutResult {
   message: string;
   paymentUrl?: string;
   checkout_url?: string;
+  link?: string;
+  url?: string;
   reference?: string;
+  data?: any;
+  rawResponse?: any;
+}
+
+/**
+ * Analyse et extrait le lien de redirection depuis l'objet JSON retourné par Moneroo.
+ * Vérifie précisément tous les chemins possibles :
+ * - response.data.checkout_url
+ * - response.checkout_url
+ * - response.link
+ * - response.data.link
+ * - response.payment_url / response.data.payment_url
+ * - response.url / response.data.url
+ */
+export function extractMonerooRedirectUrl(res: any): string | null {
+  if (!res) return null;
+
+  console.log('[Moneroo API] Analyse de l\'objet réponse pour extraction du lien :', res);
+
+  // 1. Chemins directs prioritaires
+  const directCandidates = [
+    res?.checkout_url,
+    res?.data?.checkout_url,
+    res?.link,
+    res?.data?.link,
+    res?.paymentUrl,
+    res?.data?.paymentUrl,
+    res?.payment_url,
+    res?.data?.payment_url,
+    res?.url,
+    res?.data?.url,
+    res?.redirect_url,
+    res?.data?.redirect_url
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === 'string' && candidate.trim().startsWith('http')) {
+      console.log('[Moneroo API] Lien de redirection extrait avec succès :', candidate.trim());
+      return candidate.trim();
+    }
+  }
+
+  // 2. Recherche imbriquée dans res.data.data ou res.rawResponse
+  const nestedCandidates = [
+    res?.data?.data?.checkout_url,
+    res?.data?.data?.link,
+    res?.data?.data?.url,
+    res?.rawResponse?.checkout_url,
+    res?.rawResponse?.data?.checkout_url,
+    res?.rawResponse?.link,
+    res?.rawResponse?.data?.link
+  ];
+
+  for (const nested of nestedCandidates) {
+    if (typeof nested === 'string' && nested.trim().startsWith('http')) {
+      console.log('[Moneroo API] Lien de redirection extrait (imbriqué) :', nested.trim());
+      return nested.trim();
+    }
+  }
+
+  // 3. Recherche récursive
+  try {
+    const scanObject = (obj: any, depth = 0): string | null => {
+      if (!obj || typeof obj !== 'object' || depth > 3) return null;
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if (typeof val === 'string' && val.startsWith('http') && (key.toLowerCase().includes('url') || key.toLowerCase().includes('link') || key.toLowerCase().includes('checkout'))) {
+          return val.trim();
+        }
+        if (val && typeof val === 'object') {
+          const found = scanObject(val, depth + 1);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const scanned = scanObject(res);
+    if (scanned) {
+      console.log('[Moneroo API] Lien trouvé par parcours récursif :', scanned);
+      return scanned;
+    }
+  } catch (_) {}
+
+  return null;
 }
 
 /**
  * Initialise un paiement via l'API Moneroo (POST https://api.moneroo.io/v1/payments/initialize)
- * et redirige vers le lien de paiement checkout_url.
+ * et redirige immédiatement vers le lien de paiement checkout_url.
  */
 export async function processMonerooCheckout(params: MonerooCheckoutParams): Promise<MonerooCheckoutResult> {
   const secretKey = getMonerooSecretKey();
@@ -261,6 +347,8 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         data = { message: resText };
       }
 
+      console.log('[Moneroo Service] Réponse reçue de /api/moneroo :', data);
+
       if (!serverRes.ok) {
         lastError = data?.error || data?.message || `Erreur serveur Moneroo (${serverRes.status})`;
         console.warn('[Moneroo] Échec /api/moneroo :', lastError);
@@ -271,7 +359,8 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     }
 
     // 2. Secours direct vers l'API Moneroo si nécessaire et si une clé secrète existe
-    if (!data?.checkout_url && !data?.data?.checkout_url && authHeader) {
+    const potentialUrl = extractMonerooRedirectUrl(data);
+    if (!potentialUrl && authHeader) {
       try {
         const directRes = await fetch('https://api.moneroo.io/v1/payments/initialize', {
           method: 'POST',
@@ -286,6 +375,7 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         const directText = await directRes.text();
         try {
           const directData = JSON.parse(directText);
+          console.log('[Moneroo Service] Réponse reçue de l\'API directe Moneroo :', directData);
           if (directRes.ok) {
             data = directData;
           } else {
@@ -299,14 +389,16 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       }
     }
 
-    const checkoutUrl = data?.checkout_url || data?.data?.checkout_url;
-    const paymentId = data?.reference || data?.data?.id || data?.id;
+    // Extraction précise et multi-chemins du lien de redirection
+    const checkoutUrl = extractMonerooRedirectUrl(data);
+    const paymentId = data?.reference || data?.data?.id || data?.id || data?.data?.reference;
 
     if (checkoutUrl) {
+      console.log('[Moneroo Service] ✓ Redirection vers :', checkoutUrl);
       if (params.openInNewTab && typeof window !== 'undefined') {
         window.open(checkoutUrl, '_blank');
       } else if (typeof window !== 'undefined') {
-        window.location.href = checkoutUrl;
+        window.location.assign(checkoutUrl);
       }
 
       return {
@@ -314,15 +406,21 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         message: 'Redirection vers le paiement Moneroo...',
         paymentUrl: checkoutUrl,
         checkout_url: checkoutUrl,
-        reference: paymentId
+        link: checkoutUrl,
+        url: checkoutUrl,
+        reference: paymentId,
+        data: data?.data || data,
+        rawResponse: data
       };
     }
 
-    const finalErrMsg = data?.error || data?.message || lastError || "Échec de l'initialisation du paiement Moneroo.";
-    console.error('[Moneroo Checkout Error]', finalErrMsg, data);
+    const finalErrMsg = data?.error || data?.message || lastError || "L'API Moneroo n'a renvoyé aucun lien de redirection valide.";
+    console.error('[Moneroo Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
     return {
       success: false,
-      message: finalErrMsg
+      message: finalErrMsg,
+      data: data?.data || data,
+      rawResponse: data
     };
   } catch (e: any) {
     console.error('[Moneroo] Erreur critique initialisation:', e?.message || e);

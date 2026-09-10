@@ -7,7 +7,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CURRENCY_CONFIGS, processMonerooCheckout, verifyMonerooPayment, isAfricanCurrency } from '../../services/payment';
+import { CURRENCY_CONFIGS, processMonerooCheckout, verifyMonerooPayment, extractMonerooRedirectUrl, isAfricanCurrency } from '../../services/payment';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -126,46 +126,42 @@ export const TipModal: React.FC = () => {
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined
       });
 
-      const redirectUrl = res.checkout_url || res.paymentUrl;
+      // 1. Affichage & analyse précise de l'objet JSON retourné par Moneroo
+      console.log('[TipModal] Objet JSON complet retourné par Moneroo :', res);
+
+      // 2. Extraction multi-chemins du lien de redirection :
+      // - response.data.checkout_url
+      // - response.checkout_url
+      // - response.link
+      // - response.data.link
+      // - response.paymentUrl / response.url
+      const redirectUrl = 
+        res?.checkout_url ||
+        res?.link ||
+        res?.url ||
+        res?.paymentUrl ||
+        (res?.data as any)?.checkout_url ||
+        (res?.data as any)?.link ||
+        (res?.data as any)?.url ||
+        (res?.rawResponse as any)?.data?.checkout_url ||
+        (res?.rawResponse as any)?.checkout_url ||
+        (res?.rawResponse as any)?.link ||
+        (res?.rawResponse as any)?.data?.link ||
+        extractMonerooRedirectUrl(res);
 
       if (redirectUrl) {
-        showToast('Redirection vers Moneroo en cours...');
-        setTimeout(() => setIsProcessing(false), 4000);
+        console.log('[TipModal] ✓ Lien de redirection Moneroo validé :', redirectUrl);
+        showToast('Redirection immédiate vers le paiement Moneroo...');
+        
+        // Redirige immédiatement l'utilisateur vers l'URL Moneroo
         if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl;
+          window.location.assign(redirectUrl);
         }
 
-        if (res.reference) {
-          setIsWaitingConfirmation(true);
-          const ref = res.reference;
-          const startTime = Date.now();
-
-          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-
-          pollingIntervalRef.current = setInterval(async () => {
-            if (Date.now() - startTime > 90000) {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              showToast("Délai d'attente dépassé. Si vous avez validé le code, il sera confirmé sous peu.");
-              return;
-            }
-
-            const check = await verifyMonerooPayment(ref);
-            if (check.status === 'complete') {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              handleClose();
-              setIsThankYouModalOpen(true);
-            } else if (check.status === 'failed') {
-              if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-              setIsWaitingConfirmation(false);
-              showToast("Le paiement n'a pas pu être validé ou a été annulé.");
-            }
-          }, 3000);
-        }
+        setTimeout(() => setIsProcessing(false), 3000);
       } else {
-        console.error('[TipModal] Échec initialisation Moneroo :', res);
-        const errorMsg = res.message || "Erreur lors de l'initialisation du paiement Moneroo.";
+        console.error('[TipModal] Échec : aucun lien de paiement trouvé dans l\'objet JSON :', res);
+        const errorMsg = res?.message || "Erreur lors de l'initialisation du paiement Moneroo.";
         showToast(errorMsg);
         setIsProcessing(false);
       }
@@ -174,7 +170,7 @@ export const TipModal: React.FC = () => {
       showToast(err?.message || "Échec de l'initialisation du paiement.");
       setIsProcessing(false);
     } finally {
-      setTimeout(() => setIsProcessing(false), 600);
+      setTimeout(() => setIsProcessing(false), 2500);
     }
   };
 
