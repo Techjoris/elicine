@@ -247,7 +247,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             }`}
           >
             <span>💳</span>
-            <span>PayPal & Carte</span>
+            <span>PayPal &amp; Carte bancaire</span>
           </button>
 
           <button
@@ -255,12 +255,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             onClick={() => setActiveTab('momo')}
             className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'momo'
-                ? 'bg-sky-500 text-white shadow-md'
+                ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <span>📱</span>
-            <span>Mobile Money</span>
+            <span>Paiement Mobile</span>
           </button>
         </div>
 

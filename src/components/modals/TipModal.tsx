@@ -1,20 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  X, 
   Coffee, 
-  Heart, 
   CreditCard,
   Smartphone, 
   ShieldCheck, 
-  Loader2,
-  Info,
-  MapPin,
-  Sparkles
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CURRENCY_CONFIGS, processNotchPayCheckout, verifyNotchPayPayment, PAYMENT_METHODS, isAfricanCurrency, CARD_MIN_FCFA } from '../../services/payment';
-import { getUserGeoData, isMobileMoneyAvailable, getSuggestedCurrencyForCountry } from '../../services/geoService';
+import { CURRENCY_CONFIGS, processNotchPayCheckout, verifyNotchPayPayment, isAfricanCurrency } from '../../services/payment';
+import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
+
+const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: number }> = {
+  XAF: { amounts: [500, 1000, 2500, 5000], defaultAmount: 1000 },
+  XOF: { amounts: [500, 1000, 2500, 5000], defaultAmount: 1000 },
+  EUR: { amounts: [2, 5, 10, 20], defaultAmount: 5 },
+  USD: { amounts: [2, 5, 10, 20], defaultAmount: 5 },
+  CAD: { amounts: [2, 5, 10, 25], defaultAmount: 5 }
+};
 
 export const TipModal: React.FC = () => {
   const { 
@@ -28,62 +31,29 @@ export const TipModal: React.FC = () => {
     setIsThankYouModalOpen
   } = useApp();
 
-  const isAfrica = isAfricanCurrency(currency);
-
-  const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: number }> = {
-    XAF: { amounts: [500, 1000, 2500, 5000, 10000], defaultAmount: 1000 },
-    XOF: { amounts: [500, 1000, 2500, 5000, 10000], defaultAmount: 1000 },
-    EUR: { amounts: [1, 2, 5, 10, 20], defaultAmount: 2 },
-    USD: { amounts: [1, 2, 5, 10, 20], defaultAmount: 2 },
-    CAD: { amounts: [2, 5, 10, 15, 25], defaultAmount: 5 }
-  };
-
-  const currentPresetData = presetsByCurrency[currency] || presetsByCurrency.EUR;
-
-  const [selectedPreset, setSelectedPreset] = useState<number>(() => isAfricanCurrency(currency) ? 1000 : 2);
-  const [customAmount, setCustomAmount] = useState<string>('');
-  const [selectedMethod, setSelectedMethod] = useState<string>('card');
+  const [activeTab, setActiveTab] = useState<'paypal' | 'mobile'>('paypal');
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currency || 'XAF');
+  const [amount, setAmount] = useState<string>('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const pollingIntervalRef = useRef<any>(null);
-  const [geoCountry, setGeoCountry] = useState<string>('');
-  const [geoLoading, setGeoLoading] = useState(true);
-  const [mobileMoneyEnabled, setMobileMoneyEnabled] = useState(false);
 
-  // Sync default preset when currency changes
-  useEffect(() => {
-    const config = presetsByCurrency[currency] || presetsByCurrency.EUR;
-    setSelectedPreset(config.defaultAmount);
-    setCustomAmount('');
-  }, [currency]);
-
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  }, []);
-
-  // Auto-detect user country on open
+  // Sync initial currency and amount based on user geolocation on open
   useEffect(() => {
     if (!isTipModalOpen) return;
-    setGeoLoading(true);
+
     getUserGeoData().then((geo) => {
-      setGeoCountry(geo.countryCode);
-      const canUseMobile = isMobileMoneyAvailable(geo.countryCode);
-      setMobileMoneyEnabled(true);
-      const suggested = getSuggestedCurrencyForCountry(geo.countryCode, geo.currency);
-      if (suggested !== currency) {
-        setCurrency(suggested as Currency);
-      }
-      setGeoLoading(false);
+      const suggested = (getSuggestedCurrencyForCountry(geo.countryCode, geo.currency) as Currency) || 'EUR';
+      setSelectedCurrency(suggested);
+      const isAfr = isAfricanCurrency(suggested);
+      setActiveTab(isAfr ? 'mobile' : 'paypal');
+      const defAmt = presetsByCurrency[suggested]?.defaultAmount || (isAfr ? 1000 : 5);
+      setAmount(defAmt.toString());
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsTipModalOpen(false);
+        handleClose();
       }
     };
 
@@ -97,75 +67,57 @@ export const TipModal: React.FC = () => {
     };
   }, [isTipModalOpen]);
 
-  if (!isTipModalOpen) return null;
+  // Clean polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
 
-  const currentConfig = CURRENCY_CONFIGS[currency] || CURRENCY_CONFIGS['XAF'];
-  const activeAmount = customAmount ? (Number(customAmount) || 0) : selectedPreset;
-  const convertedValue = activeAmount;
-  const activeAmountFcfa = isAfrica 
-    ? activeAmount 
-    : Math.round(activeAmount / currentConfig.rateToFcfa);
-
-  const isCardPayment = selectedMethod === 'card';
-  const cardMin = CARD_MIN_FCFA.tip; // 1000 FCFA
-  const isUnderCardThreshold = isCardPayment && isAfrica && activeAmountFcfa < cardMin;
-
-  const handleSelectMethod = (methodId: string) => {
-    setSelectedMethod(methodId);
-    if (methodId === 'card' && isAfrica && activeAmountFcfa < cardMin) {
-      setSelectedPreset(cardMin);
-      setCustomAmount('');
+  const handleClose = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
+    setIsWaitingConfirmation(false);
+    setIsTipModalOpen(false);
   };
 
-  const availableMethods = [
-    {
-      id: 'card',
-      name: 'Carte Bancaire (Visa / Mastercard)',
-      category: 'card' as const,
-      color: '#3b82f6'
-    },
-    {
-      id: 'paypal',
-      name: 'PayPal & Cartes Internationales',
-      category: 'paypal' as const,
-      color: '#0079c1'
-    },
-    ...PAYMENT_METHODS.filter(m => m.category === 'mobile')
-  ];
+  const handleCurrencyChange = (newCurr: Currency) => {
+    setSelectedCurrency(newCurr);
+    setCurrency(newCurr);
+    const def = presetsByCurrency[newCurr]?.defaultAmount || 5;
+    setAmount(def.toString());
+  };
 
-  const handleSendTip = async () => {
-    if (convertedValue <= 0) {
+  const handlePayPalCheckout = () => {
+    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+    showToast('Ouverture de la page sécurisée PayPal...');
+    handleClose();
+  };
+
+  const handleMobileMoneySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanAmount = Math.max(1, Math.round(Number(amount)));
+
+    if (!cleanAmount || cleanAmount < 1) {
       showToast('Veuillez entrer un montant valide.');
-      return;
-    }
-
-    if (selectedMethod === 'paypal') {
-      window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
-      showToast('Ouverture de la page sécurisée PayPal...');
-      setIsTipModalOpen(false);
-      return;
-    }
-
-    if (isUnderCardThreshold) {
-      showToast(`Le montant minimum par Carte Bancaire est de ${cardMin} FCFA.`);
       return;
     }
 
     setIsProcessing(true);
     try {
-      const channelMode: 'card' | 'mobile' = selectedMethod === 'card' ? 'card' : 'mobile';
-      // L'utilisateur peut choisir parmi toutes les devises (USD, EUR, etc.) en Mobile Money
-      const paymentCurrency: Currency = currency;
-
       const res = await processNotchPayCheckout({
-        amount: convertedValue,
-        currency: paymentCurrency,
+        amount: cleanAmount,
+        currency: selectedCurrency,
         paymentType: 'tip',
-        paymentMethod: channelMode,
+        paymentMethod: 'mobile',
         email: user?.email || 'contact@elicine.com',
-        name: user?.name || 'Cinéphile',
-        description: `Pourboire Soutien Éliciné (${convertedValue} ${currentConfig.symbol} - ${channelMode === 'card' ? 'Carte Bancaire' : 'Mobile Money'})`,
+        name: user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile',
+        description: `Soutien Éliciné (${cleanAmount} ${selectedCurrency})`,
         publicKey: apiSettings.notchPayPublicKey,
         hashKey: apiSettings.notchPayHashKey,
         isTestMode: false,
@@ -177,7 +129,7 @@ export const TipModal: React.FC = () => {
           window.open(res.paymentUrl, '_blank');
         }
 
-        if (channelMode === 'mobile' && res.reference) {
+        if (res.reference) {
           setIsWaitingConfirmation(true);
           const ref = res.reference;
           const startTime = Date.now();
@@ -196,7 +148,7 @@ export const TipModal: React.FC = () => {
             if (check.status === 'complete') {
               if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
               setIsWaitingConfirmation(false);
-              setIsTipModalOpen(false);
+              handleClose();
               setIsThankYouModalOpen(true);
             } else if (check.status === 'failed') {
               if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
@@ -205,10 +157,10 @@ export const TipModal: React.FC = () => {
             }
           }, 3000);
         } else {
-          showToast('Redirection vers la page de soutien sécurisée Notch Pay...');
+          showToast('Redirection vers Notch Pay...');
         }
       } else {
-        showToast(res.message);
+        showToast(res.message || "Erreur lors de l'initialisation.");
       }
     } catch (err) {
       console.error(err);
@@ -218,14 +170,17 @@ export const TipModal: React.FC = () => {
     }
   };
 
+  if (!isTipModalOpen) return null;
+
+  const currentConfig = CURRENCY_CONFIGS[selectedCurrency] || CURRENCY_CONFIGS['XAF'];
+  const presets = presetsByCurrency[selectedCurrency] || presetsByCurrency.XAF;
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-          setIsWaitingConfirmation(false);
-          setIsTipModalOpen(false);
+          handleClose();
         }
       }}
     >
@@ -234,14 +189,12 @@ export const TipModal: React.FC = () => {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="tip-modal-title"
       >
+        {/* Bouton Fermer */}
         <button
           type="button"
-          onClick={() => {
-            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-            setIsWaitingConfirmation(false);
-            setIsTipModalOpen(false);
-          }}
+          onClick={handleClose}
           aria-label="Fermer"
           className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-white/10 flex items-center justify-center transition-all cursor-pointer z-10 shadow-sm"
         >
@@ -262,7 +215,7 @@ export const TipModal: React.FC = () => {
                 Paiement en cours de validation
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-sm leading-relaxed">
-                Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money)...
+                Veuillez confirmer la transaction sur votre téléphone (*126# ou validation Orange Money / Wave)...
               </p>
             </div>
 
@@ -284,196 +237,190 @@ export const TipModal: React.FC = () => {
           </div>
         ) : (
           <>
-
-        {/* Title */}
-        <div className="text-center space-y-2 w-full">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 flex items-center justify-center mx-auto shadow-inner">
-            <Coffee className="w-6 h-6" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            Offrez un café à <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">Éliciné</span> ☕
-          </h2>
-          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
-            Votre soutien permet de maintenir les serveurs et l'intelligence artificielle 100% gratuits et sans publicité intrusive.
-          </p>
-          {/* Geo Badge */}
-          {!geoLoading && geoCountry && (
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
-              mobileMoneyEnabled
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                : 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300'
-            }`}>
-              <MapPin className="w-3 h-3" />
-              <span>
-                {mobileMoneyEnabled 
-                  ? `📱 Mobile Money + 💳 Carte (${geoCountry})`
-                  : `🌍 Carte Bancaire & PayPal (${geoCountry})`
-                }
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Currency Tabs */}
-        <div className="flex items-center justify-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60">
-          {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
-            <button
-              key={c}
-              onClick={() => setCurrency(c)}
-              className={`flex-1 py-1 rounded-full text-xs font-bold transition-all ${
-                currency === c ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {/* Preset Amounts */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Choisir un montant
-          </label>
-          <div className="grid grid-cols-5 gap-1.5">
-            {currentPresetData.amounts.map((amt) => {
-              const isSelected = !customAmount && selectedPreset === amt;
-              return (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => { setSelectedPreset(amt); setCustomAmount(''); }}
-                  className={`py-2 px-1 rounded-xl text-xs font-black border transition-all text-center ${
-                    isSelected
-                      ? 'bg-orange-500 border-orange-400 text-white shadow-md scale-105'
-                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {amt} {isAfrica ? 'F' : currentConfig.symbol}
-                </button>
-              );
-            })}
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              placeholder={isAfrica ? "Montant libre (en FCFA)..." : `Montant libre (en ${currentConfig.symbol})...`}
-              value={customAmount}
-              onChange={(e) => setCustomAmount(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-orange-500"
-            />
-            <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-              {isAfrica ? 'FCFA' : currentConfig.symbol}
-            </span>
-          </div>
-        </div>
-
-        {/* Payment Methods — geo-filtered */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400" />
-            Mode de Paiement
-          </label>
-
-          {geoLoading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
-              <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-              <span>Détection de votre région...</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {availableMethods.map((method) => {
-                const isSelected = selectedMethod === method.id;
-                return (
-                  <div
-                    key={method.id}
-                    onClick={() => handleSelectMethod(method.id)}
-                    className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-orange-50 dark:bg-orange-500/20 border-orange-500 text-slate-900 dark:text-white shadow-sm'
-                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {method.category === 'mobile' ? (
-                        <Smartphone className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                      ) : method.id === 'paypal' ? (
-                        <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-                      ) : (
-                        <CreditCard className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-                      )}
-                      <span className="text-xs font-bold">{method.name}</span>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                      isSelected ? 'border-orange-400 bg-orange-500' : 'border-slate-300 dark:border-slate-600'
-                    }`}>
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Minimum card threshold warning */}
-        {isUnderCardThreshold && (
-          <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-2.5 animate-fade-in">
-            <Info className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="leading-relaxed">
-                Le paiement par Carte Bancaire nécessite un montant minimum de <strong>{cardMin} FCFA</strong> pour couvrir les frais de traitement bancaire international.
+            {/* Header compact & chaleureux */}
+            <div className="text-center space-y-2 w-full pt-1">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-inner">
+                <Coffee className="w-6 h-6" />
+              </div>
+              <h2 id="tip-modal-title" className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Soutenir le projet <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">Éliciné</span> ☕
+              </h2>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto">
+                Votre contribution libre finance directement les serveurs d'intelligence artificielle et l'indépendance de la plateforme.
               </p>
+            </div>
+
+            {/* 2 Onglets Principaux Minimalistes */}
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-white/10 w-full">
               <button
                 type="button"
-                onClick={() => { setSelectedPreset(cardMin); setCustomAmount(''); }}
-                className="text-[11px] font-bold text-amber-700 dark:text-amber-400 underline hover:text-amber-800 dark:hover:text-amber-300"
+                onClick={() => setActiveTab('paypal')}
+                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+                  activeTab === 'paypal'
+                    ? 'bg-[#0079C1] text-white shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
               >
-                Ajuster automatiquement à {cardMin} FCFA
+                <CreditCard className="w-3.5 h-3.5" />
+                <span className="truncate">PayPal &amp; Carte bancaire</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('mobile')}
+                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+                  activeTab === 'mobile'
+                    ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span className="truncate">Paiement Mobile</span>
               </button>
             </div>
-          </div>
-        )}
 
-        {/* Converted Summary */}
-        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-center">
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-            {selectedMethod === 'paypal' ? 'Montant du don via PayPal :' : 'Total à régler :'}
-          </span>
-          <div className="text-lg font-black text-orange-600 dark:text-orange-400 font-mono mt-0.5">
-            {convertedValue} {currentConfig.symbol}
-            {!isAfrica && (
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-normal ml-1.5">
-                (~{activeAmountFcfa.toLocaleString()} FCFA)
-              </span>
+            {/* ONGLET 1 : PAYPAL & CARTE BANCAIRE */}
+            {activeTab === 'paypal' && (
+              <div className="w-full flex flex-col items-center text-center space-y-4 pt-1 animate-fade-in">
+                {/* Badges de confiance */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 text-[11px] font-semibold flex items-center gap-1">
+                    <span>💳</span>
+                    <span>Carte Visa / Mastercard</span>
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-semibold flex items-center gap-1">
+                    <span className="font-black italic">P</span>
+                    <span>PayPal</span>
+                  </span>
+                </div>
+
+                {/* Explication épurée */}
+                <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 text-center space-y-1.5">
+                  <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white">
+                    Paiement direct sécurisé sur la page officielle PayPal
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Définissez librement votre montant et réglez par <strong>Carte bancaire</strong> (sans créer de compte) ou via <strong>PayPal</strong>.
+                  </p>
+                </div>
+
+                {/* Bouton d'action direct */}
+                <button
+                  type="button"
+                  onClick={handlePayPalCheckout}
+                  className="w-full py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] text-[#003087] font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-[0.99] transition-all cursor-pointer select-none"
+                >
+                  <span>Continuer vers PayPal ou Carte bancaire →</span>
+                </button>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Submit */}
-        <button
-          onClick={handleSendTip}
-          disabled={isProcessing || isUnderCardThreshold || geoLoading || convertedValue <= 0}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs sm:text-sm tracking-wider shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 uppercase disabled:opacity-50 cursor-pointer"
-        >
-          {isProcessing ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /><span>Traitement sécurisé...</span></>
-          ) : selectedMethod === 'paypal' ? (
-            <><Sparkles className="w-4 h-4 text-amber-200" /><span>Offrir un café via PayPal ({convertedValue} {currentConfig.symbol})</span></>
-          ) : (
-            <><Heart className="w-4 h-4 fill-current" /><span>Envoyer mon pourboire ({convertedValue} {currentConfig.symbol})</span></>
-          )}
-        </button>
+            {/* ONGLET 2 : PAIEMENT MOBILE */}
+            {activeTab === 'mobile' && (
+              <form onSubmit={handleMobileMoneySubmit} className="w-full space-y-4 pt-1 animate-fade-in">
+                {/* Sélecteur de devises sobre */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <span>Devise</span>
+                    <span className="text-amber-600 dark:text-amber-400 font-bold">{currentConfig.name}</span>
+                  </div>
+                  <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 w-full gap-1">
+                    {(['XAF', 'XOF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => handleCurrencyChange(c)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                          selectedCurrency === c
+                            ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-        <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-          <span>Paiement crypté SSL — certifié Notch Pay</span>
-        </div>
+                {/* Champ Montant & Suggestions rapides */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <span>Montant du don</span>
+                    <span>Libre</span>
+                  </div>
 
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="number"
+                      min="1"
+                      step="any"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="Montant du don..."
+                      className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 focus:border-amber-500 rounded-xl px-4 py-3 text-base font-black text-slate-900 dark:text-white focus:outline-none pr-16 transition-all shadow-inner font-mono"
+                    />
+                    <span className="absolute right-4 text-xs font-bold text-amber-600 dark:text-amber-400 select-none">
+                      {currentConfig.symbol}
+                    </span>
+                  </div>
+
+                  {/* Boutons de montants suggérés */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {presets.amounts.map((amt) => {
+                      const isSelected = amount === amt.toString();
+                      return (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setAmount(amt.toString())}
+                          className={`py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer text-center ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm font-extrabold'
+                              : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {amt.toLocaleString()} {currentConfig.symbol}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Bouton d'action Mobile Money */}
+                <button
+                  type="submit"
+                  disabled={isProcessing || !amount || Number(amount) < 1}
+                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Initialisation sécurisée...</span>
+                    </>
+                  ) : (
+                    <span>Payer {Number(amount || 0).toLocaleString()} {currentConfig.symbol} via Mobile Money →</span>
+                  )}
+                </button>
+
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                  Orange Money, MTN MoMo, Wave, Moov • Certifié NotchPay
+                </p>
+              </form>
+            )}
+
+            {/* Pied de boîte : mention de sécurité */}
+            <div className="pt-2 border-t border-slate-200/80 dark:border-white/10 text-center w-full">
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Paiement crypté SSL • Éliciné 100% Indépendant</span>
+              </div>
+            </div>
           </>
         )}
-
       </div>
-
     </div>
   );
 };
+
+export default TipModal;
