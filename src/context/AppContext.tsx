@@ -69,6 +69,8 @@ interface AppContextType {
   setIsProModalOpen: (open: boolean) => void;
   isTipModalOpen: boolean;
   setIsTipModalOpen: (open: boolean) => void;
+  isSettingsModalOpen: boolean;
+  setIsSettingsModalOpen: (open: boolean) => void;
   isApiSettingsModalOpen: boolean;
   setIsApiSettingsModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
@@ -272,6 +274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
@@ -776,6 +779,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsProModalOpen,
         isTipModalOpen,
         setIsTipModalOpen,
+        isSettingsModalOpen,
+        setIsSettingsModalOpen,
         isApiSettingsModalOpen,
         setIsApiSettingsModalOpen,
         isAuthModalOpen,

@@ -25,6 +25,7 @@ import { TermsConsentModal } from './components/modals/TermsConsentModal';
 import { DevModal } from './components/DevModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
+import { SettingsModal } from './components/SettingsModal';
 import { processMonerooCheckout, extractMonerooRedirectUrl } from './services/payment';
 
 import { useApp } from './context/AppContext';
@@ -49,7 +50,10 @@ export const AppContent: React.FC = () => {
     setIsThankYouModalOpen,
     isProSuccessModalOpen,
     setIsProSuccessModalOpen,
-    setIsTipModalOpen
+    isTipModalOpen,
+    setIsTipModalOpen,
+    isSettingsModalOpen,
+    setIsSettingsModalOpen
   } = useApp();
 
   const { t } = useTranslation();
@@ -264,6 +268,7 @@ export const AppContent: React.FC = () => {
           onOpenDevModal={() => setIsDevModalOpen(true)} 
           onOpenSupport={() => setIsTipModalOpen(true)} 
           onOpenTip={() => setIsTipModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
           onNavigateTerms={handleNavigateTerms}
         />
 
@@ -336,6 +341,10 @@ export const AppContent: React.FC = () => {
       <MovieDetailModal />
       <ProModal />
       <TipModal />
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+      />
       <AuthModal />
       <ApkInstallModal />
       <ApkDownloadBanner />

@@ -13,7 +13,8 @@ import {
   PanelLeftClose,
   Plus,
   X,
-  LogIn
+  LogIn,
+  Settings
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -27,6 +28,7 @@ export interface SidebarProps {
   onOpenDevModal?: () => void;
   onOpenSupport?: () => void;
   onOpenTip?: () => void;
+  onOpenSettings?: () => void;
   onNavigateTerms?: (section?: string) => void;
 }
 
@@ -35,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenDevModal, 
   onOpenSupport,
   onOpenTip,
+  onOpenSettings,
   onNavigateTerms 
 }) => {
   const { user } = useAuth();
@@ -50,11 +53,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProModalOpen,
     setIsAuthModalOpen,
     setIsTipModalOpen,
+    isSettingsModalOpen,
+    setIsSettingsModalOpen,
     isMobileMenuOpen,
     setIsMobileMenuOpen
   } = useApp();
 
   const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
+  const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
 
   const SHOW_DEV_PANEL = (import.meta as any).env?.DEV || (typeof localStorage !== 'undefined' && localStorage.getItem('elicine_show_dev') === 'true');
 
@@ -229,6 +235,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-bold bg-slate-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">
             Don
+          </span>
+        </button>
+
+        {/* Bouton Paramètres (Accès direct, visible et permanent) */}
+        <button
+          type="button"
+          onClick={() => {
+            handleOpenSettings();
+            setIsMobileMenuOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none group"
+          title="Paramètres de visionnage & préférences"
+          aria-label="Ouvrir les paramètres"
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-slate-500 dark:text-zinc-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors" />
+            <span>Paramètres</span>
+          </div>
+          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-bold bg-slate-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">
+            Options
           </span>
         </button>
 

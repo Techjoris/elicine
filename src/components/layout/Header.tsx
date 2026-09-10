@@ -4,7 +4,6 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
-import { SettingsModal } from '../SettingsModal';
 import { ProfileMenu } from './ProfileMenu';
 import { InstallAppButton } from '../InstallAppButton';
 
@@ -29,8 +28,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
   const activeUser = user || appUser;
   const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const handleOpenSettings = onOpenSettings || (() => setIsSettingsOpen(true));
   const handleOpenTip = onOpenTip || (() => setIsTipModalOpen(true));
 
   return (
@@ -84,7 +81,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           {isConnected ? (
             <div className="flex-shrink-0">
               <ProfileMenu
-                onOpenSettings={handleOpenSettings}
                 onOpenPro={() => setIsProModalOpen(true)}
                 onOpenTip={handleOpenTip}
               />
@@ -102,9 +98,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           )}
         </div>
       </header>
-
-      {/* Settings Modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 };
