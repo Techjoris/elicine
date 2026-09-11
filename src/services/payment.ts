@@ -103,91 +103,60 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
   }
 };
 
-export interface PaymentOption {
-  id: string;
-  name: string;
-  category: 'card' | 'mobile';
-  color: string;
-  isAvailableForAfricaOnly?: boolean;
+export interface PlanFeature {
+  text: string;
+  included: boolean;
 }
 
-export const PAYMENT_METHODS: PaymentOption[] = [
-  {
-    id: 'card',
-    name: 'Carte Bancaire (Visa / Mastercard)',
-    category: 'card',
-    color: '#3b82f6',
-    isAvailableForAfricaOnly: false
-  },
-  {
-    id: 'orange_money',
-    name: 'Orange Money',
-    category: 'mobile',
-    color: '#ff7900',
-    isAvailableForAfricaOnly: true
-  },
-  {
-    id: 'mtn_momo',
-    name: 'MTN Mobile Money',
-    category: 'mobile',
-    color: '#ffcc00',
-    isAvailableForAfricaOnly: true
-  },
-  {
-    id: 'wave',
-    name: 'Wave',
-    category: 'mobile',
-    color: '#1dc4ff',
-    isAvailableForAfricaOnly: true
-  },
-  {
-    id: 'moov',
-    name: 'Moov Money',
-    category: 'mobile',
-    color: '#0055a5',
-    isAvailableForAfricaOnly: true
-  }
+export const PRO_FEATURES: PlanFeature[] = [
+  { text: 'Analyses IA et recommandations illimitées', included: true },
+  { text: 'Accès prioritaire aux nouveautés et alertes sorties', included: true },
+  { text: 'Filtres de plateformes avancés (Netflix, Canal+, Prime...)', included: true },
+  { text: 'Synchronisation multi-écrans & Ma Liste', included: true },
+  { text: 'Support prioritaire 7j/7', included: true },
+  { text: 'Badge Supporter Pro officiel sur votre profil', included: true }
 ];
 
 export function isAfricanCurrency(currency: Currency): boolean {
   return currency === 'XAF' || currency === 'XOF';
 }
 
-/** Devise par défaut active pour Moneroo (défaut : XOF - Franc CFA UEMOA natif Moneroo) */
-export const DEFAULT_MONEROO_CURRENCY: Currency = 'XOF';
+/** Devise par défaut active pour SasPay (défaut : XOF - Franc CFA UEMOA) */
+export const DEFAULT_SASPAY_CURRENCY: Currency = 'XOF';
 
 /**
- * Récupère la devise par défaut configurée pour Moneroo.
- * Permet de forcer dynamiquement la devise configurée et activée dans le tableau de bord Moneroo.
+ * Récupère la devise par défaut configurée pour SasPay.
  */
-export function getMonerooDefaultCurrency(): Currency {
+export function getSaspayDefaultCurrency(): Currency {
   const envCurr = (
-    (import.meta as any).env?.VITE_MONEROO_DEFAULT_CURRENCY ||
-    (import.meta as any).env?.MONEROO_DEFAULT_CURRENCY ||
-    (typeof process !== 'undefined' ? (process.env?.VITE_MONEROO_DEFAULT_CURRENCY || process.env?.MONEROO_DEFAULT_CURRENCY) : '') ||
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('cinéia_moneroo_default_currency') : '') ||
+    (import.meta as any).env?.VITE_SASPAY_DEFAULT_CURRENCY ||
+    (import.meta as any).env?.SASPAY_DEFAULT_CURRENCY ||
+    (typeof process !== 'undefined' ? (process.env?.VITE_SASPAY_DEFAULT_CURRENCY || process.env?.SASPAY_DEFAULT_CURRENCY) : '') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('cinéia_saspay_default_currency') : '') ||
     'XOF'
   ).trim().toUpperCase();
 
   return (envCurr === 'XAF' || envCurr === 'XOF') ? (envCurr as Currency) : 'XOF';
 }
 
+/** Alias de rétrocompatibilité */
+export const getMonerooDefaultCurrency = getSaspayDefaultCurrency;
+
 /**
- * Convertit et normalise un montant et une devise selon les attentes strictes de l'API Moneroo.
- * - Pour XOF / XAF : entier strict sans décimale, minimum 100 FCFA.
- * - Si une devise non supportée (EUR, USD, CAD) est envoyée pour un paiement Mobile,
- *   elle est convertie automatiquement dans la devise par défaut Moneroo (XOF).
+ * Convertit et normalise un montant et une devise selon les attentes de SasPay.
+ * - Pour XOF / XAF : entier strict ou décimal standard, minimum 100 FCFA.
+ * - Si une devise étrangère (EUR, USD, CAD) est envoyée pour un paiement Mobile Money,
+ *   elle est convertie automatiquement dans la devise cible SasPay (XOF).
  */
-export function convertToMonerooCurrency(
+export function convertToSaspayCurrency(
   amount: number,
   currency: Currency | string,
-  targetCurrency: Currency = getMonerooDefaultCurrency(),
+  targetCurrency: Currency = getSaspayDefaultCurrency(),
   isProPlan: boolean = false,
   isYearly: boolean = false
 ): { amount: number; currency: Currency } {
   const cleanCurr = String(currency || targetCurrency).trim().toUpperCase();
 
-  // Si c'est déjà une devise africaine conforme (XOF ou XAF)
   if (cleanCurr === 'XOF' || cleanCurr === 'XAF') {
     return {
       amount: Math.max(100, Math.round(Number(amount) || 1000)),
@@ -203,7 +172,7 @@ export function convertToMonerooCurrency(
     };
   }
 
-  // Conversion de don (EUR / USD / CAD vers FCFA XOF/XAF)
+  // Conversion de don (EUR / USD / CAD vers FCFA)
   const ratesToFcfa: Record<string, number> = {
     EUR: 655.957,
     USD: 610.0,
@@ -220,6 +189,9 @@ export function convertToMonerooCurrency(
   };
 }
 
+/** Alias de rétrocompatibilité */
+export const convertToMonerooCurrency = convertToSaspayCurrency;
+
 /** Minimum amounts for card payments (FCFA) */
 export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
   tip: 1000,
@@ -227,20 +199,33 @@ export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
 };
 
 /**
- * Récupère la clé secrète Moneroo depuis les variables d'environnement
+ * Récupère la clé API SasPay depuis les variables d'environnement Vercel (saspay_Backend).
  */
-export function getMonerooSecretKey(): string {
-  return (
-    (import.meta as any).env?.MONEROO_SECRET_KEY ||
-    (import.meta as any).env?.VITE_MONEROO_SECRET_KEY ||
-    (typeof process !== 'undefined' ? (process.env?.MONEROO_SECRET_KEY || process.env?.VITE_MONEROO_SECRET_KEY) : '') ||
-    (import.meta as any).env?.VITE_MONEROO_API_KEY ||
-    localStorage.getItem('cinéia_moneroo_sk') ||
+export function getSaspayApiKey(): string {
+  const raw = (
+    (import.meta as any).env?.saspay_Backend ||
+    (import.meta as any).env?.VITE_SASPAY_BACKEND ||
+    (import.meta as any).env?.SASPAY_BACKEND ||
+    (import.meta as any).env?.VITE_SASPAY_API_KEY ||
+    (typeof process !== 'undefined' ? (process.env?.saspay_Backend || process.env?.SASPAY_BACKEND || process.env?.VITE_SASPAY_BACKEND) : '') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('cinéia_saspay_key') : '') ||
     ''
   ).trim();
+
+  if (raw.startsWith('{') && raw.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return (parsed.apiKey || parsed.secretKey || parsed.token || parsed.key || raw).trim();
+    } catch (_) {}
+  }
+
+  return raw;
 }
 
-export interface MonerooCheckoutParams {
+/** Alias de rétrocompatibilité */
+export const getMonerooSecretKey = getSaspayApiKey;
+
+export interface SaspayCheckoutParams {
   amount: number;
   currency: Currency | string;
   paymentType?: 'pro' | 'tip';
@@ -252,13 +237,12 @@ export interface MonerooCheckoutParams {
   returnUrl?: string;
   openInNewTab?: boolean;
   skipRedirect?: boolean;
-  publicKey?: string;
-  hashKey?: string;
-  isTestMode?: boolean;
   onSuccessRedirect?: () => void;
 }
 
-export interface MonerooCheckoutResult {
+export type MonerooCheckoutParams = SaspayCheckoutParams;
+
+export interface SaspayCheckoutResult {
   success: boolean;
   message: string;
   error?: string;
@@ -271,63 +255,37 @@ export interface MonerooCheckoutResult {
   rawResponse?: any;
 }
 
+export type MonerooCheckoutResult = SaspayCheckoutResult;
+
 /**
- * Analyse et extrait le lien de redirection depuis l'objet JSON retourné par Moneroo.
- * Vérifie précisément tous les chemins possibles :
- * - response.data.checkout_url
- * - response.checkout_url
- * - response.link
- * - response.data.link
- * - response.payment_url / response.data.payment_url
- * - response.url / response.data.url
+ * Analyse et extrait le lien de redirection de paiement retourné par SasPay.
  */
-export function extractMonerooRedirectUrl(res: any): string | null {
+export function extractSaspayRedirectUrl(res: any): string | null {
   if (!res) return null;
 
-  console.log('[Moneroo API] Analyse de l\'objet réponse pour extraction du lien :', res);
+  console.log('[SasPay API] Analyse de l\'objet réponse pour extraction du lien :', res);
 
-  // 1. Chemins prioritaires rigoureux (comme spécifié par l'API Moneroo)
   const directCandidates = [
-    res?.data?.checkout_url,
     res?.checkout_url,
-    res?.link,
-    res?.data?.link,
     res?.paymentUrl,
-    res?.data?.paymentUrl,
-    res?.payment_url,
-    res?.data?.payment_url,
     res?.url,
+    res?.link,
+    res?.data?.checkout_url,
+    res?.data?.paymentUrl,
     res?.data?.url,
+    res?.data?.link,
     res?.redirect_url,
     res?.data?.redirect_url
   ];
 
   for (const candidate of directCandidates) {
     if (typeof candidate === 'string' && candidate.trim().startsWith('http')) {
-      console.log('[Moneroo API] Lien de redirection extrait avec succès :', candidate.trim());
+      console.log('[SasPay API] Lien de redirection extrait avec succès :', candidate.trim());
       return candidate.trim();
     }
   }
 
-  // 2. Recherche imbriquée dans res.data.data ou res.rawResponse
-  const nestedCandidates = [
-    res?.data?.data?.checkout_url,
-    res?.data?.data?.link,
-    res?.data?.data?.url,
-    res?.rawResponse?.checkout_url,
-    res?.rawResponse?.data?.checkout_url,
-    res?.rawResponse?.link,
-    res?.rawResponse?.data?.link
-  ];
-
-  for (const nested of nestedCandidates) {
-    if (typeof nested === 'string' && nested.trim().startsWith('http')) {
-      console.log('[Moneroo API] Lien de redirection extrait (imbriqué) :', nested.trim());
-      return nested.trim();
-    }
-  }
-
-  // 3. Recherche récursive
+  // Recherche récursive
   try {
     const scanObject = (obj: any, depth = 0): string | null => {
       if (!obj || typeof obj !== 'object' || depth > 3) return null;
@@ -345,7 +303,7 @@ export function extractMonerooRedirectUrl(res: any): string | null {
     };
     const scanned = scanObject(res);
     if (scanned) {
-      console.log('[Moneroo API] Lien trouvé par parcours récursif :', scanned);
+      console.log('[SasPay API] Lien trouvé par parcours récursif :', scanned);
       return scanned;
     }
   } catch (_) {}
@@ -353,24 +311,27 @@ export function extractMonerooRedirectUrl(res: any): string | null {
   return null;
 }
 
+/** Alias de rétrocompatibilité */
+export const extractMonerooRedirectUrl = extractSaspayRedirectUrl;
+
 /**
- * Initialise un paiement via l'API Moneroo (POST https://api.moneroo.io/v1/payments/initialize)
- * et redirige immédiatement vers le lien de paiement checkout_url.
+ * Initialise un paiement mobile money exclusivement via SasPay
+ * et redirige immédiatement vers l'URL de checkout.
  */
-export async function processMonerooCheckout(params: MonerooCheckoutParams): Promise<MonerooCheckoutResult> {
-  const secretKey = getMonerooSecretKey();
-  const defaultMonerooCurr = getMonerooDefaultCurrency();
+export async function processSaspayCheckout(params: SaspayCheckoutParams): Promise<SaspayCheckoutResult> {
+  const apiKey = getSaspayApiKey();
+  const defaultCurr = getSaspayDefaultCurrency();
   const type = params.paymentType || (params.billingCycle ? 'pro' : 'tip');
   const isPro = type === 'pro';
   const isYearly = params.billingCycle === 'yearly';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
   const successCallbackUrl = (params.returnUrl || `${origin}/?payment_status=success&type=${type}`).trim();
 
-  // Normalisation stricte de la devise et du montant selon les exigences Moneroo
-  const { amount: finalAmount, currency: formattedCurrency } = convertToMonerooCurrency(
+  // Normalisation de la devise et du montant pour SasPay
+  const { amount: finalAmount, currency: formattedCurrency } = convertToSaspayCurrency(
     params.amount,
     params.currency,
-    defaultMonerooCurr,
+    defaultCurr,
     isPro,
     isYearly
   );
@@ -382,43 +343,34 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
     };
   }
 
-  const nameParts = (params.name || 'Cinéphile').trim().split(/\s+/).filter(Boolean);
-  const firstName = nameParts[0] || 'Cinéphile';
-  const lastName = nameParts.slice(1).join(' ') || firstName;
+  const customerName = (params.name || 'Cinéphile').trim();
+  const customerEmail = (params.email || '').trim() || 'contact@elicine.com';
+  const description = params.description || (isPro ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné');
 
-  const buildPayload = (curr: Currency, amt: number) => ({
-    amount: amt,
-    currency: curr,
-    description: params.description || (isPro ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné'),
-    customer: {
-      email: (params.email || '').trim() || 'contact@elicine.com',
-      first_name: firstName,
-      last_name: lastName
-    },
+  const payload = {
+    amount: finalAmount,
+    currency: formattedCurrency,
+    description,
+    customer_name: customerName,
+    customer_email: customerEmail,
     return_url: successCallbackUrl,
-    redirect_url: successCallbackUrl
-  });
-
-  const payload = buildPayload(formattedCurrency, finalAmount);
-  const authHeader = secretKey ? `Bearer ${secretKey}` : '';
+    cancel_url: successCallbackUrl
+  };
 
   try {
     let data: any = null;
     let lastError = '';
 
-    // 1. Appel principal à la route serveur /api/moneroo (recommandée, sans blocage CORS)
+    // Appel principal à la route backend /api/saspay
     try {
-      const serverRes = await fetch('/api/moneroo', {
+      const serverRes = await fetch('/api/saspay', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          ...(authHeader ? { 'Authorization': authHeader } : {})
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}`, 'X-Saspay-Key': apiKey } : {})
         },
-        body: JSON.stringify({
-          ...payload,
-          secretKey: secretKey || undefined
-        })
+        body: JSON.stringify(payload)
       });
 
       const resText = await serverRes.text();
@@ -428,32 +380,38 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         data = { message: resText };
       }
 
-      // Structure exacte reçue de l'API Moneroo
-      console.log("REPONSE MONEROO :", data);
+      console.log('REPONSE SASPAY :', data);
 
       if (!serverRes.ok) {
-        lastError = data?.error || data?.message || `Erreur serveur Moneroo (${serverRes.status})`;
-        console.warn('[Moneroo] Échec /api/moneroo :', lastError);
+        lastError = data?.error || data?.message || `Erreur serveur SasPay (${serverRes.status})`;
+        console.warn('[SasPay] Échec /api/saspay :', lastError);
       }
     } catch (serverErr: any) {
-      lastError = serverErr?.message || 'Erreur réseau vers /api/moneroo';
-      console.warn('[Moneroo] Exception /api/moneroo, tentative directe :', lastError);
+      lastError = serverErr?.message || 'Erreur réseau vers /api/saspay';
+      console.warn('[SasPay] Exception /api/saspay, repli direct :', lastError);
     }
 
-    // 2. Secours direct vers l'API Moneroo si nécessaire et si une clé secrète existe
-    const potentialUrl = extractMonerooRedirectUrl(data);
-    if (!potentialUrl && authHeader) {
-      const callDirectApi = async (reqCurr: Currency, reqAmt: number) => {
-        const directPayload = buildPayload(reqCurr, reqAmt);
-        const directRes = await fetch('https://api.moneroo.io/v1/payments/initialize', {
+    // Secours direct si besoin
+    let urlTrouvee = extractSaspayRedirectUrl(data);
+    if (!urlTrouvee && apiKey) {
+      try {
+        const directRes = await fetch('https://api.saspay.me/api/v1/checkout-sessions/', {
           method: 'POST',
           headers: {
-            'Authorization': authHeader,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify(directPayload)
+          body: JSON.stringify({
+            amount: finalAmount.toFixed(2),
+            currency: formattedCurrency,
+            description,
+            customer_email: customerEmail,
+            customer_name: customerName,
+            return_url: successCallbackUrl
+          })
         });
+
         const directText = await directRes.text();
         let directJson: any = {};
         try {
@@ -461,49 +419,23 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
         } catch (_) {
           directJson = { message: directText };
         }
-        return { ok: directRes.ok, status: directRes.status, json: directJson };
-      };
 
-      try {
-        const directResult = await callDirectApi(formattedCurrency, finalAmount);
-        console.log("REPONSE MONEROO DIRECTE :", directResult.json);
-        if (directResult.ok) {
-          data = directResult.json;
+        console.log('REPONSE SASPAY DIRECTE :', directJson);
+        if (directRes.ok) {
+          data = directJson;
+          urlTrouvee = extractSaspayRedirectUrl(data);
         } else {
-          lastError = directResult.json?.message || directResult.json?.error || `Erreur Moneroo direct (${directResult.status})`;
-          
-          // Repli dynamique si la devise n'est pas activée dans le compte marchand
-          const errMsg = String(lastError).toLowerCase();
-          if (errMsg.includes('no payment methods enabled') || errMsg.includes('payment methods for this currency')) {
-            const alternateCurr = formattedCurrency === 'XAF' ? 'XOF' : (formattedCurrency === 'XOF' ? 'XAF' : null);
-            if (alternateCurr) {
-              console.warn(`[Moneroo] Tentative directe de repli avec ${alternateCurr}...`);
-              const retryResult = await callDirectApi(alternateCurr, finalAmount);
-              if (retryResult.ok) {
-                data = retryResult.json;
-              }
-            }
-          }
+          lastError = directJson?.message || directJson?.error || `Erreur SasPay direct (${directRes.status})`;
         }
       } catch (directErr: any) {
-        lastError = directErr?.message || 'Erreur réseau API directe Moneroo';
+        lastError = directErr?.message || 'Erreur réseau API directe SasPay';
       }
     }
 
-    // Extraction précise et multi-chemins du lien de redirection peu importe la structure
-    const urlTrouvee = 
-      data?.checkout_url || 
-      data?.link || 
-      data?.data?.checkout_url || 
-      data?.data?.link ||
-      data?.url ||
-      data?.paymentUrl ||
-      extractMonerooRedirectUrl(data);
-
-    const paymentId = data?.reference || data?.data?.id || data?.id || data?.data?.reference;
+    const paymentId = data?.reference || data?.id || data?.data?.id || data?.session_id;
 
     if (urlTrouvee) {
-      console.log("URL MONEROO TROUVEE :", urlTrouvee);
+      console.log('URL SASPAY TROUVEE :', urlTrouvee);
       if (!params.skipRedirect) {
         if (params.openInNewTab && typeof window !== 'undefined') {
           window.open(urlTrouvee, '_blank');
@@ -514,31 +446,21 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
 
       return {
         success: true,
-        message: 'Redirection vers le paiement Moneroo...',
+        message: 'Redirection vers le paiement mobile sécurisé SasPay...',
         paymentUrl: urlTrouvee,
         checkout_url: urlTrouvee,
         link: urlTrouvee,
         url: urlTrouvee,
         reference: paymentId,
-        data: {
-          ...(typeof data?.data === 'object' && data?.data !== null ? data.data : {}),
-          checkout_url: urlTrouvee,
-          link: urlTrouvee
-        },
+        data: data?.data || data,
         rawResponse: data
       };
     }
 
     const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-    const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
-    const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-    let finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}.`;
+    const finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement SasPay introuvable (checkout_url manquant). Propriétés reçues: [${receivedProps}].`;
 
-    if (finalErrMsg.toLowerCase().includes('no payment methods enabled') || finalErrMsg.toLowerCase().includes('payment methods for this currency')) {
-      finalErrMsg = `Aucune méthode de paiement n'est activée pour la devise ${formattedCurrency} dans votre tableau de bord Moneroo. Veuillez activer vos passerelles (MTN MoMo, Moov, Orange, Wave...) sur https://app.moneroo.io > Applications > Modes de paiement, ou configurer VITE_MONEROO_DEFAULT_CURRENCY.`;
-    }
-
-    console.error('[Moneroo Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
+    console.error('[SasPay Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
     return {
       success: false,
       message: finalErrMsg,
@@ -546,8 +468,8 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
       rawResponse: data
     };
   } catch (e: any) {
-    const errorMsg = e?.message || "Erreur lors de l'initialisation du paiement sécurisé Moneroo.";
-    console.error('[Moneroo] Erreur critique initialisation:', errorMsg, e);
+    const errorMsg = e?.message || "Erreur lors de l'initialisation du paiement sécurisé SasPay.";
+    console.error('[SasPay] Erreur critique initialisation:', errorMsg, e);
     return {
       success: false,
       message: errorMsg
@@ -555,71 +477,52 @@ export async function processMonerooCheckout(params: MonerooCheckoutParams): Pro
   }
 }
 
+/** Alias universel */
+export const processMonerooCheckout = processSaspayCheckout;
+export const processNotchPayCheckout = processSaspayCheckout;
+
 /**
- * Polling de vérification du statut d'une transaction Moneroo
+ * Vérification du statut d'une transaction SasPay
  */
-export async function verifyMonerooPayment(reference: string): Promise<{ 
+export async function verifySaspayPayment(reference: string): Promise<{ 
   status: 'complete' | 'pending' | 'failed'; 
   rawStatus?: string;
   transaction?: any 
 }> {
   if (!reference) return { status: 'pending' };
-  const secretKey = getMonerooSecretKey();
 
   try {
-    const res = await fetch(`https://api.moneroo.io/v1/payments/${encodeURIComponent(reference)}/verify`, {
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Accept': 'application/json'
-      }
-    });
-
+    const res = await fetch(`/api/saspay?id=${encodeURIComponent(reference)}`);
     if (res.ok) {
       const data = await res.json();
-      const rawStatus = data?.data?.status || data?.status;
-      const isSuccess = rawStatus === 'success' || rawStatus === 'successful' || rawStatus === 'completed';
-      const isFailed = rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'rejected';
-
       return {
-        status: isSuccess ? 'complete' : (isFailed ? 'failed' : 'pending'),
-        rawStatus,
-        transaction: data?.data || data
+        status: data.status,
+        rawStatus: data.rawStatus,
+        transaction: data.data || data.transaction
       };
     }
-
-    // Fallback vers /api/moneroo
-    const fallbackRes = await fetch(`/api/moneroo?id=${encodeURIComponent(reference)}`);
-    if (fallbackRes.ok) {
-      const fbData = await fallbackRes.json();
-      return {
-        status: fbData.status,
-        rawStatus: fbData.rawStatus,
-        transaction: fbData.data || fbData.transaction
-      };
-    }
-
     return { status: 'pending' };
   } catch (err) {
-    console.error('[Moneroo Polling] Erreur vérification statut :', err);
+    console.error('[SasPay Polling] Erreur vérification statut :', err);
     return { status: 'pending' };
   }
 }
 
-// ─── ALIASES DE RÉTROCOMPATIBILITÉ ──────────────────────────────────────────
-export const processNotchPayCheckout = processMonerooCheckout;
-export const verifyNotchPayPayment = verifyMonerooPayment;
+/** Aliases universels de vérification */
+export const verifyMonerooPayment = verifySaspayPayment;
+export const verifyNotchPayPayment = verifySaspayPayment;
 
 /**
- * Initialise un paiement Moneroo pour le Pass Pro
+ * Initialise un paiement SasPay pour le Pass Pro
  */
-export const handleMonerooPayment = async (
+export const handleSaspayPayment = async (
   userEmail: string, 
   userName: string,
   amount: number = 2500,
-  currency: string = getMonerooDefaultCurrency(),
+  currency: string = getSaspayDefaultCurrency(),
   description: string = 'Abonnement Pass Pro Éliciné'
 ) => {
-  return processMonerooCheckout({
+  return processSaspayCheckout({
     amount,
     currency,
     email: userEmail,
@@ -629,3 +532,4 @@ export const handleMonerooPayment = async (
   });
 };
 
+export const handleMonerooPayment = handleSaspayPayment;

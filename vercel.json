@@ -13,16 +13,36 @@
       "destination": "/api/ai"
     },
     {
-      "source": "/api/moneroo/verify",
-      "destination": "/api/moneroo"
+      "source": "/api/saspay/webhook",
+      "destination": "/api/saspay?action=webhook"
+    },
+    {
+      "source": "/api/saspay/verify",
+      "destination": "/api/saspay"
+    },
+    {
+      "source": "/api/saspay/(.*)",
+      "destination": "/api/saspay"
+    },
+    {
+      "source": "/api/saspay",
+      "destination": "/api/saspay"
+    },
+    {
+      "source": "/api/moneroo/(.*)",
+      "destination": "/api/saspay"
+    },
+    {
+      "source": "/api/moneroo",
+      "destination": "/api/saspay"
     },
     {
       "source": "/api/notchpay/(.*)",
-      "destination": "/api/moneroo"
+      "destination": "/api/saspay"
     },
     {
       "source": "/api/notchpay",
-      "destination": "/api/moneroo"
+      "destination": "/api/saspay"
     },
     {
       "source": "/api/(.*)",

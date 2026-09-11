@@ -32,3 +32,4 @@ Thumbs.db
 # Local portable tooling
 tools/
 API MONERO/
+*recovery-codes*.txt

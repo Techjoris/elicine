@@ -2,27 +2,30 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
 import { 
-  processMonerooCheckout, 
-  verifyMonerooPayment, 
-  extractMonerooRedirectUrl, 
+  processSaspayCheckout, 
+  verifySaspayPayment, 
+  extractSaspayRedirectUrl, 
   CURRENCY_CONFIGS,
-  getMonerooDefaultCurrency,
-  convertToMonerooCurrency,
+  getSaspayDefaultCurrency,
+  convertToSaspayCurrency,
   isAfricanCurrency
 } from '../services/payment';
 import { Currency } from '../types';
 
-export interface MonerooTipPayload {
+export interface SaspayTipPayload {
   amount: number;
   currency: string;
   description: string;
 }
 
+export type MonerooTipPayload = SaspayTipPayload;
+
 export interface SupportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenMoneroo?: (payload: MonerooTipPayload) => void;
-  onOpenNotchPay?: (payload: MonerooTipPayload) => void;
+  onOpenSaspay?: (payload: SaspayTipPayload) => void;
+  onOpenMoneroo?: (payload: SaspayTipPayload) => void;
+  onOpenNotchPay?: (payload: SaspayTipPayload) => void;
 }
 
 declare global {
@@ -39,11 +42,11 @@ const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: nu
   CAD: { amounts: [2, 5, 10, 15, 25], defaultAmount: 5 }
 };
 
-export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenMoneroo, onOpenNotchPay }) => {
+export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenSaspay, onOpenMoneroo, onOpenNotchPay }) => {
   const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
-  const defaultMonerooCurr = getMonerooDefaultCurrency();
+  const defaultSaspayCurr = getSaspayDefaultCurrency();
   const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
-  const [momoCurrency, setMomoCurrency] = useState<Currency>(defaultMonerooCurr);
+  const [momoCurrency, setMomoCurrency] = useState<Currency>(defaultSaspayCurr);
   const [freeAmount, setFreeAmount] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -111,22 +114,22 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       return;
     }
 
-    const { amount, currency } = convertToMonerooCurrency(
+    const { amount, currency } = convertToSaspayCurrency(
       rawNum,
       momoCurrency,
-      defaultMonerooCurr,
+      defaultSaspayCurr,
       false
     );
 
     setErrorMessage(null);
     setIsProcessing(true);
     try {
-      console.log('[SupportModal] Initialisation Moneroo avec :', {
+      console.log('[SupportModal] Initialisation SasPay avec :', {
         amount,
         currency
       });
 
-      const data = await processMonerooCheckout({
+      const data = await processSaspayCheckout({
         amount,
         currency,
         paymentType: 'tip',
@@ -134,66 +137,64 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description: `Soutien Éliciné (${amount} ${currency})`,
-        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,
         skipRedirect: true
       });
 
       // 1. Structure exacte reçue dans la console du navigateur (F12)
-      console.log("REPONSE MONEROO :", data);
+      console.log("REPONSE SASPAY :", data);
 
       // Si la réponse n'est pas un succès
       if (!data || data.success === false) {
         const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
-        console.error('[SupportModal] Échec Moneroo :', exactError, data);
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement SasPay (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[SupportModal] Échec SasPay :', exactError, data);
         setErrorMessage(exactError);
         showToast(exactError);
-        alert(`Erreur Moneroo : ${exactError}`);
+        alert(`Erreur SasPay : ${exactError}`);
         setIsProcessing(false);
         return;
       }
 
-      // 2. Extraction correcte de l'URL peu importe sa structure (data.checkout_url, data.link, ou data.data.checkout_url)
+      // 2. Extraction de l'URL de redirection SasPay
       const urlTrouvee = 
         data?.checkout_url ||
         data?.link ||
-        data?.data?.checkout_url ||
-        data?.data?.link ||
         data?.paymentUrl ||
         data?.url ||
-        (data as any)?.rawResponse?.checkout_url ||
-        (data as any)?.rawResponse?.link ||
-        (data as any)?.rawResponse?.data?.checkout_url ||
-        extractMonerooRedirectUrl(data);
+        data?.data?.checkout_url ||
+        data?.data?.link ||
+        data?.data?.paymentUrl ||
+        extractSaspayRedirectUrl(data);
 
-      // S'assure que si checkout_url ou link est absent, l'application lève une erreur claire listant les propriétés reçues
+      // Si checkout_url ou link est absent
       if (!urlTrouvee) {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
         
         console.error('[SupportModal]', missingLinkError);
         setErrorMessage(missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        alert(`Erreur de redirection SasPay :\n${missingLinkError}`);
         setIsProcessing(false);
         return;
       }
 
-      // Force immédiatement le window.location.href = urlTrouvee
-      console.log("URL MONEROO TROUVEE :", urlTrouvee);
-      showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
+      // Force immédiatement la redirection
+      console.log("URL SASPAY TROUVEE :", urlTrouvee);
+      showToast('Redirection immédiate vers le paiement sécurisé SasPay...');
       setIsProcessing(false);
       if (typeof window !== 'undefined') {
         window.location.href = urlTrouvee;
       }
     } catch (err: any) {
-      console.error('[SupportModal] Exception initialisation Moneroo :', err);
-      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement Moneroo.";
+      console.error('[SupportModal] Exception initialisation SasPay :', err);
+      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement SasPay.";
       setErrorMessage(exactError);
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur de paiement Moneroo :\n${exactError}`);
+      alert(`Erreur de paiement SasPay :\n${exactError}`);
       setIsProcessing(false);
     }
   };
@@ -378,7 +379,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1.5 mt-1">
                   <span>💡</span>
                   <span>
-                    Mobile Money traite les transactions en FCFA ({defaultMonerooCurr}). Équivalent : ~{convertToMonerooCurrency(Number(freeAmount) || 1, momoCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA.
+                    Mobile Money traite les transactions en FCFA ({defaultSaspayCurr}) via SasPay. Équivalent : ~{convertToSaspayCurrency(Number(freeAmount) || 1, momoCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA.
                   </span>
                 </div>
               )}
@@ -434,7 +435,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-fade-in break-words">
                 <span className="text-base flex-shrink-0">⚠️</span>
                 <div className="flex-1">
-                  <p className="font-bold">Erreur de paiement Moneroo :</p>
+                  <p className="font-bold">Erreur de paiement SasPay :</p>
                   <p className="text-[11px] mt-0.5 opacity-90 break-all">{errorMessage}</p>
                 </div>
               </div>
@@ -452,12 +453,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 </>
               ) : (
                 <span>
-                  Envoyer {convertToMonerooCurrency(Number(freeAmount) || 1000, momoCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA ({convertToMonerooCurrency(Number(freeAmount) || 1000, momoCurrency, defaultMonerooCurr).currency}) via Mobile Money →
+                  Envoyer {convertToSaspayCurrency(Number(freeAmount) || 1000, momoCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA ({convertToSaspayCurrency(Number(freeAmount) || 1000, momoCurrency, defaultSaspayCurr).currency}) via SasPay →
                 </span>
               )}
             </button>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-              Orange Money, MTN MoMo, Wave • Sécurisé par Moneroo
+              Orange Money, MTN MoMo, Wave, Moov • Sécurisé par SasPay
             </p>
           </form>
         )}

@@ -152,6 +152,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const notchSk = localStorage.getItem('cinéia_notch_sk') || '';
     const notchHash = localStorage.getItem('cinéia_notch_hash') || localStorage.getItem('cinéia_notch_hash_key') || '';
 
+    const envSaspay = (((import.meta as any).env?.saspay_Backend || (import.meta as any).env?.SASPAY_BACKEND || (import.meta as any).env?.VITE_SASPAY_BACKEND || '') as string).trim();
+    const storedSaspay = (localStorage.getItem('cinéia_saspay_key') || localStorage.getItem('saspay_backend') || localStorage.getItem('saspay_key') || '').trim();
+    const saspayKey = envSaspay || storedSaspay;
+
     const envMonerooSk = (((import.meta as any).env?.MONEROO_SECRET_KEY || (import.meta as any).env?.VITE_MONEROO_SECRET_KEY || '') as string).trim();
     const storedMonerooSk = (localStorage.getItem('cinéia_moneroo_sk') || localStorage.getItem('moneroo_secret_key') || '').trim();
     const monerooSk = envMonerooSk || storedMonerooSk;
@@ -166,6 +170,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       groqApiKey: groq,
       qwenApiKey: qwen,
       preferredAiProvider: preferredAi,
+      saspayApiKey: saspayKey,
       monerooSecretKey: monerooSk,
       notchPayPublicKey: notchPk,
       notchPaySecretKey: notchSk,
@@ -340,6 +345,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('cinéia_groq_key', apiSettings.groqApiKey || '');
     localStorage.setItem('cinéia_qwen_api_key', apiSettings.qwenApiKey || '');
     localStorage.setItem('cinéia_preferred_ai_provider', apiSettings.preferredAiProvider || 'qwen');
+    if (apiSettings.saspayApiKey) {
+      localStorage.setItem('cinéia_saspay_key', apiSettings.saspayApiKey);
+    }
     if (apiSettings.monerooSecretKey) {
       localStorage.setItem('cinéia_moneroo_sk', apiSettings.monerooSecretKey);
     }
@@ -644,6 +652,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       groqApiKey: '',
       qwenApiKey: '',
       preferredAiProvider: 'qwen',
+      saspayApiKey: '',
       monerooSecretKey: '',
       notchPayPublicKey: '',
       notchPaySecretKey: '',
@@ -662,6 +671,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('cinéia_groq_key');
     localStorage.removeItem('cinéia_qwen_api_key');
     localStorage.removeItem('cinéia_preferred_ai_provider');
+    localStorage.removeItem('cinéia_saspay_key');
+    localStorage.removeItem('cinéia_moneroo_sk');
     localStorage.removeItem('cinéia_notch_pk');
     localStorage.removeItem('cinéia_notch_sk');
     localStorage.removeItem('cinéia_notch_hash');

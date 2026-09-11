@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
-import { processMonerooCheckout, extractMonerooRedirectUrl, getMonerooDefaultCurrency, isAfricanCurrency } from '../../services/payment';
+import { processSaspayCheckout, extractSaspayRedirectUrl, getSaspayDefaultCurrency, isAfricanCurrency } from '../../services/payment';
 import { Currency } from '../../types';
 
 export const ProModal: React.FC = () => {
@@ -14,18 +14,18 @@ export const ProModal: React.FC = () => {
 
   if (!isProModalOpen) return null;
 
-  const handleMonerooCheckout = async (payload?: CheckoutPayload) => {
+  const handleSaspayCheckout = async (payload?: CheckoutPayload) => {
     try {
-      showToast('Initialisation du paiement Moneroo sécurisé...');
+      showToast('Initialisation du paiement mobile SasPay sécurisé...');
       const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
-      const defaultMonerooCurr = getMonerooDefaultCurrency();
+      const defaultCurr = getSaspayDefaultCurrency();
       const isYearly = payload?.plan === 'yearly';
 
-      const reqCurrency = (payload?.currency as Currency) || defaultMonerooCurr;
-      const cleanCurrency = isAfricanCurrency(reqCurrency) ? reqCurrency : defaultMonerooCurr;
+      const reqCurrency = (payload?.currency as Currency) || defaultCurr;
+      const cleanCurrency = isAfricanCurrency(reqCurrency) ? reqCurrency : defaultCurr;
       const cleanAmount = isYearly ? 20000 : 2500;
 
-      const data = await processMonerooCheckout({
+      const data = await processSaspayCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'pro',
@@ -38,14 +38,14 @@ export const ProModal: React.FC = () => {
         skipRedirect: true
       });
 
-      console.log("REPONSE MONEROO :", data);
+      console.log('REPONSE SASPAY :', data);
 
       if (!data || data.success === false) {
         const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
-        console.error('[ProModal] Échec Moneroo :', exactError, data);
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement SasPay (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[ProModal] Échec SasPay :', exactError, data);
         showToast(exactError);
-        alert(`Erreur Moneroo : ${exactError}`);
+        alert(`Erreur SasPay : ${exactError}`);
         return;
       }
 
@@ -56,10 +56,10 @@ export const ProModal: React.FC = () => {
         data?.data?.link || 
         data?.url || 
         data?.paymentUrl || 
-        extractMonerooRedirectUrl(data);
+        extractSaspayRedirectUrl(data);
 
       if (urlTrouvee) {
-        showToast('Redirection vers la passerelle de paiement Moneroo...');
+        showToast('Redirection vers la passerelle de paiement SasPay...');
         if (typeof window !== 'undefined') {
           window.location.href = urlTrouvee;
         }
@@ -67,16 +67,16 @@ export const ProModal: React.FC = () => {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
         console.error('[ProModal]', missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        alert(`Erreur de redirection SasPay :\n${missingLinkError}`);
       }
     } catch (err: any) {
-      console.error('[ProModal Moneroo]', err);
-      const exactError = err?.message || String(err) || "Erreur lors de l'initialisation du paiement Moneroo.";
+      console.error('[ProModal SasPay]', err);
+      const exactError = err?.message || String(err) || "Erreur lors de l'initialisation du paiement SasPay.";
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur de paiement Moneroo :\n${exactError}`);
+      alert(`Erreur de paiement SasPay :\n${exactError}`);
     }
   };
 
@@ -89,8 +89,9 @@ export const ProModal: React.FC = () => {
     <SubscriptionModal
       isOpen={isProModalOpen}
       onClose={() => setIsProModalOpen(false)}
-      onOpenMoneroo={handleMonerooCheckout}
-      onOpenNotchPay={handleMonerooCheckout}
+      onOpenSaspay={handleSaspayCheckout}
+      onOpenMoneroo={handleSaspayCheckout}
+      onOpenNotchPay={handleSaspayCheckout}
       onOpenPayPal={handlePayPalCheckout}
     />
   );

@@ -27,6 +27,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
   const [qwenKey, setQwenKey] = useState('');
   const [preferredAi, setPreferredAi] = useState<'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai'>('qwen');
 
+  const [saspayKey, setSaspayKey] = useState('');
   const [monerooSk, setMonerooSk] = useState('');
   const [notchPk, setNotchPk] = useState('');
   const [notchSk, setNotchSk] = useState('');
@@ -64,6 +65,14 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
         (localStorage.getItem('cinéia_preferred_ai_provider') as any) || 
         apiSettings.preferredAiProvider || 
         'qwen'
+      );
+
+      setSaspayKey(
+        localStorage.getItem('cinéia_saspay_key') || 
+        localStorage.getItem('saspay_backend') || 
+        localStorage.getItem('saspay_Backend') || 
+        apiSettings.saspayApiKey || 
+        ''
       );
 
       setMonerooSk(
@@ -145,7 +154,19 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
 
     localStorage.setItem('cinéia_preferred_ai_provider', preferredAi);
 
-    // 4. Sauvegarde Moneroo & NotchPay (Mode Live obligatoire)
+    // 4. Sauvegarde SasPay (Passerelle Mobile Money exclusive)
+    const cleanSaspay = saspayKey.trim();
+    if (cleanSaspay) {
+      localStorage.setItem('cinéia_saspay_key', cleanSaspay);
+      localStorage.setItem('saspay_backend', cleanSaspay);
+      localStorage.setItem('saspay_Backend', cleanSaspay);
+    } else {
+      localStorage.removeItem('cinéia_saspay_key');
+      localStorage.removeItem('saspay_backend');
+      localStorage.removeItem('saspay_Backend');
+    }
+
+    // Moneroo & NotchPay (Legacy)
     const cleanMonerooSk = monerooSk.trim();
     if (cleanMonerooSk) {
       localStorage.setItem('cinéia_moneroo_sk', cleanMonerooSk);
@@ -199,6 +220,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       groqApiKey: cleanGroq,
       qwenApiKey: cleanQwen,
       preferredAiProvider: preferredAi,
+      saspayApiKey: cleanSaspay,
       monerooSecretKey: cleanMonerooSk,
       notchPayPublicKey: cleanNotchPk,
       notchPaySecretKey: cleanNotchSk,
@@ -223,12 +245,18 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       localStorage.removeItem('groq_api_key');
       localStorage.removeItem('elicine_groq_key');
       localStorage.removeItem('qwen_api_key');
+      localStorage.removeItem('cinéia_saspay_key');
+      localStorage.removeItem('saspay_backend');
+      localStorage.removeItem('saspay_Backend');
+      localStorage.removeItem('cinéia_moneroo_sk');
+      localStorage.removeItem('moneroo_secret_key');
       localStorage.removeItem('notch_public_key');
       localStorage.removeItem('cinéia_notch_pk');
       localStorage.removeItem('cinéia_notch_sk');
       localStorage.removeItem('cinéia_notch_hash');
       localStorage.removeItem('elicine_nordvpn_url');
       localStorage.removeItem('elicine_surfshark_url');
+      setSaspayKey('');
       showToast('Clés API réinitialisées.');
       setTimeout(() => window.location.reload(), 400);
     }
@@ -370,35 +398,35 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* SECTION 2: Passerelle de Paiement Moneroo & Mobile Money */}
+        {/* SECTION 2: Passerelle de Paiement SasPay (Mobile Money Exclusif) */}
         <div className="space-y-3 pt-4 border-t border-slate-800/80">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
               <CreditCard className="w-3.5 h-3.5" />
-              2. Passerelle de Paiement Moneroo (Mobile Money & Devises)
+              2. Passerelle SasPay (Mobile Money Exclusif & Transactions)
             </h3>
 
             {/* Mode Live forcé */}
             <div className="flex items-center gap-1.5 bg-emerald-500/15 px-2.5 py-1 rounded-xl border border-emerald-500/30 text-[11px] font-bold text-emerald-400 select-none">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>LIVE / MONEROO</span>
+              <span>LIVE / SASPAY</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-400">
-                Clé Secrète Moneroo (MONEROO_SECRET_KEY)
+                Clé API SasPay / Variable Vercel (saspay_Backend)
               </label>
               <input
                 type={showKeys ? 'text' : 'password'}
-                value={monerooSk}
-                onChange={(e) => setMonerooSk(e.target.value)}
-                placeholder="Ex: msk_live_... ou sk_..."
+                value={saspayKey}
+                onChange={(e) => setSaspayKey(e.target.value)}
+                placeholder="Ex: sk_live_... ou objet JSON profil"
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
               />
               <p className="text-[10px] text-slate-500">
-                Initialise les paiements et redirige vers Moneroo (https://api.moneroo.io/v1/payments/initialize).
+                Centralise tous les paiements mobiles et crée des sessions checkout sécurisées SasPay (https://api.saspay.me/api/v1/checkout-sessions/).
               </p>
             </div>
           </div>

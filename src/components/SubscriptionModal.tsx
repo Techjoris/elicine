@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
 import { Currency } from '../types';
-import { getMonerooDefaultCurrency, isAfricanCurrency } from '../services/payment';
+import { getSaspayDefaultCurrency, isAfricanCurrency } from '../services/payment';
 
 export interface CheckoutPayload {
   currency: string;
@@ -15,6 +15,7 @@ export interface CheckoutPayload {
 export interface SubscriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenSaspay?: (payload: CheckoutPayload) => void;
   onOpenMoneroo?: (payload: CheckoutPayload) => void;
   onOpenNotchPay?: (payload: CheckoutPayload) => void;
   onOpenPayPal?: (payload: CheckoutPayload) => void;
@@ -31,13 +32,14 @@ const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: strin
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
   isOpen, 
   onClose, 
+  onOpenSaspay,
   onOpenMoneroo,
   onOpenNotchPay, 
   onOpenPayPal 
 }) => {
   const { user, currency: appCurrency, loginWithGoogle } = useApp();
-  const defaultMonerooCurr = getMonerooDefaultCurrency();
-  const [currency, setCurrency] = useState<Currency>(() => (isAfricanCurrency(appCurrency) ? appCurrency : defaultMonerooCurr));
+  const defaultSaspayCurr = getSaspayDefaultCurrency();
+  const [currency, setCurrency] = useState<Currency>(() => (isAfricanCurrency(appCurrency) ? appCurrency : defaultSaspayCurr));
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -77,9 +79,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const handleCheckout = () => {
     setIsProcessing(true);
     if (paymentMethod === 'mobile_money') {
-      const targetCurr = isAfricanCurrency(currency) ? currency : defaultMonerooCurr;
+      const targetCurr = isAfricanCurrency(currency) ? currency : defaultSaspayCurr;
       const targetAmt = isYearly ? '20 000' : '2 500';
-      if (onOpenMoneroo) {
+      if (onOpenSaspay) {
+        onOpenSaspay({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
+      } else if (onOpenMoneroo) {
         onOpenMoneroo({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
       } else if (onOpenNotchPay) {
         onOpenNotchPay({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
@@ -333,9 +337,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave, Carte</p>
-                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Règlement en FCFA ({defaultMonerooCurr}) • Moneroo</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes (SasPay)</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave, Moov, Carte</p>
+                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Règlement en FCFA ({defaultSaspayCurr}) • SasPay</span>
               </div>
             </div>
 

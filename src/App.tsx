@@ -27,7 +27,7 @@ import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { supabase } from './lib/supabase';
-import { processMonerooCheckout, extractMonerooRedirectUrl, getMonerooDefaultCurrency, convertToMonerooCurrency } from './services/payment';
+import { processSaspayCheckout, extractSaspayRedirectUrl, getSaspayDefaultCurrency, convertToSaspayCurrency } from './services/payment';
 
 import { useApp } from './context/AppContext';
 import { useTranslation } from './context/LanguageContext';
@@ -88,12 +88,14 @@ export const AppContent: React.FC = () => {
     const isProSuccess =
       params.get('subscription') === 'pro_success' ||
       params.get('payment') === 'pro_success' ||
+      params.get('payment') === 'saspay_pro_success' ||
       (params.get('payment_status') === 'success' && params.get('type') === 'pro');
 
     // --- TIP / DONATION SUCCESS ---
-    // Triggered by ?payment=success OR ?tip=success OR ?payment=moneroo_success OR ?payment_status=success&type=don
+    // Triggered by ?payment=success OR ?tip=success OR ?payment=saspay_success OR ?payment=moneroo_success OR ?payment_status=success&type=don
     const isTipSuccess =
       (params.get('payment') === 'success' && params.get('subscription') !== 'pro_success') ||
+      params.get('payment') === 'saspay_success' ||
       params.get('payment') === 'moneroo_success' ||
       (params.get('payment_status') === 'success' && params.get('type') === 'don') ||
       params.get('tip') === 'success';
@@ -164,17 +166,17 @@ export const AppContent: React.FC = () => {
     }
   }, [activeView]);
 
-  const handleSupportMoneroo = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
+  const handleSupportSaspay = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
     try {
-      const defaultMonerooCurr = getMonerooDefaultCurrency();
-      const { amount: cleanAmount, currency: cleanCurrency } = convertToMonerooCurrency(
+      const defaultSaspayCurr = getSaspayDefaultCurrency();
+      const { amount: cleanAmount, currency: cleanCurrency } = convertToSaspayCurrency(
         amount,
         currency,
-        defaultMonerooCurr,
+        defaultSaspayCurr,
         false
       );
-      console.log('[App] Initialisation soutien Moneroo :', { amount: cleanAmount, currency: cleanCurrency });
-      const data = await processMonerooCheckout({
+      console.log('[App] Initialisation soutien SasPay :', { amount: cleanAmount, currency: cleanCurrency });
+      const data = await processSaspayCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'tip',
@@ -182,34 +184,35 @@ export const AppContent: React.FC = () => {
         email: user?.email || 'contact@elicine.com',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description,
-        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,
         onSuccessRedirect: () => {
           showToast('Merci infiniment pour votre soutien ! ☕');
         }
       });
 
-      console.log("REPONSE MONEROO :", data);
+      console.log("REPONSE SASPAY :", data);
 
       if (!data || data.success === false) {
         const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
-        console.error('[App] Échec Moneroo :', exactError, data);
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement SasPay (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[App] Échec SasPay :', exactError, data);
         showToast(exactError);
-        alert(`Erreur Moneroo : ${exactError}`);
+        alert(`Erreur SasPay : ${exactError}`);
         return;
       }
 
       const urlTrouvee = 
         data?.checkout_url ||
         data?.link ||
+        data?.paymentUrl ||
+        data?.url ||
         data?.data?.checkout_url ||
         data?.data?.link ||
-        data?.url ||
-        data?.paymentUrl ||
-        extractMonerooRedirectUrl(data);
+        data?.data?.paymentUrl ||
+        extractSaspayRedirectUrl(data);
 
       if (urlTrouvee) {
-        showToast('Redirection immédiate vers Moneroo...');
+        showToast('Redirection immédiate vers SasPay...');
         if (typeof window !== 'undefined') {
           window.location.href = urlTrouvee;
         }
@@ -217,18 +220,20 @@ export const AppContent: React.FC = () => {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
         console.error('[App]', missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        alert(`Erreur de redirection SasPay :\n${missingLinkError}`);
       }
     } catch (e: any) {
-      console.error('[App] Exception initialisation Moneroo :', e);
-      const exactError = e?.message || String(e) || "Échec de l'initialisation du paiement Moneroo.";
+      console.error('[App] Exception initialisation SasPay :', e);
+      const exactError = e?.message || String(e) || "Échec de l'initialisation du paiement SasPay.";
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur de paiement Moneroo :\n${exactError}`);
+      alert(`Erreur de paiement SasPay :\n${exactError}`);
     }
   };
+
+  const handleSupportMoneroo = handleSupportSaspay;
 
   // Route /terms, /reset-password, /update-password detection & browser history synchronization
   useEffect(() => {
@@ -397,8 +402,9 @@ export const AppContent: React.FC = () => {
       <SupportModal
         isOpen={isSupportOpen}
         onClose={() => setIsSupportOpen(false)}
-        onOpenMoneroo={handleSupportMoneroo}
-        onOpenNotchPay={handleSupportMoneroo}
+        onOpenSaspay={handleSupportSaspay}
+        onOpenMoneroo={handleSupportSaspay}
+        onOpenNotchPay={handleSupportSaspay}
       />
       <SuccessModal
         isOpen={showThankYouModal || successModal.isOpen}

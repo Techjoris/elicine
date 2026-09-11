@@ -78,8 +78,16 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            // 3. ROUTE /api/moneroo (et alias /api/notchpay)
-            if (pathname === '/api/moneroo' || pathname === '/api/moneroo/verify' || pathname === '/api/notchpay' || pathname === '/api/notchpay/verify') {
+            // 3. ROUTE /api/saspay (et alias /api/moneroo, /api/notchpay)
+            if (
+              pathname === '/api/saspay' || 
+              pathname === '/api/saspay/verify' || 
+              pathname === '/api/saspay/webhook' ||
+              pathname === '/api/moneroo' || 
+              pathname === '/api/moneroo/verify' || 
+              pathname === '/api/notchpay' || 
+              pathname === '/api/notchpay/verify'
+            ) {
               adaptResponse();
               const query: Record<string, string> = {};
               url.searchParams.forEach((v, k) => { query[k] = v; });
@@ -88,11 +96,10 @@ export default defineConfig(({ mode }) => {
                 (req as any).body = await getBody();
               }
               try {
-                process.env.MONEROO_SECRET_KEY = env.MONEROO_SECRET_KEY || env.VITE_MONEROO_SECRET_KEY || process.env.MONEROO_SECRET_KEY;
-                process.env.VITE_MONEROO_SECRET_KEY = process.env.MONEROO_SECRET_KEY;
-                const fileUrl = pathToFileURL(path.resolve('./api/moneroo.js')).href;
-                const monerooHandler = (await import(/* @vite-ignore */ fileUrl)).default;
-                return await monerooHandler(req, res);
+                process.env.saspay_Backend = env.saspay_Backend || env.SASPAY_BACKEND || env.VITE_SASPAY_BACKEND || process.env.saspay_Backend;
+                const fileUrl = pathToFileURL(path.resolve('./api/saspay.js')).href;
+                const saspayHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await saspayHandler(req, res);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

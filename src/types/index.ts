@@ -126,7 +126,10 @@ export interface ApiSettings {
   // 8. Qwen (Alibaba Cloud / DashScope)
   qwenApiKey?: string; // cinéia_qwen_api_key
 
-  // 9. Moneroo — Clé secrète (Authentification Bearer)
+  // 9. SasPay — Passerelle Mobile Money exclusive (saspay_Backend)
+  saspayApiKey?: string; // cinéia_saspay_key
+
+  // Moneroo — Legacy (conservé pour compatibilité)
   monerooSecretKey?: string; // cinéia_moneroo_sk
 
   // Notch Pay — Legacy (conservé pour compatibilité)

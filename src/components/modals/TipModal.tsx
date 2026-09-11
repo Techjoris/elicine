@@ -9,12 +9,12 @@ import {
 import { useApp } from '../../context/AppContext';
 import { 
   CURRENCY_CONFIGS, 
-  processMonerooCheckout, 
-  verifyMonerooPayment, 
-  extractMonerooRedirectUrl, 
+  processSaspayCheckout, 
+  verifySaspayPayment, 
+  extractSaspayRedirectUrl, 
   isAfricanCurrency,
-  getMonerooDefaultCurrency,
-  convertToMonerooCurrency
+  getSaspayDefaultCurrency,
+  convertToSaspayCurrency
 } from '../../services/payment';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
@@ -39,9 +39,9 @@ export const TipModal: React.FC = () => {
     setIsThankYouModalOpen
   } = useApp();
 
-  const defaultMonerooCurr = getMonerooDefaultCurrency();
+  const defaultSaspayCurr = getSaspayDefaultCurrency();
   const [activeTab, setActiveTab] = useState<'paypal' | 'mobile'>('paypal');
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => (isAfricanCurrency(currency) ? currency : defaultMonerooCurr));
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => (isAfricanCurrency(currency) ? currency : defaultSaspayCurr));
   const [amount, setAmount] = useState<string>('1000');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export const TipModal: React.FC = () => {
     setActiveTab(tab);
     setErrorMessage(null);
     if (tab === 'mobile' && !isAfricanCurrency(selectedCurrency)) {
-      const defCurr = getMonerooDefaultCurrency();
+      const defCurr = getSaspayDefaultCurrency();
       setSelectedCurrency(defCurr);
       setCurrency(defCurr);
       setAmount('1000');
@@ -132,23 +132,23 @@ export const TipModal: React.FC = () => {
       return;
     }
 
-    // Normalisation stricte de la devise et du montant pour Moneroo
-    const { amount: cleanAmount, currency: cleanCurrency } = convertToMonerooCurrency(
+    // Normalisation stricte de la devise et du montant pour SasPay
+    const { amount: cleanAmount, currency: cleanCurrency } = convertToSaspayCurrency(
       rawNum,
       selectedCurrency,
-      getMonerooDefaultCurrency(),
+      getSaspayDefaultCurrency(),
       false
     );
 
     setErrorMessage(null);
     setIsProcessing(true);
     try {
-      console.log('[TipModal] Initialisation paiement Moneroo :', {
+      console.log('[TipModal] Initialisation paiement SasPay :', {
         amount: cleanAmount,
         currency: cleanCurrency
       });
 
-      const data = await processMonerooCheckout({
+      const data = await processSaspayCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'tip',
@@ -156,26 +156,26 @@ export const TipModal: React.FC = () => {
         email: user?.email || 'contact@elicine.com',
         name: user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile',
         description: `Soutien Éliciné (${cleanAmount} ${cleanCurrency})`,
-        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=moneroo_success&type=don` : undefined,
+        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,
         skipRedirect: true
       });
 
       // 1. Structure exacte reçue dans la console du navigateur (F12)
-      console.log("REPONSE MONEROO :", data);
+      console.log("REPONSE SASPAY :", data);
 
       // Si la réponse n'est pas un succès
       if (!data || data.success === false) {
         const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement Moneroo (propriétés reçues : [${receivedKeys}]).`;
-        console.error('[TipModal] Échec Moneroo :', exactError, data);
+        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement SasPay (propriétés reçues : [${receivedKeys}]).`;
+        console.error('[TipModal] Échec SasPay :', exactError, data);
         setErrorMessage(exactError);
         showToast(exactError);
-        alert(`Erreur Moneroo : ${exactError}`);
+        alert(`Erreur SasPay : ${exactError}`);
         setIsProcessing(false);
         return;
       }
 
-      // 2. Extraction correcte de l'URL peu importe sa structure (data.checkout_url, data.link, ou data.data.checkout_url)
+      // 2. Extraction correcte de l'URL peu importe sa structure
       const urlTrouvee = 
         data?.checkout_url ||
         data?.link ||
@@ -186,36 +186,34 @@ export const TipModal: React.FC = () => {
         (data as any)?.rawResponse?.checkout_url ||
         (data as any)?.rawResponse?.link ||
         (data as any)?.rawResponse?.data?.checkout_url ||
-        extractMonerooRedirectUrl(data);
+        extractSaspayRedirectUrl(data);
 
-      // S'assure que si checkout_url ou link est absent, l'application lève une erreur claire listant les propriétés reçues
       if (!urlTrouvee) {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection Moneroo introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
         
         console.error('[TipModal]', missingLinkError);
         setErrorMessage(missingLinkError);
         showToast(`Lien manquant. Propriétés reçues : [${receivedProps}]`);
-        alert(`Erreur de redirection Moneroo :\n${missingLinkError}`);
+        alert(`Erreur de redirection SasPay :\n${missingLinkError}`);
         setIsProcessing(false);
         return;
       }
 
-      // Force immédiatement le window.location.href = urlTrouvee
-      console.log("URL MONEROO TROUVEE :", urlTrouvee);
-      showToast('Redirection immédiate vers le paiement sécurisé Moneroo...');
+      console.log("URL SASPAY TROUVEE :", urlTrouvee);
+      showToast('Redirection immédiate vers le paiement sécurisé SasPay...');
       setIsProcessing(false);
       if (typeof window !== 'undefined') {
         window.location.href = urlTrouvee;
       }
     } catch (err: any) {
-      console.error('[TipModal] Exception initialisation Moneroo :', err);
-      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement Moneroo.";
+      console.error('[TipModal] Exception initialisation SasPay :', err);
+      const exactError = err?.message || String(err) || "Échec inconnu de l'initialisation du paiement SasPay.";
       setErrorMessage(exactError);
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur de paiement Moneroo :\n${exactError}`);
+      alert(`Erreur de paiement SasPay :\n${exactError}`);
       setIsProcessing(false);
     }
   };
@@ -395,7 +393,7 @@ export const TipModal: React.FC = () => {
                     <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1.5 mt-1">
                       <span>💡</span>
                       <span>
-                        Mobile Money traite les transactions en FCFA ({defaultMonerooCurr}). Équivalent : ~{convertToMonerooCurrency(Number(amount) || 1, selectedCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA.
+                        Mobile Money traite les transactions en FCFA ({defaultSaspayCurr}) via SasPay. Équivalent : ~{convertToSaspayCurrency(Number(amount) || 1, selectedCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA.
                       </span>
                     </div>
                   )}
@@ -451,7 +449,7 @@ export const TipModal: React.FC = () => {
                   <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-fade-in break-words">
                     <span className="text-base flex-shrink-0">⚠️</span>
                     <div className="flex-1">
-                      <p className="font-bold">Erreur de paiement Moneroo :</p>
+                      <p className="font-bold">Erreur de paiement SasPay :</p>
                       <p className="text-[11px] mt-0.5 opacity-90 break-all">{errorMessage}</p>
                     </div>
                   </div>
@@ -470,13 +468,13 @@ export const TipModal: React.FC = () => {
                     </>
                   ) : (
                     <span>
-                      Payer {convertToMonerooCurrency(Number(amount) || 1000, selectedCurrency, defaultMonerooCurr).amount.toLocaleString()} FCFA ({convertToMonerooCurrency(Number(amount) || 1000, selectedCurrency, defaultMonerooCurr).currency}) via Mobile Money →
+                      Payer {convertToSaspayCurrency(Number(amount) || 1000, selectedCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA ({convertToSaspayCurrency(Number(amount) || 1000, selectedCurrency, defaultSaspayCurr).currency}) via SasPay →
                     </span>
                   )}
                 </button>
 
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-                  Orange Money, MTN MoMo, Wave, Moov • Certifié Moneroo
+                  Orange Money, MTN MoMo, Wave, Moov • Certifié SasPay
                 </p>
               </form>
             )}
