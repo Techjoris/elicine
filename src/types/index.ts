@@ -166,4 +166,4 @@ export interface SearchHistoryItem {
   mood?: string;
 }
 
-export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password';
+export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password';

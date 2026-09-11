@@ -26,6 +26,7 @@ import { DevModal } from './components/DevModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
+import { supabase } from './lib/supabase';
 import { processMonerooCheckout, extractMonerooRedirectUrl, getMonerooDefaultCurrency, convertToMonerooCurrency } from './services/payment';
 
 import { useApp } from './context/AppContext';
@@ -229,20 +230,39 @@ export const AppContent: React.FC = () => {
     }
   };
 
-  // Route /terms detection & browser history synchronization
+  // Route /terms, /reset-password, /update-password detection & browser history synchronization
   useEffect(() => {
     const handleLocation = () => {
       const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+
       if (path === '/terms' || path === '/terms/') {
         setActiveView('terms');
-      } else if (path === '/reset-password' || path === '/reset-password/') {
+      } else if (
+        path === '/reset-password' || 
+        path === '/reset-password/' ||
+        path === '/update-password' ||
+        path === '/update-password/' ||
+        hash.includes('type=recovery')
+      ) {
         setActiveView('reset-password');
       }
     };
 
     handleLocation();
     window.addEventListener('popstate', handleLocation);
-    return () => window.removeEventListener('popstate', handleLocation);
+
+    // Écoute automatique de l'événement de récupération Supabase Auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setActiveView('reset-password');
+      }
+    });
+
+    return () => {
+      window.removeEventListener('popstate', handleLocation);
+      subscription.unsubscribe();
+    };
   }, [setActiveView]);
 
   const [heroResetKey, setHeroResetKey] = useState(0);
@@ -340,7 +360,7 @@ export const AppContent: React.FC = () => {
           {activeView === 'alerts' && <AlertsView />}
           {activeView === 'admin' && <AdminView />}
           {activeView === 'terms' && <TermsView />}
-          {activeView === 'reset-password' && <ResetPasswordView />}
+          {(activeView === 'reset-password' || activeView === 'update-password') && <ResetPasswordView />}
 
         </main>
       </div>

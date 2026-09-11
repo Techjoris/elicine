@@ -48,6 +48,7 @@ export const AuthModal: React.FC = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotSuccessMessage, setForgotSuccessMessage] = useState<string | null>(null);
   const [showBenefitsPopover, setShowBenefitsPopover] = useState(false);
 
   if (!isAuthModalOpen) return null;
@@ -55,6 +56,7 @@ export const AuthModal: React.FC = () => {
   const handleSwitchMode = (signup: boolean) => {
     setIsSignUp(signup);
     setIsForgotPassword(false);
+    setForgotSuccessMessage(null);
     setShowBenefitsPopover(false);
     setErrorMessage(null);
   };
@@ -151,40 +153,35 @@ export const AuthModal: React.FC = () => {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setForgotSuccessMessage(null);
 
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      const msg = "Veuillez saisir votre adresse email.";
-      alert(msg);
-      setErrorMessage(msg);
+      setErrorMessage("Veuillez saisir votre adresse email.");
       return;
     }
 
     if (!isValidEmail(cleanEmail)) {
-      const msg = "Format d'adresse email invalide (ex: utilisateur@domaine.com).";
-      alert(msg);
-      setErrorMessage(msg);
+      setErrorMessage("Format d'adresse email invalide (ex: utilisateur@domaine.com).");
       return;
     }
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // Supabase gère l'envoi sécurisé sans révéler si l'email existe ou non (bonne pratique de sécurité)
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/update-password`,
       });
 
       if (error) {
-        alert("Erreur : " + error.message);
-        setErrorMessage("Erreur : " + error.message);
+        setErrorMessage(error.message);
       } else {
-        alert("Un e-mail de réinitialisation sécurisé vous a été envoyé.");
-        showToast("Un e-mail de réinitialisation sécurisé vous a été envoyé.");
-        setIsForgotPassword(false);
+        setForgotSuccessMessage("Si un compte est associé à cet e-mail, un lien de réinitialisation vous a été envoyé.");
+        showToast("Lien de réinitialisation envoyé.");
       }
     } catch (err: any) {
       const msg = err?.message || "Une erreur inattendue est survenue.";
-      alert("Erreur : " + msg);
-      setErrorMessage("Erreur : " + msg);
+      setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }
@@ -364,6 +361,14 @@ export const AuthModal: React.FC = () => {
               </p>
             </div>
 
+            {/* Success Banner */}
+            {forgotSuccessMessage && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <p className="font-medium leading-relaxed">{forgotSuccessMessage}</p>
+              </div>
+            )}
+
             {/* Error Banner */}
             {errorMessage && (
               <div className="p-2.5 rounded-xl bg-red-50 dark:bg-[#220a0d] border border-red-300 dark:border-red-700 text-red-700 dark:text-red-200 text-xs flex items-center gap-2 animate-shake">
@@ -372,51 +377,68 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleForgotPassword} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-200 mb-1.5">
-                  Adresse Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 dark:text-zinc-400 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="vous@exemple.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#181818] border border-slate-200 dark:border-zinc-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-400 outline-none focus:border-slate-400 dark:focus:border-zinc-300 transition-colors"
-                  />
+            {!forgotSuccessMessage ? (
+              <form onSubmit={handleForgotPassword} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-200 mb-1.5">
+                    Adresse Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 dark:text-zinc-400 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="vous@exemple.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#181818] border border-slate-200 dark:border-zinc-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-400 outline-none focus:border-slate-400 dark:focus:border-zinc-300 transition-colors"
+                    />
+                  </div>
                 </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Envoi en cours...</span>
+                    </>
+                  ) : (
+                    <span>Envoyer l'e-mail de réinitialisation</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setErrorMessage(null);
+                    setForgotSuccessMessage(null);
+                  }}
+                  className="w-full py-2 text-xs text-slate-600 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white font-medium transition-colors cursor-pointer text-center block"
+                >
+                  ← Retour à la connexion
+                </button>
+              </form>
+            ) : (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setForgotSuccessMessage(null);
+                    setErrorMessage(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-black font-bold text-xs uppercase tracking-wider hover:bg-slate-800 dark:hover:bg-zinc-200 transition-colors cursor-pointer text-center block"
+                >
+                  Retour à la connexion
+                </button>
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Envoi en cours...</span>
-                  </>
-                ) : (
-                  <span>Envoyer l'e-mail de réinitialisation</span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsForgotPassword(false);
-                  setErrorMessage(null);
-                }}
-                className="w-full py-2 text-xs text-slate-600 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white font-medium transition-colors cursor-pointer text-center block"
-              >
-                ← Retour à la connexion
-              </button>
-            </form>
+            )}
           </div>
         ) : (
           /* NOT LOGGED IN: STREAMLINED MINIMALIST AUTHENTICATION */
