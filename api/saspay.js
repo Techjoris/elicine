@@ -38,6 +38,62 @@ export function getSaspayCredentials(req) {
 }
 
 /**
+ * Extrait un message d'erreur textuel lisible depuis n'importe quel objet d'erreur ou réponse API.
+ * Empêche formellement l'affichage de '[object Object]'.
+ */
+export function extractErrorMessage(data, fallback = 'Erreur SasPay') {
+  if (!data) return fallback;
+  if (typeof data === 'string') {
+    return data.trim() === '[object Object]' ? fallback : data;
+  }
+  if (data instanceof Error) {
+    return data.message || data.name || fallback;
+  }
+  if (typeof data === 'object') {
+    // 1. data.error (string ou sous-objet)
+    if (typeof data.error === 'string' && data.error.trim() && data.error !== '[object Object]') {
+      return data.error;
+    }
+    if (data.error && typeof data.error === 'object') {
+      const nested = extractErrorMessage(data.error, '');
+      if (nested) return nested;
+    }
+    // 2. data.message (string ou sous-objet)
+    if (typeof data.message === 'string' && data.message.trim() && data.message !== '[object Object]') {
+      return data.message;
+    }
+    if (data.message && typeof data.message === 'object') {
+      const nested = extractErrorMessage(data.message, '');
+      if (nested) return nested;
+    }
+    // 3. data.detail (FastAPI / Django REST)
+    if (typeof data.detail === 'string' && data.detail.trim()) {
+      return data.detail;
+    }
+    if (Array.isArray(data.detail)) {
+      return data.detail.map(d => (d && typeof d === 'object' ? (d.msg || d.message || JSON.stringify(d)) : String(d))).join(', ');
+    }
+    // 4. data.errors (dictionnaire de validation)
+    if (data.errors && typeof data.errors === 'object') {
+      return Object.entries(data.errors)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join('; ') : (typeof v === 'object' ? JSON.stringify(v) : v)}`)
+        .join(' | ');
+    }
+    // 5. description / reason / msg
+    if (typeof data.description === 'string' && data.description.trim()) return data.description;
+    if (typeof data.reason === 'string' && data.reason.trim()) return data.reason;
+    if (typeof data.msg === 'string' && data.msg.trim()) return data.msg;
+
+    // 6. JSON fallback
+    try {
+      const str = JSON.stringify(data);
+      if (str && str !== '{}') return str;
+    } catch (_) {}
+  }
+  return String(data) || fallback;
+}
+
+/**
  * Handler Serverless SasPay (Unique passerelle Mobile Money pour Éliciné)
  * - POST : Initialisation de session de paiement (checkout-sessions ou softpay) / Gestion des webhooks
  * - GET  : Vérification du statut de la transaction
@@ -231,10 +287,11 @@ export default async function handler(req, res) {
       console.log(`[SasPay Backend] Réponse API (${apiRes.status}) :`, data);
 
       if (!apiRes.ok) {
-        const errorMsg = data?.error || data?.message || data?.detail || `Échec API SasPay (${apiRes.status})`;
+        const errorMsg = extractErrorMessage(data, `Échec API SasPay (${apiRes.status})`);
         return res.status(apiRes.status).json({
           success: false,
           error: errorMsg,
+          message: errorMsg,
           rawResponse: data
         });
       }
@@ -262,9 +319,11 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       console.error('[SasPay Exception]:', err);
+      const errorMsg = extractErrorMessage(err, "Erreur interne de communication avec l'API SasPay");
       return res.status(500).json({
         success: false,
-        error: `Erreur interne lors de la communication avec SasPay : ${err.message}`
+        error: `Erreur interne lors de la communication avec SasPay : ${errorMsg}`,
+        message: `Erreur interne lors de la communication avec SasPay : ${errorMsg}`
       });
     }
   }

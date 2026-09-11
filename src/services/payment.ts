@@ -258,6 +258,69 @@ export interface SaspayCheckoutResult {
 export type MonerooCheckoutResult = SaspayCheckoutResult;
 
 /**
+ * Extrait et formate un message d'erreur textuel propre et lisible depuis n'importe quelle erreur (API ou exception).
+ * Empêche formellement l'affichage de "[object Object]".
+ */
+export function formatPaymentErrorMessage(err: any, fallback: string = "Une erreur est survenue lors du paiement."): string {
+  if (!err) return fallback;
+  if (typeof err === 'string') {
+    const trimmed = err.trim();
+    if (trimmed === '[object Object]' || !trimmed) return fallback;
+    return trimmed;
+  }
+  if (err instanceof Error) {
+    return err.message || err.name || fallback;
+  }
+  if (typeof err === 'object') {
+    // 1. err.error
+    if (typeof err.error === 'string' && err.error.trim() && err.error !== '[object Object]') {
+      return err.error.trim();
+    }
+    if (err.error && typeof err.error === 'object') {
+      const nested = formatPaymentErrorMessage(err.error, '');
+      if (nested) return nested;
+    }
+    // 2. err.message
+    if (typeof err.message === 'string' && err.message.trim() && err.message !== '[object Object]') {
+      return err.message.trim();
+    }
+    if (err.message && typeof err.message === 'object') {
+      const nested = formatPaymentErrorMessage(err.message, '');
+      if (nested) return nested;
+    }
+    // 3. err.detail (ex: API Python / Django / FastAPI)
+    if (typeof err.detail === 'string' && err.detail.trim()) {
+      return err.detail.trim();
+    }
+    if (Array.isArray(err.detail)) {
+      return err.detail.map((d: any) => (d && typeof d === 'object' ? (d.msg || d.message || JSON.stringify(d)) : String(d))).join(', ');
+    }
+    // 4. err.errors (dictionnaire de validation ou liste)
+    if (err.errors && typeof err.errors === 'object') {
+      if (Array.isArray(err.errors)) {
+        return err.errors.map((e: any) => formatPaymentErrorMessage(e, '')).filter(Boolean).join(' ; ');
+      }
+      return Object.entries(err.errors)
+        .map(([k, v]: [string, any]) => `${k}: ${Array.isArray(v) ? v.join('; ') : (typeof v === 'object' ? JSON.stringify(v) : v)}`)
+        .join(' | ');
+    }
+    // 5. description / reason / msg
+    if (typeof err.description === 'string' && err.description.trim()) return err.description.trim();
+    if (typeof err.reason === 'string' && err.reason.trim()) return err.reason.trim();
+    if (typeof err.msg === 'string' && err.msg.trim()) return err.msg.trim();
+
+    // 6. JSON fallback lisible
+    try {
+      const str = JSON.stringify(err);
+      if (str && str !== '{}') return str;
+    } catch (_) {}
+  }
+  return String(err) || fallback;
+}
+
+export const formatSaspayErrorMessage = formatPaymentErrorMessage;
+
+/**
  * Analyse et extrait le lien de redirection de paiement retourné par SasPay.
  */
 export function extractSaspayRedirectUrl(res: any): string | null {
@@ -383,11 +446,11 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
       console.log('REPONSE SASPAY :', data);
 
       if (!serverRes.ok) {
-        lastError = data?.error || data?.message || `Erreur serveur SasPay (${serverRes.status})`;
+        lastError = formatPaymentErrorMessage(data?.error || data?.message || data, `Erreur serveur SasPay (${serverRes.status})`);
         console.warn('[SasPay] Échec /api/saspay :', lastError);
       }
     } catch (serverErr: any) {
-      lastError = serverErr?.message || 'Erreur réseau vers /api/saspay';
+      lastError = formatPaymentErrorMessage(serverErr, 'Erreur réseau vers /api/saspay');
       console.warn('[SasPay] Exception /api/saspay, repli direct :', lastError);
     }
 
@@ -425,10 +488,10 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
           data = directJson;
           urlTrouvee = extractSaspayRedirectUrl(data);
         } else {
-          lastError = directJson?.message || directJson?.error || `Erreur SasPay direct (${directRes.status})`;
+          lastError = formatPaymentErrorMessage(directJson?.message || directJson?.error || directJson, `Erreur SasPay direct (${directRes.status})`);
         }
       } catch (directErr: any) {
-        lastError = directErr?.message || 'Erreur réseau API directe SasPay';
+        lastError = formatPaymentErrorMessage(directErr, 'Erreur réseau API directe SasPay');
       }
     }
 
@@ -458,21 +521,24 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
     }
 
     const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-    const finalErrMsg = data?.error || data?.message || lastError || `Lien de paiement SasPay introuvable (checkout_url manquant). Propriétés reçues: [${receivedProps}].`;
+    const rawError = data?.error || data?.message || lastError || `Lien de paiement SasPay introuvable (checkout_url manquant). Propriétés reçues: [${receivedProps}].`;
+    const finalErrMsg = formatPaymentErrorMessage(rawError);
 
     console.error('[SasPay Checkout Error] Objet reçu sans lien :', finalErrMsg, data);
     return {
       success: false,
       message: finalErrMsg,
+      error: finalErrMsg,
       data: data?.data || data,
       rawResponse: data
     };
   } catch (e: any) {
-    const errorMsg = e?.message || "Erreur lors de l'initialisation du paiement sécurisé SasPay.";
+    const errorMsg = formatPaymentErrorMessage(e, "Erreur lors de l'initialisation du paiement sécurisé SasPay.");
     console.error('[SasPay] Erreur critique initialisation:', errorMsg, e);
     return {
       success: false,
-      message: errorMsg
+      message: errorMsg,
+      error: errorMsg
     };
   }
 }

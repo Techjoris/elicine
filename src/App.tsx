@@ -27,7 +27,13 @@ import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { supabase } from './lib/supabase';
-import { processSaspayCheckout, extractSaspayRedirectUrl, getSaspayDefaultCurrency, convertToSaspayCurrency } from './services/payment';
+import { 
+  processSaspayCheckout, 
+  extractSaspayRedirectUrl, 
+  getSaspayDefaultCurrency, 
+  convertToSaspayCurrency,
+  formatPaymentErrorMessage 
+} from './services/payment';
 
 import { useApp } from './context/AppContext';
 import { useTranslation } from './context/LanguageContext';
@@ -193,11 +199,10 @@ export const AppContent: React.FC = () => {
       console.log("REPONSE SASPAY :", data);
 
       if (!data || data.success === false) {
-        const receivedKeys = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
-        const exactError = data?.message || data?.error || `Échec de l'initialisation du paiement SasPay (propriétés reçues : [${receivedKeys}]).`;
-        console.error('[App] Échec SasPay :', exactError, data);
+        const exactError = formatPaymentErrorMessage(data?.message || data?.error || data, "Échec de l'initialisation du paiement SasaPay.");
+        console.error('[App] Échec SasaPay :', exactError, data);
         showToast(exactError);
-        alert(`Erreur SasPay : ${exactError}`);
+        alert(`Erreur SasaPay : ${exactError}`);
         return;
       }
 
@@ -220,16 +225,16 @@ export const AppContent: React.FC = () => {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${JSON.stringify(data)}`;
+        const missingLinkError = `Lien de redirection SasaPay introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${typeof data === 'object' ? JSON.stringify(data) : data}`;
         console.error('[App]', missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection SasPay :\n${missingLinkError}`);
+        alert(`Erreur de redirection SasaPay :\n${missingLinkError}`);
       }
     } catch (e: any) {
-      console.error('[App] Exception initialisation SasPay :', e);
-      const exactError = e?.message || String(e) || "Échec de l'initialisation du paiement SasPay.";
+      console.error('[App] Exception initialisation SasaPay :', e);
+      const exactError = formatPaymentErrorMessage(e, "Échec de l'initialisation du paiement SasaPay.");
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur de paiement SasPay :\n${exactError}`);
+      alert(`Erreur SasaPay : ${exactError}`);
     }
   };
 
