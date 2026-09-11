@@ -1,4 +1,12 @@
+import { checkRateLimit } from './_rateLimit.js';
+
 export default async function handler(req, res) {
+  // Protection contre les abus : 8 requêtes par minute par adresse IP
+  const limiter = checkRateLimit(req, res, { max: 8, windowMs: 60 * 1000 });
+  if (!limiter.allowed) {
+    return;
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
