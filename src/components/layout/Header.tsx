@@ -5,7 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { ProfileMenu } from './ProfileMenu';
-import { InstallAppButton } from '../InstallAppButton';
 
 interface HeaderProps {
   onGoHome?: () => void;
@@ -55,12 +54,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, onOpen
           </div>
         </div>
 
-        {/* ZONE DROITE: Actions épurées : [Installer] [☕ Soutenir] [FR] [Profil OU Connexion] */}
+        {/* ZONE DROITE: Actions épurées : [☕ Soutenir] [FR] [Profil OU Connexion] */}
         <div className="flex items-center justify-end gap-2 flex-shrink-0">
-          {/* 1. Bouton PWA "Installer" */}
-          <InstallAppButton variant="header" />
-
-          {/* 2. Bouton Soutenir */}
+          {/* 1. Bouton Soutenir */}
           <button
             type="button"
             onClick={handleOpenTip}

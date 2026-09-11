@@ -46,14 +46,7 @@ export const ApkInstallModal: React.FC = () => {
     }
   }, [isApkModalOpen, isAndroid, isIOS, canInstallPwa, installPwa, showToast, setIsApkModalOpen]);
 
-  if (!isApkModalOpen || !isIOS) return null;
-
-  return (
-    <IosInstallModal 
-      isOpen={isApkModalOpen} 
-      onClose={() => setIsApkModalOpen(false)} 
-    />
-  );
+  return null;
 };
 
 export default ApkInstallModal;

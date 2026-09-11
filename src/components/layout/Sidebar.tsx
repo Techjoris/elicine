@@ -20,7 +20,6 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
-import { InstallAppButton } from '../InstallAppButton';
 import { LanguageSelector } from '../LanguageSelector';
 
 export interface SidebarProps {
@@ -215,9 +214,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Illimité
           </span>
         </div>
-
-        {/* Bouton Installer l'application (PWA & APK) */}
-        <InstallAppButton variant="sidebar" className="w-full" />
 
         {/* Bouton Soutenir le projet (Don unifié) */}
         <button
