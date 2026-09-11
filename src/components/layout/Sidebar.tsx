@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Home, 
   Flame, 
@@ -14,13 +14,15 @@ import {
   Plus,
   X,
   LogIn,
-  Settings
+  Settings,
+  Download
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
+import { InstallModal } from '../modals/InstallModal';
 
 export interface SidebarProps {
   onGoHome?: () => void;
@@ -60,6 +62,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+
+  const handleInstallClick = async () => {
+    const promptEvent = typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null;
+    if (promptEvent) {
+      try {
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === 'accepted') {
+          if (typeof window !== 'undefined') {
+            (window as any).deferredPWAInstallPrompt = null;
+          }
+        }
+      } catch (err) {
+        setIsInstallModalOpen(true);
+      }
+    } else {
+      setIsInstallModalOpen(true);
+    }
+  };
 
   const SHOW_DEV_PANEL = (import.meta as any).env?.DEV || (typeof localStorage !== 'undefined' && localStorage.getItem('elicine_show_dev') === 'true');
 
@@ -234,6 +256,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </button>
 
+        {/* Bouton Installer l'application (Toujours visible dans la barre latérale) */}
+        <button
+          type="button"
+          onClick={() => {
+            handleInstallClick();
+            setIsMobileMenuOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none group"
+          title="Installer l'application Éliciné sur cet appareil"
+        >
+          <div className="flex items-center gap-2">
+            <Download className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+            <span>Installer l'application</span>
+          </div>
+          <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded">
+            PWA
+          </span>
+        </button>
+
         {/* Bouton Paramètres (Accès direct, visible et permanent) */}
         <button
           type="button"
@@ -384,6 +425,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modale d'aide contextuelle pour l'installation manuelle PWA */}
+      <InstallModal 
+        isOpen={isInstallModalOpen} 
+        onClose={() => setIsInstallModalOpen(false)} 
+      />
     </>
   );
 };
