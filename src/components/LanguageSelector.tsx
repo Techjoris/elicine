@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Globe } from 'lucide-react';
 import { useTranslation } from '../context/LanguageContext';
 import { Language } from '../i18n/translations';
 
@@ -41,12 +42,12 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = fa
       <button
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1 sm:gap-1.5 ${
-          compact ? 'px-2.5 py-1 rounded-full text-xs' : 'px-3 py-2 rounded-xl text-xs'
-        } bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 font-semibold text-slate-800 dark:text-zinc-100 hover:text-slate-950 dark:hover:text-white hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap`}
+          compact ? 'px-2.5 py-1.5 rounded-full text-xs' : 'px-3 py-2 rounded-xl text-xs'
+        } bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 font-semibold text-slate-800 dark:text-zinc-200 transition-all cursor-pointer select-none shadow-sm flex-shrink-0 whitespace-nowrap`}
         title="Changer la langue / Change language / Cambiar idioma"
         type="button"
       >
-        <span>{active.flag}</span>
+        <Globe size={14} className="text-zinc-400" />
         <span className="font-semibold uppercase tracking-wider text-[11px]">{active.code}</span>
         <span className="text-[9px] text-slate-400 dark:text-zinc-500">▾</span>
       </button>
