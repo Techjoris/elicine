@@ -12,12 +12,14 @@ import {
   Sparkles,
   Compass,
   Menu,
-  Plus
+  Plus,
+  Flame
 } from 'lucide-react';
 
-export type InstallTab = 'ios' | 'samsung' | 'android' | 'desktop';
+export type InstallTab = 'ios' | 'samsung' | 'firefox' | 'android' | 'desktop';
 
 export interface BrowserInfo {
+  browserName: string;
   isSamsungBrowser: boolean;
   isIOS: boolean;
   isAndroid: boolean;
@@ -30,10 +32,12 @@ export interface BrowserInfo {
 
 /**
  * Détection précise de l'environnement et du navigateur de l'utilisateur
+ * pour sélectionner automatiquement les instructions sur-mesure
  */
 export const detectBrowserInfo = (): BrowserInfo => {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return {
+      browserName: 'Navigateur Web',
       isSamsungBrowser: false,
       isIOS: false,
       isAndroid: true,
@@ -55,17 +59,33 @@ export const detectBrowserInfo = (): BrowserInfo => {
   const isDesktop = !isIOS && !isAndroid;
 
   let recommendedTab: InstallTab = 'android';
+  let browserName = 'Navigateur Web';
+
   if (isSamsungBrowser) {
     recommendedTab = 'samsung';
+    browserName = 'Samsung Internet';
   } else if (isIOS) {
     recommendedTab = 'ios';
+    if (isFirefox) {
+      browserName = 'Firefox (iOS)';
+    } else if (isChrome) {
+      browserName = 'Chrome (iOS)';
+    } else {
+      browserName = 'Safari (iOS)';
+    }
+  } else if (isFirefox) {
+    recommendedTab = 'firefox';
+    browserName = isAndroid ? 'Firefox pour Android' : 'Mozilla Firefox';
+  } else if (isAndroid) {
+    recommendedTab = 'android';
+    browserName = isChrome ? 'Google Chrome (Android)' : 'Navigateur Android';
   } else if (isDesktop) {
     recommendedTab = 'desktop';
-  } else {
-    recommendedTab = 'android';
+    browserName = isEdge ? 'Microsoft Edge' : (isChrome ? 'Google Chrome' : 'Ordinateur (PC / Mac)');
   }
 
   return {
+    browserName,
     isSamsungBrowser,
     isIOS,
     isAndroid,
@@ -93,7 +113,8 @@ export const InstallModal: React.FC<InstallModalProps> = ({
   defaultTab
 }) => {
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo>(() => detectBrowserInfo());
-  const [activeTab, setActiveTab] = useState<InstallTab>('android');
+  // Sélection automatique et instantanée dès le premier rendu pour éviter tout décalage
+  const [activeTab, setActiveTab] = useState<InstallTab>(() => defaultTab || detectBrowserInfo().recommendedTab);
 
   useEffect(() => {
     if (isOpen) {
@@ -148,16 +169,34 @@ export const InstallModal: React.FC<InstallModalProps> = ({
         </div>
 
         <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
-          Installez Éliciné pour profiter d'un lancement instantané en plein écran et d'une fluidité maximale sans passer par un store.
+          Installez Éliciné sur votre appareil pour un lancement direct en plein écran, sans publicité et sans passer par un store.
         </p>
 
+        {/* Bannière de détection intelligente du navigateur */}
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100/90 dark:bg-zinc-900/90 border border-slate-200 dark:border-zinc-800 text-xs">
+          <div className="w-8 h-8 rounded-xl bg-red-600/15 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
+            <Compass className="w-4 h-4 animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white truncate">
+              <span>Appareil détecté :</span>
+              <span className="px-2 py-0.5 rounded-md bg-red-600/10 text-red-600 dark:text-red-400 font-bold text-[11px] truncate">
+                {browserInfo.browserName}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+              Guide sur-mesure sélectionné automatiquement ci-dessous :
+            </p>
+          </div>
+        </div>
+
         {/* Onglets de sélection du système & navigateur */}
-        <div className="grid grid-cols-4 p-1 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 gap-1 text-[11px] sm:text-xs">
+        <div className="grid grid-cols-5 p-1 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 gap-1 text-[10px] sm:text-xs">
           {/* Onglet iOS */}
           <button
             type="button"
             onClick={() => setActiveTab('ios')}
-            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'ios'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
@@ -165,8 +204,8 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           >
             <Apple className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate">iOS</span>
-            {browserInfo.isIOS && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500" title="Votre appareil" />
+            {browserInfo.recommendedTab === 'ios' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-zinc-900" title="Détecté" />
             )}
           </button>
 
@@ -174,7 +213,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('samsung')}
-            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'samsung'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
@@ -182,8 +221,25 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           >
             <Compass className="w-3.5 h-3.5 flex-shrink-0 text-indigo-500" />
             <span className="truncate">Samsung</span>
-            {browserInfo.isSamsungBrowser && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-500" title="Votre navigateur" />
+            {browserInfo.recommendedTab === 'samsung' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-zinc-900" title="Détecté" />
+            )}
+          </button>
+
+          {/* Onglet Firefox */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('firefox')}
+            className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-semibold transition-all cursor-pointer ${
+              activeTab === 'firefox'
+                ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
+            <span className="truncate">Firefox</span>
+            {browserInfo.recommendedTab === 'firefox' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-zinc-900" title="Détecté" />
             )}
           </button>
 
@@ -191,16 +247,16 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('android')}
-            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'android'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+            <Smartphone className="w-3.5 h-3.5 flex-shrink-0 text-red-500" />
             <span className="truncate">Android</span>
-            {browserInfo.isAndroid && !browserInfo.isSamsungBrowser && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" title="Votre appareil" />
+            {browserInfo.recommendedTab === 'android' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-zinc-900" title="Détecté" />
             )}
           </button>
 
@@ -208,21 +264,21 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('desktop')}
-            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'desktop'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Laptop className="w-3.5 h-3.5 flex-shrink-0" />
+            <Laptop className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
             <span className="truncate">PC/Mac</span>
-            {browserInfo.isDesktop && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500" title="Votre appareil" />
+            {browserInfo.recommendedTab === 'desktop' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900" title="Détecté" />
             )}
           </button>
         </div>
 
-        {/* CONTENU 1 : GUIDAGE iOS (SAFARI) */}
+        {/* CONTENU 1 : GUIDAGE iOS (SAFARI & WEBKIT) */}
         {activeTab === 'ios' && (
           <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
             {/* Étape 1 */}
@@ -231,7 +287,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                 1
               </div>
               <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
-                <span>Touchez le bouton </span>
+                <span>Dans Safari, touchez le bouton </span>
                 <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
                   Partager
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-500/10 dark:bg-blue-400/20 text-blue-600 dark:text-blue-400">
@@ -239,7 +295,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                   </span>
                 </strong>
                 <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
-                  (Situé dans la barre en bas de Safari sur iPhone, ou en haut sur iPad)
+                  (Situé dans la barre d'outils en bas sur iPhone, ou en haut à droite sur iPad)
                 </span>
               </div>
             </div>
@@ -252,7 +308,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                 2
               </div>
               <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
-                <span>Faites défiler vers le bas et sélectionnez </span>
+                <span>Faites défiler la liste vers le bas et sélectionnez </span>
                 <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
                   « Sur l'écran d'accueil »
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200">
@@ -272,7 +328,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
               <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
                 <span>Touchez </span>
                 <strong className="text-slate-900 dark:text-white font-semibold">« Ajouter »</strong>
-                <span> en haut à droite pour valider.</span>
+                <span> en haut à droite pour valider. L'icône apparaîtra directement sur votre écran d'accueil.</span>
               </div>
             </div>
           </div>
@@ -348,7 +404,73 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           </div>
         )}
 
-        {/* CONTENU 3 : GUIDAGE ANDROID STANDARD (CHROME, FIREFOX, EDGE) */}
+        {/* CONTENU 3 : GUIDAGE SPÉCIFIQUE FIREFOX */}
+        {activeTab === 'firefox' && (
+          <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
+            {browserInfo.isFirefox && (
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px] font-medium mb-1">
+                <Flame className="w-4 h-4 flex-shrink-0" />
+                <span>Navigateur Firefox détecté. Suivez ces étapes simples :</span>
+              </div>
+            )}
+
+            {/* Étape 1 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                1
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Appuyez sur le </span>
+                <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
+                  Menu Firefox
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/10 dark:bg-amber-400/20 text-amber-600 dark:text-amber-400">
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </span>
+                </strong>
+                <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                  (Les 3 points verticaux situés en haut à droite ou en bas selon votre affichage)
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200/60 dark:border-zinc-800/60 my-1" />
+
+            {/* Étape 2 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                2
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Appuyez sur </span>
+                <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
+                  « Installer »
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200">
+                    <Download className="w-3.5 h-3.5" />
+                  </span>
+                </strong>
+                <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                  (ou « Ajouter à l'écran d'accueil »)
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200/60 dark:border-zinc-800/60 my-1" />
+
+            {/* Étape 3 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                3
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Validez sur </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">« Ajouter automatiquement »</strong>
+                <span>. L'icône Éliciné s'installe directement sur votre écran d'accueil.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTENU 4 : GUIDAGE ANDROID STANDARD (CHROME & CHROMIUM SANS PROMPT NATIF) */}
         {activeTab === 'android' && (
           <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
             {/* Étape 1 */}
@@ -365,7 +487,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                   </span>
                 </strong>
                 <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
-                  (Les 3 points verticaux situés en haut à droite ou en bas selon votre navigateur)
+                  (Les 3 points verticaux situés en haut à droite)
                 </span>
               </div>
             </div>
@@ -407,7 +529,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           </div>
         )}
 
-        {/* CONTENU 4 : GUIDAGE ORDINATEUR */}
+        {/* CONTENU 5 : GUIDAGE ORDINATEUR (PC / MAC / LINUX) */}
         {activeTab === 'desktop' && (
           <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
             <div className="flex items-start gap-3">
@@ -443,7 +565,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
         {/* Avantages PWA */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-400">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>Expérience fluide, mode plein écran instantané et catalogue accessible hors-ligne.</span>
+          <span>Lancement plein écran instantané, streaming sans latence et pas d'encombrement mémoire.</span>
         </div>
 
         {/* Bouton de confirmation */}
