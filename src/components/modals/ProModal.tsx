@@ -4,7 +4,6 @@ import { SubscriptionModal, CheckoutPayload } from '../SubscriptionModal';
 import { 
   processSaspayCheckout, 
   extractSaspayRedirectUrl, 
-  getSaspayDefaultCurrency, 
   isAfricanCurrency,
   formatPaymentErrorMessage 
 } from '../../services/payment';
@@ -24,12 +23,23 @@ export const ProModal: React.FC = () => {
     try {
       showToast('Initialisation du paiement mobile SasPay sécurisé...');
       const name = user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
-      const defaultCurr = getSaspayDefaultCurrency();
       const isYearly = payload?.plan === 'yearly';
 
-      const reqCurrency = (payload?.currency as Currency) || defaultCurr;
-      const cleanCurrency = isAfricanCurrency(reqCurrency) ? reqCurrency : defaultCurr;
-      const cleanAmount = isYearly ? 20000 : 2500;
+      // Récupération de la devise demandée (USD par défaut)
+      const cleanCurrency = ((payload?.currency as Currency) || 'USD').toUpperCase() as Currency;
+
+      // Parsing du montant dynamique ou repli sur le barème configuré
+      let cleanAmount: number;
+      if (payload?.amount) {
+        const parsed = parseFloat(String(payload.amount).replace(/\s/g, '').replace(',', '.'));
+        cleanAmount = !isNaN(parsed) && parsed > 0 ? parsed : (isYearly ? 15.99 : 1.99);
+      } else {
+        cleanAmount = cleanCurrency === 'USD' 
+          ? (isYearly ? 15.99 : 1.99) 
+          : (isAfricanCurrency(cleanCurrency) ? (isYearly ? 9600 : 1200) : (isYearly ? 15.00 : 1.85));
+      }
+
+      const currSymbol = cleanCurrency === 'USD' ? '$' : (cleanCurrency === 'EUR' ? '€' : (cleanCurrency === 'CAD' ? 'CA$' : 'FCFA'));
 
       const data = await processSaspayCheckout({
         amount: cleanAmount,
@@ -38,7 +48,7 @@ export const ProModal: React.FC = () => {
         billingCycle: payload?.plan || 'monthly',
         email: user?.email || 'contact@elicine.com',
         name,
-        description: `Pass Pro Éliciné (${cleanAmount.toLocaleString()} FCFA - ${isYearly ? 'Annuel' : 'Mensuel'})`,
+        description: `Pass Pro Éliciné (${cleanAmount} ${currSymbol} - ${isYearly ? 'Annuel' : 'Mensuel'})`,
         returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro`,
         openInNewTab: false,
         skipRedirect: true

@@ -4,7 +4,6 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
 import { Currency } from '../types';
-import { getSaspayDefaultCurrency, isAfricanCurrency } from '../services/payment';
 
 export interface CheckoutPayload {
   currency: string;
@@ -22,11 +21,11 @@ export interface SubscriptionModalProps {
 }
 
 const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: string; perMonthYearly: string }> = {
-  XAF: { symbol: 'FCFA', monthly: '2 500', yearly: '20 000', perMonthYearly: '1 667' },
-  XOF: { symbol: 'FCFA', monthly: '2 500', yearly: '20 000', perMonthYearly: '1 667' },
-  EUR: { symbol: '€', monthly: '3,80', yearly: '30,00', perMonthYearly: '2,50' },
-  USD: { symbol: '$', monthly: '4.10', yearly: '33.00', perMonthYearly: '2.75' },
-  CAD: { symbol: 'CA$', monthly: '5.50', yearly: '44.00', perMonthYearly: '3.66' },
+  USD: { symbol: '$', monthly: '1.99', yearly: '15.99', perMonthYearly: '1.33' },
+  EUR: { symbol: '€', monthly: '1,85', yearly: '15,00', perMonthYearly: '1,25' },
+  CAD: { symbol: 'CA$', monthly: '2.70', yearly: '21.50', perMonthYearly: '1.79' },
+  XOF: { symbol: 'FCFA', monthly: '1 200', yearly: '9 600', perMonthYearly: '800' },
+  XAF: { symbol: 'FCFA', monthly: '1 200', yearly: '9 600', perMonthYearly: '800' },
 };
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
@@ -38,8 +37,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onOpenPayPal 
 }) => {
   const { user, currency: appCurrency, loginWithGoogle } = useApp();
-  const defaultSaspayCurr = getSaspayDefaultCurrency();
-  const [currency, setCurrency] = useState<Currency>(() => (isAfricanCurrency(appCurrency) ? appCurrency : defaultSaspayCurr));
+  const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,19 +76,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   const handleCheckout = () => {
     setIsProcessing(true);
+    const targetAmt = amountToPay;
     if (paymentMethod === 'mobile_money') {
-      const targetCurr = isAfricanCurrency(currency) ? currency : defaultSaspayCurr;
-      const targetAmt = isYearly ? '20 000' : '2 500';
       if (onOpenSaspay) {
-        onOpenSaspay({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
+        onOpenSaspay({ currency, amount: targetAmt, plan: billingCycle });
       } else if (onOpenMoneroo) {
-        onOpenMoneroo({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
+        onOpenMoneroo({ currency, amount: targetAmt, plan: billingCycle });
       } else if (onOpenNotchPay) {
-        onOpenNotchPay({ currency: targetCurr, amount: targetAmt, plan: billingCycle });
+        onOpenNotchPay({ currency, amount: targetAmt, plan: billingCycle });
       }
     } else {
       if (onOpenPayPal) {
-        onOpenPayPal({ currency, amount: amountToPay, plan: billingCycle });
+        onOpenPayPal({ currency, amount: targetAmt, plan: billingCycle });
       }
     }
     setTimeout(() => setIsProcessing(false), 1000);
@@ -252,7 +249,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
           {/* Devises */}
           <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
-            {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
+            {(['USD', 'EUR', 'XOF', 'XAF', 'CAD'] as Currency[]).map((c) => (
               <button
                 key={c}
                 type="button"
@@ -339,7 +336,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes (SasPay)</p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange Money, MTN MoMo, Wave, Moov, Carte</p>
-                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Règlement en FCFA ({defaultSaspayCurr}) • SasPay</span>
+                <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium mt-1 block">Règlement ({amountToPay} {currentPrice.symbol}) • SasPay</span>
               </div>
             </div>
 

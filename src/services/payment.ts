@@ -43,61 +43,61 @@ export const CURRENCY_CONFIGS: Record<Currency, CurrencyConfig> = {
 export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
   XAF: {
     monthly: {
-      amount: 2500,
-      formatted: '2 500 FCFA / mois'
+      amount: 1200,
+      formatted: '1 200 FCFA / mois'
     },
     yearly: {
-      amount: 20000,
-      formatted: '20 000 FCFA / an',
-      monthlyEquivalent: '~1 667 FCFA / mois',
+      amount: 9600,
+      formatted: '9 600 FCFA / an',
+      monthlyEquivalent: '~800 FCFA / mois',
       savings: '-33% (4 mois offerts)'
     }
   },
   XOF: {
     monthly: {
-      amount: 2500,
-      formatted: '2 500 FCFA / mois'
+      amount: 1200,
+      formatted: '1 200 FCFA / mois'
     },
     yearly: {
-      amount: 20000,
-      formatted: '20 000 FCFA / an',
-      monthlyEquivalent: '~1 667 FCFA / mois',
+      amount: 9600,
+      formatted: '9 600 FCFA / an',
+      monthlyEquivalent: '~800 FCFA / mois',
       savings: '-33% (4 mois offerts)'
     }
   },
   EUR: {
     monthly: {
-      amount: 3.80,
-      formatted: '3,80 € / mois'
+      amount: 1.85,
+      formatted: '1,85 € / mois'
     },
     yearly: {
-      amount: 30.00,
-      formatted: '30,00 € / an',
-      monthlyEquivalent: '~2,50 € / mois',
+      amount: 15.00,
+      formatted: '15,00 € / an',
+      monthlyEquivalent: '~1,25 € / mois',
       savings: '-34% (4 mois offerts)'
     }
   },
   USD: {
     monthly: {
-      amount: 4.10,
-      formatted: '$4.10 / month'
+      amount: 1.99,
+      formatted: '$1.99 / month'
     },
     yearly: {
-      amount: 33.00,
-      formatted: '$33.00 / year',
-      monthlyEquivalent: '~$2.75 / month',
+      amount: 15.99,
+      formatted: '$15.99 / year',
+      monthlyEquivalent: '~$1.33 / month',
       savings: '-33% (4 months free)'
     }
   },
   CAD: {
     monthly: {
-      amount: 5.50,
-      formatted: '5,50 CA$ / mois'
+      amount: 2.70,
+      formatted: '2,70 CA$ / mois'
     },
     yearly: {
-      amount: 44.00,
-      formatted: '44,00 CA$ / an',
-      monthlyEquivalent: '~3,66 CA$ / mois',
+      amount: 21.50,
+      formatted: '21,50 CA$ / an',
+      monthlyEquivalent: '~1,79 CA$ / mois',
       savings: '-33% (4 mois offerts)'
     }
   }
@@ -164,11 +164,29 @@ export function convertToSaspayCurrency(
     };
   }
 
-  // Pour le Pass Pro, appliquer le tarif officiel en FCFA (2 500 ou 20 000)
+  // Pour le Pass Pro, appliquer le tarif officiel selon la devise demandée (1.99 $ USD de référence)
   if (isProPlan) {
+    if (cleanCurr === 'USD') {
+      return {
+        amount: isYearly ? 15.99 : 1.99,
+        currency: 'USD'
+      };
+    }
+    if (cleanCurr === 'EUR') {
+      return {
+        amount: isYearly ? 15.00 : 1.85,
+        currency: 'EUR'
+      };
+    }
+    if (cleanCurr === 'CAD') {
+      return {
+        amount: isYearly ? 21.50 : 2.70,
+        currency: 'CAD'
+      };
+    }
     return {
-      amount: isYearly ? 20000 : 2500,
-      currency: targetCurrency
+      amount: isYearly ? 9600 : 1200,
+      currency: (targetCurrency === 'XAF' || targetCurrency === 'XOF') ? targetCurrency : 'XOF'
     };
   }
 
@@ -195,7 +213,7 @@ export const convertToMonerooCurrency = convertToSaspayCurrency;
 /** Minimum amounts for card payments (FCFA) */
 export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
   tip: 1000,
-  pro: 2500
+  pro: 1200
 };
 
 /**
@@ -584,8 +602,8 @@ export const verifyNotchPayPayment = verifySaspayPayment;
 export const handleSaspayPayment = async (
   userEmail: string, 
   userName: string,
-  amount: number = 2500,
-  currency: string = getSaspayDefaultCurrency(),
+  amount: number = 1.99,
+  currency: string = 'USD',
   description: string = 'Abonnement Pass Pro Éliciné'
 ) => {
   return processSaspayCheckout({
