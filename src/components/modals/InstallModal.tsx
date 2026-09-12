@@ -9,26 +9,82 @@ import {
   Smartphone, 
   Laptop, 
   CheckCircle2, 
-  Sparkles 
+  Sparkles,
+  Compass,
+  Menu,
+  Plus
 } from 'lucide-react';
 
+export type InstallTab = 'ios' | 'samsung' | 'android' | 'desktop';
+
+export interface BrowserInfo {
+  isSamsungBrowser: boolean;
+  isIOS: boolean;
+  isAndroid: boolean;
+  isFirefox: boolean;
+  isChrome: boolean;
+  isEdge: boolean;
+  isDesktop: boolean;
+  recommendedTab: InstallTab;
+}
+
 /**
- * Détection précise de l'appareil utilisateur
+ * Détection précise de l'environnement et du navigateur de l'utilisateur
  */
-export const detectDeviceType = (): 'ios' | 'android' | 'desktop' => {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'android';
+export const detectBrowserInfo = (): BrowserInfo => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {
+      isSamsungBrowser: false,
+      isIOS: false,
+      isAndroid: true,
+      isFirefox: false,
+      isChrome: true,
+      isEdge: false,
+      isDesktop: false,
+      recommendedTab: 'android'
+    };
+  }
+
   const ua = navigator.userAgent || '';
-  const isIos = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (isIos) return 'ios';
+  const isSamsungBrowser = ua.includes('SamsungBrowser') || /SamsungBrowser/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/i.test(ua);
-  if (isAndroid) return 'android';
-  return 'desktop';
+  const isFirefox = /Firefox|FxiOS/i.test(ua);
+  const isEdge = /EdgA?|Edge/i.test(ua);
+  const isChrome = /Chrome|CriOS/i.test(ua) && !isSamsungBrowser && !isEdge;
+  const isDesktop = !isIOS && !isAndroid;
+
+  let recommendedTab: InstallTab = 'android';
+  if (isSamsungBrowser) {
+    recommendedTab = 'samsung';
+  } else if (isIOS) {
+    recommendedTab = 'ios';
+  } else if (isDesktop) {
+    recommendedTab = 'desktop';
+  } else {
+    recommendedTab = 'android';
+  }
+
+  return {
+    isSamsungBrowser,
+    isIOS,
+    isAndroid,
+    isFirefox,
+    isChrome,
+    isEdge,
+    isDesktop,
+    recommendedTab
+  };
+};
+
+export const detectDeviceType = (): InstallTab => {
+  return detectBrowserInfo().recommendedTab;
 };
 
 export interface InstallModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultTab?: 'ios' | 'android' | 'desktop';
+  defaultTab?: InstallTab;
 }
 
 export const InstallModal: React.FC<InstallModalProps> = ({ 
@@ -36,14 +92,17 @@ export const InstallModal: React.FC<InstallModalProps> = ({
   onClose,
   defaultTab
 }) => {
-  const [activeTab, setActiveTab] = useState<'ios' | 'android' | 'desktop'>('android');
+  const [browserInfo, setBrowserInfo] = useState<BrowserInfo>(() => detectBrowserInfo());
+  const [activeTab, setActiveTab] = useState<InstallTab>('android');
 
   useEffect(() => {
     if (isOpen) {
+      const info = detectBrowserInfo();
+      setBrowserInfo(info);
       if (defaultTab) {
         setActiveTab(defaultTab);
       } else {
-        setActiveTab(detectDeviceType());
+        setActiveTab(info.recommendedTab);
       }
     }
   }, [isOpen, defaultTab]);
@@ -92,45 +151,74 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           Installez Éliciné pour profiter d'un lancement instantané en plein écran et d'une fluidité maximale sans passer par un store.
         </p>
 
-        {/* Onglets de sélection du système */}
-        <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 gap-1 text-xs">
+        {/* Onglets de sélection du système & navigateur */}
+        <div className="grid grid-cols-4 p-1 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 gap-1 text-[11px] sm:text-xs">
+          {/* Onglet iOS */}
           <button
             type="button"
             onClick={() => setActiveTab('ios')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'ios'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Apple className="w-3.5 h-3.5" />
-            <span>iOS (Safari)</span>
+            <Apple className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">iOS</span>
+            {browserInfo.isIOS && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500" title="Votre appareil" />
+            )}
           </button>
 
+          {/* Onglet Samsung Internet */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('samsung')}
+            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+              activeTab === 'samsung'
+                ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 flex-shrink-0 text-indigo-500" />
+            <span className="truncate">Samsung</span>
+            {browserInfo.isSamsungBrowser && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-500" title="Votre navigateur" />
+            )}
+          </button>
+
+          {/* Onglet Android (Chrome / Navigateurs) */}
           <button
             type="button"
             onClick={() => setActiveTab('android')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'android'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Android</span>
+            <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">Android</span>
+            {browserInfo.isAndroid && !browserInfo.isSamsungBrowser && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" title="Votre appareil" />
+            )}
           </button>
 
+          {/* Onglet Ordinateur */}
           <button
             type="button"
             onClick={() => setActiveTab('desktop')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`relative flex items-center justify-center gap-1 py-1.5 px-1 sm:px-2 rounded-lg font-semibold transition-all cursor-pointer ${
               activeTab === 'desktop'
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-zinc-700/60'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Laptop className="w-3.5 h-3.5" />
-            <span>Ordinateur</span>
+            <Laptop className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">PC/Mac</span>
+            {browserInfo.isDesktop && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500" title="Votre appareil" />
+            )}
           </button>
         </div>
 
@@ -190,7 +278,77 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           </div>
         )}
 
-        {/* CONTENU 2 : GUIDAGE ANDROID / AUTRES NAVIGATEURS */}
+        {/* CONTENU 2 : GUIDAGE SPÉCIFIQUE SAMSUNG INTERNET */}
+        {activeTab === 'samsung' && (
+          <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
+            {browserInfo.isSamsungBrowser && (
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-[11px] font-medium mb-1">
+                <Compass className="w-4 h-4 flex-shrink-0" />
+                <span>Navigateur Samsung Internet détecté. Suivez ces 3 étapes :</span>
+              </div>
+            )}
+
+            {/* Étape 1 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                1
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Appuyez sur le </span>
+                <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
+                  Menu du navigateur
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-indigo-500/10 dark:bg-indigo-400/20 text-indigo-600 dark:text-indigo-400">
+                    <Menu className="w-3.5 h-3.5" />
+                  </span>
+                </strong>
+                <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                  (L'icône avec les 3 traits horizontaux ☰ située en bas à droite de votre écran)
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200/60 dark:border-zinc-800/60 my-1" />
+
+            {/* Étape 2 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                2
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Dans le volet d'options, appuyez sur </span>
+                <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
+                  « Ajouter la page à »
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200">
+                    <Plus className="w-3.5 h-3.5" />
+                  </span>
+                </strong>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200/60 dark:border-zinc-800/60 my-1" />
+
+            {/* Étape 3 */}
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                3
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Sélectionnez </span>
+                <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
+                  « Écran d'accueil »
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-indigo-500/10 dark:bg-indigo-400/20 text-indigo-600 dark:text-indigo-400">
+                    <Smartphone className="w-3.5 h-3.5" />
+                  </span>
+                </strong>
+                <span> puis validez sur </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">« Ajouter »</strong>
+                <span>. L'icône de l'application sera ajoutée directement.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTENU 3 : GUIDAGE ANDROID STANDARD (CHROME, FIREFOX, EDGE) */}
         {activeTab === 'android' && (
           <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
             {/* Étape 1 */}
@@ -249,7 +407,7 @@ export const InstallModal: React.FC<InstallModalProps> = ({
           </div>
         )}
 
-        {/* CONTENU 3 : GUIDAGE ORDINATEUR */}
+        {/* CONTENU 4 : GUIDAGE ORDINATEUR */}
         {activeTab === 'desktop' && (
           <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/80 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 text-xs">
             <div className="flex items-start gap-3">

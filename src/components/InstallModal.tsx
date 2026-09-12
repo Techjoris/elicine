@@ -1,5 +1,11 @@
-import InstallModal, { detectDeviceType, InstallModalProps } from './modals/InstallModal';
+import InstallModal, { 
+  detectDeviceType, 
+  detectBrowserInfo, 
+  InstallModalProps, 
+  InstallTab, 
+  BrowserInfo 
+} from './modals/InstallModal';
 
-export { detectDeviceType };
-export type { InstallModalProps };
+export { detectDeviceType, detectBrowserInfo };
+export type { InstallModalProps, InstallTab, BrowserInfo };
 export default InstallModal;

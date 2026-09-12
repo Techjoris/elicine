@@ -8,13 +8,14 @@ export interface InstallAppButtonProps {
 
 export const detectOS = () => {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return { isIOS: false, isAndroid: false, isDesktop: true };
+    return { isIOS: false, isAndroid: false, isDesktop: true, isSamsung: false };
   }
   const ua = navigator.userAgent || '';
+  const isSamsung = ua.includes('SamsungBrowser') || /SamsungBrowser/i.test(ua);
   const isAndroid = /android/i.test(ua);
   const isIOS = /ipad|iphone|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isDesktop = !isAndroid && !isIOS;
-  return { isIOS, isAndroid, isDesktop };
+  return { isIOS, isAndroid, isDesktop, isSamsung };
 };
 
 /**
