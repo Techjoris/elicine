@@ -116,15 +116,15 @@ export function usePWAInstall() {
   const handleInstallClick = useCallback(async (): Promise<boolean> => {
     const prompt = (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null) || globalDeferredPrompt;
 
-    if (!prompt) {
+    if (!prompt || typeof prompt.prompt !== 'function') {
       // Cas iOS / Safari ou navigateur sans beforeinstallprompt disponible
       setShowManualInstallGuide(true);
       return false;
     }
 
     try {
-      // Déclencher le prompt natif du navigateur
-      prompt.prompt();
+      // Déclencher le prompt natif du navigateur instantanément
+      await prompt.prompt();
       const choiceResult = await prompt.userChoice;
       if (choiceResult?.outcome === 'accepted') {
         console.log("Installation acceptée par l'utilisateur !");
@@ -137,11 +137,6 @@ export function usePWAInstall() {
         } catch {
           // confetti optional
         }
-        (window as any).deferredPWAInstallPrompt = null;
-        globalDeferredPrompt = null;
-        globalIsInstallable = false;
-        setIsInstallable(false);
-        listeners.forEach((cb) => cb(false));
         return true;
       }
       return false;
@@ -149,6 +144,12 @@ export function usePWAInstall() {
       console.warn("Erreur déclenchement prompt installation PWA:", err);
       setShowManualInstallGuide(true);
       return false;
+    } finally {
+      (window as any).deferredPWAInstallPrompt = null;
+      globalDeferredPrompt = null;
+      globalIsInstallable = false;
+      setIsInstallable(false);
+      listeners.forEach((cb) => cb(false));
     }
   }, []);
 

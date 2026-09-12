@@ -62,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
@@ -86,12 +87,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
       (mediaQuery as any).addListener(handleDisplayModeChange);
     }
 
-    const handleAppInstalled = () => {
-      setIsStandalone(true);
-      setIsInstallModalOpen(false);
+    if (typeof window !== 'undefined' && (window as any).deferredPWAInstallPrompt) {
+      setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+    }
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (typeof window !== 'undefined') {
+        (window as any).deferredPWAInstallPrompt = e;
+      }
     };
 
+    const handlePromptReady = () => {
+      if (typeof window !== 'undefined' && (window as any).deferredPWAInstallPrompt) {
+        setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setIsStandalone(true);
+      setDeferredPrompt(null);
+      setIsInstallModalOpen(false);
+      if (typeof window !== 'undefined') {
+        (window as any).deferredPWAInstallPrompt = null;
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwa-install-ready', handlePromptReady);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('pwa-installed', handleAppInstalled);
 
     return () => {
       if (mediaQuery.removeEventListener) {
@@ -99,27 +125,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
       } else if ((mediaQuery as any).removeListener) {
         (mediaQuery as any).removeListener(handleDisplayModeChange);
       }
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-install-ready', handlePromptReady);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('pwa-installed', handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = async () => {
-    const promptEvent = typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null;
-    if (promptEvent) {
+    // 1. Vérification immédiate si deferredPrompt est disponible
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null);
+
+    // 2. Si disponible (Chrome / Android natif), appeler instantanément prompt() en 1 clic
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       try {
-        promptEvent.prompt();
-        const { outcome } = await promptEvent.userChoice;
-        if (outcome === 'accepted') {
-          if (typeof window !== 'undefined') {
-            (window as any).deferredPWAInstallPrompt = null;
-          }
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          setIsStandalone(true);
         }
       } catch (err) {
+        console.warn('Erreur prompt installation PWA native (Sidebar) :', err);
         setIsInstallModalOpen(true);
+      } finally {
+        setDeferredPrompt(null);
+        if (typeof window !== 'undefined') {
+          (window as any).deferredPWAInstallPrompt = null;
+        }
       }
-    } else {
-      setIsInstallModalOpen(true);
+      return;
     }
+
+    // 3. Uniquement si deferredPrompt est absent : ouvrir modale d'aide
+    setIsInstallModalOpen(true);
   };
 
   const SHOW_DEV_PANEL = (import.meta as any).env?.DEV || (typeof localStorage !== 'undefined' && localStorage.getItem('elicine_show_dev') === 'true');

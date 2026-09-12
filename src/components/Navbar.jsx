@@ -4,7 +4,6 @@ import InstallModal from './modals/InstallModal';
 
 export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMenu }) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [installMethod, setInstallMethod] = useState('manual'); // 'native' | 'manual'
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
@@ -36,16 +35,20 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
     // Vérifie si le prompt natif a déjà été intercepté au niveau de la page
     if (typeof window !== 'undefined' && window.deferredPWAInstallPrompt) {
       setDeferredPrompt(window.deferredPWAInstallPrompt);
-      setInstallMethod('native');
     }
 
     // 2. Événement natif d'installation PWA (Android / Chrome / Edge)
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setInstallMethod('native');
       if (typeof window !== 'undefined') {
         window.deferredPWAInstallPrompt = e;
+      }
+    };
+
+    const handlePromptReady = () => {
+      if (typeof window !== 'undefined' && window.deferredPWAInstallPrompt) {
+        setDeferredPrompt(window.deferredPWAInstallPrompt);
       }
     };
 
@@ -53,7 +56,6 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setDeferredPrompt(null);
-      setInstallMethod('manual');
       setShowInstallModal(false);
       if (typeof window !== 'undefined') {
         window.deferredPWAInstallPrompt = null;
@@ -61,7 +63,9 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwa-install-ready', handlePromptReady);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('pwa-installed', handleAppInstalled);
 
     return () => {
       if (mediaQuery.removeEventListener) {
@@ -70,37 +74,38 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
         mediaQuery.removeListener(handleDisplayModeChange);
       }
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-install-ready', handlePromptReady);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('pwa-installed', handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = async () => {
+    // 1. Vérification immédiate si deferredPrompt est disponible
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.deferredPWAInstallPrompt : null);
 
-    // 1. Flux automatique natif (Chrome / Android / Edge) si disponible
-    if (installMethod === 'native' && promptEvent) {
+    // 2. Si disponible (cas de Chrome/Android natif), déclencher instantanément la boîte de dialogue native en 1 clic
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       try {
-        promptEvent.prompt();
-        const { outcome } = await promptEvent.userChoice;
-        if (outcome === 'accepted') {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
-          setDeferredPrompt(null);
-          if (typeof window !== 'undefined') {
-            window.deferredPWAInstallPrompt = null;
-          }
-        } else {
-          // L'utilisateur a décliné le prompt automatique, bascule vers aide manuelle
-          setInstallMethod('manual');
         }
       } catch (err) {
-        console.warn('Erreur prompt installation PWA native, ouverture modale de guidage :', err);
-        setInstallMethod('manual');
+        console.warn('Erreur prompt installation PWA native, ouverture modale de secours :', err);
         setShowInstallModal(true);
+      } finally {
+        setDeferredPrompt(null);
+        if (typeof window !== 'undefined') {
+          window.deferredPWAInstallPrompt = null;
+        }
       }
-    } else {
-      // 2. Flux manuel universel (iOS Safari, navigateurs tiers sans beforeinstallprompt)
-      setShowInstallModal(true);
+      return;
     }
+
+    // 3. Uniquement si deferredPrompt est absent (iOS Safari ou navigateurs incompatibles) : ouvrir modale explicative
+    setShowInstallModal(true);
   };
 
   return (
