@@ -64,7 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isIosStandalone = (window.navigator as any)?.standalone === true;
+    return Boolean(isDisplayStandalone || isIosStandalone);
+  });
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -91,6 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setDeferredPrompt((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt);
     }
 
+    // 1. Écoute et stockage de l'événement beforeinstallprompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -106,6 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     };
 
+    // Détection de l'installation terminée
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setDeferredPrompt(null);
@@ -135,36 +142,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const handleInstallClick = async () => {
-    // S'assurer que window.deferredPrompt est synchronisé
-    if (typeof window !== 'undefined' && !(window as any).deferredPrompt) {
-      if (deferredPrompt) {
-        (window as any).deferredPrompt = deferredPrompt;
-      } else if ((window as any).deferredPWAInstallPrompt) {
-        (window as any).deferredPrompt = (window as any).deferredPWAInstallPrompt;
-      }
-    }
+    // Récupération de deferredPrompt (variable globale ou état)
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
 
-    // Étape 1 & Étape 2 : Vérifier si window.deferredPrompt existe, appeler IMMÉDIATEMENT prompt() sans ouvrir la modale
-    if (typeof window !== 'undefined' && (window as any).deferredPrompt) {
+    // CONDITION A (Installation native directe) : Si deferredPrompt est présent
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       try {
-        await (window as any).deferredPrompt.prompt();
-        // Étape 3 : Attendre la réponse window.deferredPrompt.userChoice
-        const choice = await (window as any).deferredPrompt.userChoice;
+        await promptEvent.prompt();
+        // Attendre le choix de l'utilisateur
+        const choice = await promptEvent.userChoice;
         if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
         }
       } catch (err) {
         console.warn('Erreur prompt installation PWA native (Sidebar) :', err);
       } finally {
-        // Vider la variable
-        (window as any).deferredPrompt = null;
-        (window as any).deferredPWAInstallPrompt = null;
+        // Réinitialiser deferredPrompt = null
         setDeferredPrompt(null);
+        if (typeof window !== 'undefined') {
+          (window as any).deferredPrompt = null;
+          (window as any).deferredPWAInstallPrompt = null;
+        }
       }
-      return; // Ne PAS ouvrir la modale
+      // Ne rien afficher d'autre (aucune modale)
+      return;
     }
 
-    // Étape 4 : S'il n'existe PAS : ouvrir modale d'aide manuelle
+    // CONDITION B (Secours universel / Guide manuel) : Si deferredPrompt n'est PAS disponible
+    // (iOS Safari, Firefox, etc.) -> ouvrir modale
     setIsInstallModalOpen(true);
   };
 

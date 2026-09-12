@@ -13,6 +13,13 @@ interface HeaderProps {
   onOpenInstallModal?: () => void;
 }
 
+const checkIsStandalone = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const isIosStandalone = (window.navigator as any)?.standalone === true;
+  return Boolean(isDisplayStandalone || isIosStandalone);
+};
+
 export const Header: React.FC<HeaderProps> = ({ 
   onGoHome, 
   onOpenSettings, 
@@ -22,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { user } = useAuth();
   const {
     user: appUser,
+    watchlist,
     setIsAuthModalOpen,
     setIsProModalOpen,
     setIsTipModalOpen,
@@ -35,21 +43,13 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleOpenTip = onOpenTip || (() => setIsTipModalOpen(true));
 
-  // Gestion PWA : prompt natif direct & modale de guidage manuel
+  // Gestion PWA : prompt natif direct & modale de guidage manuel universel
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => checkIsStandalone());
 
   useEffect(() => {
-    // 1. Détection d'environnement : Vérifie si l'application est exécutée en mode autonome (standalone / PWA installée)
-    const checkStandalone = () => {
-      if (typeof window === 'undefined') return false;
-      const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isIosStandalone = (window.navigator as any)?.standalone === true;
-      return Boolean(isDisplayStandalone || isIosStandalone);
-    };
-
-    setIsStandalone(checkStandalone());
+    setIsStandalone(checkIsStandalone());
 
     // Écoute dynamique du changement de mode d'affichage
     const mediaQuery = window.matchMedia('(display-mode: standalone)');
@@ -70,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
       setDeferredPrompt((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt);
     }
 
-    // Écoute de l'événement natif d'installation PWA
+    // 1. Écoute et stockage de l'événement beforeinstallprompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -86,6 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
 
+    // Détection de l'installation terminée
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setDeferredPrompt(null);
@@ -115,36 +116,34 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleInstallClick = async () => {
-    // S'assurer que window.deferredPrompt est synchronisé
-    if (typeof window !== 'undefined' && !(window as any).deferredPrompt) {
-      if (deferredPrompt) {
-        (window as any).deferredPrompt = deferredPrompt;
-      } else if ((window as any).deferredPWAInstallPrompt) {
-        (window as any).deferredPrompt = (window as any).deferredPWAInstallPrompt;
-      }
-    }
+    // Récupération de deferredPrompt (variable globale ou état)
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
 
-    // Étape 1 & Étape 2 : Vérifier si window.deferredPrompt existe, appeler IMMÉDIATEMENT prompt() sans ouvrir la modale
-    if (typeof window !== 'undefined' && (window as any).deferredPrompt) {
+    // CONDITION A (Installation native directe) : Si deferredPrompt est présent
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       try {
-        await (window as any).deferredPrompt.prompt();
-        // Étape 3 : Attendre la réponse window.deferredPrompt.userChoice
-        const choice = await (window as any).deferredPrompt.userChoice;
+        await promptEvent.prompt();
+        // Attendre le choix de l'utilisateur
+        const choice = await promptEvent.userChoice;
         if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
         }
       } catch (err) {
-        console.warn('Erreur prompt installation PWA native :', err);
+        console.warn('Erreur lors du prompt d\'installation native :', err);
       } finally {
-        // Vider la variable
-        (window as any).deferredPrompt = null;
-        (window as any).deferredPWAInstallPrompt = null;
+        // Réinitialiser deferredPrompt = null
         setDeferredPrompt(null);
+        if (typeof window !== 'undefined') {
+          (window as any).deferredPrompt = null;
+          (window as any).deferredPWAInstallPrompt = null;
+        }
       }
-      return; // Ne PAS ouvrir la modale
+      // Ne rien afficher d'autre (aucune modale)
+      return;
     }
 
-    // Étape 4 : S'il n'existe PAS (iOS Safari ou navigateurs incompatibles) : ouvrir modale explicative
+    // CONDITION B (Secours universel / Guide manuel) : Si deferredPrompt n'est PAS disponible
+    // (iOS Safari, Firefox, ou si Chrome a déjà consommé/bloqué l'événement) -> ouvrir modale
     if (onOpenInstallModal) {
       onOpenInstallModal();
     } else {
