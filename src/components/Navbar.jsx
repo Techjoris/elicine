@@ -4,25 +4,57 @@ import InstallModal from './modals/InstallModal';
 
 export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMenu }) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [installMethod, setInstallMethod] = useState('manual'); // 'native' | 'manual'
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // 1. Détection d'environnement : Vérifie si l'application est exécutée en mode autonome (standalone / PWA installée)
+    const checkStandalone = () => {
+      if (typeof window === 'undefined') return false;
+      const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isIosStandalone = window.navigator?.standalone === true;
+      return Boolean(isDisplayStandalone || isIosStandalone);
+    };
+
+    setIsStandalone(checkStandalone());
+
+    // Écoute dynamique du changement de mode d'affichage
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e) => {
+      if (e.matches) {
+        setIsStandalone(true);
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleDisplayModeChange);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleDisplayModeChange);
+    }
+
     // Vérifie si le prompt natif a déjà été intercepté au niveau de la page
     if (typeof window !== 'undefined' && window.deferredPWAInstallPrompt) {
       setDeferredPrompt(window.deferredPWAInstallPrompt);
+      setInstallMethod('native');
     }
 
-    // Écoute de l'événement natif d'installation PWA (Android / Chrome / Edge)
+    // 2. Événement natif d'installation PWA (Android / Chrome / Edge)
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      setInstallMethod('native');
       if (typeof window !== 'undefined') {
         window.deferredPWAInstallPrompt = e;
       }
     };
 
+    // 3. Événement appinstalled : masquer immédiatement le bouton après installation
     const handleAppInstalled = () => {
+      setIsStandalone(true);
       setDeferredPrompt(null);
+      setInstallMethod('manual');
+      setShowInstallModal(false);
       if (typeof window !== 'undefined') {
         window.deferredPWAInstallPrompt = null;
       }
@@ -30,7 +62,13 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+
     return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleDisplayModeChange);
+      } else if (mediaQuery.removeListener) {
+        mediaQuery.removeListener(handleDisplayModeChange);
+      }
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
@@ -39,23 +77,28 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
   const handleInstallClick = async () => {
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.deferredPWAInstallPrompt : null);
 
-    if (promptEvent) {
-      // 1. Déclencheur natif (Android / Chrome / Edge)
+    // 1. Flux automatique natif (Chrome / Android / Edge) si disponible
+    if (installMethod === 'native' && promptEvent) {
       try {
         promptEvent.prompt();
         const { outcome } = await promptEvent.userChoice;
         if (outcome === 'accepted') {
+          setIsStandalone(true);
           setDeferredPrompt(null);
           if (typeof window !== 'undefined') {
             window.deferredPWAInstallPrompt = null;
           }
+        } else {
+          // L'utilisateur a décliné le prompt automatique, bascule vers aide manuelle
+          setInstallMethod('manual');
         }
       } catch (err) {
-        console.warn('Erreur prompt installation PWA native:', err);
+        console.warn('Erreur prompt installation PWA native, ouverture modale de guidage :', err);
+        setInstallMethod('manual');
         setShowInstallModal(true);
       }
     } else {
-      // 2. Fallback universel (iOS Safari, navigateurs sans beforeinstallprompt)
+      // 2. Flux manuel universel (iOS Safari, navigateurs tiers sans beforeinstallprompt)
       setShowInstallModal(true);
     }
   };
@@ -96,16 +139,19 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
             <span>Soutenir</span>
           </a>
 
-          {/* Bouton Installer PWA (TOUJOURS visible sur mobile et desktop) */}
-          <button
-            onClick={handleInstallClick}
-            className="flex items-center space-x-1 text-xs bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-zinc-700 text-zinc-200 transition cursor-pointer"
-            title="Installer l'application"
-            type="button"
-          >
-            <Download size={14} className="text-red-500" />
-            <span className="hidden md:inline">Installer</span>
-          </button>
+          {/* Bouton Installer PWA : Masqué dynamiquement en mode autonome (standalone) */}
+          {!isStandalone && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center space-x-1 text-xs bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-zinc-700 text-zinc-200 transition cursor-pointer"
+              title="Installer l'application"
+              type="button"
+              aria-label="Installer l'application"
+            >
+              <Download size={14} className="text-red-500" />
+              <span className="hidden md:inline">Installer</span>
+            </button>
+          )}
 
           {/* Sélecteur de langue compact */}
           <button 
@@ -116,7 +162,7 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
             <span>FR</span>
           </button>
 
-          {/* Bouton Connexion (Version compacte sur mobile avec icône, texte sur desktop) */}
+          {/* Bouton Connexion */}
           <a
             href="/login"
             onClick={(e) => {
@@ -133,7 +179,7 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
         </div>
       </header>
 
-      {/* Modale d'aide universelle pour l'installation manuelle (iOS Safari / Android / Autre) */}
+      {/* Modale d'aide universelle pour l'installation manuelle (iOS Safari / Android / Desktop) */}
       <InstallModal 
         isOpen={showInstallModal} 
         onClose={() => setShowInstallModal(false)} 

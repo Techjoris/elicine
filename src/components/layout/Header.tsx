@@ -37,25 +37,56 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Gestion PWA : prompt natif & modale universelle
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [installMethod, setInstallMethod] = useState<'native' | 'manual'>('manual');
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // 1. Détection d'environnement : Vérifie si l'application est exécutée en mode autonome (standalone / PWA installée)
+    const checkStandalone = () => {
+      if (typeof window === 'undefined') return false;
+      const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isIosStandalone = (window.navigator as any)?.standalone === true;
+      return Boolean(isDisplayStandalone || isIosStandalone);
+    };
+
+    setIsStandalone(checkStandalone());
+
+    // Écoute dynamique du changement de mode d'affichage
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        setIsStandalone(true);
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleDisplayModeChange);
+    } else if ((mediaQuery as any).addListener) {
+      (mediaQuery as any).addListener(handleDisplayModeChange);
+    }
+
     // Vérifie si le prompt a déjà été intercepté
     if (typeof window !== 'undefined' && (window as any).deferredPWAInstallPrompt) {
       setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+      setInstallMethod('native');
     }
 
     // Écoute de l'événement natif d'installation PWA
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      setInstallMethod('native');
       if (typeof window !== 'undefined') {
         (window as any).deferredPWAInstallPrompt = e;
       }
     };
 
     const handleAppInstalled = () => {
+      setIsStandalone(true);
       setDeferredPrompt(null);
+      setInstallMethod('manual');
+      setIsInstallModalOpen(false);
       if (typeof window !== 'undefined') {
         (window as any).deferredPWAInstallPrompt = null;
       }
@@ -66,11 +97,17 @@ export const Header: React.FC<HeaderProps> = ({
     window.addEventListener('pwa-install-ready', () => {
       if ((window as any).deferredPWAInstallPrompt) {
         setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+        setInstallMethod('native');
       }
     });
     window.addEventListener('pwa-installed', handleAppInstalled);
 
     return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleDisplayModeChange);
+      } else if ((mediaQuery as any).removeListener) {
+        (mediaQuery as any).removeListener(handleDisplayModeChange);
+      }
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('pwa-install-ready', handleAppInstalled);
@@ -81,19 +118,23 @@ export const Header: React.FC<HeaderProps> = ({
   const handleInstallClick = async () => {
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null);
 
-    if (promptEvent) {
+    if (installMethod === 'native' && promptEvent) {
       // 1. Déclencheur natif (Android / Chrome / Edge)
       try {
         promptEvent.prompt();
         const { outcome } = await promptEvent.userChoice;
         if (outcome === 'accepted') {
+          setIsStandalone(true);
           setDeferredPrompt(null);
           if (typeof window !== 'undefined') {
             (window as any).deferredPWAInstallPrompt = null;
           }
+        } else {
+          setInstallMethod('manual');
         }
       } catch (err) {
         console.warn('Erreur prompt installation PWA native:', err);
+        setInstallMethod('manual');
         if (onOpenInstallModal) {
           onOpenInstallModal();
         } else {
@@ -150,16 +191,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Soutenir</span>
             </button>
 
-            {/* Bouton Installer PWA (TOUJOURS visible sur mobile et desktop) */}
-            <button
-              type="button"
-              onClick={handleInstallClick}
-              className="flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer"
-              title="Installer l'application"
-            >
-              <Download size={14} className="text-red-500" />
-              <span className="hidden md:inline">Installer</span>
-            </button>
+            {/* Bouton Installer PWA : Masqué dynamiquement en mode autonome (standalone) */}
+            {!isStandalone && (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                className="flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer"
+                title="Installer l'application"
+                aria-label="Installer l'application sur votre appareil"
+              >
+                <Download size={14} className="text-red-500" />
+                <span className="hidden md:inline">Installer</span>
+              </button>
+            )}
 
             {/* Sélecteur de langue compact */}
             <div className="flex-shrink-0">

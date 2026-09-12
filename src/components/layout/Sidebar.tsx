@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Home, 
   Flame, 
@@ -63,6 +63,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const checkStandalone = () => {
+      if (typeof window === 'undefined') return false;
+      const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isIosStandalone = (window.navigator as any)?.standalone === true;
+      return Boolean(isDisplayStandalone || isIosStandalone);
+    };
+
+    setIsStandalone(checkStandalone());
+
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setIsStandalone(true);
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleDisplayModeChange);
+    } else if ((mediaQuery as any).addListener) {
+      (mediaQuery as any).addListener(handleDisplayModeChange);
+    }
+
+    const handleAppInstalled = () => {
+      setIsStandalone(true);
+      setIsInstallModalOpen(false);
+    };
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleDisplayModeChange);
+      } else if ((mediaQuery as any).removeListener) {
+        (mediaQuery as any).removeListener(handleDisplayModeChange);
+      }
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
 
   const handleInstallClick = async () => {
     const promptEvent = typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null;
@@ -256,24 +295,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </button>
 
-        {/* Bouton Installer l'application (Toujours visible dans la barre latérale) */}
-        <button
-          type="button"
-          onClick={() => {
-            handleInstallClick();
-            setIsMobileMenuOpen(false);
-          }}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none group"
-          title="Installer l'application Éliciné sur cet appareil"
-        >
-          <div className="flex items-center gap-2">
-            <Download className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
-            <span>Installer l'application</span>
-          </div>
-          <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded">
-            PWA
-          </span>
-        </button>
+        {/* Bouton Installer l'application (Masqué si l'application est déjà installée en mode autonome) */}
+        {!isStandalone && (
+          <button
+            type="button"
+            onClick={() => {
+              handleInstallClick();
+              setIsMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none group"
+            title="Installer l'application Éliciné sur cet appareil"
+          >
+            <div className="flex items-center gap-2">
+              <Download className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+              <span>Installer l'application</span>
+            </div>
+            <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded">
+              PWA
+            </span>
+          </button>
+        )}
 
         {/* Bouton Paramètres (Accès direct, visible et permanent) */}
         <button
