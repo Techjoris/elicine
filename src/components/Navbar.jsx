@@ -33,8 +33,8 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
     }
 
     // Vérifie si le prompt natif a déjà été intercepté au niveau de la page
-    if (typeof window !== 'undefined' && window.deferredPWAInstallPrompt) {
-      setDeferredPrompt(window.deferredPWAInstallPrompt);
+    if (typeof window !== 'undefined' && (window.deferredPrompt || window.deferredPWAInstallPrompt)) {
+      setDeferredPrompt(window.deferredPrompt || window.deferredPWAInstallPrompt);
     }
 
     // 2. Événement natif d'installation PWA (Android / Chrome / Edge)
@@ -42,13 +42,14 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
       e.preventDefault();
       setDeferredPrompt(e);
       if (typeof window !== 'undefined') {
+        window.deferredPrompt = e;
         window.deferredPWAInstallPrompt = e;
       }
     };
 
     const handlePromptReady = () => {
-      if (typeof window !== 'undefined' && window.deferredPWAInstallPrompt) {
-        setDeferredPrompt(window.deferredPWAInstallPrompt);
+      if (typeof window !== 'undefined' && (window.deferredPrompt || window.deferredPWAInstallPrompt)) {
+        setDeferredPrompt(window.deferredPrompt || window.deferredPWAInstallPrompt);
       }
     };
 
@@ -58,6 +59,7 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
       setDeferredPrompt(null);
       setShowInstallModal(false);
       if (typeof window !== 'undefined') {
+        window.deferredPrompt = null;
         window.deferredPWAInstallPrompt = null;
       }
     };
@@ -81,30 +83,36 @@ export default function Navbar({ onOpenTip, onOpenSettings, onLogin, onToggleMen
   }, []);
 
   const handleInstallClick = async () => {
-    // 1. Vérification immédiate si deferredPrompt est disponible
-    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.deferredPWAInstallPrompt : null);
+    // S'assurer que window.deferredPrompt est alimenté si l'événement a été capté
+    if (typeof window !== 'undefined' && !window.deferredPrompt) {
+      if (deferredPrompt) {
+        window.deferredPrompt = deferredPrompt;
+      } else if (window.deferredPWAInstallPrompt) {
+        window.deferredPrompt = window.deferredPWAInstallPrompt;
+      }
+    }
 
-    // 2. Si disponible (cas de Chrome/Android natif), déclencher instantanément la boîte de dialogue native en 1 clic
-    if (promptEvent && typeof promptEvent.prompt === 'function') {
+    // Étape 1 & Étape 2 : Vérifier si window.deferredPrompt existe, appeler IMMÉDIATEMENT prompt() sans ouvrir la modale
+    if (typeof window !== 'undefined' && window.deferredPrompt) {
       try {
-        await promptEvent.prompt();
-        const choice = await promptEvent.userChoice;
+        await window.deferredPrompt.prompt();
+        // Étape 3 : Attendre la réponse window.deferredPrompt.userChoice
+        const choice = await window.deferredPrompt.userChoice;
         if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
         }
       } catch (err) {
-        console.warn('Erreur prompt installation PWA native, ouverture modale de secours :', err);
-        setShowInstallModal(true);
+        console.warn('Erreur prompt installation PWA native :', err);
       } finally {
+        // Vider la variable
+        window.deferredPrompt = null;
+        window.deferredPWAInstallPrompt = null;
         setDeferredPrompt(null);
-        if (typeof window !== 'undefined') {
-          window.deferredPWAInstallPrompt = null;
-        }
       }
-      return;
+      return; // Ne PAS ouvrir la modale
     }
 
-    // 3. Uniquement si deferredPrompt est absent (iOS Safari ou navigateurs incompatibles) : ouvrir modale explicative
+    // Étape 4 : S'il n'existe PAS (ex: iOS Safari ou navigateur incompatible) : ouvrir modale d'aide manuelle
     setShowInstallModal(true);
   };
 

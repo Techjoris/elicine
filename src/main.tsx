@@ -12,12 +12,14 @@ import './index.css';
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault();
+    (window as any).deferredPrompt = e;
     (window as any).deferredPWAInstallPrompt = e;
     window.dispatchEvent(new Event('pwa-install-ready'));
   });
 
   window.addEventListener('appinstalled', () => {
     console.log("Éliciné a été installée avec succès");
+    (window as any).deferredPrompt = null;
     (window as any).deferredPWAInstallPrompt = null;
     window.dispatchEvent(new Event('pwa-installed'));
   });

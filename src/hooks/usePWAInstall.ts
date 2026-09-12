@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 
 declare global {
   interface Window {
+    deferredPrompt?: any;
     deferredPWAInstallPrompt?: any;
   }
 }
@@ -17,6 +18,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     // Empêcher l'affichage de la mini-barre native par défaut du navigateur
     e.preventDefault();
+    (window as any).deferredPrompt = e;
     (window as any).deferredPWAInstallPrompt = e;
     globalDeferredPrompt = e;
     globalIsInstallable = true;
@@ -27,6 +29,7 @@ if (typeof window !== 'undefined') {
   // Détection de l'installation terminée
   window.addEventListener('appinstalled', () => {
     console.log("Éliciné a été installée avec succès");
+    (window as any).deferredPrompt = null;
     (window as any).deferredPWAInstallPrompt = null;
     globalDeferredPrompt = null;
     globalIsInstallable = false;
@@ -114,7 +117,7 @@ export function usePWAInstall() {
   }, []);
 
   const handleInstallClick = useCallback(async (): Promise<boolean> => {
-    const prompt = (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null) || globalDeferredPrompt;
+    const prompt = (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null) || globalDeferredPrompt;
 
     if (!prompt || typeof prompt.prompt !== 'function') {
       // Cas iOS / Safari ou navigateur sans beforeinstallprompt disponible
@@ -145,7 +148,10 @@ export function usePWAInstall() {
       setShowManualInstallGuide(true);
       return false;
     } finally {
-      (window as any).deferredPWAInstallPrompt = null;
+      if (typeof window !== 'undefined') {
+        (window as any).deferredPrompt = null;
+        (window as any).deferredPWAInstallPrompt = null;
+      }
       globalDeferredPrompt = null;
       globalIsInstallable = false;
       setIsInstallable(false);
@@ -153,7 +159,7 @@ export function usePWAInstall() {
     }
   }, []);
 
-  const currentPrompt = (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null) || globalDeferredPrompt;
+  const currentPrompt = (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null) || globalDeferredPrompt;
 
   return {
     isInstallable,

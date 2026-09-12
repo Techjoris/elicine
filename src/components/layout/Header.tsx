@@ -66,8 +66,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     // Vérifie si le prompt a déjà été intercepté
-    if (typeof window !== 'undefined' && (window as any).deferredPWAInstallPrompt) {
-      setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+    if (typeof window !== 'undefined' && ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt)) {
+      setDeferredPrompt((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt);
     }
 
     // Écoute de l'événement natif d'installation PWA
@@ -75,13 +75,14 @@ export const Header: React.FC<HeaderProps> = ({
       e.preventDefault();
       setDeferredPrompt(e);
       if (typeof window !== 'undefined') {
+        (window as any).deferredPrompt = e;
         (window as any).deferredPWAInstallPrompt = e;
       }
     };
 
     const handlePromptReady = () => {
-      if (typeof window !== 'undefined' && (window as any).deferredPWAInstallPrompt) {
-        setDeferredPrompt((window as any).deferredPWAInstallPrompt);
+      if (typeof window !== 'undefined' && ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt)) {
+        setDeferredPrompt((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt);
       }
     };
 
@@ -90,6 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
       setDeferredPrompt(null);
       setIsInstallModalOpen(false);
       if (typeof window !== 'undefined') {
+        (window as any).deferredPrompt = null;
         (window as any).deferredPWAInstallPrompt = null;
       }
     };
@@ -113,34 +115,36 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleInstallClick = async () => {
-    // 1. Vérification immédiate si deferredPrompt est disponible
-    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).deferredPWAInstallPrompt : null);
+    // S'assurer que window.deferredPrompt est synchronisé
+    if (typeof window !== 'undefined' && !(window as any).deferredPrompt) {
+      if (deferredPrompt) {
+        (window as any).deferredPrompt = deferredPrompt;
+      } else if ((window as any).deferredPWAInstallPrompt) {
+        (window as any).deferredPrompt = (window as any).deferredPWAInstallPrompt;
+      }
+    }
 
-    // 2. Si disponible (Chrome / Android natif), appeler instantanément prompt() en un clic
-    if (promptEvent && typeof promptEvent.prompt === 'function') {
+    // Étape 1 & Étape 2 : Vérifier si window.deferredPrompt existe, appeler IMMÉDIATEMENT prompt() sans ouvrir la modale
+    if (typeof window !== 'undefined' && (window as any).deferredPrompt) {
       try {
-        await promptEvent.prompt();
-        const choice = await promptEvent.userChoice;
+        await (window as any).deferredPrompt.prompt();
+        // Étape 3 : Attendre la réponse window.deferredPrompt.userChoice
+        const choice = await (window as any).deferredPrompt.userChoice;
         if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
         }
       } catch (err) {
-        console.warn('Erreur prompt installation PWA native, ouverture modale de secours :', err);
-        if (onOpenInstallModal) {
-          onOpenInstallModal();
-        } else {
-          setIsInstallModalOpen(true);
-        }
+        console.warn('Erreur prompt installation PWA native :', err);
       } finally {
+        // Vider la variable
+        (window as any).deferredPrompt = null;
+        (window as any).deferredPWAInstallPrompt = null;
         setDeferredPrompt(null);
-        if (typeof window !== 'undefined') {
-          (window as any).deferredPWAInstallPrompt = null;
-        }
       }
-      return;
+      return; // Ne PAS ouvrir la modale
     }
 
-    // 3. Uniquement si deferredPrompt est absent (iOS Safari ou navigateurs incompatibles) : ouvrir modale explicative
+    // Étape 4 : S'il n'existe PAS (iOS Safari ou navigateurs incompatibles) : ouvrir modale explicative
     if (onOpenInstallModal) {
       onOpenInstallModal();
     } else {

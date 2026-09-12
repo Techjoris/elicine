@@ -43,6 +43,20 @@
           }
         } catch (e) {}
       })();
+
+      // Capture immédiate du prompt d'installation PWA dès le chargement du document
+      window.deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        window.deferredPWAInstallPrompt = e;
+        window.dispatchEvent(new Event('pwa-install-ready'));
+      });
+      window.addEventListener('appinstalled', function() {
+        window.deferredPrompt = null;
+        window.deferredPWAInstallPrompt = null;
+        window.dispatchEvent(new Event('pwa-installed'));
+      });
     </script>
     <script 
       src="https://www.paypal.com/sdk/js?client-id=BAAACUlHb7uF5qnWN81SZn4OFL1S5uXB0s_LMKmjsWaXIQj4AlOfdamkXtc1bNMb9SvcWgXFEF8iVJtdv0&components=hosted-buttons&disable-funding=venmo&currency=USD" 
