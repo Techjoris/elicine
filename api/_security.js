@@ -101,14 +101,24 @@ export const paypalRecordPaymentSchema = z.object({
 // 2. CONTRÔLE D'ACCÈS & VÉRIFICATION DU STATUT PRO (SERVER-SIDE PAYWALL)
 // ============================================================================
 
+export const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
+
+export function isMasterAdminEmail(email) {
+  if (!email) return false;
+  return String(email).trim().toLowerCase() === MASTER_ADMIN_EMAIL;
+}
+
 /**
  * Vérifie l'authenticité de la session utilisateur et son statut Pro actif dans Supabase.
  * Règle d'or de sécurité : Ne JAMAIS faire confiance à un booléen `isPro` transmis par le client.
+ * Exemption prioritaire : L'administrateur principal (ivanjoris959@gmail.com) dispose d'un accès illimité permanent.
  */
 export async function verifyServerSession(req) {
   const result = {
     isAuthenticated: false,
     isPro: false,
+    isAdmin: false,
+    isBypassQuotas: false,
     user: null,
     effectiveUserId: '',
     clientIp: ''
@@ -153,6 +163,16 @@ export async function verifyServerSession(req) {
         result.isAuthenticated = true;
         result.user = authData.user;
         result.effectiveUserId = authData.user.id;
+
+        const email = (authData.user.email || '').trim().toLowerCase();
+
+        // 🛡️ EXEMPTION PERMANENTE PRIORITAIRE : Compte administrateur principal
+        if (isMasterAdminEmail(email)) {
+          result.isPro = true;
+          result.isAdmin = true;
+          result.isBypassQuotas = true;
+          return result;
+        }
 
         // Vérification des métadonnées utilisateur
         if (authData.user.user_metadata?.isPro === true) {

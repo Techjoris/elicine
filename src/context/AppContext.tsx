@@ -118,6 +118,8 @@ export const formatUser = (rawUser: any): UserProfile => {
   const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Cinéphile');
   const email = rawUser.email || meta.email || identityMeta.email || '';
 
+  const isMasterAdmin = email.toLowerCase() === 'ivanjoris959@gmail.com';
+
   return {
     ...rawUser,
     id: rawUser.id || 'usr_' + Date.now(),
@@ -125,8 +127,8 @@ export const formatUser = (rawUser: any): UserProfile => {
     name,
     avatar: avatar || undefined,
     provider: 'google',
-    role: meta.role || rawUser.role || 'user',
-    isPro: rawUser.isPro ?? false,
+    role: isMasterAdmin ? 'admin' : (meta.role || rawUser.role || 'user'),
+    isPro: isMasterAdmin ? true : (rawUser.isPro ?? false),
     referralCode: rawUser.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
     createdAt: rawUser.created_at || rawUser.createdAt || new Date().toISOString()
   };
@@ -497,9 +499,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...authUser,
           token: authSession?.access_token || authUser.token
         });
+        const isMasterAdmin = (authUser.email || '').toLowerCase() === 'ivanjoris959@gmail.com';
         const updatedUser = {
           ...formatted,
-          isPro: prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
+          isPro: isMasterAdmin || prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
         };
         try {
           localStorage.setItem('cineia_user', JSON.stringify(updatedUser));
@@ -519,7 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoading(false);
   }, [authUser, authSession]);
 
-  // Quota Management (3 recherches gratuites / jour, illimité pour les membres Pro)
+  // Quota Management (3 recherches gratuites / jour, illimité pour les membres Pro et Admin)
   const refreshQuota = async () => {
     try {
       const current = await searchQuotaService.getQuota(user);
@@ -531,10 +534,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     refreshQuota();
-  }, [user?.id, user?.isPro]);
+  }, [user?.id, user?.isPro, user?.email]);
 
   const canPerformSearch = (): boolean => {
-    if ((user as any)?.isPro) return true;
+    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    if ((user as any)?.isPro || isMasterAdmin) return true;
 
     if (quota.remaining <= 0) {
       showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99$) pour continuer !");
@@ -551,17 +555,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const recordSuccessfulSearch = async (): Promise<void> => {
+    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    if ((user as any)?.isPro || isMasterAdmin) return;
+
     try {
       const updated = await searchQuotaService.recordSuccessfulSearch(user);
       setQuota(updated);
     } catch (e) {
       console.warn('[AppContext] Erreur enregistrement recherche réussie :', e);
-      if (!(user as any)?.isPro) {
-        setQuota(prev => ({
-          ...prev,
-          remaining: Math.max(0, prev.remaining - 1)
-        }));
-      }
+      setQuota(prev => ({
+        ...prev,
+        remaining: Math.max(0, prev.remaining - 1)
+      }));
     }
   };
 

@@ -2,6 +2,7 @@ import { UserProfile, Movie, AdminUserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const ADMIN_EMAILS = [
+  'ivanjoris959@gmail.com',
   'techjoris@gmail.com',
   'admin@elicine.app',
   'admin@cineai.app',

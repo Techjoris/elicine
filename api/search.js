@@ -28,20 +28,21 @@ export default async function handler(req, res) {
 
   const { action } = validation.data;
   const sessionInfo = await verifyServerSession(req);
-  const isPro = sessionInfo.isPro;
+  const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
   const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
   // Action : Consultation du quota quotidien
   if (action === 'quota' || req.method === 'GET') {
-    // Si l'utilisateur est abonné Pro certifié en base de données Supabase
+    // Si l'utilisateur est abonné Pro ou Administrateur principal (ivanjoris959@gmail.com)
     if (isPro) {
       return res.status(200).json({
         remaining: 999,
         max: 3,
         searchCount: 0,
         today: todayDate,
-        isPro: true
+        isPro: true,
+        isAdmin: Boolean(sessionInfo.isAdmin)
       });
     }
 

@@ -51,6 +51,7 @@ export default async function handler(req, res) {
   // ─── 2. Contrôle d'Accès & Paywall Côté Serveur (Supabase) ─────────────────
   const sessionInfo = await verifyServerSession(req);
   const isPro = sessionInfo.isPro;
+  const isBypassQuotas = Boolean(sessionInfo.isBypassQuotas || sessionInfo.isAdmin);
   const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     )
   );
 
-  if (hasProFilters && !isPro) {
+  if (hasProFilters && !isPro && !isBypassQuotas) {
     return res.status(403).json({
       error: "Les filtres avancés (plateformes de streaming, notes minimales) sont strictement réservés aux abonnés Pro (1.99$).",
       code: "PRO_REQUIRED",
@@ -71,7 +72,8 @@ export default async function handler(req, res) {
   }
 
   // B. Validation systématique du quota journalier (3 recherches gratuites / jour)
-  if (!isPro && effectiveUserKey && supabaseServer) {
+  // L'administrateur principal (ivanjoris959@gmail.com) et les membres Pro sont exemptés de toute restriction
+  if (!isPro && !isBypassQuotas && effectiveUserKey && supabaseServer) {
     try {
       const { data: searchRecord } = await supabaseServer
         .from('user_searches')
@@ -275,7 +277,8 @@ export default async function handler(req, res) {
 
   // ─── Enregistrement Quota dans Supabase pour les Utilisateurs Gratuits ───────
   const recordSearchInSupabase = async () => {
-    if (!supabaseServer || !effectiveUserKey || isPro) return;
+    // Si membre Pro ou Administrateur principal : AUCUNE décrémentation ni incrémentation de compteur
+    if (!supabaseServer || !effectiveUserKey || isPro || isBypassQuotas) return;
     try {
       const { data: existing } = await supabaseServer
         .from('user_searches')
