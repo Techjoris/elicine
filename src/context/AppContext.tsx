@@ -15,11 +15,15 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { authService } from '../services/authService';
 import { supabase, signInWithGoogle } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 
 interface AppContextType {
   // Quota & AI
   quota: AIQuota;
   useAiQuota: () => boolean;
+  canPerformSearch: () => boolean;
+  recordSuccessfulSearch: () => Promise<void>;
+  refreshQuota: () => Promise<void>;
   resetQuota: () => void;
 
   // User & Auth
@@ -58,13 +62,11 @@ interface AppContextType {
   addHistoryItem: (query: string, count: number, mood?: string) => void;
   clearHistory: () => void;
 
-  // Navigation
+  // Navigation & Modals
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
-
-  // Modals & Selected Movie
   selectedMovie: Movie | null;
-  setSelectedMovie: (m: Movie | null) => void;
+  setSelectedMovie: (movie: Movie | null) => void;
   isProModalOpen: boolean;
   setIsProModalOpen: (open: boolean) => void;
   isTipModalOpen: boolean;
@@ -83,18 +85,16 @@ interface AppContextType {
   setIsThankYouModalOpen: (open: boolean) => void;
   isProSuccessModalOpen: boolean;
   setIsProSuccessModalOpen: (open: boolean) => void;
-
-  // Mobile Menu & PWA
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
-  canInstallPwa: boolean;
-  installPwa: () => Promise<boolean | void>;
 
-  // Toast / Feedback
+  // Feedback & Notifications
   toastMessage: string | null;
   showToast: (msg: string, durationMs?: number) => void;
 
-  // APK Download Toast / Banner
+  // PWA Support
+  canInstallPwa: boolean;
+  installPwa: () => Promise<boolean | void>;
   showOpenInstallerToast: boolean;
   setShowOpenInstallerToast: (show: boolean) => void;
   triggerApkDownload: () => void;
@@ -102,9 +102,9 @@ interface AppContextType {
 
 
 const DEFAULT_QUOTA: AIQuota = {
-  remaining: 999,
-  max: 999,
-  lastResetDate: new Date().toISOString().split('T')[0]
+  remaining: MAX_FREE_DAILY_SEARCHES,
+  max: MAX_FREE_DAILY_SEARCHES,
+  lastResetDate: getLocalTodayDateString()
 };
 
 export const formatUser = (rawUser: any): UserProfile => {
@@ -509,25 +509,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoading(false);
   }, [authUser, authSession]);
 
-  // Quota Management
-  const useAiQuota = (): boolean => {
+  // Quota Management (3 recherches gratuites / jour, illimité pour les membres Pro)
+  const refreshQuota = async () => {
+    try {
+      const current = await searchQuotaService.getQuota(user);
+      setQuota(current);
+    } catch (e) {
+      console.warn('[AppContext] Erreur refreshQuota :', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshQuota();
+  }, [user?.id, user?.isPro]);
+
+  const canPerformSearch = (): boolean => {
     if ((user as any)?.isPro) return true;
 
     if (quota.remaining <= 0) {
+      showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99$) pour continuer !");
       setIsProModalOpen(true);
       return false;
     }
 
-    setQuota(prev => ({
-      ...prev,
-      remaining: Math.max(0, prev.remaining - 1)
-    }));
     return true;
+  };
+
+  // Rétrocompatibilité : useAiQuota vérifie le quota sans décrémenter prématurément
+  const useAiQuota = (): boolean => {
+    return canPerformSearch();
+  };
+
+  const recordSuccessfulSearch = async (): Promise<void> => {
+    try {
+      const updated = await searchQuotaService.recordSuccessfulSearch(user);
+      setQuota(updated);
+    } catch (e) {
+      console.warn('[AppContext] Erreur enregistrement recherche réussie :', e);
+      if (!(user as any)?.isPro) {
+        setQuota(prev => ({
+          ...prev,
+          remaining: Math.max(0, prev.remaining - 1)
+        }));
+      }
+    }
   };
 
   const resetQuota = () => {
     setQuota(DEFAULT_QUOTA);
-    showToast('⚡ Quota IA illimité actif !');
+    showToast('⚡ Quota IA réinitialisé (3 recherches gratuites) !');
   };
 
   // User Actions
@@ -776,6 +806,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         quota,
         useAiQuota,
+        canPerformSearch,
+        recordSuccessfulSearch,
+        refreshQuota,
         resetQuota,
         user,
         loading,

@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Sparkles, 
-  Search, 
-  Zap, 
-  ArrowRight, 
-  Loader2, 
-  Crown, 
-  SlidersHorizontal 
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { askCineIA, AIRecommendationResult } from '../../services/aiEngine';
@@ -30,7 +25,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
 }) => {
   const {
     quota,
-    useAiQuota,
+    canPerformSearch,
+    recordSuccessfulSearch,
     apiSettings,
     user,
     addHistoryItem,
@@ -55,14 +51,18 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
       return;
     }
 
-    // Check & decrement quota
-    if (!useAiQuota()) {
+    // Vérification du quota avant lancement
+    if (!canPerformSearch()) {
       return;
     }
 
     setIsLoading(true);
     try {
       const result: AIRecommendationResult = await askCineIA(query, apiSettings);
+      
+      // Enregistrement de la recherche réussie
+      await recordSuccessfulSearch();
+
       addHistoryItem(query, result.recommendedMovies.length, result.moodDetected);
       onResultsFound({
         movies: result.recommendedMovies,
@@ -137,11 +137,19 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               <button
                 type="button"
                 onClick={() => setIsProModalOpen(true)}
-                title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
-                className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+                title={user?.isPro ? "Pass Pro : Recherches IA illimitées" : `Il vous reste ${quota.remaining} recherche(s) gratuite(s) aujourd'hui sur 3`}
+                className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                  user?.isPro
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
+                    : quota.remaining <= 0
+                    ? "bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 hover:bg-rose-500/30"
+                    : "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+                }`}
               >
-                <span>⚡</span>
-                <span className="hidden sm:inline font-bold">Illimité</span>
+                <span>{user?.isPro ? '👑' : (quota.remaining <= 0 ? '🔒' : '⚡')}</span>
+                <span className="hidden sm:inline font-bold">
+                  {user?.isPro ? 'Illimité' : `${quota.remaining}/3`}
+                </span>
               </button>
 
               {/* Explorer Button */}
@@ -164,13 +172,43 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
           </div>
         </div>
 
-        {/* Indicateur de longueur positionné sous le champ de saisie */}
-        <div className="flex items-center justify-between px-2 text-[11px]">
-          <span className="text-slate-400 dark:text-zinc-500 text-[10px] hidden sm:inline">
-            Recherche intelligente par ambiance ou émotion
-          </span>
+        {/* Ligne d'état discrète sous le champ de saisie : Quota restant & Compteur de caractères */}
+        <div className="flex items-center justify-between px-2 text-[11px] gap-2">
+          {/* Texte discret de quota journalier mis à jour en temps réel */}
+          <div className="flex items-center gap-1.5 text-[11px] select-none text-left min-w-0">
+            {user?.isPro ? (
+              <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1 truncate">
+                <span>👑</span>
+                <span>Pass Pro actif • Recherches IA illimitées</span>
+              </span>
+            ) : quota.remaining > 0 ? (
+              <span className="text-slate-500 dark:text-zinc-400 flex items-center gap-1 truncate">
+                <span className="text-amber-500">⚡</span>
+                <span>
+                  Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                </span>
+              </span>
+            ) : (
+              <span className="text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
+                <span>🔒</span>
+                <span>0 recherche restante aujourd'hui •</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsProModalOpen(true);
+                  }}
+                  className="text-amber-600 dark:text-amber-400 hover:underline underline-offset-2 font-semibold cursor-pointer transition-colors"
+                >
+                  Passer au compte Pro (1.99 $)
+                </button>
+              </span>
+            )}
+          </div>
+
+          {/* Compteur de longueur max 350 */}
           <span
-            className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors ${
+            className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors flex-shrink-0 ${
               prompt.length >= 350
                 ? 'text-rose-500 font-bold'
                 : prompt.length >= 300
@@ -200,7 +238,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
           </button>
         ))}
       </div>
-
     </div>
   );
 };
+
+export default AISearchBar;

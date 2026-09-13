@@ -1,4 +1,20 @@
 import { checkRateLimit } from './_rateLimit.js';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 
+  process.env.VITE_SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
+
+const supabaseAnonKey = 
+  process.env.VITE_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  process.env.SUPABASE_ANON_KEY ||
+  '';
+
+const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 export default async function handler(req, res) {
   // Protection contre les abus : 8 requêtes par minute par adresse IP
@@ -19,7 +35,38 @@ export default async function handler(req, res) {
     response_format,
     max_tokens = 600,
     stream = false,
+    userId,
+    isPro = false,
+    deviceId
   } = req.body || {};
+
+  // ─── Vérification Quota Quotidien (Max 3 recherches gratuites / jour) ────────
+  const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+  const effectiveUserKey = userId ? String(userId).trim() : (deviceId ? String(deviceId).trim() : (clientIp ? `ip_${clientIp}` : ''));
+  const todayDate = new Date().toISOString().split('T')[0];
+
+  if (!isPro && effectiveUserKey && supabase) {
+    try {
+      const { data: searchRecord } = await supabase
+        .from('user_searches')
+        .select('search_count')
+        .eq('user_id', effectiveUserKey)
+        .eq('search_date', todayDate)
+        .maybeSingle();
+
+      if (searchRecord && searchRecord.search_count >= 3) {
+        return res.status(403).json({
+          error: "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro (1.99$) pour un accès illimité.",
+          code: "QUOTA_EXCEEDED",
+          quotaExceeded: true,
+          remaining: 0,
+          max: 3
+        });
+      }
+    } catch (quotaErr) {
+      console.warn('[API /api/ai] Erreur vérification quota Supabase :', quotaErr?.message);
+    }
+  }
 
   // Auto-génération des messages si query/prompt est fourni directement
   let finalMessages = messages;
@@ -144,17 +191,54 @@ export default async function handler(req, res) {
     throw lastError || new Error('Tous les endpoints Qwen ont échoué');
   };
 
+  const recordSearchInSupabase = async () => {
+    if (!supabase || !effectiveUserKey || isPro) return;
+    try {
+      const { data: existing } = await supabase
+        .from('user_searches')
+        .select('id, search_count')
+        .eq('user_id', effectiveUserKey)
+        .eq('search_date', todayDate)
+        .maybeSingle();
+
+      if (existing?.id) {
+        await supabase
+          .from('user_searches')
+          .update({
+            search_count: (existing.search_count || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('user_searches')
+          .insert({
+            user_id: effectiveUserKey,
+            ip_address: clientIp || null,
+            search_date: todayDate,
+            search_count: 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+      }
+    } catch (e) {
+      console.warn('[API /api/ai] Erreur incrémentation user_searches:', e?.message);
+    }
+  };
+
   // ─── Routage & Cascade de Résilience ─────────────────────────────────────────
   try {
     if (provider === 'qwen') {
       // Si Qwen explicitement demandé, tente Qwen d'abord mais replie immédiatement sur Groq si 401 ou erreur
       try {
         const result = await tryQwen();
+        recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (qwenErr) {
         console.warn('[API /api/ai] Échec Qwen (ex: 401), repli automatique vers Groq...', qwenErr.message);
         if (groqKey) {
           const fallbackResult = await tryGroq(DEFAULT_GROQ_MODEL);
+          recordSearchInSupabase();
           return res.status(200).json(fallbackResult);
         }
         throw qwenErr;
@@ -163,12 +247,14 @@ export default async function handler(req, res) {
       // PAR DÉFAUT : GROQ EN PREMIER (Fastest, High Reliability, 0% blocker)
       try {
         const result = await tryGroq(model || DEFAULT_GROQ_MODEL);
+        recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (groqErr) {
         console.warn('[API /api/ai] Groq indisponible, tentative de repli vers Qwen...', groqErr.message);
         if (qwenKey) {
           try {
             const fallbackResult = await tryQwen(DEFAULT_QWEN_MODEL);
+            recordSearchInSupabase();
             return res.status(200).json(fallbackResult);
           } catch (qwenErr) {
             console.warn('[API /api/ai] Qwen a également échoué :', qwenErr.message);

@@ -105,6 +105,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
     addAlert, 
     isMovieAlertActive,
     useAiQuota,
+    canPerformSearch,
+    recordSuccessfulSearch,
     quota,
     user,
     setIsProModalOpen,
@@ -238,7 +240,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       return;
     }
 
-    if (!useAiQuota()) {
+    if (!canPerformSearch()) {
       return;
     }
 
@@ -251,6 +253,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       console.log(`[Éliciné AI] Exécution requête IA réelle pour : "${q}" (${t.aiPromptLang})`);
       const res: AIRecommendationResult = await executeCinoraSearch(q, apiSettings, t.tmdbLang, t.aiPromptLang);
       
+      // Incrémentation du compteur de recherches réussies et persistance Supabase / LocalStorage
+      await recordSuccessfulSearch();
+
       addHistoryItem(q, res.recommendedMovies.length, res.moodDetected);
       
       if (onAiResultsFound) {
@@ -388,11 +393,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
                   e.preventDefault();
                   setIsProModalOpen(true);
                 }}
-                title="Exploration IA illimitée"
-                className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
+                title={user?.isPro ? "Pass Pro : Recherches IA illimitées" : `Il vous reste ${quota.remaining} recherche(s) gratuite(s) aujourd'hui sur 3`}
+                className={`text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                  user?.isPro
+                    ? "bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
+                    : quota.remaining <= 0
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30"
+                    : "bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
+                }`}
               >
-                <span>⚡</span>
-                <span className="hidden sm:inline font-bold">Illimité</span>
+                <span>{user?.isPro ? '👑' : (quota.remaining <= 0 ? '🔒' : '⚡')}</span>
+                <span className="hidden sm:inline font-bold">
+                  {user?.isPro ? 'Illimité' : `${quota.remaining}/3`}
+                </span>
               </button>
 
               {/* Action Submit Button - Rouge Cinéma #e50914 */}
@@ -417,13 +430,43 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
             </div>
           </form>
 
-          {/* Indicateur de longueur positionné sous le champ de saisie */}
-          <div className="flex items-center justify-between px-2 text-[11px]">
-            <span className="text-zinc-500 text-[10px] hidden sm:inline">
-              Décrivez une émotion ou une ambiance
-            </span>
+          {/* Ligne d'état discrète sous le champ de saisie : Quota restant & Compteur de caractères */}
+          <div className="flex items-center justify-between px-2 text-[11px] gap-2">
+            {/* Texte discret de quota journalier mis à jour en temps réel */}
+            <div className="flex items-center gap-1.5 text-[11px] select-none text-left min-w-0">
+              {user?.isPro ? (
+                <span className="text-amber-400/90 font-medium flex items-center gap-1 truncate">
+                  <span>👑</span>
+                  <span>Pass Pro actif • Recherches IA illimitées</span>
+                </span>
+              ) : quota.remaining > 0 ? (
+                <span className="text-zinc-400 flex items-center gap-1 truncate">
+                  <span className="text-amber-400">⚡</span>
+                  <span>
+                    Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                  </span>
+                </span>
+              ) : (
+                <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
+                  <span>🔒</span>
+                  <span>0 recherche restante aujourd'hui •</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsProModalOpen(true);
+                    }}
+                    className="text-amber-400 hover:text-amber-300 underline underline-offset-2 font-semibold cursor-pointer transition-colors"
+                  >
+                    Passer au compte Pro (1.99 $)
+                  </button>
+                </span>
+              )}
+            </div>
+
+            {/* Compteur de longueur max 350 */}
             <span
-              className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors ${
+              className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors flex-shrink-0 ${
                 searchPrompt.length >= 350
                   ? 'text-rose-400 font-bold'
                   : searchPrompt.length >= 300

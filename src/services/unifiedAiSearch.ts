@@ -113,6 +113,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
   }
 
   // TENTATIVE 1 : GROQ (Llama 3.3 70B / 8B Instant)
+  const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('elicine_device_id') || undefined) : undefined;
   for (const model of ACTIVE_GROQ_MODELS) {
     try {
       const response = await fetch('/api/ai', {
@@ -124,6 +125,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
         body: JSON.stringify({
           provider: 'groq',
           model: model,
+          deviceId,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -131,6 +133,11 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
           max_tokens: maxTokens
         })
       });
+
+      if (response.status === 403) {
+        const errJson = await response.json().catch(() => null);
+        throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -140,7 +147,10 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
           return { titles, provider: `Groq (${model})` };
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+        throw err;
+      }
       console.warn(`[Éliciné AI] Échec Groq (${model}) :`, err);
     }
   }
@@ -157,6 +167,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
         body: JSON.stringify({
           provider: 'qwen',
           model: model,
+          deviceId,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -164,6 +175,11 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
           max_tokens: maxTokens
         })
       });
+
+      if (response.status === 403) {
+        const errJson = await response.json().catch(() => null);
+        throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -173,7 +189,10 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
           return { titles, provider: `Qwen (${model})` };
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+        throw err;
+      }
       console.warn(`[Éliciné AI] Échec Qwen (${model}) :`, err);
     }
   }
