@@ -229,7 +229,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   const alertActive = currentMovie?.id ? isMovieAlertActive(currentMovie.id) : false;
 
   const handleSearch = async (queryText?: string) => {
-    const q = (queryText !== undefined ? queryText : searchPrompt).trim();
+    const raw = (queryText !== undefined ? queryText : searchPrompt).trim();
+    const q = raw.slice(0, 350);
     setErrorMessage(null);
 
     if (!q) {
@@ -347,23 +348,52 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
             <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          {/* Textarea auto-extensible */}
+          {/* Textarea auto-extensible avec limite 350 caractères */}
           <textarea
             ref={textareaRef}
             id="main-ai-search"
             rows={1}
+            maxLength={350}
             className="flex-1 w-full bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
             placeholder="Décrivez une ambiance, une émotion..."
             value={searchPrompt}
             onChange={(e) => {
-              setSearchPrompt(e.target.value);
+              const val = e.target.value.slice(0, 350);
+              setSearchPrompt(val);
               if (errorMessage) setErrorMessage(null);
+            }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const text = e.clipboardData.getData('text') || '';
+              const current = searchPrompt;
+              const target = e.currentTarget;
+              const start = target.selectionStart ?? current.length;
+              const end = target.selectionEnd ?? current.length;
+              const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
+              setSearchPrompt(next);
+              if (current.length + text.length > 350) {
+                showToast('Texte collé tronqué à la limite de 350 caractères.');
+              }
             }}
             onKeyDown={handleKeyDown}
           />
 
-          {/* Integrated Quota Badge + Explorer Button with Cinema Accent */}
-          <div className="flex items-center gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+          {/* Integrated Character Counter + Quota Badge + Explorer Button with Cinema Accent */}
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+            {/* Indicateur visuel discret de longueur */}
+            <span
+              className={`text-[10px] tabular-nums font-mono px-1 select-none transition-colors ${
+                searchPrompt.length >= 350
+                  ? 'text-rose-400 font-bold'
+                  : searchPrompt.length >= 300
+                  ? 'text-amber-400 font-medium'
+                  : 'text-zinc-500'
+              } ${searchPrompt.length === 0 ? 'opacity-30' : 'opacity-85'}`}
+              title={`${350 - searchPrompt.length} caractères restants (max 350)`}
+            >
+              {searchPrompt.length}/350
+            </span>
+
             {/* Quota Badge */}
             <button
               type="button"

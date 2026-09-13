@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   // Auto-génération des messages si query/prompt est fourni directement
   let finalMessages = messages;
   if ((!finalMessages || finalMessages.length === 0) && (req.body?.query || req.body?.prompt)) {
-    const userQ = String(req.body.query || req.body.prompt).trim();
+    const userQ = String(req.body.query || req.body.prompt).trim().slice(0, 350);
     const cleanLower = userQ.toLowerCase();
 
     // Détection de spécificité côté backend

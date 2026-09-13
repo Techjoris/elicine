@@ -65,7 +65,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   };
 
   const handleSearchSubmit = () => {
-    const q = query.trim();
+    const q = query.trim().slice(0, 350);
 
     if (!q) {
       showToast('Veuillez décrire le film ou l\'ambiance souhaitée.');
@@ -88,19 +88,47 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
         <SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
 
-      {/* Textarea auto-extensible */}
+      {/* Textarea auto-extensible avec limite 350 caractères */}
       <textarea
         ref={textareaRef}
         rows={1}
+        maxLength={350}
         className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
         placeholder={placeholder}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => setQuery(e.target.value.slice(0, 350))}
+        onPaste={(e) => {
+          e.preventDefault();
+          const text = e.clipboardData.getData('text') || '';
+          const current = query;
+          const target = e.currentTarget;
+          const start = target.selectionStart ?? current.length;
+          const end = target.selectionEnd ?? current.length;
+          const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
+          setQuery(next);
+          if (current.length + text.length > 350) {
+            showToast('Texte collé tronqué à la limite de 350 caractères.');
+          }
+        }}
         onKeyDown={handleKeyDown}
       />
 
-      {/* Integrated Quota Badge + Explorer Button inside the pill - Alignés en bas */}
+      {/* Integrated Character Counter + Quota Badge + Explorer Button inside the pill - Alignés en bas */}
       <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+        {/* Indicateur visuel discret de longueur */}
+        <span
+          className={`text-[10px] tabular-nums font-mono px-1 select-none transition-colors ${
+            query.length >= 350
+              ? 'text-rose-400 font-bold'
+              : query.length >= 300
+              ? 'text-amber-400 font-medium'
+              : 'text-zinc-500 dark:text-zinc-400'
+          } ${query.length === 0 ? 'opacity-30' : 'opacity-85'}`}
+          title={`${350 - query.length} caractères restants (max 350)`}
+        >
+          {query.length}/350
+        </span>
+
         {/* Quota Badge */}
         <button
           type="button"

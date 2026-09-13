@@ -48,7 +48,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   ];
 
   const handleSearch = async (textToSearch?: string) => {
-    const query = (textToSearch || prompt).trim();
+    const query = (textToSearch || prompt).trim().slice(0, 350);
 
     if (!query) {
       showToast('Veuillez décrire le film ou l\'ambiance souhaitée.');
@@ -105,19 +105,47 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
           </div>
 
-          {/* Input text */}
+          {/* Input text avec limite 350 caractères */}
           <input
             type="text"
+            maxLength={350}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => setPrompt(e.target.value.slice(0, 350))}
+            onPaste={(e) => {
+              e.preventDefault();
+              const text = e.clipboardData.getData('text') || '';
+              const current = prompt;
+              const target = e.currentTarget;
+              const start = target.selectionStart ?? current.length;
+              const end = target.selectionEnd ?? current.length;
+              const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
+              setPrompt(next);
+              if (current.length + text.length > 350) {
+                showToast('Texte collé tronqué à la limite de 350 caractères.');
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Décrivez une ambiance, une émotion..."
             className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
             disabled={isLoading}
           />
 
-          {/* Integrated Quota Badge + Explorer Button inside the pill */}
+          {/* Integrated Character Counter + Quota Badge + Explorer Button inside the pill */}
           <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+            {/* Indicateur visuel discret de longueur */}
+            <span
+              className={`text-[10px] tabular-nums font-mono px-1 select-none transition-colors ${
+                prompt.length >= 350
+                  ? 'text-rose-500 font-bold'
+                  : prompt.length >= 300
+                  ? 'text-amber-500 font-medium'
+                  : 'text-slate-400 dark:text-zinc-500'
+              } ${prompt.length === 0 ? 'opacity-30' : 'opacity-85'}`}
+              title={`${350 - prompt.length} caractères restants (max 350)`}
+            >
+              {prompt.length}/350
+            </span>
+
             {/* Quota Badge */}
             <button
               type="button"
