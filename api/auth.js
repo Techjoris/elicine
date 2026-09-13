@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { authLoginSchema, authRegisterSchema } from './_security.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -72,19 +73,25 @@ async function handleLogin(req, res) {
   }
 
   try {
-    const { identifier, email, password } = req.body || {};
-    const cleanEmail = (email || identifier || '').trim();
+    const rawBody = req.body || {};
+    const inputToValidate = {
+      email: (rawBody.email || rawBody.identifier || '').trim().toLowerCase(),
+      password: rawBody.password || ''
+    };
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-      return res.status(400).json({ 
-        error: "Veuillez saisir une adresse email valide." 
+    const validation = authLoginSchema.safeParse(inputToValidate);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Identifiants invalides",
+        details: validation.error.format()
       });
     }
 
+    const { email: cleanEmail, password } = validation.data;
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
-      password: password || '',
+      password,
     });
 
     if (error) {
@@ -112,17 +119,24 @@ async function handleRegister(req, res) {
   }
 
   try {
-    const { username, email, password } = req.body || {};
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const rawBody = req.body || {};
+    const inputToValidate = {
+      email: (rawBody.email || '').trim().toLowerCase(),
+      password: rawBody.password || '',
+      username: rawBody.username ? String(rawBody.username).trim() : undefined
+    };
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-      return res.status(400).json({ 
-        error: "Veuillez fournir une adresse email valide." 
+    const validation = authRegisterSchema.safeParse(inputToValidate);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Données d'inscription invalides",
+        details: validation.error.format()
       });
     }
 
-    if (!password || password.length < 6 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    const { email: cleanEmail, password, username } = validation.data;
+
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
       return res.status(400).json({ 
         error: "Le mot de passe doit contenir au moins 6 caractères, incluant au moins une majuscule et un chiffre." 
       });
@@ -130,10 +144,10 @@ async function handleRegister(req, res) {
 
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
-      password: password || '',
+      password,
       options: {
         data: {
-          full_name: (username || '').trim()
+          full_name: username || ''
         }
       }
     });

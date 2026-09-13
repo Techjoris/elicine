@@ -1,36 +1,51 @@
 import { checkRateLimit } from './_rateLimit.js';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
-
-const supabaseAnonKey = 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import { searchQuotaQuerySchema, verifyServerSession, supabaseServer } from './_security.js';
 
 export default async function handler(req, res) {
-  // Limiteur de requêtes : 15 requêtes par minute par IP
-  const limiter = checkRateLimit(req, res, { max: 15, windowMs: 60 * 1000 });
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-supabase-token');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Limiteur de requêtes : 20 requêtes par minute par IP
+  const limiter = checkRateLimit(req, res, { max: 20, windowMs: 60 * 1000 });
   if (!limiter.allowed) {
     return;
   }
 
-  const { action, userId, deviceId } = req.query || {};
-  const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
-  const effectiveUserKey = userId ? String(userId).trim() : (deviceId ? String(deviceId).trim() : (clientIp ? `ip_${clientIp}` : ''));
+  // Validation Zod des paramètres
+  const validation = searchQuotaQuerySchema.safeParse(req.query || {});
+  if (!validation.success) {
+    return res.status(400).json({
+      error: "Paramètres de requête non valides",
+      details: validation.error.format()
+    });
+  }
+
+  const { action } = validation.data;
+  const sessionInfo = await verifyServerSession(req);
+  const isPro = sessionInfo.isPro;
+  const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
-  // Action : Récupération du quota quotidien
+  // Action : Consultation du quota quotidien
   if (action === 'quota' || req.method === 'GET') {
-    if (!effectiveUserKey || !supabase) {
+    // Si l'utilisateur est abonné Pro certifié en base de données Supabase
+    if (isPro) {
+      return res.status(200).json({
+        remaining: 999,
+        max: 3,
+        searchCount: 0,
+        today: todayDate,
+        isPro: true
+      });
+    }
+
+    if (!effectiveUserKey || !supabaseServer) {
       return res.status(200).json({
         remaining: 3,
         max: 3,
@@ -41,7 +56,7 @@ export default async function handler(req, res) {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseServer
         .from('user_searches')
         .select('search_count')
         .eq('user_id', effectiveUserKey)
@@ -64,13 +79,10 @@ export default async function handler(req, res) {
         max: 3,
         searchCount: 0,
         today: todayDate,
+        isPro: false,
         error: err?.message
       });
     }
-  }
-
-  if (req.method === 'POST') {
-    return res.status(200).json({ success: true, message: "Requête acceptée" });
   }
 
   return res.status(200).json({ success: true, message: "Service de recherche actif" });

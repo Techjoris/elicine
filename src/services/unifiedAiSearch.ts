@@ -120,7 +120,8 @@ export const getApiKey = (provider: 'qwen' | 'deepseek' | 'groq' | 'tmdb', apiSe
 export async function queryAiTitles(
   query: string,
   apiKey?: string,
-  specificity?: SpecificityAnalysis
+  specificity?: SpecificityAnalysis,
+  filters?: AdvancedSearchFiltersOptions
 ): Promise<{ titles: string[]; provider: string }> {
   const spec = specificity || analyzeQuerySpecificity(query);
 
@@ -149,28 +150,72 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
 
   const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('elicine_device_id') || undefined) : undefined;
 
+  // Résolution du token de session Supabase pour la vérification serveur de l'abonnement
+  let supabaseToken: string | undefined;
+  if (typeof window !== 'undefined') {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.access_token) {
+              supabaseToken = parsed.access_token;
+              break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  const buildHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (supabaseToken) {
+      headers['x-supabase-token'] = supabaseToken;
+    }
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+    } else if (supabaseToken) {
+      headers['Authorization'] = `Bearer ${supabaseToken}`;
+    }
+    return headers;
+  };
+
+  const payloadBase = {
+    query: query.slice(0, 350),
+    prompt,
+    deviceId,
+    supabaseToken,
+    filters: filters ? {
+      platform: filters.platform,
+      minRating: filters.minRating,
+      mediaType: filters.mediaType
+    } : undefined,
+    temperature,
+    max_tokens: maxTokens
+  };
+
   // TENTATIVE 1 : QWEN (DASHSCOPE) AVEC FALLBACK SERVEUR AUTOMATIQUE VERS DEEPSEEK-FLASH
   try {
     const response = await fetch('/api/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
-      },
+      headers: buildHeaders(),
       body: JSON.stringify({
+        ...payloadBase,
         provider: 'qwen',
-        model: 'qwen-plus',
-        deviceId,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature,
-        max_tokens: maxTokens
+        model: 'qwen-plus'
       })
     });
 
     if (response.status === 403) {
       const errJson = await response.json().catch(() => null);
+      if (errJson?.code === 'PRO_REQUIRED') {
+        throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
+      }
       throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
     }
 
@@ -183,7 +228,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       }
     }
   } catch (err: any) {
-    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
       throw err;
     }
     console.warn('[Éliciné AI] Tentative Qwen échouée ou basculée, repli client...', err?.message || err);
@@ -193,24 +238,19 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
   try {
     const response = await fetch('/api/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
-      },
+      headers: buildHeaders(),
       body: JSON.stringify({
+        ...payloadBase,
         provider: 'deepseek',
-        model: 'deepseek-flash',
-        deviceId,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature,
-        max_tokens: maxTokens
+        model: 'deepseek-flash'
       })
     });
 
     if (response.status === 403) {
       const errJson = await response.json().catch(() => null);
+      if (errJson?.code === 'PRO_REQUIRED') {
+        throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
+      }
       throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
     }
 
@@ -223,7 +263,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       }
     }
   } catch (err: any) {
-    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
       throw err;
     }
     console.warn('[Éliciné AI] Échec DeepSeek-Flash explicite :', err?.message || err);
@@ -234,24 +274,19 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     try {
       const response = await fetch('/api/ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
-        },
+        headers: buildHeaders(),
         body: JSON.stringify({
+          ...payloadBase,
           provider: 'groq',
-          model: model,
-          deviceId,
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature,
-          max_tokens: maxTokens
+          model
         })
       });
 
       if (response.status === 403) {
         const errJson = await response.json().catch(() => null);
+        if (errJson?.code === 'PRO_REQUIRED') {
+          throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
+        }
         throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
       }
 
@@ -264,7 +299,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
         }
       }
     } catch (err: any) {
-      if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+      if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
         throw err;
       }
       console.warn(`[Éliciné AI] Échec Groq (${model}) :`, err);
@@ -440,7 +475,7 @@ export async function executeCinoraSearch(
   }
 
   // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres (Qwen -> DeepSeek-Flash)
-  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity);
+  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity, filters);
   console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
   // 3. Hydratation depuis TMDB selon le volume adéquat

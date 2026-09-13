@@ -1,22 +1,22 @@
 import { checkRateLimit } from './_rateLimit.js';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
-
-const supabaseAnonKey = 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import { 
+  aiSearchRequestSchema, 
+  verifyServerSession, 
+  sanitizeUserQuery, 
+  buildSecuredPrompt, 
+  supabaseServer 
+} from './_security.js';
 
 export default async function handler(req, res) {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-supabase-token');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Protection contre les abus : 8 requêtes par minute par adresse IP
   const limiter = checkRateLimit(req, res, { max: 8, windowMs: 60 * 1000 });
   if (!limiter.allowed) {
@@ -27,27 +27,53 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
 
+  // ─── 1. Validation Stricte des Données Entrantes avec Zod ────────────────────
+  const parseResult = aiSearchRequestSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      error: "Données de requête invalides",
+      details: parseResult.error.format()
+    });
+  }
+
   const {
+    query,
+    prompt,
+    messages,
     provider = 'auto',
-    messages = [],
     model,
     temperature = 0.2,
     response_format,
     max_tokens = 600,
-    stream = false,
-    userId,
-    isPro = false,
-    deviceId
-  } = req.body || {};
+    filters
+  } = parseResult.data;
 
-  // ─── Vérification Quota Quotidien (Max 3 recherches gratuites / jour) ────────
-  const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
-  const effectiveUserKey = userId ? String(userId).trim() : (deviceId ? String(deviceId).trim() : (clientIp ? `ip_${clientIp}` : ''));
+  // ─── 2. Contrôle d'Accès & Paywall Côté Serveur (Supabase) ─────────────────
+  const sessionInfo = await verifyServerSession(req);
+  const isPro = sessionInfo.isPro;
+  const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
-  if (!isPro && effectiveUserKey && supabase) {
+  // A. Vérification de l'accès aux filtres Pro (Plateformes ou notes minimales)
+  const hasProFilters = Boolean(
+    filters && (
+      (filters.platform && filters.platform !== 'all') ||
+      (filters.minRating && filters.minRating > 0)
+    )
+  );
+
+  if (hasProFilters && !isPro) {
+    return res.status(403).json({
+      error: "Les filtres avancés (plateformes de streaming, notes minimales) sont strictement réservés aux abonnés Pro (1.99$).",
+      code: "PRO_REQUIRED",
+      requiresPro: true
+    });
+  }
+
+  // B. Validation systématique du quota journalier (3 recherches gratuites / jour)
+  if (!isPro && effectiveUserKey && supabaseServer) {
     try {
-      const { data: searchRecord } = await supabase
+      const { data: searchRecord } = await supabaseServer
         .from('user_searches')
         .select('search_count')
         .eq('user_id', effectiveUserKey)
@@ -68,32 +94,28 @@ export default async function handler(req, res) {
     }
   }
 
-  // Auto-génération des messages si query/prompt est fourni directement
-  let finalMessages = messages;
-  if ((!finalMessages || finalMessages.length === 0) && (req.body?.query || req.body?.prompt)) {
-    const userQ = String(req.body.query || req.body.prompt).trim().slice(0, 350);
-    const cleanLower = userQ.toLowerCase();
-
-    // Détection de spécificité côté backend
-    const isUltra = /\b(twist|fin où|il était mort|schizophrène|piégé|enfermé|cercueil|cabine téléphonique|île psychiatrique|hopital psychiatrique|asile|pianiste juif|ghetto|sniper|magiciens rivaux)\b/i.test(cleanLower);
-    const isBroad = !isUltra && /\b(films d|films de|films avec|films des|années 80|années 90|années 2000|comédie|science-fiction|action|horreur|thriller|western|coréen|français|américain)\b/i.test(cleanLower);
-
-    let sysContent = `Tu es le moteur de recommandation cinématographique expert d'Éliciné.`;
-    if (isUltra) {
-      sysContent += `\nL'utilisateur effectue une recherche ultra-ciblée. Identifie STRICTEMENT la ou les 1 à 2 œuvres exactes correspondant à l'ensemble des critères d'intrigue, sans aucun film de remplissage.\nRéponds EXCLUSIVEMENT avec un objet JSON :\n{\n  "movies": ["Titre exact"]\n}`;
-    } else if (isBroad) {
-      sysContent += `\nL'utilisateur effectue une recherche large. Fournis une sélection complète, variée et riche de 14 à 16 films ou séries incontournables et emblématiques.\nRéponds EXCLUSIVEMENT avec un objet JSON :\n{\n  "movies": ["Titre 1", "Titre 2", ...]\n}`;
-    } else {
-      sysContent += `\nPour toute demande de l'utilisateur, réponds EXCLUSIVEMENT avec un objet JSON contenant une liste de 6 à 8 titres de films ou séries exacts et pertinents.\nExemple de format attendu :\n{\n  "movies": ["Shutter Island", "Inception", "The Departed", "Catch Me If You Can"]\n}`;
-    }
-
-    finalMessages = [
-      { role: 'system', content: sysContent },
-      { role: 'user', content: userQ }
-    ];
+  // ─── 3. Défense contre les Prompt Injections : Assainissement & Délimitation ─
+  let rawUserQuery = query || prompt || '';
+  if (!rawUserQuery && messages && messages.length > 0) {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    rawUserQuery = lastUserMsg ? lastUserMsg.content : '';
   }
 
-  // ─── Clés API & Fournisseurs ────────────────────────────────────────────────
+  const cleanUserQuery = sanitizeUserQuery(rawUserQuery);
+  if (!cleanUserQuery) {
+    return res.status(400).json({ error: "Requête de recherche vide ou invalide après assainissement." });
+  }
+
+  // Détection de spécificité pour calibrer les instructions de réponse
+  const cleanLower = cleanUserQuery.toLowerCase();
+  const isUltra = /\b(twist|fin où|il était mort|schizophrène|piégé|enfermé|cercueil|cabine téléphonique|île psychiatrique|hopital psychiatrique|asile|pianiste juif|ghetto|sniper|magiciens rivaux)\b/i.test(cleanLower);
+  const isBroad = !isUltra && /\b(films d|films de|films avec|films des|années 80|années 90|années 2000|comédie|science-fiction|action|horreur|thriller|western|coréen|français|américain)\b/i.test(cleanLower);
+  const specificityLevel = isUltra ? 'ultra_targeted' : (isBroad ? 'broad' : 'standard');
+
+  // Construction du prompt hermétique avec rôle système inviolable et conteneur <search_query>
+  const finalMessages = buildSecuredPrompt(cleanUserQuery, specificityLevel);
+
+  // ─── 4. Clés API & Fournisseurs LLM ──────────────────────────────────────────
   const authHeader = req.headers.authorization || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
@@ -124,7 +146,7 @@ export default async function handler(req, res) {
   const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash';
   const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-  // Helper fetch avec timeout pour éviter tout blocage
+  // Helper fetch avec timeout pour éviter tout blocage réseau
   const fetchWithTimeout = async (url, options, timeoutMs = 8000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -168,7 +190,7 @@ export default async function handler(req, res) {
             ...(max_tokens ? { max_tokens } : {}),
             stream: false,
           }),
-        }, 8000); // 8s timeout
+        }, 8000);
 
         if (!response.ok) {
           const errText = await response.text();
@@ -205,13 +227,13 @@ export default async function handler(req, res) {
         ...(max_tokens ? { max_tokens } : {}),
         stream: false,
       }),
-    }, 10000); // 10s timeout
+    }, 10000);
 
     if (!response.ok) {
       const errText = await response.text();
-      // Si le nom deepseek-flash est rejeté par le endpoint, bascule automatique sur deepseek-chat
+      // Repli automatique sur deepseek-chat si deepseek-flash n'est pas reconnu
       if (response.status === 400 && errText.toLowerCase().includes('model') && selectedModel === 'deepseek-flash') {
-        console.warn('[API /api/ai] DeepSeek : Repli sur deepseek-chat suite à rejet du modèle deepseek-flash');
+        console.warn('[API /api/ai] DeepSeek : Repli sur deepseek-chat suite au rejet de deepseek-flash');
         return await tryDeepSeek('deepseek-chat');
       }
       throw new Error(`DeepSeek HTTP ${response.status}: ${errText}`);
@@ -221,7 +243,7 @@ export default async function handler(req, res) {
     return { ...data, provider_used: `DeepSeek (${selectedModel})` };
   };
 
-  // ─── Secours Ultérieur : Groq Cloud (Llama 3.3) ──────────────────────────────
+  // ─── Secours Supplémentaire : Groq Cloud (Llama 3.3) ─────────────────────────
   const tryGroq = async (customModel) => {
     if (!groqKey) throw new Error('Clé GROQ_API_KEY non configurée');
     const selectedModel = customModel || (model && !model.includes('qwen') && !model.includes('deepseek') ? model : DEFAULT_GROQ_MODEL);
@@ -251,10 +273,11 @@ export default async function handler(req, res) {
     return { ...data, provider_used: `Groq (${selectedModel})` };
   };
 
+  // ─── Enregistrement Quota dans Supabase pour les Utilisateurs Gratuits ───────
   const recordSearchInSupabase = async () => {
-    if (!supabase || !effectiveUserKey || isPro) return;
+    if (!supabaseServer || !effectiveUserKey || isPro) return;
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await supabaseServer
         .from('user_searches')
         .select('id, search_count')
         .eq('user_id', effectiveUserKey)
@@ -262,7 +285,7 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (existing?.id) {
-        await supabase
+        await supabaseServer
           .from('user_searches')
           .update({
             search_count: (existing.search_count || 0) + 1,
@@ -270,11 +293,11 @@ export default async function handler(req, res) {
           })
           .eq('id', existing.id);
       } else {
-        await supabase
+        await supabaseServer
           .from('user_searches')
           .insert({
             user_id: effectiveUserKey,
-            ip_address: clientIp || null,
+            ip_address: sessionInfo.clientIp || null,
             search_date: todayDate,
             search_count: 1,
             created_at: new Date().toISOString(),
@@ -313,18 +336,17 @@ export default async function handler(req, res) {
         return res.status(200).json(result);
       } catch (groqErr) {
         console.warn('[API /api/ai] Échec Groq, repli vers Qwen/DeepSeek...', groqErr?.message);
-        // Cascade vers Qwen puis DeepSeek
       }
     }
 
     // CAS PAR DÉFAUT : Qwen (DashScope) en Priorité Absolue
     try {
-      console.log('[API /api/ai] [Étape 1] Interrogation de Qwen (DashScope)...');
+      console.log('[API /api/ai] [Étape 1] Interrogation sécurisée de Qwen (DashScope)...');
       const result = await tryQwen();
       await recordSearchInSupabase();
       return res.status(200).json(result);
     } catch (qwenErr) {
-      // Étape 2 : Interception de l'erreur / timeout / HTTP fail dans le try/catch
+      // Étape 2 : Interception de l'échec Qwen dans le try/catch
       console.warn('[API /api/ai] [Étape 2] Échec ou timeout Qwen :', qwenErr?.message || qwenErr);
       
       // Étape 3 : Bascule automatique immédiate sur DeepSeek-Flash
@@ -336,7 +358,7 @@ export default async function handler(req, res) {
       } catch (deepseekErr) {
         console.warn('[API /api/ai] Échec du fournisseur de secours DeepSeek :', deepseekErr?.message || deepseekErr);
 
-        // Filet de sécurité tertiaire si Groq est configuré
+        // Filet de sécurité tertiaire si Groq est disponible
         if (groqKey) {
           console.log('[API /api/ai] Filet de secours ultime : tentative via Groq Cloud...');
           try {

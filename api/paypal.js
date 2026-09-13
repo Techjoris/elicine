@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { paypalRecordPaymentSchema } from './_security.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -58,6 +59,15 @@ export default async function handler(req, res) {
   // 2. Enregistrement direct et validation d'un paiement PayPal complété
   if (req.method === 'POST' && (action === 'record-payment' || !action)) {
     try {
+      const validation = paypalRecordPaymentSchema.safeParse(req.body || {});
+      if (!validation.success) {
+        return res.status(400).json({
+          success: false,
+          error: "Données de paiement PayPal invalides",
+          details: validation.error.format()
+        });
+      }
+
       const {
         orderId,
         subscriptionId,
@@ -68,11 +78,7 @@ export default async function handler(req, res) {
         currency,
         amount,
         details
-      } = req.body || {};
-
-      if (!orderId) {
-        return res.status(400).json({ success: false, error: "Identifiant de transaction PayPal (orderId) manquant." });
-      }
+      } = validation.data;
 
       const now = new Date().toISOString();
       const targetSubId = subscriptionId || `sub_paypal_${orderId}`;
