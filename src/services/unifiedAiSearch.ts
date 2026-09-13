@@ -28,7 +28,25 @@ export interface AIRecommendationResult {
 }
 
 /**
- * MODÈLES GROQ ACTIFS — Moteur principal de recommandation (Vitesse & Fiabilité)
+ * MODÈLES QWEN ACTIFS — Moteur principal de recommandation (Précision & Compréhension sémantique)
+ */
+export const ACTIVE_QWEN_MODELS = [
+  'qwen-plus',
+  'qwen2.5-72b-instruct',
+];
+export const QWEN_MODELS = ACTIVE_QWEN_MODELS;
+
+/**
+ * MODÈLES DEEPSEEK ACTIFS — Fallback Haute Disponibilité (Vitesse & Résilience)
+ */
+export const ACTIVE_DEEPSEEK_MODELS = [
+  'deepseek-flash',
+  'deepseek-chat',
+];
+export const DEEPSEEK_MODELS = ACTIVE_DEEPSEEK_MODELS;
+
+/**
+ * MODÈLES GROQ — Filet de secours supplémentaire
  */
 export const ACTIVE_GROQ_MODELS = [
   'llama-3.3-70b-versatile',
@@ -36,13 +54,30 @@ export const ACTIVE_GROQ_MODELS = [
 ];
 export const GROQ_MODELS = ACTIVE_GROQ_MODELS;
 
-/**
- * MODÈLES QWEN — Fallback si Groq indisponible
- */
-export const ACTIVE_QWEN_MODELS = [
-  'qwen-plus',
-  'qwen2.5-72b-instruct',
-];
+export const getQwenKey = (apiSettings?: ApiSettings): string => {
+  return (
+    localStorage.getItem('dashscope_api_key') ||
+    localStorage.getItem('elicine_qwen_key') ||
+    localStorage.getItem('elicine_qwen_api_key') ||
+    localStorage.getItem('cinora_qwen_api_key') ||
+    localStorage.getItem('cinéia_qwen_api_key') ||
+    localStorage.getItem('cinéia_qwen_key') ||
+    localStorage.getItem('qwen_api_key') ||
+    apiSettings?.qwenApiKey ||
+    ""
+  ).trim();
+};
+
+export const getDeepSeekKey = (apiSettings?: ApiSettings): string => {
+  return (
+    localStorage.getItem('deepseek_api_key') ||
+    localStorage.getItem('elicine_deepseek_key') ||
+    localStorage.getItem('cinora_deepseek_api_key') ||
+    localStorage.getItem('cinéia_deepseek_api_key') ||
+    apiSettings?.deepseekApiKey ||
+    ""
+  ).trim();
+};
 
 export const getGroqKey = (apiSettings?: ApiSettings): string => {
   return (
@@ -58,7 +93,9 @@ export const getGroqKey = (apiSettings?: ApiSettings): string => {
   ).trim();
 };
 
-export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiSettings): string => {
+export const getApiKey = (provider: 'qwen' | 'deepseek' | 'groq' | 'tmdb', apiSettings?: ApiSettings): string => {
+  if (provider === 'qwen') return getQwenKey(apiSettings);
+  if (provider === 'deepseek') return getDeepSeekKey(apiSettings);
   if (provider === 'groq') return getGroqKey(apiSettings);
   if (provider === 'tmdb') {
     return (
@@ -71,15 +108,7 @@ export const getApiKey = (provider: 'qwen' | 'groq' | 'tmdb', apiSettings?: ApiS
       ''
     ).trim();
   }
-  return (
-    localStorage.getItem('dashscope_api_key') ||
-    localStorage.getItem('elicine_qwen_api_key') ||
-    localStorage.getItem('cinora_qwen_api_key') ||
-    localStorage.getItem('cinéia_qwen_api_key') ||
-    localStorage.getItem('qwen_api_key') ||
-    apiSettings?.qwenApiKey ||
-    ''
-  ).trim();
+  return getQwenKey(apiSettings);
 };
 
 /**
@@ -118,8 +147,89 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     temperature = 0.2;
   }
 
-  // TENTATIVE 1 : GROQ (Llama 3.3 70B / 8B Instant)
   const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('elicine_device_id') || undefined) : undefined;
+
+  // TENTATIVE 1 : QWEN (DASHSCOPE) AVEC FALLBACK SERVEUR AUTOMATIQUE VERS DEEPSEEK-FLASH
+  try {
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
+      },
+      body: JSON.stringify({
+        provider: 'qwen',
+        model: 'qwen-plus',
+        deviceId,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature,
+        max_tokens: maxTokens
+      })
+    });
+
+    if (response.status === 403) {
+      const errJson = await response.json().catch(() => null);
+      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.choices?.[0]?.message?.content || '';
+      const titles = extractTitlesFromText(rawText);
+      if (titles.length > 0) {
+        return { titles, provider: data.provider_used || 'Qwen / DeepSeek-Flash' };
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+      throw err;
+    }
+    console.warn('[Éliciné AI] Tentative Qwen échouée ou basculée, repli client...', err?.message || err);
+  }
+
+  // TENTATIVE 2 : APPEL DIRECT DEEPSEEK-FLASH (Secours Explicite)
+  try {
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
+      },
+      body: JSON.stringify({
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        deviceId,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature,
+        max_tokens: maxTokens
+      })
+    });
+
+    if (response.status === 403) {
+      const errJson = await response.json().catch(() => null);
+      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.choices?.[0]?.message?.content || '';
+      const titles = extractTitlesFromText(rawText);
+      if (titles.length > 0) {
+        return { titles, provider: data.provider_used || 'DeepSeek (deepseek-flash)' };
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
+      throw err;
+    }
+    console.warn('[Éliciné AI] Échec DeepSeek-Flash explicite :', err?.message || err);
+  }
+
+  // TENTATIVE 3 : FILET DE SECOURS SUPPLÉMENTAIRE (GROQ LLAMA 3.3)
   for (const model of ACTIVE_GROQ_MODELS) {
     try {
       const response = await fetch('/api/ai', {
@@ -158,48 +268,6 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
         throw err;
       }
       console.warn(`[Éliciné AI] Échec Groq (${model}) :`, err);
-    }
-  }
-
-  // TENTATIVE 2 : FALLBACK QWEN
-  for (const model of ACTIVE_QWEN_MODELS) {
-    try {
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'Authorization': `Bearer ${apiKey.trim()}` } : {})
-        },
-        body: JSON.stringify({
-          provider: 'qwen',
-          model: model,
-          deviceId,
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature,
-          max_tokens: maxTokens
-        })
-      });
-
-      if (response.status === 403) {
-        const errJson = await response.json().catch(() => null);
-        throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawText = data.choices?.[0]?.message?.content || '';
-        const titles = extractTitlesFromText(rawText);
-        if (titles.length > 0) {
-          return { titles, provider: `Qwen (${model})` };
-        }
-      }
-    } catch (err: any) {
-      if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier')) {
-        throw err;
-      }
-      console.warn(`[Éliciné AI] Échec Qwen (${model}) :`, err);
     }
   }
 
@@ -275,6 +343,17 @@ export async function queryQwen(userQuery: string, apiKey?: string): Promise<Raw
   }));
 }
 
+export async function queryDeepSeek(userQuery: string, apiKey?: string): Promise<RawAiMovieItem[]> {
+  const specificity = analyzeQuerySpecificity(userQuery);
+  const { titles } = await queryAiTitles(userQuery, apiKey, specificity);
+  const limit = specificity.maxResults;
+  return titles.slice(0, limit).map((t, idx) => ({
+    title: t,
+    match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 96) : Math.max(78, 98 - idx * 3),
+    reason: specificity.level === 'ultra_targeted' ? 'Correspondance exacte identifiée' : 'Recommandé par Éliciné'
+  }));
+}
+
 export async function fetchTmdbDetails(
   item: RawAiMovieItem,
   tmdbKey: string,
@@ -302,7 +381,7 @@ export async function fetchTmdbDetails(
 /**
  * 3. & 4. PIPELINE END-TO-END AVEC ADAPTATION DE DENSITÉ ET VOLUME :
  * - Analyse de spécificité (Large vs Ultra-Ciblée vs Modérée)
- * - Query AI adaptée (prompts spécialisés, volume ciblé)
+ * - Query AI adaptée (prompts spécialisés, volume ciblé avec Qwen -> DeepSeek-Flash fallback)
  * - Fetch TMDB en parallèle pour le volume exact attendu
  * - Restriction stricte des résultats si ultra-ciblée (1-2 titres) ou expansion riche si large (14-16 titres)
  */
@@ -315,7 +394,10 @@ export async function executeCinoraSearch(
 ): Promise<AIRecommendationResult> {
   const cleanQuery = query.trim();
   const tmdbKey = getApiKey('tmdb', apiSettings);
+  const qwenKey = getQwenKey(apiSettings);
+  const deepseekKey = getDeepSeekKey(apiSettings);
   const groqKey = getGroqKey(apiSettings);
+  const aiKey = qwenKey || deepseekKey || groqKey;
   const specificity = analyzeQuerySpecificity(cleanQuery);
 
   console.log(`[Éliciné AI] Spécificité détectée pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, score: ${specificity.score})`);
@@ -357,8 +439,8 @@ export async function executeCinoraSearch(
     };
   }
 
-  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres
-  let { titles, provider } = await queryAiTitles(promptWithFilters, groqKey, specificity);
+  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres (Qwen -> DeepSeek-Flash)
+  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity);
   console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
   // 3. Hydratation depuis TMDB selon le volume adéquat

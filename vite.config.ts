@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
               try {
                 process.env.GROQ_API_KEY = env.GROQ_API_KEY || process.env.GROQ_API_KEY;
                 process.env.QWEN_API_KEY = env.QWEN_API_KEY || process.env.QWEN_API_KEY;
+                process.env.DASHSCOPE_API_KEY = env.DASHSCOPE_API_KEY || env.VITE_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY;
+                process.env.DEEPSEEK_API_KEY = env.DEEPSEEK_API_KEY || env.VITE_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
                 const fileUrl = pathToFileURL(path.resolve('./api/ai.js')).href;
                 const aiHandler = (await import(/* @vite-ignore */ fileUrl)).default;
                 return await aiHandler(req, res);

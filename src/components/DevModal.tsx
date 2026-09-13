@@ -25,7 +25,8 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
   const [tmdbKey, setTmdbKey] = useState('');
   const [groqKey, setGroqKey] = useState('');
   const [qwenKey, setQwenKey] = useState('');
-  const [preferredAi, setPreferredAi] = useState<'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai'>('qwen');
+  const [deepseekKey, setDeepseekKey] = useState('');
+  const [preferredAi, setPreferredAi] = useState<'qwen' | 'deepseek' | 'groq' | 'openai' | 'anthropic' | 'xai'>('qwen');
 
   const [saspayKey, setSaspayKey] = useState('');
   const [monerooSk, setMonerooSk] = useState('');
@@ -59,6 +60,13 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
         localStorage.getItem('qwen_api_key') || 
         localStorage.getItem('cinéia_qwen_api_key') || 
         apiSettings.qwenApiKey || 
+        ''
+      );
+      setDeepseekKey(
+        localStorage.getItem('deepseek_api_key') || 
+        localStorage.getItem('elicine_deepseek_key') || 
+        localStorage.getItem('cinéia_deepseek_api_key') || 
+        apiSettings.deepseekApiKey || 
         ''
       );
       setPreferredAi(
@@ -150,6 +158,18 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
     } else {
       localStorage.removeItem('qwen_api_key');
       localStorage.removeItem('cinéia_qwen_api_key');
+    }
+
+    // 3. bis Sauvegarde DeepSeek (Fallback Haute Disponibilité)
+    const cleanDeepseek = deepseekKey.trim();
+    if (cleanDeepseek) {
+      localStorage.setItem('deepseek_api_key', cleanDeepseek);
+      localStorage.setItem('elicine_deepseek_key', cleanDeepseek);
+      localStorage.setItem('cinéia_deepseek_api_key', cleanDeepseek);
+    } else {
+      localStorage.removeItem('deepseek_api_key');
+      localStorage.removeItem('elicine_deepseek_key');
+      localStorage.removeItem('cinéia_deepseek_api_key');
     }
 
     localStorage.setItem('cinéia_preferred_ai_provider', preferredAi);
@@ -245,6 +265,9 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
       localStorage.removeItem('groq_api_key');
       localStorage.removeItem('elicine_groq_key');
       localStorage.removeItem('qwen_api_key');
+      localStorage.removeItem('deepseek_api_key');
+      localStorage.removeItem('elicine_deepseek_key');
+      localStorage.removeItem('cinéia_deepseek_api_key');
       localStorage.removeItem('cinéia_saspay_key');
       localStorage.removeItem('saspay_backend');
       localStorage.removeItem('saspay_Backend');
@@ -366,12 +389,26 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
               />
             </div>
+
+            {/* Clé DeepSeek-Flash */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-slate-400">
+                Clé API DeepSeek-Flash (sk-...)
+              </label>
+              <input
+                type={showKeys ? 'text' : 'password'}
+                value={deepseekKey}
+                onChange={(e) => setDeepseekKey(e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
           </div>
 
           {/* Moteur prioritaire */}
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
             <span className="text-[11px] text-slate-400 font-medium">Moteur IA prioritaire :</span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setPreferredAi('qwen')}
@@ -381,7 +418,18 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
                     : 'bg-slate-900 border border-slate-800 text-slate-400'
                 }`}
               >
-                Qwen AI
+                Qwen AI (Principal)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreferredAi('deepseek')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  preferredAi === 'deepseek' 
+                    ? 'bg-amber-500/20 border border-amber-500/50 text-amber-300' 
+                    : 'bg-slate-900 border border-slate-800 text-slate-400'
+                }`}
+              >
+                DeepSeek-Flash
               </button>
               <button
                 type="button"
@@ -392,7 +440,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
                     : 'bg-slate-900 border border-slate-800 text-slate-400'
                 }`}
               >
-                Groq Cloud (Llama)
+                Groq Cloud
               </button>
             </div>
           </div>

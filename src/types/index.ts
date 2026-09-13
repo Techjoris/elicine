@@ -142,10 +142,13 @@ export interface ApiSettings {
   // 7. Groq (Llama, gratuite)
   groqApiKey: string; // cinéia_groq_key
 
-  // 8. Qwen (Alibaba Cloud / DashScope)
+  // 8. Qwen (Alibaba Cloud / DashScope — Moteur Principal)
   qwenApiKey?: string; // cinéia_qwen_api_key
 
-  // 9. SasPay — Passerelle Mobile Money exclusive (saspay_Backend)
+  // 9. DeepSeek (deepseek-flash — Fallback Haute Disponibilité)
+  deepseekApiKey?: string; // cinéia_deepseek_api_key
+
+  // 10. SasPay — Passerelle Mobile Money exclusive (saspay_Backend)
   saspayApiKey?: string; // cinéia_saspay_key
 
   // Moneroo — Legacy (conservé pour compatibilité)
@@ -157,8 +160,8 @@ export interface ApiSettings {
   notchPayHashKey: string; // cinéia_notch_hash
 
   // Options
-  preferredAiProvider?: 'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai';
-  aiProvider?: 'qwen' | 'groq' | 'openai' | 'anthropic' | 'xai' | 'demo';
+  preferredAiProvider?: 'qwen' | 'deepseek' | 'groq' | 'openai' | 'anthropic' | 'xai';
+  aiProvider?: 'qwen' | 'deepseek' | 'groq' | 'openai' | 'anthropic' | 'xai' | 'demo';
   aiModel?: string;
   apiMode: 'production' | 'test';
 }
