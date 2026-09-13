@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   User, 
@@ -23,6 +23,7 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { authService } from '../../services/authService';
 import { handleMonerooPayment } from '../../services/payment';
+import { subscriptionService, CheckoutIntent } from '../../services/subscriptionService';
 
 export const AuthModal: React.FC = () => {
   const { 
@@ -50,6 +51,19 @@ export const AuthModal: React.FC = () => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotSuccessMessage, setForgotSuccessMessage] = useState<string | null>(null);
   const [showBenefitsPopover, setShowBenefitsPopover] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<CheckoutIntent | null>(null);
+
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      const intent = subscriptionService.getPendingCheckoutIntent();
+      setPendingIntent(intent);
+      if (intent) {
+        setIsSignUp(true);
+      }
+    } else {
+      setPendingIntent(null);
+    }
+  }, [isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
 
@@ -127,6 +141,23 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
+        const pendingIntent = subscriptionService.getPendingCheckoutIntent();
+        if (pendingIntent) {
+          showToast("👑 Compte créé ! Redirection vers le paiement...");
+          setIsAuthModalOpen(false);
+          setPassword('');
+          setUsername('');
+          setEmail('');
+
+          const targetUser = (res as any)?.user || authService.getStoredUser() || { email: cleanEmail, name: username || cleanEmail.split('@')[0] };
+          const checkoutRes = await subscriptionService.executeCheckoutWithIntent(pendingIntent, targetUser);
+          if (checkoutRes.success && checkoutRes.redirectUrl && typeof window !== 'undefined') {
+            window.location.href = checkoutRes.redirectUrl;
+            return;
+          }
+          return;
+        }
+
         setIsAuthModalOpen(false);
         setPassword('');
         setUsername('');
@@ -135,6 +166,22 @@ export const AuthModal: React.FC = () => {
         const res = await loginWithCredentials(cleanEmail, password);
         if (!res.success) {
           setErrorMessage(res.error || "Identifiants invalides. Veuillez vérifier votre adresse email et mot de passe.");
+          return;
+        }
+
+        const pendingIntent = subscriptionService.getPendingCheckoutIntent();
+        if (pendingIntent) {
+          showToast("👑 Connexion réussie ! Redirection vers le paiement...");
+          setIsAuthModalOpen(false);
+          setPassword('');
+          setEmail('');
+
+          const targetUser = (res as any)?.user || authService.getStoredUser() || { email: cleanEmail, name: cleanEmail.split('@')[0] };
+          const checkoutRes = await subscriptionService.executeCheckoutWithIntent(pendingIntent, targetUser);
+          if (checkoutRes.success && checkoutRes.redirectUrl && typeof window !== 'undefined') {
+            window.location.href = checkoutRes.redirectUrl;
+            return;
+          }
           return;
         }
 
@@ -527,15 +574,39 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
+            {/* BANNIÈRE D'INTERCEPTION ABONNEMENT PRO */}
+            {pendingIntent && (
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#e50914]/10 to-amber-500/10 border border-amber-500/30 dark:border-amber-400/25 flex items-start gap-3 animate-fade-in text-left">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-[#e50914] flex items-center justify-center text-white flex-shrink-0 shadow-sm mt-0.5">
+                  <Crown className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Étape 2/3 : Compte requis
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                      {pendingIntent.amount} {pendingIntent.currency === 'USD' ? '$' : (pendingIntent.currency === 'EUR' ? '€' : (pendingIntent.currency === 'CAD' ? 'CA$' : 'FCFA'))}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-700 dark:text-zinc-200 mt-0.5 font-medium leading-relaxed">
+                    Créez votre compte ou connectez-vous pour être redirigé automatiquement vers le paiement {pendingIntent.paymentMethod === 'mobile_money' ? 'SasaPay' : 'PayPal'}.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Header Title */}
             <div className="text-center space-y-1">
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
                 {isSignUp ? 'Créer un Compte' : 'Connexion'}
               </h2>
               <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium">
-                {isSignUp 
-                  ? 'Rejoignez Éliciné et synchronisez vos favoris.' 
-                  : 'Accédez à votre espace cinéma personnalisé.'}
+                {pendingIntent
+                  ? 'Une étape rapide avant de finaliser votre abonnement Pro.'
+                  : (isSignUp 
+                      ? 'Rejoignez Éliciné et synchronisez vos favoris.' 
+                      : 'Accédez à votre espace cinéma personnalisé.')}
               </p>
               <div>
                 <button

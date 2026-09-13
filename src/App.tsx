@@ -131,6 +131,33 @@ export const AppContent: React.FC = () => {
     }
   }, [upgradeToPro, setIsProSuccessModalOpen]);
 
+  // Reprise automatique du paiement Pro après connexion Google OAuth ou rechargement
+  useEffect(() => {
+    if (!user) return;
+    const pendingIntent = subscriptionService.getPendingCheckoutIntent();
+    if (!pendingIntent) return;
+
+    let isMounted = true;
+    const resumeCheckout = async () => {
+      showToast("👑 Connexion réussie ! Préparation du paiement Pro...");
+      const res = await subscriptionService.executeCheckoutWithIntent(pendingIntent, user);
+      if (!isMounted) return;
+      if (res.success && res.redirectUrl) {
+        if (pendingIntent.paymentMethod !== 'paypal_card' && typeof window !== 'undefined') {
+          window.location.href = res.redirectUrl;
+        }
+      } else if (res.error) {
+        showToast(`Erreur : ${res.error}`);
+      }
+    };
+
+    resumeCheckout();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, showToast]);
+
   const key = apiSettings.tmdbApiKey;
   const fetchTrendingFn = React.useCallback(
     (page: number) => fetchTrendingPage(page, key, t.tmdbLang),
