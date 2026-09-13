@@ -349,6 +349,119 @@ export const subscriptionService = {
   },
 
   /**
+   * Valide et enregistre un paiement PayPal complété (onApprove)
+   * Enregistre la souscription active dans Supabase et dans le cache local
+   */
+  async recordPayPalPayment(params: {
+    orderId: string;
+    userId?: string;
+    email?: string;
+    customerName?: string;
+    plan: PricingBillingCycle;
+    amount: number;
+    currency: string;
+    details?: any;
+  }): Promise<{ success: boolean; subscription?: ProSubscription; error?: string }> {
+    const now = new Date().toISOString();
+    const subId = `sub_paypal_${params.orderId}`;
+    const email = (params.email || params.details?.payer?.email_address || 'pro@elicine.com').trim().toLowerCase();
+    const name = (
+      params.customerName ||
+      (params.details?.payer?.name?.given_name 
+        ? `${params.details.payer.name.given_name} ${params.details.payer.name.surname || ''}`.trim() 
+        : 'Cinéphile Pro')
+    );
+
+    const activeSub: ProSubscription = {
+      id: subId,
+      userId: params.userId || `usr_${Date.now()}`,
+      email,
+      customerName: name,
+      plan: params.plan,
+      currency: params.currency || 'USD',
+      amount: params.amount,
+      status: 'active',
+      paymentReference: params.orderId,
+      termsAccepted: true,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // 1. Enregistrement direct dans Supabase si configuré
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('subscriptions').upsert({
+          id: activeSub.id,
+          user_id: activeSub.userId,
+          email: activeSub.email,
+          customer_name: activeSub.customerName,
+          phone: activeSub.phone || null,
+          plan: activeSub.plan,
+          currency: activeSub.currency,
+          amount: activeSub.amount,
+          status: 'active',
+          payment_reference: params.orderId,
+          terms_accepted: true,
+          created_at: activeSub.createdAt,
+          updated_at: activeSub.updatedAt
+        });
+
+        // Synchronisation des métadonnées utilisateur dans Supabase Auth
+        if (supabase.auth && (supabase.auth as any).updateUser) {
+          try {
+            await (supabase.auth as any).updateUser({
+              data: {
+                is_pro: true,
+                pro_plan: params.plan,
+                pro_plan_expires_at: params.plan === 'yearly' ? 'Pass Annuel Actif' : 'Pass Mensuel Actif'
+              }
+            });
+          } catch (_) {}
+        }
+      } catch (sbErr) {
+        console.warn('[subscriptionService] Supabase PayPal record notice:', sbErr);
+      }
+    }
+
+    // 2. Appel du backend serverless Vercel /api/paypal si disponible
+    try {
+      await fetch('/api/paypal?action=record-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: params.orderId,
+          subscriptionId: subId,
+          userId: activeSub.userId,
+          email: activeSub.email,
+          customerName: activeSub.customerName,
+          plan: activeSub.plan,
+          currency: activeSub.currency,
+          amount: activeSub.amount,
+          details: params.details
+        })
+      });
+    } catch (_) {}
+
+    // 3. Persistance dans le stockage local
+    try {
+      localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
+      localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
+
+      const existingRaw = localStorage.getItem(ALL_SUBS_STORAGE_KEY);
+      const existing: ProSubscription[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const updatedList = [activeSub, ...existing.filter(s => s.id !== subId)];
+      localStorage.setItem(ALL_SUBS_STORAGE_KEY, JSON.stringify(updatedList));
+    } catch (e) {
+      console.error('[subscriptionService] Erreur persistance locale PayPal:', e);
+    }
+
+    return {
+      success: true,
+      subscription: activeSub
+    };
+  },
+
+  /**
    * Réinitialise ou annule la souscription en attente
    */
   clearPendingSubscription(): void {

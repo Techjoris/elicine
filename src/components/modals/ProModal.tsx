@@ -104,6 +104,17 @@ export const ProModal: React.FC = () => {
     if (user && isProModalOpen) {
       const pendingIntent = subscriptionService.getPendingCheckoutIntent();
       if (pendingIntent) {
+        // Pour PayPal, l'utilisateur connecté voit directement les Smart Buttons dans la modale
+        if (pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal') {
+          subscriptionService.clearPendingCheckoutIntent();
+          try {
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.removeItem('pending_checkout');
+            }
+          } catch (_) {}
+          return;
+        }
+
         handlePay({
           currency: pendingIntent.currency as Currency,
           amount: pendingIntent.amount,

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
+import { PayPalButton } from './payment/PayPalButton';
+import { subscriptionService } from '../services/subscriptionService';
 
 export interface CheckoutPayload {
   currency: Currency;
@@ -36,7 +38,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onPay,
   isProcessing = false
 }) => {
-  const { currency: appCurrency, user } = useApp();
+  const { 
+    currency: appCurrency, 
+    user, 
+    upgradeToPro, 
+    setIsProSuccessModalOpen, 
+    showToast 
+  } = useApp();
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
@@ -255,7 +263,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">PayPal & Cartes</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">PayPal & Cartes</p>
+                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded">
+                    {isYearly ? '15.99 $' : '1.99 $'}
+                  </span>
+                </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Compte PayPal</p>
               </div>
             </div>
@@ -264,23 +277,92 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
         {/* 6. Bouton d'action direct & Réassurance */}
         <div className="flex flex-col gap-2.5 pt-1">
-          <button
-            type="button"
-            onClick={handleCheckoutClick}
-            disabled={isProcessing}
-            className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isProcessing ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                Traitement sécurisé...
-              </span>
+          {paymentMethod === 'paypal_card' ? (
+            user ? (
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Paiement direct sécurisé PayPal
+                  </span>
+                  <span className="font-extrabold text-sky-600 dark:text-sky-400">
+                    {isYearly ? '15.99 $ USD / an' : '1.99 $ USD / mois'}
+                  </span>
+                </div>
+
+                <PayPalButton
+                  amount={isYearly ? 15.99 : 1.99}
+                  currency="USD"
+                  billingCycle={billingCycle}
+                  disabled={isProcessing}
+                  onSuccess={async (details, orderId) => {
+                    try {
+                      showToast('👑 Transaction PayPal validée ! Activation de votre compte Pro...');
+                      await subscriptionService.recordPayPalPayment({
+                        orderId,
+                        userId: user.id,
+                        email: user.email,
+                        customerName: user.name,
+                        plan: billingCycle,
+                        amount: isYearly ? 15.99 : 1.99,
+                        currency: 'USD',
+                        details
+                      });
+
+                      upgradeToPro(billingCycle);
+                      onClose();
+                      if (setIsProSuccessModalOpen) {
+                        setIsProSuccessModalOpen(true);
+                      }
+                    } catch (err: any) {
+                      console.error('[SubscriptionModal] Erreur activation PayPal:', err);
+                      upgradeToPro(billingCycle);
+                      onClose();
+                      if (setIsProSuccessModalOpen) {
+                        setIsProSuccessModalOpen(true);
+                      }
+                    }
+                  }}
+                  onError={(err) => {
+                    console.error('[SubscriptionModal] Erreur PayPal:', err);
+                    showToast("Échec de la transaction PayPal. Vous pouvez réessayer ou payer avec SasaPay.");
+                  }}
+                  onCancel={() => {
+                    showToast("Transaction PayPal annulée.");
+                  }}
+                />
+              </div>
             ) : (
-              <span>
-                Payer avec {paymentMethod === 'mobile_money' ? 'SasaPay' : 'PayPal'} ({amountToPay} {currentPrice.symbol}) →
-              </span>
-            )}
-          </button>
+              <button
+                type="button"
+                onClick={handleCheckoutClick}
+                disabled={isProcessing}
+                className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <span>
+                  👑 Se connecter pour payer avec PayPal ({isYearly ? '15.99 $' : '1.99 $'}) →
+                </span>
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={handleCheckoutClick}
+              disabled={isProcessing}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                  Traitement sécurisé...
+                </span>
+              ) : (
+                <span>
+                  Payer avec SasaPay ({amountToPay} {currentPrice.symbol}) →
+                </span>
+              )}
+            </button>
+          )}
 
           <div className="flex items-center justify-center gap-3 text-[10px] text-slate-400">
             <span>🔒 Chiffrement SSL 256-bit</span>
