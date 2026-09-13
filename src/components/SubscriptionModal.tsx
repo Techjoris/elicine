@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
@@ -36,10 +36,35 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onPay,
   isProcessing = false
 }) => {
-  const { currency: appCurrency } = useApp();
+  const { currency: appCurrency, user } = useApp();
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
+
+  // Restauration automatique de l'état mémorisé (méthode de paiement, plan, devise) lors de la réouverture
+  useEffect(() => {
+    if (isOpen && typeof sessionStorage !== 'undefined') {
+      try {
+        const savedMethod = sessionStorage.getItem('payment_method');
+        const savedCurrency = sessionStorage.getItem('checkout_currency') as Currency;
+        const savedPlan = sessionStorage.getItem('checkout_plan') as PricingBillingCycle;
+
+        if (savedMethod === 'sasapay' || savedMethod === 'mobile_money') {
+          setPaymentMethod('mobile_money');
+        } else if (savedMethod === 'paypal' || savedMethod === 'paypal_card') {
+          setPaymentMethod('paypal_card');
+        }
+
+        if (savedCurrency && PRICING[savedCurrency]) {
+          setCurrency(savedCurrency);
+        }
+
+        if (savedPlan === 'yearly' || savedPlan === 'monthly') {
+          setBillingCycle(savedPlan);
+        }
+      } catch (_) {}
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -88,6 +113,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
             Quotas IA illimités, filtres avancés par plateforme et alertes instantanées.
           </p>
+
+          {/* Badge utilisateur connecté si disponible */}
+          {user && (
+            <div className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold mt-1">
+              <span>✓ Compte actif : <strong>{user.name || user.email}</strong></span>
+            </div>
+          )}
         </div>
 
         {/* 2. Les 3 Avantages Essentiels (Très compact) */}

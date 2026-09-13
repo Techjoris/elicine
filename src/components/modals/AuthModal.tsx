@@ -141,20 +141,16 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        const pendingIntent = subscriptionService.getPendingCheckoutIntent();
-        if (pendingIntent) {
-          showToast("👑 Compte créé ! Redirection vers le paiement...");
+        // Vérification de la persistance du tunnel d'abonnement Pro
+        const isPendingCheckout = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true';
+        if (isPendingCheckout) {
+          sessionStorage.removeItem('pending_checkout');
           setIsAuthModalOpen(false);
           setPassword('');
           setUsername('');
           setEmail('');
-
-          const targetUser = (res as any)?.user || authService.getStoredUser() || { email: cleanEmail, name: username || cleanEmail.split('@')[0] };
-          const checkoutRes = await subscriptionService.executeCheckoutWithIntent(pendingIntent, targetUser);
-          if (checkoutRes.success && checkoutRes.redirectUrl && typeof window !== 'undefined') {
-            window.location.href = checkoutRes.redirectUrl;
-            return;
-          }
+          setIsProModalOpen(true);
+          showToast("👑 Compte créé ! Finalisation de votre abonnement Pro...");
           return;
         }
 
@@ -169,19 +165,15 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        const pendingIntent = subscriptionService.getPendingCheckoutIntent();
-        if (pendingIntent) {
-          showToast("👑 Connexion réussie ! Redirection vers le paiement...");
+        // Vérification de la persistance du tunnel d'abonnement Pro
+        const isPendingCheckout = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true';
+        if (isPendingCheckout) {
+          sessionStorage.removeItem('pending_checkout');
           setIsAuthModalOpen(false);
           setPassword('');
           setEmail('');
-
-          const targetUser = (res as any)?.user || authService.getStoredUser() || { email: cleanEmail, name: cleanEmail.split('@')[0] };
-          const checkoutRes = await subscriptionService.executeCheckoutWithIntent(pendingIntent, targetUser);
-          if (checkoutRes.success && checkoutRes.redirectUrl && typeof window !== 'undefined') {
-            window.location.href = checkoutRes.redirectUrl;
-            return;
-          }
+          setIsProModalOpen(true);
+          showToast("👑 Connexion réussie ! Finalisation de votre abonnement Pro...");
           return;
         }
 

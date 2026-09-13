@@ -54,6 +54,8 @@ export const AppContent: React.FC = () => {
     showToast,
     upgradeToPro,
     user,
+    setIsProModalOpen,
+    setIsAuthModalOpen,
     isThankYouModalOpen,
     setIsThankYouModalOpen,
     isProSuccessModalOpen,
@@ -131,32 +133,25 @@ export const AppContent: React.FC = () => {
     }
   }, [upgradeToPro, setIsProSuccessModalOpen]);
 
-  // Reprise automatique du paiement Pro après connexion Google OAuth ou rechargement
+  // 2 & 3. Restauration et réouverture automatique de la modale de paiement après authentification
   useEffect(() => {
     if (!user) return;
-    const pendingIntent = subscriptionService.getPendingCheckoutIntent();
-    if (!pendingIntent) return;
 
-    let isMounted = true;
-    const resumeCheckout = async () => {
-      showToast("👑 Connexion réussie ! Préparation du paiement Pro...");
-      const res = await subscriptionService.executeCheckoutWithIntent(pendingIntent, user);
-      if (!isMounted) return;
-      if (res.success && res.redirectUrl) {
-        if (pendingIntent.paymentMethod !== 'paypal_card' && typeof window !== 'undefined') {
-          window.location.href = res.redirectUrl;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const isPending = sessionStorage.getItem('pending_checkout') === 'true';
+        if (isPending) {
+          console.log('[Auto-Resume] pending_checkout détecté après connexion. Réouverture instantanée de la modale Pro...');
+          sessionStorage.removeItem('pending_checkout');
+          setIsAuthModalOpen(false);
+          setIsProModalOpen(true);
+          showToast("👑 Bon retour ! Finalisation de votre abonnement Pro...", 4000);
         }
-      } else if (res.error) {
-        showToast(`Erreur : ${res.error}`);
       }
-    };
-
-    resumeCheckout();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user, showToast]);
+    } catch (e) {
+      console.warn('[Auto-Resume] Erreur vérification sessionStorage:', e);
+    }
+  }, [user, setIsProModalOpen, setIsAuthModalOpen, showToast]);
 
   const key = apiSettings.tmdbApiKey;
   const fetchTrendingFn = React.useCallback(

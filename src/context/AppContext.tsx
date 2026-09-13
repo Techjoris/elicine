@@ -550,6 +550,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser(res.user);
       setAuthUser(res.user);
       setIsAuthModalOpen(false);
+
+      try {
+        if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true') {
+          sessionStorage.removeItem('pending_checkout');
+          setIsProModalOpen(true);
+          showToast(`👑 Bon retour ${res.user.name || ''} ! Finalisation de votre abonnement Pro...`);
+          return { success: true };
+        }
+      } catch (_) {}
+
       showToast(`👋 Bon retour sur Éliciné, ${res.user.name || res.user.email} !`);
       return { success: true };
     }
@@ -564,6 +574,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser(res.user);
       setAuthUser(res.user);
       setIsAuthModalOpen(false);
+
+      try {
+        if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true') {
+          sessionStorage.removeItem('pending_checkout');
+          setIsProModalOpen(true);
+          showToast(`👑 Compte créé ! Finalisation de votre abonnement Pro...`);
+          return { success: true };
+        }
+      } catch (_) {}
+
       showToast(`✉️ Un e-mail de confirmation a été envoyé à ${res.user.email}. Bienvenue sur Éliciné !`, 7000);
       return { success: true };
     }

@@ -20,18 +20,36 @@ export const ProModal: React.FC = () => {
   const handlePay = async (payload: CheckoutPayload) => {
     // 1. Interception par l'authentification si non connecté
     if (!user) {
+      const isPaypal = payload.paymentMethod === 'paypal_card';
+      const paymentMethodStr = isPaypal ? 'paypal' : 'sasapay';
+
+      // Sauvegarde dans sessionStorage selon l'instruction technique
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('pending_checkout', 'true');
+          sessionStorage.setItem('payment_method', paymentMethodStr);
+          sessionStorage.setItem('checkout_plan', payload.plan);
+          sessionStorage.setItem('checkout_currency', payload.currency);
+          sessionStorage.setItem('checkout_amount', payload.amount);
+          sessionStorage.setItem('checkout_numeric_amount', String(payload.numericAmount));
+        }
+      } catch (e) {
+        console.warn('[ProModal] Erreur écriture sessionStorage:', e);
+      }
+
       subscriptionService.setPendingCheckoutIntent({
         plan: payload.plan,
         currency: payload.currency,
         amount: payload.amount,
         numericAmount: payload.numericAmount,
         paymentMethod: payload.paymentMethod,
-        provider: payload.paymentMethod === 'mobile_money' ? 'saspay' : 'paypal',
+        provider: isPaypal ? 'paypal' : 'saspay',
         timestamp: Date.now()
       });
+
       setIsProModalOpen(false);
       setIsAuthModalOpen(true);
-      showToast(`Connectez-vous pour finaliser votre abonnement Pro (${payload.amount} ${payload.currency === 'USD' ? '$' : payload.currency}).`);
+      showToast('👑 Connectez-vous ou créez votre compte pour finaliser votre abonnement Pro.');
       return;
     }
 
@@ -51,6 +69,17 @@ export const ProModal: React.FC = () => {
       }, user);
 
       if (result.success && result.redirectUrl) {
+        try {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('pending_checkout');
+            sessionStorage.removeItem('payment_method');
+            sessionStorage.removeItem('checkout_plan');
+            sessionStorage.removeItem('checkout_currency');
+            sessionStorage.removeItem('checkout_amount');
+            sessionStorage.removeItem('checkout_numeric_amount');
+          }
+        } catch (_) {}
+
         showToast('Redirection vers le paiement sécurisé SasaPay...');
         if (typeof window !== 'undefined') {
           window.location.href = result.redirectUrl;
