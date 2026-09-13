@@ -141,21 +141,46 @@ export const termsEn: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTICLE 5: \"PASS PRO\" OFFER, PRICING, AND PAYMENTS",
+      title: "ARTICLE 5: \"PASS PRO\" OFFER, PRICING, AND PAYMENT TERMS",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Nature and Scope of Offer",
-          text: "Users may subscribe to the optional Pass Pro plan (benchmark price: $1.99 USD or equivalent in local currency at checkout). This upgrade unlocks the following exclusive benefits: (1) unlimited AI query quotas, (2) advanced filters to refine post-search results by platform subscriptions or top ratings, and (3) activation of personalized availability alerts for movies and series."
+          title: "5.1. Nature and Scope of Pass Pro Offer",
+          text: "Users may subscribe to Éliciné's optional Pass Pro upgrade, unlocking premium features:",
+          items: [
+            { label: "Unlimited AI Quotas", text: "Continuous, unrestricted access to the CinéIA recommendation engine for tailor-made cinematic discovery." },
+            { label: "Advanced Post-Search Filters", text: "Instantly refine results by active streaming subscriptions (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) and top critical ratings." },
+            { label: "Personalized Availability Alerts", text: "Automated tracking and notifications when monitored movies or series become available on streaming platforms." }
+          ]
         },
         {
           type: "subsection",
-          title: "5.2. Security of Financial Transactions",
-          text: "All payment transactions are handled through authorized payment service providers (international credit/debit cards and regional mobile money gateways).",
+          title: "5.2. Official Pricing and Supported Currencies",
+          text: "The official benchmark price of the Pass Pro monthly subscription is set at $1.99 USD per month (or equivalent in local currencies at checkout). Users may choose between two billing cycles:",
           items: [
-            { label: "No Financial Storage", text: "Éliciné does not store, see, or archive any payment card numbers, CVVs, or bank credentials." },
-            { label: "Encrypted Validation", text: "Payment processors solely return a technical webhook validation token confirming transaction success to activate Pro privileges on the user's account." }
+            { label: "Standard Monthly Plan", text: "$1.99 USD / month (or 1,200 FCFA [XOF / XAF], €1.85 EUR, $2.70 CAD)." },
+            { label: "Discounted Annual Plan", text: "$15.99 USD / year (~$1.33 USD / month with 30% savings, or 9,600 FCFA [XOF / XAF], €15.00 EUR, $21.50 CAD)." }
           ]
+        },
+        {
+          type: "subsection",
+          title: "5.3. Payment Methods and Authorized Gateways",
+          text: "All payments are securely processed through encrypted authorized payment service providers:",
+          items: [
+            { label: "Mobile Money & Cards (SasaPay)", text: "Dedicated secure gateway supporting Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) and regional/international debit/credit cards." },
+            { label: "International Payments (PayPal & Cards)", text: "Global secure checkout via PayPal balance or credit cards (Visa, Mastercard, American Express)." },
+            { label: "Strict Zero Financial Storage", text: "Éliciné does not store, process, or archive payment card numbers, CVVs, or mobile money PINs. Only encrypted technical webhook tokens are used to activate account privileges." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5.4. Immediate Service Delivery and Right of Withdrawal",
+          text: "In accordance with standards applicable to digital content and online services, full access to Pass Pro benefits is granted immediately upon transaction confirmation. By completing payment, the user expressly requests immediate performance of the service and acknowledges that the right of withdrawal is waived once digital delivery has begun with their consent."
+        },
+        {
+          type: "subsection",
+          title: "5.5. Billing, Renewal, and Cancellation",
+          text: "The Pass Pro membership carries no minimum lock-in period. Users may cancel or disable renewal at any time directly through their account settings or via customer support (support@elicine.app). Pro privileges remain fully active until the end of the paid billing period (monthly or yearly)."
         }
       ]
     },

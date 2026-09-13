@@ -135,17 +135,41 @@ export const termsIt: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTICOLO 5: ABBONAMENTO «PASS PRO» E PAGAMENTI",
+      title: "ARTICOLO 5: ABBONAMENTO «PASS PRO», TARIFFE E MODALITÀ DI PAGAMENTO",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Oggetto dell'offerta",
-          text: "L'opzione Pass Pro (prezzo base: 1,99 $ USD) sblocca i seguenti vantaggi esclusivi: (1) quote illimitate di query IA, (2) filtri avanzati per perfezionare i risultati post-ricerca in base agli abbonamenti alle piattaforme o ai voti migliori, e (3) attivazione di avvisi personalizzati per film e serie."
+          title: "5.1. Oggetto e vantaggi dell'offerta Pass Pro",
+          text: "L'opzione Pass Pro sblocca i seguenti vantaggi esclusivi:",
+          items: [
+            { label: "Quote IA illimitate", text: "Accesso continuativo senza limiti giornalieri al motore di intelligenza artificiale CinéIA per ricerche e analisi su misura." },
+            { label: "Filtri avanzati", text: "Perfezionamento immediato dei risultati in base agli abbonamenti di streaming attivi (Netflix, Prime Video, Disney+, Canal+, Apple TV+) e ai punteggi della critica." },
+            { label: "Avvisi personalizzati di disponibilità", text: "Notifiche automatiche non appena i film o le serie monitorate diventano disponibili sulle piattaforme preferite." }
+          ]
         },
         {
           type: "subsection",
-          title: "5.2. Sicurezza dei pagamenti",
-          text: "I pagamenti sono elaborati da gestori certificati (PayPal, Notch Pay). Éliciné non archivia né accede a numeri di carte di credito."
+          title: "5.2. Tariffe ufficiali e valute accettate",
+          text: "La tariffa ufficiale di riferimento per l'abbonamento mensile Pass Pro è fissata a 1.99 $ USD al mese (o l'equivalente in valuta locale al momento del pagamento):",
+          items: [
+            { label: "Piano Mensile standard", text: "1.99 $ USD / mese (o 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
+            { label: "Piano Annuale conveniente", text: "15.99 $ USD / anno (~1.33 $ USD / mese con il 30% di sconto, o 9 600 FCFA, 15,00 € EUR, 21,50 CA$ CAD)." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5.3. Modalità di pagamento e gestori autorizzati",
+          text: "I pagamenti sono elaborati tramite protocolli crittografati sicuri da gestori autorizzati:",
+          items: [
+            { label: "Mobile Money & Carte (SasaPay)", text: "Gateway dedicato per pagamenti tramite Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) e carte bancarie." },
+            { label: "Pagamento Internazionale (PayPal & Carte)", text: "Transazioni sicure tramite carte di credito internazionali (Visa, Mastercard, Amex) o conto PayPal." },
+            { label: "Nessuna archiviazione di dati bancari", text: "Éliciné non archivia, non visualizza e non tratta numeri di carte o codici PIN. L'attivazione avviene mediante token crittografici sicuri (webhook)." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5.4. Esecuzione immediata e recesso",
+          text: "L'accesso al Pass Pro è erogato immediatamente dopo la conferma del pagamento. L'abbonamento non prevede alcun vincolo di durata e può essere interrotto in qualsiasi momento (support@elicine.app)."
         }
       ]
     },

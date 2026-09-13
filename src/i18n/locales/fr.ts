@@ -141,21 +141,46 @@ export const termsFr: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTICLE 5 : OFFRE « PASS PRO », CONDITIONS TARIFAIRES ET PAIEMENTS",
+      title: "ARTICLE 5 : OFFRE « PASS PRO », CONDITIONS TARIFAIRES ET MODALITÉS DE PAIEMENT",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Nature et périmètre de l'offre",
-          text: "L'utilisateur a la faculté de souscrire à l'option payante Pass Pro (tarif de référence : 1,99 $ USD ou contre-valeur en monnaie locale lors du règlement). Cette formule débloque les avantages exclusifs suivants : (1) des quotas illimités de requêtes IA, (2) des filtres avancés permettant d'affiner les résultats post-recherche selon ses abonnements de plateformes ou les meilleures notes, et (3) l'activation des alertes personnalisées de disponibilité pour les films et séries."
+          title: "5.1. Nature et périmètre de l'offre Pass Pro",
+          text: "L'utilisateur a la faculté de souscrire à l'option payante Pass Pro d'Éliciné. Cette formule débloque l'accès à un ensemble exclusif de fonctionnalités avancées :",
+          items: [
+            { label: "Quotas IA illimités", text: "Accès continu et sans restriction quotidienne au moteur d'intelligence artificielle CinéIA pour des recommandations, analyses et requêtes cinématographiques personnalisées." },
+            { label: "Filtres avancés post-recherche", text: "Possibilité d'affiner instantanément les résultats selon ses abonnements de streaming actifs (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) et par notes critiques d'agrégateurs reconnus." },
+            { label: "Alertes personnalisées de disponibilité", text: "Suivi proactif et notifications automatiques dès qu'un film ou une série surveillée devient disponible sur ses plateformes favorites." }
+          ]
         },
         {
           type: "subsection",
-          title: "5.2. Sécurité des transactions financières",
-          text: "Les règlements financiers s'opèrent via des prestataires de services de paiement agréés (cartes bancaires internationales et passerelles de paiement mobile régionales).",
+          title: "5.2. Tarification officielle et devises acceptées",
+          text: "Le tarif officiel de référence de l'abonnement Pass Pro est fixé à 1.99 $ USD par mois (ou son équivalent en devises locales au moment du règlement). L'utilisateur dispose du choix entre deux formules de facturation :",
           items: [
-            { label: "Éliciné ne stocke, ne voit et n'archive aucun numéro de carte de paiement", text: "cryptogramme visuel ou code secret bancaire." },
-            { label: "Transmission sécurisée", text: "Les plateformes de paiement transmettent uniquement un jeton de validation technique (webhook token) certifiant le succès de la transaction pour permettre l'activation des droits Pro sur le compte de l'utilisateur." }
+            { label: "Formule Mensuelle standard", text: "1.99 $ USD par mois (ou 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
+            { label: "Formule Annuelle avantageuse", text: "15.99 $ USD par an (soit environ 1.33 $ USD / mois avec 30% d'économie, ou 9 600 FCFA [XOF / XAF], 15,00 € EUR, 21,50 CA$ CAD)." }
           ]
+        },
+        {
+          type: "subsection",
+          title: "5.3. Modalités de règlement et passerelles de paiement agréées",
+          text: "Les règlements financiers s'opèrent par voie électronique chiffrée via nos partenaires de paiement sécurisés et agréés :",
+          items: [
+            { label: "Paiement Mobile Money & Cartes (SasaPay)", text: "Passerelle dédiée aux règlements instantanés par Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) ainsi que par cartes bancaires régionales et internationales." },
+            { label: "Paiement International (PayPal & Cartes)", text: "Règlement sécurisé par cartes bancaires internationales (Visa, Mastercard, American Express) ou solde de compte PayPal." },
+            { label: "Sécurité bancaire stricte (Zéro stockage)", text: "Éliciné ne stocke, ne voit, ne traite et n'archive aucun numéro de carte de paiement, cryptogramme visuel (CVV) ni code secret bancaire ou Mobile Money. Les passerelles de paiement transmettent uniquement un jeton cryptographique de validation technique certifiant le succès de la transaction pour permettre l'activation des privilèges Pro sur le compte utilisateur." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5.4. Exécution immédiate du service numérique et renonciation au droit de rétractation",
+          text: "Conformément aux dispositions régissant la fourniture de contenus et services numériques fournis en ligne sans support matériel, l'accès complet aux fonctionnalités du Pass Pro est mis à disposition de l'utilisateur immédiatement dès la validation de la transaction financière. L'utilisateur reconnaît et accepte expressément que l'exécution de la prestation commence instantanément lors de la confirmation du paiement, et renonce expressément à tout droit de rétractation dès lors que le service Pro est pleinement accessible avec son accord préalable."
+        },
+        {
+          type: "subsection",
+          title: "5.5. Facturation, renouvellement et résiliation sans engagement",
+          text: "L'abonnement Pass Pro est souscrit sans aucun engagement de durée contraignant. L'utilisateur a la faculté de suspendre, modifier ou résilier le renouvellement de son abonnement à tout moment en un clic depuis les paramètres de son compte ou par simple demande au support client (support@elicine.app). En cas de résiliation, les fonctionnalités Pro demeurent pleinement actives jusqu'à l'échéance de la période déjà réglée (mensuelle ou annuelle)."
         }
       ]
     },
