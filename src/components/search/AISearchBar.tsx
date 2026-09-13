@@ -95,85 +95,92 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
     <div className="w-full space-y-4">
       
       {/* Main AI Input Bar with glowing cinema effect */}
-      <div className="relative group">
-        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-purple-600 to-amber-500 rounded-2xl blur-md opacity-40 group-hover:opacity-75 transition duration-500 group-focus-within:opacity-100" />
-        
-        <div className="relative flex items-center bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-white/15 rounded-2xl p-1.5 sm:p-2 shadow-md dark:shadow-2xl backdrop-blur-xl">
+      <div className="flex flex-col gap-1.5">
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-purple-600 to-amber-500 rounded-2xl blur-md opacity-40 group-hover:opacity-75 transition duration-500 group-focus-within:opacity-100" />
           
-          {/* AI Icon with Sparkles */}
-          <div className="flex items-center justify-center pl-3 pr-2 text-blue-500 dark:text-blue-400 flex-shrink-0">
-            <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-          </div>
+          <div className="relative flex items-center bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-white/15 rounded-2xl p-1.5 sm:p-2 shadow-md dark:shadow-2xl backdrop-blur-xl">
+            
+            {/* AI Icon with Sparkles */}
+            <div className="flex items-center justify-center pl-3 pr-2 text-blue-500 dark:text-blue-400 flex-shrink-0">
+              <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+            </div>
 
-          {/* Input text avec limite 350 caractères */}
-          <input
-            type="text"
-            maxLength={350}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value.slice(0, 350))}
-            onPaste={(e) => {
-              e.preventDefault();
-              const text = e.clipboardData.getData('text') || '';
-              const current = prompt;
-              const target = e.currentTarget;
-              const start = target.selectionStart ?? current.length;
-              const end = target.selectionEnd ?? current.length;
-              const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
-              setPrompt(next);
-              if (current.length + text.length > 350) {
-                showToast('Texte collé tronqué à la limite de 350 caractères.');
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Décrivez une ambiance, une émotion..."
-            className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
-            disabled={isLoading}
-          />
-
-          {/* Integrated Character Counter + Quota Badge + Explorer Button inside the pill */}
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-            {/* Indicateur visuel discret de longueur */}
-            <span
-              className={`text-[10px] tabular-nums font-mono px-1 select-none transition-colors ${
-                prompt.length >= 350
-                  ? 'text-rose-500 font-bold'
-                  : prompt.length >= 300
-                  ? 'text-amber-500 font-medium'
-                  : 'text-slate-400 dark:text-zinc-500'
-              } ${prompt.length === 0 ? 'opacity-30' : 'opacity-85'}`}
-              title={`${350 - prompt.length} caractères restants (max 350)`}
-            >
-              {prompt.length}/350
-            </span>
-
-            {/* Quota Badge */}
-            <button
-              type="button"
-              onClick={() => setIsProModalOpen(true)}
-              title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
-              className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
-            >
-              <span>⚡</span>
-              <span className="hidden sm:inline font-bold">Illimité</span>
-            </button>
-
-            {/* Explorer Button */}
-            <button
-              type="button"
-              onClick={() => handleSearch()}
+            {/* Input text avec limite 350 caractères */}
+            <input
+              type="text"
+              maxLength={350}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value.slice(0, 350))}
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text') || '';
+                const current = prompt;
+                const target = e.currentTarget;
+                const start = target.selectionStart ?? current.length;
+                const end = target.selectionEnd ?? current.length;
+                const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
+                setPrompt(next);
+                if (current.length + text.length > 350) {
+                  showToast('Texte collé tronqué à la limite de 350 caractères.');
+                }
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Décrivez une ambiance, une émotion..."
+              className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
               disabled={isLoading}
-              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1 sm:gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
-            >
-              {isLoading ? (
-                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
-              ) : (
-                <span>✨</span>
-              )}
-              <span className="hidden sm:inline">
-                {isLoading ? 'Recherche...' : 'Explorer'}
-              </span>
-            </button>
+            />
+
+            {/* Integrated Quota Badge + Explorer Button inside the pill */}
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+              {/* Quota Badge */}
+              <button
+                type="button"
+                onClick={() => setIsProModalOpen(true)}
+                title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
+                className="text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline font-bold">Illimité</span>
+              </button>
+
+              {/* Explorer Button */}
+              <button
+                type="button"
+                onClick={() => handleSearch()}
+                disabled={isLoading}
+                className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1 sm:gap-1.5 shadow-md shadow-blue-500/25 hover:opacity-95 active:scale-95 transition-transform disabled:opacity-50 cursor-pointer flex-shrink-0"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
+                ) : (
+                  <span>✨</span>
+                )}
+                <span className="hidden sm:inline">
+                  {isLoading ? 'Recherche...' : 'Explorer'}
+                </span>
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Indicateur de longueur positionné sous le champ de saisie */}
+        <div className="flex items-center justify-between px-2 text-[11px]">
+          <span className="text-slate-400 dark:text-zinc-500 text-[10px] hidden sm:inline">
+            Recherche intelligente par ambiance ou émotion
+          </span>
+          <span
+            className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors ${
+              prompt.length >= 350
+                ? 'text-rose-500 font-bold'
+                : prompt.length >= 300
+                ? 'text-amber-500 font-medium'
+                : 'text-slate-400 dark:text-zinc-500'
+            }`}
+            title={`${350 - prompt.length} caractères restants (max 350)`}
+          >
+            {prompt.length} / 350
+          </span>
         </div>
       </div>
 

@@ -336,99 +336,106 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
         </p>
 
         {/* c) Barre de Recherche Unifiée "Floating Glass" Minimaliste */}
-        <form 
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSearch(searchPrompt);
-          }}
-          className="relative flex items-end min-h-[48px] w-full max-w-2xl mx-auto rounded-xl sm:rounded-2xl border border-white/15 bg-zinc-950/85 backdrop-blur-2xl px-3 py-1.5 shadow-2xl focus-within:border-white/40 transition-all"
-        >
-          {/* Search icon */}
-          <div className="pl-1 pr-2 text-zinc-500 flex-shrink-0 self-start mt-2">
-            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-
-          {/* Textarea auto-extensible avec limite 350 caractères */}
-          <textarea
-            ref={textareaRef}
-            id="main-ai-search"
-            rows={1}
-            maxLength={350}
-            className="flex-1 w-full bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
-            placeholder="Décrivez une ambiance, une émotion..."
-            value={searchPrompt}
-            onChange={(e) => {
-              const val = e.target.value.slice(0, 350);
-              setSearchPrompt(val);
-              if (errorMessage) setErrorMessage(null);
-            }}
-            onPaste={(e) => {
+        <div className="w-full max-w-2xl mx-auto flex flex-col gap-1.5">
+          <form 
+            onSubmit={(e) => {
               e.preventDefault();
-              const text = e.clipboardData.getData('text') || '';
-              const current = searchPrompt;
-              const target = e.currentTarget;
-              const start = target.selectionStart ?? current.length;
-              const end = target.selectionEnd ?? current.length;
-              const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
-              setSearchPrompt(next);
-              if (current.length + text.length > 350) {
-                showToast('Texte collé tronqué à la limite de 350 caractères.');
-              }
+              handleSearch(searchPrompt);
             }}
-            onKeyDown={handleKeyDown}
-          />
+            className="relative flex items-end min-h-[48px] w-full rounded-xl sm:rounded-2xl border border-white/15 bg-zinc-950/85 backdrop-blur-2xl px-3 py-1.5 shadow-2xl focus-within:border-white/40 transition-all"
+          >
+            {/* Search icon */}
+            <div className="pl-1 pr-2 text-zinc-500 flex-shrink-0 self-start mt-2">
+              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
 
-          {/* Integrated Character Counter + Quota Badge + Explorer Button with Cinema Accent */}
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
-            {/* Indicateur visuel discret de longueur */}
+            {/* Textarea auto-extensible avec limite 350 caractères */}
+            <textarea
+              ref={textareaRef}
+              id="main-ai-search"
+              rows={1}
+              maxLength={350}
+              className="flex-1 w-full bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
+              placeholder="Décrivez une ambiance, une émotion..."
+              value={searchPrompt}
+              onChange={(e) => {
+                const val = e.target.value.slice(0, 350);
+                setSearchPrompt(val);
+                if (errorMessage) setErrorMessage(null);
+              }}
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text') || '';
+                const current = searchPrompt;
+                const target = e.currentTarget;
+                const start = target.selectionStart ?? current.length;
+                const end = target.selectionEnd ?? current.length;
+                const next = (current.slice(0, start) + text + current.slice(end)).slice(0, 350);
+                setSearchPrompt(next);
+                if (current.length + text.length > 350) {
+                  showToast('Texte collé tronqué à la limite de 350 caractères.');
+                }
+              }}
+              onKeyDown={handleKeyDown}
+            />
+
+            {/* Integrated Quota Badge + Explorer Button with Cinema Accent */}
+            <div className="flex items-center gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+              {/* Quota Badge */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsProModalOpen(true);
+                }}
+                title="Exploration IA illimitée"
+                className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline font-bold">Illimité</span>
+              </button>
+
+              {/* Action Submit Button - Rouge Cinéma #e50914 */}
+              <button
+                type="submit"
+                disabled={isAiLoading}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSearch(searchPrompt);
+                }}
+                className="px-3.5 sm:px-5 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex-shrink-0"
+              >
+                {isAiLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
+                ) : (
+                  <span>✨</span>
+                )}
+                <span className="hidden sm:inline">
+                  {isAiLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
+                </span>
+              </button>
+            </div>
+          </form>
+
+          {/* Indicateur de longueur positionné sous le champ de saisie */}
+          <div className="flex items-center justify-between px-2 text-[11px]">
+            <span className="text-zinc-500 text-[10px] hidden sm:inline">
+              Décrivez une émotion ou une ambiance
+            </span>
             <span
-              className={`text-[10px] tabular-nums font-mono px-1 select-none transition-colors ${
+              className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors ${
                 searchPrompt.length >= 350
                   ? 'text-rose-400 font-bold'
                   : searchPrompt.length >= 300
                   ? 'text-amber-400 font-medium'
                   : 'text-zinc-500'
-              } ${searchPrompt.length === 0 ? 'opacity-30' : 'opacity-85'}`}
+              }`}
               title={`${350 - searchPrompt.length} caractères restants (max 350)`}
             >
-              {searchPrompt.length}/350
+              {searchPrompt.length} / 350
             </span>
-
-            {/* Quota Badge */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                setIsProModalOpen(true);
-              }}
-              title="Exploration IA illimitée"
-              className="text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
-            >
-              <span>⚡</span>
-              <span className="hidden sm:inline font-bold">Illimité</span>
-            </button>
-
-            {/* Action Submit Button - Rouge Cinéma #e50914 */}
-            <button
-              type="submit"
-              disabled={isAiLoading}
-              onClick={(e) => {
-                e.preventDefault();
-                handleSearch(searchPrompt);
-              }}
-              className="px-3.5 sm:px-5 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex-shrink-0"
-            >
-              {isAiLoading ? (
-                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
-              ) : (
-                <span>✨</span>
-              )}
-              <span className="hidden sm:inline">
-                {isAiLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
-              </span>
-            </button>
           </div>
-        </form>
+        </div>
 
         {/* Banner de chargement IA */}
         {isAiLoading && (
