@@ -268,7 +268,14 @@ export default async function handler(req, res) {
           sub.updatedAt = new Date().toISOString();
           globalSubscriptions.set(key, sub);
           if (supabase) {
-            supabase.from('subscriptions').update({ status: 'active', updated_at: sub.updatedAt }).eq('id', sub.id).catch(() => {});
+            try {
+              await supabase.from('subscriptions').update({ 
+                status: 'active', 
+                updated_at: sub.updatedAt 
+              }).eq('id', sub.id);
+            } catch (subErr) {
+              console.warn('[SasPay Webhook] Erreur mise à jour statut Supabase:', subErr?.message || subErr);
+            }
           }
         }
       }
@@ -523,10 +530,14 @@ export default async function handler(req, res) {
         verifiedSubscription.updatedAt = new Date().toISOString();
         globalSubscriptions.set(verifiedSubscription.id, verifiedSubscription);
         if (supabase) {
-          supabase.from('subscriptions').update({
-            payment_reference: reference,
-            updated_at: verifiedSubscription.updatedAt
-          }).eq('id', verifiedSubscription.id).catch(() => {});
+          try {
+            await supabase.from('subscriptions').update({
+              payment_reference: reference,
+              updated_at: verifiedSubscription.updatedAt
+            }).eq('id', verifiedSubscription.id);
+          } catch (subErr) {
+            console.warn('[SasPay] Erreur mise à jour reference Supabase:', subErr?.message || subErr);
+          }
         }
       }
 
