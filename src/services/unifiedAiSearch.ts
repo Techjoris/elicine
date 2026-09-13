@@ -12,6 +12,12 @@ export interface RawAiMovieItem {
   reason?: string;
 }
 
+export interface AdvancedSearchFiltersOptions {
+  platform?: string; // 'all' | 'netflix' | 'prime' | 'disney' | 'apple' | 'canal' | 'paramount' | 'max'
+  minRating?: number; // 0, 6, 7, 8
+  mediaType?: 'Tous' | 'Films' | 'Séries TV';
+}
+
 export interface AIRecommendationResult {
   thought: string;
   moodDetected: string;
@@ -304,7 +310,8 @@ export async function executeCinoraSearch(
   query: string,
   apiSettings?: ApiSettings,
   _tmdbLang?: string,
-  _aiPromptLang?: string
+  _aiPromptLang?: string,
+  filters?: AdvancedSearchFiltersOptions
 ): Promise<AIRecommendationResult> {
   const cleanQuery = query.trim();
   const tmdbKey = getApiKey('tmdb', apiSettings);
@@ -313,9 +320,21 @@ export async function executeCinoraSearch(
 
   console.log(`[Éliciné AI] Spécificité détectée pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, score: ${specificity.score})`);
 
-  // Recherche directe TMDB si titre direct évident
+  // Enrichissement de la requête pour l'IA si des filtres Pro sont actifs
+  let promptWithFilters = cleanQuery;
+  if (filters?.platform && filters.platform !== 'all') {
+    promptWithFilters += ` (disponible sur ${filters.platform.toUpperCase()})`;
+  }
+  if (filters?.minRating && filters.minRating > 0) {
+    promptWithFilters += ` (note minimale ${filters.minRating}/10)`;
+  }
+  if (filters?.mediaType && filters.mediaType !== 'Tous') {
+    promptWithFilters += ` (format: ${filters.mediaType})`;
+  }
+
+  // Recherche directe TMDB si titre direct évident sans filtres complexes
   const route = analyzeSearchIntent(cleanQuery);
-  if (route.intent === 'direct_tmdb') {
+  if (route.intent === 'direct_tmdb' && (!filters || (filters.platform === 'all' && (!filters.minRating || filters.minRating === 0)))) {
     const results = await searchMoviesTmdb(cleanQuery, tmdbKey, 'fr-FR');
     const movies = (results || []).slice(0, 6).map((m, idx) => ({
       ...m,
@@ -338,8 +357,8 @@ export async function executeCinoraSearch(
     };
   }
 
-  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité
-  let { titles, provider } = await queryAiTitles(cleanQuery, groqKey, specificity);
+  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres
+  let { titles, provider } = await queryAiTitles(promptWithFilters, groqKey, specificity);
   console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
   // 3. Hydratation depuis TMDB selon le volume adéquat
@@ -425,6 +444,35 @@ export async function executeCinoraSearch(
     }
   }
 
+  // 3. bis : Application des filtres Pro post-résolution (Note minimale, Plateforme, Format)
+  if (resolvedMovies.length > 0 && filters) {
+    // a) Filtre de note minimale
+    if (filters.minRating && filters.minRating > 0) {
+      const filteredByRating = resolvedMovies.filter(m => (m.vote_average || 0) >= filters.minRating!);
+      if (filteredByRating.length > 0) {
+        resolvedMovies = filteredByRating;
+      }
+    }
+
+    // b) Filtre de type de média (Films vs Séries)
+    if (filters.mediaType && filters.mediaType !== 'Tous') {
+      const targetType = filters.mediaType === 'Films' ? 'FILM' : 'SÉRIE';
+      const filteredByType = resolvedMovies.filter(m => m.media_type === targetType);
+      if (filteredByType.length > 0) {
+        resolvedMovies = filteredByType;
+      }
+    }
+
+    // c) Marquage de la plateforme sélectionnée
+    if (filters.platform && filters.platform !== 'all') {
+      const platUpper = filters.platform.toUpperCase();
+      resolvedMovies = resolvedMovies.map(m => ({
+        ...m,
+        primary_platform: platUpper
+      }));
+    }
+  }
+
   // 4. Formulation du message d'explication selon la spécificité
   let thoughtMessage = `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`;
   if (specificity.level === 'ultra_targeted') {
@@ -433,6 +481,13 @@ export async function executeCinoraSearch(
       : `🎯 Correspondance ultra-ciblée (${resolvedMovies.length} œuvres exactes trouvées) pour "${cleanQuery}"`;
   } else if (specificity.level === 'broad') {
     thoughtMessage = `🎬 Sélection élargie (${resolvedMovies.length} œuvres trouvées) pour explorer "${cleanQuery}"`;
+  }
+
+  if (filters && ((filters.platform && filters.platform !== 'all') || (filters.minRating && filters.minRating > 0))) {
+    const badgeList = [];
+    if (filters.platform && filters.platform !== 'all') badgeList.push(filters.platform.toUpperCase());
+    if (filters.minRating && filters.minRating > 0) badgeList.push(`⭐ ${filters.minRating}+`);
+    thoughtMessage += ` • Filtres Pro (${badgeList.join(', ')})`;
   }
 
   return {

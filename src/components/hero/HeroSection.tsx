@@ -12,6 +12,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
+import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
 import { Movie } from '../../types';
 
 interface HeroSectionProps {
@@ -121,6 +122,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [searchPrompt, setSearchPrompt] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'Tous' | 'Films' | 'Séries TV'>('Tous');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
+  const [selectedMinRating, setSelectedMinRating] = useState<number>(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -251,7 +254,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
 
     try {
       console.log(`[Éliciné AI] Exécution requête IA réelle pour : "${q}" (${t.aiPromptLang})`);
-      const res: AIRecommendationResult = await executeCinoraSearch(q, apiSettings, t.tmdbLang, t.aiPromptLang);
+      const res: AIRecommendationResult = await executeCinoraSearch(
+        q, 
+        apiSettings, 
+        t.tmdbLang, 
+        t.aiPromptLang,
+        {
+          platform: user?.isPro ? selectedPlatform : 'all',
+          minRating: user?.isPro ? selectedMinRating : 0,
+          mediaType: selectedTypeFilter
+        }
+      );
       
       // Incrémentation du compteur de recherches réussies et persistance Supabase / LocalStorage
       await recordSuccessfulSearch();
@@ -505,7 +518,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
         )}
 
         {/* d) Filtres Rapides (Pills Monochromes) */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 mt-4 sm:mt-5 mb-5 sm:mb-6 px-2">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 mt-4 sm:mt-5 mb-3 px-2">
           {[
             { type: 'Tous' as const, label: t.filterAll },
             { type: 'Films' as const, label: t.filterMovies },
@@ -527,6 +540,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
               </button>
             );
           })}
+        </div>
+
+        {/* d.2) Filtres Avancés Pro (Plateformes & Notes minimales) */}
+        <div className="w-full mb-5 sm:mb-6 px-1">
+          <AdvancedSearchFilters
+            selectedPlatform={selectedPlatform}
+            onSelectPlatform={(p) => setSelectedPlatform(p)}
+            selectedMinRating={selectedMinRating}
+            onSelectMinRating={(r) => setSelectedMinRating(r)}
+            isPro={Boolean(user?.isPro)}
+            onTriggerProModal={() => {
+              showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+              setIsProModalOpen(true);
+            }}
+          />
         </div>
 
         {/* e) Encart "À l'Affiche" & Actions du Film */}

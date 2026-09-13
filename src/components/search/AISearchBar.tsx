@@ -4,7 +4,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { askCineIA, AIRecommendationResult } from '../../services/aiEngine';
+import { askCineIA, executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
+import { AdvancedSearchFilters } from './AdvancedSearchFilters';
 import { Movie } from '../../types';
 
 interface AISearchBarProps {
@@ -35,6 +36,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   } = useApp();
 
   const [prompt, setPrompt] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState('all');
+  const [selectedMinRating, setSelectedMinRating] = useState(0);
 
   const samplePrompts = [
     '🌧️ Thriller sombre sous la pluie avec un twist final',
@@ -58,7 +61,16 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
 
     setIsLoading(true);
     try {
-      const result: AIRecommendationResult = await askCineIA(query, apiSettings);
+      const result: AIRecommendationResult = await executeCinoraSearch(
+        query, 
+        apiSettings,
+        undefined,
+        undefined,
+        {
+          platform: user?.isPro ? selectedPlatform : 'all',
+          minRating: user?.isPro ? selectedMinRating : 0
+        }
+      );
       
       // Enregistrement de la recherche réussie
       await recordSuccessfulSearch();
@@ -220,6 +232,21 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             {prompt.length} / 350
           </span>
         </div>
+      </div>
+
+      {/* Filtres Avancés Pro (Plateformes & Notes minimales) */}
+      <div className="w-full">
+        <AdvancedSearchFilters
+          selectedPlatform={selectedPlatform}
+          onSelectPlatform={(p) => setSelectedPlatform(p)}
+          selectedMinRating={selectedMinRating}
+          onSelectMinRating={(r) => setSelectedMinRating(r)}
+          isPro={Boolean(user?.isPro)}
+          onTriggerProModal={() => {
+            showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+            setIsProModalOpen(true);
+          }}
+        />
       </div>
 
       {/* Suggested Quick Tags */}
