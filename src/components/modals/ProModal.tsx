@@ -10,6 +10,7 @@ export const ProModal: React.FC = () => {
     isProModalOpen, 
     setIsProModalOpen, 
     setIsAuthModalOpen,
+    openAuthModal,
     user, 
     showToast 
   } = useApp();
@@ -34,7 +35,7 @@ export const ProModal: React.FC = () => {
           sessionStorage.setItem('checkout_numeric_amount', String(payload.numericAmount));
         }
       } catch (e) {
-        console.warn('[ProModal] Erreur écriture sessionStorage:', e);
+        console.warn('[ProModal] Erreur sauvegarde sessionStorage:', e);
       }
 
       subscriptionService.setPendingCheckoutIntent({
@@ -48,7 +49,7 @@ export const ProModal: React.FC = () => {
       });
 
       setIsProModalOpen(false);
-      setIsAuthModalOpen(true);
+      openAuthModal('pro_upgrade');
       showToast('👑 Connectez-vous ou créez votre compte pour finaliser votre abonnement Pro.');
       return;
     }

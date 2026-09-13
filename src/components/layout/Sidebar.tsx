@@ -53,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     showToast,
     setIsProModalOpen,
     setIsAuthModalOpen,
+    openAuthModal,
     setIsTipModalOpen,
     isSettingsModalOpen,
     setIsSettingsModalOpen,
@@ -402,7 +403,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div 
                 onClick={() => {
-                  setIsAuthModalOpen(true);
+                  openAuthModal('default');
                   setIsMobileMenuOpen(false);
                 }}
                 className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/20 cursor-pointer transition-all flex items-center justify-between group select-none"
@@ -447,7 +448,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setIsAuthModalOpen(true);
+                  openAuthModal('login');
                   setIsMobileMenuOpen(false);
                 }}
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-zinc-200 dark:text-black text-xs font-bold transition-all cursor-pointer select-none"

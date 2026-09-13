@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { UpdatePassword } from '../auth/UpdatePassword';
 
 export const ResetPasswordView: React.FC = () => {
-  const { setActiveView, setIsAuthModalOpen, showToast } = useApp();
+  const { setActiveView, setIsAuthModalOpen, openAuthModal, showToast } = useApp();
 
   return (
     <div className="flex items-center justify-center min-h-[65vh] p-4">
@@ -13,7 +13,7 @@ export const ResetPasswordView: React.FC = () => {
         }}
         onGoHome={() => {
           setActiveView('home');
-          setIsAuthModalOpen(true);
+          openAuthModal('login');
         }}
       />
     </div>

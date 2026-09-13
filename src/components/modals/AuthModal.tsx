@@ -25,10 +25,20 @@ import { authService } from '../../services/authService';
 import { handleMonerooPayment } from '../../services/payment';
 import { subscriptionService, CheckoutIntent } from '../../services/subscriptionService';
 
-export const AuthModal: React.FC = () => {
+export interface AuthModalProps {
+  isCheckoutFlow?: boolean;
+  context?: 'signup' | 'login' | 'pro_upgrade' | 'default';
+}
+
+export const AuthModal: React.FC<AuthModalProps> = ({
+  isCheckoutFlow: propCheckoutFlow,
+  context: propContext
+}) => {
   const { 
     isAuthModalOpen, 
     setIsAuthModalOpen, 
+    authModalContext,
+    setAuthModalContext,
     user, 
     loginWithGoogle,
     loginWithCredentials,
@@ -39,6 +49,11 @@ export const AuthModal: React.FC = () => {
     watchlist,
     showToast 
   } = useApp();
+
+  const effectiveContext = propContext || authModalContext || 'default';
+  const isCheckout = propCheckoutFlow !== undefined 
+    ? propCheckoutFlow 
+    : (effectiveContext === 'pro_upgrade');
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [username, setUsername] = useState('');
@@ -55,15 +70,24 @@ export const AuthModal: React.FC = () => {
 
   useEffect(() => {
     if (isAuthModalOpen) {
-      const intent = subscriptionService.getPendingCheckoutIntent();
-      setPendingIntent(intent);
-      if (intent) {
+      if (isCheckout) {
+        const intent = subscriptionService.getPendingCheckoutIntent();
+        setPendingIntent(intent);
         setIsSignUp(true);
+      } else {
+        // Mode standard neutre : Aucun intent de paiement pris en compte
+        setPendingIntent(null);
+        if (effectiveContext === 'signup') {
+          setIsSignUp(true);
+        } else if (effectiveContext === 'login') {
+          setIsSignUp(false);
+        }
       }
     } else {
       setPendingIntent(null);
+      setAuthModalContext('default');
     }
-  }, [isAuthModalOpen]);
+  }, [isAuthModalOpen, isCheckout, effectiveContext]);
 
   if (!isAuthModalOpen) return null;
 
@@ -141,9 +165,9 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        // Vérification de la persistance du tunnel d'abonnement Pro
+        // Vérification de la persistance du tunnel d'abonnement Pro (uniquement en flux checkout)
         const isPendingCheckout = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true';
-        if (isPendingCheckout) {
+        if (isCheckout && isPendingCheckout) {
           sessionStorage.removeItem('pending_checkout');
           setIsAuthModalOpen(false);
           setPassword('');
@@ -165,9 +189,9 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        // Vérification de la persistance du tunnel d'abonnement Pro
+        // Vérification de la persistance du tunnel d'abonnement Pro (uniquement en flux checkout)
         const isPendingCheckout = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pending_checkout') === 'true';
-        if (isPendingCheckout) {
+        if (isCheckout && isPendingCheckout) {
           sessionStorage.removeItem('pending_checkout');
           setIsAuthModalOpen(false);
           setPassword('');
@@ -566,8 +590,8 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
-            {/* BANNIÈRE D'INTERCEPTION ABONNEMENT PRO */}
-            {pendingIntent && (
+            {/* BANNIÈRE D'INTERCEPTION ABONNEMENT PRO : Affichée UNIQUEMENT lors d'un achat Pro */}
+            {isCheckout && pendingIntent && (
               <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#e50914]/10 to-amber-500/10 border border-amber-500/30 dark:border-amber-400/25 flex items-start gap-3 animate-fade-in text-left">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-[#e50914] flex items-center justify-center text-white flex-shrink-0 shadow-sm mt-0.5">
                   <Crown className="w-4 h-4" />
@@ -588,13 +612,13 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
-            {/* Header Title */}
+            {/* Header Title : Neutre en création standard, contextualisé en Pro */}
             <div className="text-center space-y-1">
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-                {isSignUp ? 'Créer un Compte' : 'Connexion'}
+                {isSignUp ? 'Créer un Compte' : 'Se Connecter'}
               </h2>
               <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium">
-                {pendingIntent
+                {isCheckout && pendingIntent
                   ? 'Une étape rapide avant de finaliser votre abonnement Pro.'
                   : (isSignUp 
                       ? 'Rejoignez Éliciné et synchronisez vos favoris.' 

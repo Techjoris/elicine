@@ -31,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
     user: appUser,
     watchlist,
     setIsAuthModalOpen,
+    openAuthModal,
     setIsProModalOpen,
     setIsTipModalOpen,
     setActiveView,
@@ -221,7 +222,7 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => openAuthModal('login')}
                 className="flex items-center justify-center bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm"
                 title="Connexion"
               >

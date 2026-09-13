@@ -24,7 +24,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenTip
 }) => {
   const { user, loading, signOut } = useAuth();
-  const { user: appUser, setIsAuthModalOpen, setActiveView, watchlist, setIsTipModalOpen } = useApp();
+  const { user: appUser, setIsAuthModalOpen, openAuthModal, setActiveView, watchlist, setIsTipModalOpen } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -183,7 +183,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsAuthModalOpen(true);
+                    openAuthModal('default');
                     setOpen(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -282,7 +282,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsAuthModalOpen(true);
+                    openAuthModal('login');
                     setOpen(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}

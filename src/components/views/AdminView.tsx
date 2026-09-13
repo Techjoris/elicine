@@ -26,7 +26,7 @@ import { authService } from '../../services/authService';
 import { AdminUserData } from '../../types';
 
 export const AdminView: React.FC = () => {
-  const { user, setActiveView, showToast, setIsAuthModalOpen } = useApp();
+  const { user, setActiveView, showToast, setIsAuthModalOpen, openAuthModal } = useApp();
 
   const [isAuthorized, setIsAuthorized] = useState<boolean>(() => authService.isAdmin(user));
   const [passcode, setPasscode] = useState('');
@@ -253,7 +253,7 @@ export const AdminView: React.FC = () => {
             {!user ? (
               <button
                 type="button"
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => openAuthModal('login')}
                 className="text-cyan-600 dark:text-cyan-400 hover:underline block w-full text-center"
               >
                 Se connecter avec un compte admin

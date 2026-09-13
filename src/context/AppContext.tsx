@@ -77,6 +77,9 @@ interface AppContextType {
   setIsApiSettingsModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  authModalContext: 'signup' | 'login' | 'pro_upgrade' | 'default';
+  setAuthModalContext: (context: 'signup' | 'login' | 'pro_upgrade' | 'default') => void;
+  openAuthModal: (context?: 'signup' | 'login' | 'pro_upgrade' | 'default') => void;
   isAlertsModalOpen: boolean;
   setIsAlertsModalOpen: (open: boolean) => void;
   isApkModalOpen: boolean;
@@ -282,6 +285,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalContext, setAuthModalContext] = useState<'signup' | 'login' | 'pro_upgrade' | 'default'>('default');
+
+  const openAuthModal = (context: 'signup' | 'login' | 'pro_upgrade' | 'default' = 'default') => {
+    setAuthModalContext(context);
+    setIsAuthModalOpen(true);
+  };
+
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isThankYouModalOpen, setIsThankYouModalOpen] = useState(false);
@@ -849,6 +859,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsApiSettingsModalOpen,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        authModalContext,
+        setAuthModalContext,
+        openAuthModal,
         isAlertsModalOpen,
         setIsAlertsModalOpen,
         isApkModalOpen,
