@@ -27,6 +27,7 @@ import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { supabase } from './lib/supabase';
+import { subscriptionService } from './services/subscriptionService';
 import { 
   processSaspayCheckout, 
   extractSaspayRedirectUrl, 
@@ -107,11 +108,19 @@ export const AppContent: React.FC = () => {
       params.get('tip') === 'success';
 
     if (isProSuccess) {
-      // 1. Activate Pro immediately in state & localStorage
-      upgradeToPro('yearly');
-      // 2. Open the dedicated Pro welcome modal
+      // 1. Validation de la souscription enregistrée
+      const returnedSubId = params.get('subscription_id') || undefined;
+      const returnedRef = params.get('reference') || params.get('id') || undefined;
+      subscriptionService.markSubscriptionPaid(returnedSubId, returnedRef);
+
+      // 2. Détection du cycle souscrit
+      const detectedCycle = params.get('cycle') === 'monthly' || params.get('billing_cycle') === 'monthly' ? 'monthly' : 'yearly';
+      upgradeToPro(detectedCycle);
+
+      // 3. Ouvrir la modale de bienvenue Pro
       setIsProSuccessModalOpen(true);
-      // 3. Clean URL so refresh doesn't re-trigger
+
+      // 4. Nettoyage de l'URL
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (isTipSuccess) {
       // Show the donation thank-you modal

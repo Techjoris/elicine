@@ -249,6 +249,7 @@ export interface SaspayCheckoutParams {
   paymentType?: 'pro' | 'tip';
   paymentMethod?: 'card' | 'mobile' | 'all';
   billingCycle?: PricingBillingCycle;
+  subscriptionId?: string;
   email?: string;
   name?: string;
   description?: string;
@@ -428,12 +429,16 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
   const customerEmail = (params.email || '').trim() || 'contact@elicine.com';
   const description = params.description || (isPro ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné');
 
-  const payload = {
+  const payload: any = {
     amount: finalAmount,
     currency: formattedCurrency,
     description,
     customer_name: customerName,
     customer_email: customerEmail,
+    paymentType: type,
+    subscription_id: params.subscriptionId,
+    subscriptionId: params.subscriptionId,
+    billing_cycle: params.billingCycle,
     return_url: successCallbackUrl,
     cancel_url: successCallbackUrl
   };
@@ -604,7 +609,8 @@ export const handleSaspayPayment = async (
   userName: string,
   amount: number = 1.99,
   currency: string = 'USD',
-  description: string = 'Abonnement Pass Pro Éliciné'
+  description: string = 'Abonnement Pass Pro Éliciné',
+  subscriptionId?: string
 ) => {
   return processSaspayCheckout({
     amount,
@@ -612,7 +618,8 @@ export const handleSaspayPayment = async (
     email: userEmail,
     name: userName,
     description,
-    paymentType: 'pro'
+    paymentType: 'pro',
+    subscriptionId
   });
 };
 

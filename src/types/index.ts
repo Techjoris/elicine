@@ -83,6 +83,25 @@ export interface UserProfile {
   token?: string;
 }
 
+export type SubscriptionStatus = 'pending_payment' | 'active' | 'cancelled' | 'expired';
+
+export interface ProSubscription {
+  id: string;
+  userId: string;
+  email: string;
+  customerName: string;
+  phone?: string;
+  plan: 'monthly' | 'yearly';
+  currency: Currency | string;
+  amount: number;
+  status: SubscriptionStatus;
+  paymentReference?: string;
+  paymentProvider?: 'saspay' | 'paypal' | 'moneroo';
+  termsAccepted: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface AdminUserData {
   id: string;
   username?: string;

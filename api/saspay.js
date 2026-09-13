@@ -1,4 +1,23 @@
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 
+  process.env.VITE_SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
+
+const supabaseAnonKey = 
+  process.env.VITE_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  process.env.SUPABASE_ANON_KEY ||
+  '';
+
+const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+// Mémoire globale des souscriptions pour le runtime Serverless
+const globalSubscriptions = (globalThis.__elicine_subscriptions = globalThis.__elicine_subscriptions || new Map());
 
 /**
  * Récupère les identifiants SasPay depuis les variables d'environnement Vercel.
@@ -111,6 +130,116 @@ export default async function handler(req, res) {
   const { apiKey } = getSaspayCredentials(req);
   const action = req.query?.action || '';
 
+  // 1.5. Initialisation formelle d'une souscription Pro (Prérequis obligatoire)
+  if (action === 'init-subscription' || action === 'create-subscription') {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Méthode non autorisée. POST requis.' });
+    }
+
+    let subBody = req.body;
+    if (typeof subBody === 'string') {
+      try { subBody = JSON.parse(subBody); } catch (_) { subBody = {}; }
+    }
+    subBody = subBody || {};
+
+    const { userId, email, customerName, phone, plan, currency, amount, termsAccepted } = subBody;
+
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: "L'acceptation des conditions d'abonnement est obligatoire pour valider la souscription."
+      });
+    }
+
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: "Une adresse email valide est obligatoire pour initialiser la souscription."
+      });
+    }
+
+    const subId = `sub_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const now = new Date().toISOString();
+
+    const subscription = {
+      id: subId,
+      userId: String(userId || 'usr_anonymous').trim(),
+      email: cleanEmail,
+      customerName: String(customerName || cleanEmail.split('@')[0] || 'Cinéphile Pro').trim(),
+      phone: phone ? String(phone).trim() : undefined,
+      plan: plan === 'yearly' ? 'yearly' : 'monthly',
+      currency: (currency || 'USD').toUpperCase(),
+      amount: Number(amount) || 1.99,
+      status: 'pending_payment',
+      termsAccepted: true,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // Stockage en mémoire globale du worker
+    globalSubscriptions.set(subId, subscription);
+    globalSubscriptions.set(`email:${cleanEmail}`, subscription);
+
+    // Synchronisation Supabase si disponible
+    if (supabase) {
+      try {
+        await supabase.from('subscriptions').upsert({
+          id: subscription.id,
+          user_id: subscription.userId,
+          email: subscription.email,
+          customer_name: subscription.customerName,
+          phone: subscription.phone || null,
+          plan: subscription.plan,
+          currency: subscription.currency,
+          amount: subscription.amount,
+          status: 'pending_payment',
+          terms_accepted: true,
+          created_at: subscription.createdAt,
+          updated_at: subscription.updatedAt
+        });
+      } catch (sbErr) {
+        console.warn('[SasPay Serverless] Notification table Supabase subscriptions:', sbErr?.message);
+      }
+    }
+
+    console.log('[SasPay Serverless] Souscription Pro initialisée avec succès (pending_payment):', {
+      subId,
+      email: cleanEmail,
+      plan: subscription.plan,
+      amount: subscription.amount,
+      currency: subscription.currency
+    });
+
+    return res.status(200).json({
+      success: true,
+      subscription
+    });
+  }
+
+  // 1.6. Consultation d'une souscription
+  if (action === 'get-subscription') {
+    const subId = req.query?.id || req.query?.subscription_id;
+    const email = (req.query?.email || '').trim().toLowerCase();
+
+    let found = null;
+    if (subId) found = globalSubscriptions.get(subId);
+    if (!found && email) found = globalSubscriptions.get(`email:${email}`);
+
+    if (!found && subId && supabase) {
+      try {
+        const { data } = await supabase.from('subscriptions').select('*').eq('id', subId).maybeSingle();
+        if (data) found = data;
+      } catch (_) {}
+    }
+
+    if (!found) {
+      return res.status(404).json({ success: false, error: 'Souscription non trouvée.' });
+    }
+
+    return res.status(200).json({ success: true, subscription: found });
+  }
+
   // 2. Traitement Webhook (action=webhook ou POST avec structure d'événement)
   if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
     let webhookBody = req.body;
@@ -130,6 +259,20 @@ export default async function handler(req, res) {
 
     // Détection de succès
     const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID' || event === 'transaction.success';
+
+    if (isSuccess && transactionData?.id) {
+      const txId = transactionData.id;
+      for (const [key, sub] of globalSubscriptions.entries()) {
+        if (sub && (sub.paymentReference === txId || sub.id === transactionData?.subscription_id)) {
+          sub.status = 'active';
+          sub.updatedAt = new Date().toISOString();
+          globalSubscriptions.set(key, sub);
+          if (supabase) {
+            supabase.from('subscriptions').update({ status: 'active', updated_at: sub.updatedAt }).eq('id', sub.id).catch(() => {});
+          }
+        }
+      }
+    }
 
     return res.status(200).json({
       received: true,
@@ -214,13 +357,6 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    if (!apiKey) {
-      console.error('[SasPay Backend] Clé API absente dans process.env.saspay_Backend');
-      return res.status(500).json({
-        error: 'Clé d\'authentification SasPay non configurée. Veuillez renseigner saspay_Backend dans les variables d\'environnement Vercel.'
-      });
-    }
-
     const amount = Number(body.amount);
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({
@@ -240,9 +376,82 @@ export default async function handler(req, res) {
       'Cinéphile Éliciné'
     ).trim();
 
-    const returnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/?payment_status=success').trim();
+    // SÉCURITÉ TUNNEL PRO : Contrôle strict qu'une souscription valide en attente existe
+    const paymentType = (body.paymentType || body.payment_type || (body.billing_cycle || body.billingCycle ? 'pro' : '') || '').toLowerCase();
+    const isPro = paymentType === 'pro' || (body.description && body.description.toLowerCase().includes('pass pro'));
+
+    let verifiedSubscription = null;
+
+    if (isPro) {
+      const subscriptionId = (body.subscription_id || body.subscriptionId || req.headers['x-subscription-id'] || '').trim();
+
+      if (!subscriptionId) {
+        console.warn('[SasPay Security Check] Rejet 400 : Paiement Pro initié sans subscription_id.');
+        return res.status(400).json({
+          success: false,
+          error: "Sécurité souscription : Aucun identifiant d'enregistrement Pro fourni. Vous devez impérativement valider votre inscription Pro avant d'appeler le paiement."
+        });
+      }
+
+      // Recherche dans le registre mémoire serveur
+      verifiedSubscription = globalSubscriptions.get(subscriptionId);
+
+      // Si pas en mémoire, recherche dans la base Supabase
+      if (!verifiedSubscription && supabase) {
+        try {
+          const { data } = await supabase.from('subscriptions').select('*').eq('id', subscriptionId).maybeSingle();
+          if (data) verifiedSubscription = data;
+        } catch (sbErr) {
+          console.warn('[SasPay Security Check] Erreur lecture Supabase:', sbErr?.message);
+        }
+      }
+
+      // Repli par email si ID absent du worker courant mais email en attente
+      if (!verifiedSubscription && customerEmail) {
+        const emailSub = globalSubscriptions.get(`email:${customerEmail.toLowerCase()}`);
+        if (emailSub && (emailSub.status === 'pending_payment' || emailSub.status === 'pending')) {
+          verifiedSubscription = emailSub;
+        }
+      }
+
+      if (!verifiedSubscription) {
+        console.warn('[SasPay Security Check] Rejet 403 : Aucune souscription valide trouvée pour ID:', subscriptionId);
+        return res.status(403).json({
+          success: false,
+          error: "Sécurité souscription : Aucune souscription valide en attente de paiement n'a été trouvée pour ce compte. Veuillez compléter l'étape d'inscription."
+        });
+      }
+
+      if (verifiedSubscription.status === 'active') {
+        return res.status(400).json({
+          success: false,
+          error: "Cette souscription a déjà été réglée et est actuellement active sur votre compte."
+        });
+      }
+
+      console.log('[SasPay Security Check] Souscription en attente confirmée avec succès :', {
+        subId: verifiedSubscription.id,
+        status: verifiedSubscription.status,
+        email: verifiedSubscription.email
+      });
+    }
+
+    if (!apiKey) {
+      console.error('[SasPay Backend] Clé API absente dans process.env.saspay_Backend');
+      return res.status(500).json({
+        error: 'Clé d\'authentification SasPay non configurée. Veuillez renseigner saspay_Backend dans les variables d\'environnement Vercel.'
+      });
+    }
+
+    const rawReturnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/?payment_status=success').trim();
+    const returnUrl = verifiedSubscription
+      ? (rawReturnUrl.includes('?') ? `${rawReturnUrl}&subscription_id=${verifiedSubscription.id}` : `${rawReturnUrl}?subscription_id=${verifiedSubscription.id}`)
+      : rawReturnUrl;
+
     const cancelUrl = (body.cancel_url || returnUrl).trim();
-    const description = (body.description || 'Paiement Mobile Éliciné').trim();
+    const description = verifiedSubscription
+      ? `${body.description || 'Pass Pro Éliciné'} [Ref: ${verifiedSubscription.id}]`
+      : (body.description || 'Paiement Mobile Éliciné').trim();
 
     const idempotencyKey = req.headers['idempotency-key'] || body.idempotency_key || crypto.randomUUID();
 
@@ -261,6 +470,7 @@ export default async function handler(req, res) {
       amount: formattedAmount,
       currency,
       customer_email: customerEmail,
+      subscriptionId: verifiedSubscription?.id || 'N/A',
       idempotencyKey
     });
 
@@ -308,6 +518,18 @@ export default async function handler(req, res) {
 
       const reference = data?.id || data?.reference || data?.data?.id || idempotencyKey;
 
+      if (verifiedSubscription) {
+        verifiedSubscription.paymentReference = reference;
+        verifiedSubscription.updatedAt = new Date().toISOString();
+        globalSubscriptions.set(verifiedSubscription.id, verifiedSubscription);
+        if (supabase) {
+          supabase.from('subscriptions').update({
+            payment_reference: reference,
+            updated_at: verifiedSubscription.updatedAt
+          }).eq('id', verifiedSubscription.id).catch(() => {});
+        }
+      }
+
       return res.status(200).json({
         success: true,
         checkout_url: checkoutUrl,
@@ -315,6 +537,7 @@ export default async function handler(req, res) {
         link: checkoutUrl,
         url: checkoutUrl,
         reference,
+        subscription_id: verifiedSubscription?.id || null,
         data
       });
     } catch (err) {

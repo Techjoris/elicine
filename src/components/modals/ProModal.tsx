@@ -41,15 +41,19 @@ export const ProModal: React.FC = () => {
 
       const currSymbol = cleanCurrency === 'USD' ? '$' : (cleanCurrency === 'EUR' ? '€' : (cleanCurrency === 'CAD' ? 'CA$' : 'FCFA'));
 
+      const customerEmail = payload?.customerEmail || user?.email || 'contact@elicine.com';
+      const customerName = payload?.customerName || user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile';
+
       const data = await processSaspayCheckout({
         amount: cleanAmount,
         currency: cleanCurrency,
         paymentType: 'pro',
         billingCycle: payload?.plan || 'monthly',
-        email: user?.email || 'contact@elicine.com',
-        name,
+        subscriptionId: payload?.subscriptionId,
+        email: customerEmail,
+        name: customerName,
         description: `Pass Pro Éliciné (${cleanAmount} ${currSymbol} - ${isYearly ? 'Annuel' : 'Mensuel'})`,
-        returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro`,
+        returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro${payload?.subscriptionId ? `&subscription_id=${payload.subscriptionId}` : ''}`,
         openInNewTab: false,
         skipRedirect: true
       });
