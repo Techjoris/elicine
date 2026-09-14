@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { ElicineLogo } from '../ElicineLogo';
-import { ShieldCheck, Heart } from 'lucide-react';
+import { ShieldCheck, Heart, Mail } from 'lucide-react';
 
 interface FooterProps {
   onNavigateTerms?: (section?: string) => void;
@@ -49,8 +49,19 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
           </p>
         </div>
 
-        {/* Right: Discreet Legal & Action Links */}
+        {/* Right: Discreet Legal, Contact & Action Links */}
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium">
+          <a
+            href="mailto:support@elicine.app"
+            className="text-slate-600 hover:text-sky-600 dark:text-zinc-400 dark:hover:text-sky-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer font-medium"
+            title="Contacter le support officiel Éliciné"
+          >
+            <Mail className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-400" />
+            <span>support@elicine.app</span>
+          </a>
+
+          <span className="text-slate-300 dark:text-zinc-700">•</span>
+
           <button
             type="button"
             onClick={() => handleGoToTerms()}

@@ -540,7 +540,7 @@ export const subscriptionService = {
     details?: any;
   }): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
     const subId = `sub_paypal_${params.orderId}`;
-    const email = (params.email || params.details?.payer?.email_address || 'pro@elicine.com').trim().toLowerCase();
+    const email = (params.email || params.details?.payer?.email_address || 'support@elicine.app').trim().toLowerCase();
     const name = (
       params.customerName ||
       (params.details?.payer?.name?.given_name 

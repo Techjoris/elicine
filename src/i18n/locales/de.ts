@@ -31,7 +31,7 @@ export const termsDe: TermsTranslations = {
           items: [
             { label: "Dienstbezeichnung", text: "Éliciné" },
             { label: "Offizielle Website", text: "https://elicine.app", link: "https://elicine.app" },
-            { label: "Kundensupport & Anfragen", text: "contact@elicine.app", email: "contact@elicine.app" },
+            { label: "Kundensupport & Anfragen", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Datenschutzbeauftragter (DPO / Privacy)", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Hosting und Infrastruktur", text: "Hochverfügbare verteilte Cloud-Server mit SSL/TLS-Ende-zu-Ende-Verschlüsselung." },
             { label: "Datenbank & Sessions", text: "Verwaltet durch Supabase (ISO 27001 und SOC 2 Type II zertifizierte Server)." },
@@ -208,7 +208,7 @@ export const termsDe: TermsTranslations = {
       blocks: [
         {
           type: "paragraph",
-          text: "Sie haben das Recht auf Auskunft, Berichtigung und vollständige Löschung Ihres Kontos. Senden Sie eine Anfrage an support@elicine.app oder contact@elicine.app unter Angabe Ihrer Google-E-Mail. Die Löschung erfolgt binnen 72 Arbeitsstunden."
+          text: "Sie haben das Recht auf Auskunft, Berichtigung und vollständige Löschung Ihres Kontos. Senden Sie eine Anfrage an support@elicine.app unter Angabe Ihrer Google-E-Mail. Die Löschung erfolgt binnen 72 Arbeitsstunden."
         }
       ]
     },

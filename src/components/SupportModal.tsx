@@ -135,7 +135,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         currency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
-        email: user?.email || 'contact@elicine.com',
+        email: user?.email || 'support@elicine.app',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description: `Soutien Éliciné (${amount} ${currency})`,
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,

@@ -8,7 +8,20 @@ export const TermsView: React.FC = () => {
   const { t } = useTranslation();
 
   useEffect(() => {
-    // Scroll en haut lors du chargement du document
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '');
+      if (hash) {
+        setTimeout(() => {
+          const el = document.getElementById(hash) || (hash === 'contact' ? document.getElementById('article-1') : null);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+        }, 100);
+        return;
+      }
+    }
+    // Scroll en haut lors du chargement initial sans ancre
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 

@@ -430,7 +430,7 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
   }
 
   const customerName = (params.name || 'Cinéphile').trim();
-  const customerEmail = (params.email || '').trim() || 'contact@elicine.com';
+  const customerEmail = (params.email || '').trim() || 'support@elicine.app';
   const description = params.description || (isPro ? 'Abonnement Pass Pro Éliciné' : 'Soutien au projet Éliciné');
 
   const payload: any = {

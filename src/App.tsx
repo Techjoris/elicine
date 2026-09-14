@@ -221,7 +221,7 @@ export const AppContent: React.FC = () => {
         currency: cleanCurrency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
-        email: user?.email || 'contact@elicine.com',
+        email: user?.email || 'support@elicine.app',
         name: user?.name || 'Cinéphile Bienfaiteur',
         description,
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,

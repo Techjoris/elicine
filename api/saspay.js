@@ -730,7 +730,7 @@ export default async function handler(req, res) {
     const currency = (body.currency || 'XOF').toUpperCase();
     const formattedAmount = (amount).toFixed(2);
 
-    const customerEmail = (body.customer?.email || body.customer_email || body.email || 'client@elicine.com').trim();
+    const customerEmail = (body.customer?.email || body.customer_email || body.email || 'client@elicine.app').trim();
     const customerName = (
       body.customer_name ||
       (body.customer?.first_name ? `${body.customer.first_name} ${body.customer.last_name || ''}` : '') ||

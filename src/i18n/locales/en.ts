@@ -31,7 +31,7 @@ export const termsEn: TermsTranslations = {
           items: [
             { label: "Service Name", text: "Éliciné" },
             { label: "Official Website", text: "https://elicine.app", link: "https://elicine.app" },
-            { label: "Support & Inquiries Contact", text: "contact@elicine.app", email: "contact@elicine.app" },
+            { label: "Support & Inquiries Contact", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Data Protection Officer (DPO / Privacy)", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Hosting & Network Infrastructure", text: "High-availability distributed cloud servers and end-to-end SSL/TLS encryption protocols." },
             { label: "Database & Session Management", text: "Infrastructure managed by Supabase (ISO 27001 and SOC 2 Type II certified servers)." },
@@ -228,7 +228,7 @@ export const termsEn: TermsTranslations = {
         {
           type: "bullet_list",
           items: [
-            { label: "By email to", text: "support@elicine.app or contact@elicine.app", email: "support@elicine.app" },
+            { label: "By email to", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Required detail", text: "Specifying the email address associated with your Google sign-in account." }
           ]
         },

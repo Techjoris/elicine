@@ -31,7 +31,7 @@ export const termsEs: TermsTranslations = {
           items: [
             { label: "Denominación del servicio", text: "Éliciné" },
             { label: "Sitio oficial", text: "https://elicine.app", link: "https://elicine.app" },
-            { label: "Contacto de soporte y reclamaciones", text: "contact@elicine.app", email: "contact@elicine.app" },
+            { label: "Contacto de soporte y reclamaciones", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Delegado de Protección de Datos (DPO / Privacy)", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Alojamiento e infraestructura de red", text: "Servidores cloud distribuidos de alta disponibilidad y protocolos de cifrado SSL/TLS de extremo a extremo." },
             { label: "Base de datos y gestión de sesiones", text: "Infraestructura gestionada por Supabase (servidores certificados ISO 27001 y SOC 2 Type II)." },
@@ -228,7 +228,7 @@ export const termsEs: TermsTranslations = {
         {
           type: "bullet_list",
           items: [
-            { label: "Por correo a", text: "support@elicine.app o contact@elicine.app", email: "support@elicine.app" },
+            { label: "Por correo a", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Dato necesario", text: "Indicando la dirección de correo asociada a su cuenta de Google." }
           ]
         },

@@ -31,7 +31,7 @@ export const termsIt: TermsTranslations = {
           items: [
             { label: "Denominazione del servizio", text: "Éliciné" },
             { label: "Sito ufficiale", text: "https://elicine.app", link: "https://elicine.app" },
-            { label: "Contatto supporto e reclami", text: "contact@elicine.app", email: "contact@elicine.app" },
+            { label: "Contatto supporto e reclami", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Responsabile della protezione dei dati (DPO / Privacy)", text: "support@elicine.app", email: "support@elicine.app" },
             { label: "Infrastruttura di rete", text: "Server cloud distribuiti ad alta disponibilità con crittografia SSL/TLS end-to-end." },
             { label: "Database e sessioni", text: "Gestito tramite Supabase (server conformi a standard ISO 27001 e SOC 2 Type II)." },
@@ -208,7 +208,7 @@ export const termsIt: TermsTranslations = {
       blocks: [
         {
           type: "paragraph",
-          text: "Gli utenti hanno diritto di accedere, rettificare o cancellare i propri dati personali inviando un'email a support@elicine.app o contact@elicine.app specificando l'indirizzo Google collegato. La richiesta viene evasa entro 72 ore lavorative."
+          text: "Gli utenti hanno diritto di accedere, rettificare o cancellare i propri dati personali inviando un'email a support@elicine.app specificando l'indirizzo Google collegato. La richiesta viene evasa entro 72 ore lavorative."
         }
       ]
     },

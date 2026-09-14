@@ -154,7 +154,7 @@ export const TipModal: React.FC = () => {
         currency: cleanCurrency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
-        email: user?.email || 'contact@elicine.com',
+        email: user?.email || 'support@elicine.app',
         name: user?.name || (user as any)?.user_metadata?.full_name || 'Cinéphile',
         description: `Soutien Éliciné (${cleanAmount} ${cleanCurrency})`,
         returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,
