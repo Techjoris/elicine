@@ -27,6 +27,8 @@ import { DevModal } from './components/DevModal';
 import { ApkDownloadBanner } from './components/ApkDownloadBanner';
 import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
+import { FeedbackModal } from './components/feedback/FeedbackModal';
+import { FeedbackFloatingWidget } from './components/feedback/FeedbackFloatingWidget';
 import { supabase } from './lib/supabase';
 import { subscriptionService } from './services/subscriptionService';
 import { 
@@ -64,7 +66,11 @@ export const AppContent: React.FC = () => {
     isTipModalOpen,
     setIsTipModalOpen,
     isSettingsModalOpen,
-    setIsSettingsModalOpen
+    setIsSettingsModalOpen,
+    isFeedbackModalOpen,
+    setIsFeedbackModalOpen,
+    feedbackInitialCategory,
+    openFeedbackModal
   } = useApp();
 
   const { t } = useTranslation();
@@ -459,6 +465,16 @@ export const AppContent: React.FC = () => {
       <ProSuccessModal
         isOpen={isProSuccessModalOpen}
         onClose={() => setIsProSuccessModalOpen(false)}
+      />
+
+      {/* Floating Feedback & Suggestions Widget */}
+      <FeedbackFloatingWidget onOpenFeedback={openFeedbackModal} />
+
+      {/* Interactive Feedback & Suggestions Popover / Modal */}
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+        initialCategory={feedbackInitialCategory}
       />
 
     </div>

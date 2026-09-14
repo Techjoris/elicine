@@ -1,14 +1,14 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { ElicineLogo } from '../ElicineLogo';
-import { ShieldCheck, Heart, Mail } from 'lucide-react';
+import { ShieldCheck, Heart, Mail, Clapperboard } from 'lucide-react';
 
 interface FooterProps {
   onNavigateTerms?: (section?: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
-  const { setActiveView, setIsTipModalOpen, setIsProModalOpen } = useApp();
+  const { setActiveView, setIsTipModalOpen, setIsProModalOpen, openFeedbackModal } = useApp();
 
   const handleGoToTerms = (section?: string) => {
     if (onNavigateTerms) {
@@ -51,6 +51,18 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
 
         {/* Right: Discreet Legal, Contact & Action Links */}
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => openFeedbackModal()}
+            className="text-slate-600 hover:text-emerald-500 dark:text-zinc-300 dark:hover:text-emerald-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer font-bold"
+            title="Ouvrir le formulaire de signalement et de suggestions"
+          >
+            <Clapperboard className="w-3.5 h-3.5 text-[#e50914]" />
+            <span>Signalement &amp; Suggestions</span>
+          </button>
+
+          <span className="text-slate-300 dark:text-zinc-700">•</span>
+
           <a
             href="mailto:support@elicine.app"
             className="text-slate-600 hover:text-sky-600 dark:text-zinc-400 dark:hover:text-sky-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer font-medium"

@@ -1,7 +1,8 @@
 import React from 'react';
 import { MovieCard } from './MovieCard';
 import { Movie } from '../../types';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Clapperboard, HelpCircle } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 interface MovieGridProps {
   title?: string;
@@ -43,6 +44,8 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   isLoadingMore = false,
   hasMore = false
 }) => {
+  const { openFeedbackModal } = useApp();
+
   return (
     <section id="results-section" className="w-full space-y-6">
 
@@ -67,22 +70,45 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       )}
 
       {/* Section Header - Typographie asymétrique imposante */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pt-2 border-b border-slate-200/80 dark:border-white/[0.06] pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 pt-2 border-b border-slate-200/80 dark:border-white/[0.06] pb-3">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
             {title}
           </h2>
           {subtitle && <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">{subtitle}</p>}
         </div>
-        <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-400 font-medium self-start sm:self-auto">
-          {movies.length} titre{movies.length !== 1 ? 's' : ''}
-        </span>
+
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          {showAiMatch && (
+            <button
+              type="button"
+              onClick={() => openFeedbackModal('ai_bug')}
+              className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 font-medium transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Signaler un résultat imprécis ou suggérer un film"
+            >
+              <Clapperboard className="w-3 h-3 text-[#e50914]" />
+              <span>Suggérer / Signaler</span>
+            </button>
+          )}
+
+          <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-400 font-medium">
+            {movies.length} titre{movies.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* Grid — posters immersifs */}
       {movies.length === 0 && !isLoadingMore && !hasMore ? (
-        <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/[0.08] shadow-sm">
+        <div className="text-center py-12 sm:py-16 px-4 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/[0.08] shadow-sm space-y-4">
           <p className="text-slate-600 dark:text-zinc-400 font-medium text-sm">Aucun résultat trouvé pour cette sélection.</p>
+          <button
+            type="button"
+            onClick={() => openFeedbackModal('missing_movie')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+          >
+            <Clapperboard className="w-3.5 h-3.5" />
+            <span>Suggérer ce film ou cette série à l'équipe</span>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">

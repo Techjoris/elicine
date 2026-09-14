@@ -92,6 +92,11 @@ interface AppContextType {
   setIsProSuccessModalOpen: (open: boolean) => void;
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
+  isFeedbackModalOpen: boolean;
+  setIsFeedbackModalOpen: (open: boolean) => void;
+  feedbackInitialCategory: 'missing_movie' | 'ai_bug' | 'pro_payment' | 'feature_idea' | 'other';
+  setFeedbackInitialCategory: (cat: 'missing_movie' | 'ai_bug' | 'pro_payment' | 'feature_idea' | 'other') => void;
+  openFeedbackModal: (category?: 'missing_movie' | 'ai_bug' | 'pro_payment' | 'feature_idea' | 'other') => void;
 
   // Feedback & Notifications
   toastMessage: string | null;
@@ -301,6 +306,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isThankYouModalOpen, setIsThankYouModalOpen] = useState(false);
   const [isProSuccessModalOpen, setIsProSuccessModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [feedbackInitialCategory, setFeedbackInitialCategory] = useState<'missing_movie' | 'ai_bug' | 'pro_payment' | 'feature_idea' | 'other'>('missing_movie');
+
+  const openFeedbackModal = (category: 'missing_movie' | 'ai_bug' | 'pro_payment' | 'feature_idea' | 'other' = 'missing_movie') => {
+    setFeedbackInitialCategory(category);
+    setIsFeedbackModalOpen(true);
+  };
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -918,6 +931,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsProSuccessModalOpen,
         isMobileMenuOpen,
         setIsMobileMenuOpen,
+        isFeedbackModalOpen,
+        setIsFeedbackModalOpen,
+        feedbackInitialCategory,
+        setFeedbackInitialCategory,
+        openFeedbackModal,
         canInstallPwa,
         installPwa,
         toastMessage,
