@@ -218,9 +218,9 @@ export function analyzeQuerySpecificity(queryText: string): SpecificityAnalysis 
   if (hasBroadCues && specificScore === 0) {
     return {
       level: 'broad',
-      targetCount: 16,
-      minResults: 12,
-      maxResults: 16,
+      targetCount: 8,
+      minResults: 6,
+      maxResults: 10,
       strictFiltering: false,
       score: 0,
       reason: 'Recherche globale de genre, acteur, époque ou nationalité'

@@ -42,9 +42,9 @@ export default async function handler(req, res) {
     messages,
     provider = 'auto',
     model,
-    temperature = 0.2,
+    temperature = 0.3,
     response_format,
-    max_tokens = 600,
+    max_tokens = 220,
     filters
   } = parseResult.data;
 
@@ -203,11 +203,12 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: selectedModel,
         messages: finalMessages,
-        temperature: 0.2,
+        temperature: 0.3,
+        max_tokens: Math.min(Number(max_tokens) || 220, 250),
         stream: false,
         response_format: { type: 'json_object' }
       }),
-    }, 12000);
+    }, 7000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -247,10 +248,11 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model: selectedModel,
             messages: finalMessages,
-            temperature: 0.2,
+            temperature: 0.3,
+            max_tokens: Math.min(Number(max_tokens) || 220, 250),
             stream: false,
           }),
-        }, 8000);
+        }, 6000);
 
         if (!response.ok) {
           const errText = await response.text();
@@ -291,9 +293,10 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: customModel,
           messages: finalMessages,
-          temperature: 0.2,
+          temperature: 0.3,
+          max_tokens: Math.min(Number(max_tokens) || 220, 250),
         }),
-      }, 10000);
+      }, 7000);
 
       if (response.ok) {
         const data = await response.json();

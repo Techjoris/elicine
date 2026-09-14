@@ -127,26 +127,26 @@ export async function queryAiTitles(
   const spec = specificity || analyzeQuerySpecificity(query);
 
   let prompt = '';
-  let maxTokens = 300;
-  let temperature = 0.2;
+  let maxTokens = 200;
+  let temperature = 0.3;
 
   if (spec.level === 'ultra_targeted') {
     prompt = `IDENTIFICATION ULTRA-CIBLÉE : L'utilisateur recherche une œuvre précise d'après des détails narratifs stricts : "${query}".
-Identifie avec une exactitude absolue UNIQUEMENT la ou les 1 à 2 œuvres réelles qui correspondent à l'ENSEMBLE de ces détails (aucun film approximatif, aucune recommandation large, aucun film de remplissage).
+Identifie avec exactitude UNIQUEMENT la ou les 1 à 2 œuvres réelles correspondantes.
 Réponds EXCLUSIVEMENT avec le ou les titres exacts séparés par des virgules (1 ou 2 titres maximum).`;
     maxTokens = 100;
-    temperature = 0.0;
+    temperature = 0.2;
   } else if (spec.level === 'broad') {
-    prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection large et complète pour : "${query}".
-Propose une liste riche et diversifiée d'environ 15 à 18 films ou séries incontournables et emblématiques qui correspondent parfaitement à cette catégorie (mélange de classiques et de références modernes).
-Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans numérotation ni texte additionnel.`;
-    maxTokens = 650;
+    prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
+Propose une sélection percutante de 8 à 10 films ou séries emblématiques et incontournables.
+Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
+    maxTokens = 220;
     temperature = 0.3;
   } else {
-    prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants et pertinents pour l'ambiance ou le thème : "${query}".
+    prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants pour : "${query}".
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
-    maxTokens = 250;
-    temperature = 0.2;
+    maxTokens = 180;
+    temperature = 0.3;
   }
 
   const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('elicine_device_id') || undefined) : undefined;
@@ -436,60 +436,76 @@ export function extractTitlesFromText(rawText: string): string[] {
   return Array.from(new Set(candidateTitles));
 }
 
+// Cache mémoire des correspondances TMDB pour accélérer les requêtes récurrentes
+const tmdbTitleCache = new Map<string, any>();
+
 /**
- * Résolution TMDB haute fidélité pour un titre :
- * - Recherche Multi (Films & Séries) en français
- * - Si 0 résultat, recherche Movie directe
- * - Si 0 résultat, recherche Multi en anglais (pour titres originaux comme The Descent)
- * - Dépliage automatique de known_for si une personne est renvoyée
+ * Résolution TMDB haute fidélité ultra-rapide pour un titre :
+ * - Cache mémoire immédiat (0ms si déjà résolu)
+ * - Recherche Multi (Films & Séries) en français avec timeout strict de 2.8s
+ * - Si aucun résultat, recherche Multi en version originale (anglais)
+ * - Dépliage automatique de known_for si un profil d'acteur/réalisateur est renvoyé
  */
 export async function resolveTitleToTmdb(rawTitle: string, tmdbKey?: string): Promise<any | null> {
   const title = cleanMovieTitle(rawTitle);
   if (!title || title.length < 2) return null;
 
+  const cacheKey = title.toLowerCase();
+  if (tmdbTitleCache.has(cacheKey)) {
+    return tmdbTitleCache.get(cacheKey);
+  }
+
   const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
 
-  // 1. Essai search/multi en français (couvre films et séries)
+  // 1. Essai search/multi en français (couvre films, séries et personnes en une seule requête)
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2800);
     const url = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
     if (res.ok) {
       const data = await res.json();
       if (data.results && data.results.length > 0) {
         const media = data.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
-        if (media) return media;
-        if (data.results[0]?.known_for?.length > 0) {
-          return data.results[0].known_for[0];
+        if (media) {
+          tmdbTitleCache.set(cacheKey, media);
+          return media;
         }
+        if (data.results[0]?.known_for?.length > 0) {
+          const item = data.results[0].known_for[0];
+          tmdbTitleCache.set(cacheKey, item);
+          return item;
+        }
+        tmdbTitleCache.set(cacheKey, data.results[0]);
         return data.results[0];
       }
     }
   } catch (_) {}
 
-  // 2. Essai search/movie direct en français
+  // 2. Repli rapide search/multi en anglais (pour titres originaux non traduits)
   try {
-    const url = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        return data.results[0];
-      }
-    }
-  } catch (_) {}
-
-  // 3. Essai search/multi en anglais (pour les titres anglophones ou non traduits)
-  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2200);
     const url = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(title)}&language=en-US&include_adult=false${keyParam}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
     if (res.ok) {
       const data = await res.json();
       if (data.results && data.results.length > 0) {
         const media = data.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
-        if (media) return media;
-        if (data.results[0]?.known_for?.length > 0) {
-          return data.results[0].known_for[0];
+        if (media) {
+          tmdbTitleCache.set(cacheKey, media);
+          return media;
         }
+        if (data.results[0]?.known_for?.length > 0) {
+          const item = data.results[0].known_for[0];
+          tmdbTitleCache.set(cacheKey, item);
+          return item;
+        }
+        tmdbTitleCache.set(cacheKey, data.results[0]);
         return data.results[0];
       }
     }

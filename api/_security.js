@@ -39,8 +39,8 @@ export const aiSearchRequestSchema = z.object({
   ).max(10, "Historique limité à 10 messages maximum").optional(),
   provider: z.enum(['auto', 'qwen', 'deepseek', 'groq']).optional().default('auto'),
   model: z.string().max(60).regex(/^[a-zA-Z0-9._-]+$/, "Nom de modèle invalide").optional(),
-  temperature: z.number().min(0).max(1).optional().default(0.2),
-  max_tokens: z.number().int().min(1).max(1000).optional().default(600),
+  temperature: z.number().min(0).max(1).optional().default(0.3),
+  max_tokens: z.number().int().min(1).max(400).optional().default(220),
   response_format: z.any().optional(),
   stream: z.boolean().optional().default(false),
   userId: z.string().max(128).optional(),
@@ -240,7 +240,7 @@ export function buildSecuredPrompt(cleanQuery, specificityLevel = 'standard') {
   if (specificityLevel === 'ultra_targeted') {
     modeInstruction = `Recherche ultra-ciblée : identifie STRICTEMENT et UNIQUEMENT la ou les 1 à 2 œuvres cinématographiques réelles correspondant à l'ensemble de ces détails. Zéro remplissage.`;
   } else if (specificityLevel === 'broad') {
-    modeInstruction = `Recherche thématique large : fournis une sélection complète et variée de 14 à 16 films ou séries emblématiques et incontournables.`;
+    modeInstruction = `Recherche thématique large : fournis une sélection percutante de 8 à 10 films ou séries emblématiques et incontournables.`;
   } else {
     modeInstruction = `Recherche générale : fournis entre 6 et 8 titres de films ou séries exacts et très pertinents.`;
   }
