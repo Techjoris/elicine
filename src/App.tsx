@@ -366,6 +366,7 @@ export const AppContent: React.FC = () => {
               <HeroSection 
                 key={heroResetKey}
                 onAiResultsFound={(res) => setAiResults(res)} 
+                hasSearched={Boolean(aiResults && aiResults.movies && aiResults.movies.length > 0)}
               />
 
               {/* 2. AI Generated Results (if a search has been performed) */}

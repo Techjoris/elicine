@@ -38,6 +38,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   const [prompt, setPrompt] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [selectedMinRating, setSelectedMinRating] = useState(0);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const samplePrompts = [
     '🌧️ Thriller sombre sous la pluie avec un twist final',
@@ -60,6 +61,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
     }
 
     setIsLoading(true);
+    setHasSearched(true);
     try {
       const result: AIRecommendationResult = await executeCinoraSearch(
         query, 
@@ -234,19 +236,27 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         </div>
       </div>
 
-      {/* Filtres Avancés Pro (Plateformes & Notes minimales) */}
-      <div className="w-full">
-        <AdvancedSearchFilters
-          selectedPlatform={selectedPlatform}
-          onSelectPlatform={(p) => setSelectedPlatform(p)}
-          selectedMinRating={selectedMinRating}
-          onSelectMinRating={(r) => setSelectedMinRating(r)}
-          isPro={Boolean(user?.isPro)}
-          onTriggerProModal={() => {
-            showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
-            setIsProModalOpen(true);
-          }}
-        />
+      {/* Filtres Avancés Pro (Plateformes & Notes minimales) - Masqué par défaut, affiché uniquement après recherche */}
+      <div 
+        id="aisearch-advanced-filters"
+        className={`w-full transition-all duration-300 ${
+          (hasSearched || isLoading) ? 'block animate-fade-in' : 'hidden'
+        }`}
+        style={{ display: (hasSearched || isLoading) ? undefined : 'none' }}
+      >
+        {(hasSearched || isLoading) && (
+          <AdvancedSearchFilters
+            selectedPlatform={selectedPlatform}
+            onSelectPlatform={(p) => setSelectedPlatform(p)}
+            selectedMinRating={selectedMinRating}
+            onSelectMinRating={(r) => setSelectedMinRating(r)}
+            isPro={Boolean(user?.isPro)}
+            onTriggerProModal={() => {
+              showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+              setIsProModalOpen(true);
+            }}
+          />
+        )}
       </div>
 
       {/* Suggested Quick Tags */}

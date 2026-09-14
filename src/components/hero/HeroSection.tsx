@@ -23,6 +23,7 @@ interface HeroSectionProps {
     suggestedPrompts: string[];
   }) => void;
   onAiSearchStart?: () => void;
+  hasSearched?: boolean;
 }
 
 const DEFAULT_HERO_MOVIES: Movie[] = [
@@ -98,7 +99,11 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
   }
 ];
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAiSearchStart }) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({ 
+  onAiResultsFound, 
+  onAiSearchStart,
+  hasSearched: propHasSearched = false 
+}) => {
   const { 
     setSelectedMovie, 
     toggleWatchlist, 
@@ -125,7 +130,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [selectedMinRating, setSelectedMinRating] = useState<number>(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [internalHasSearched, setInternalHasSearched] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Le bloc des filtres avancés n'est affiché que si la recherche est active ou que des résultats sont présents
+  const isSearchActive = internalHasSearched || Boolean(propHasSearched) || isAiLoading;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -233,7 +242,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
   const inWatchlist = currentMovie?.id ? isInWatchlist(currentMovie.id) : false;
   const alertActive = currentMovie?.id ? isMovieAlertActive(currentMovie.id) : false;
 
-  const handleSearch = async (queryText?: string) => {
+  const handleSearch = async (
+    queryText?: string,
+    overridePlatform?: string,
+    overrideMinRating?: number,
+    overrideTypeFilter?: 'Tous' | 'Films' | 'Séries TV'
+  ) => {
     const raw = (queryText !== undefined ? queryText : searchPrompt).trim();
     const q = raw.slice(0, 350);
     setErrorMessage(null);
@@ -247,7 +261,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       return;
     }
 
+    const platformToUse = overridePlatform !== undefined ? overridePlatform : selectedPlatform;
+    const minRatingToUse = overrideMinRating !== undefined ? overrideMinRating : selectedMinRating;
+    const typeFilterToUse = overrideTypeFilter !== undefined ? overrideTypeFilter : selectedTypeFilter;
+
     setIsAiLoading(true);
+    setInternalHasSearched(true);
     if (onAiSearchStart) {
       onAiSearchStart();
     }
@@ -260,9 +279,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
         t.tmdbLang, 
         t.aiPromptLang,
         {
-          platform: user?.isPro ? selectedPlatform : 'all',
-          minRating: user?.isPro ? selectedMinRating : 0,
-          mediaType: selectedTypeFilter
+          platform: user?.isPro ? platformToUse : 'all',
+          minRating: user?.isPro ? minRatingToUse : 0,
+          mediaType: typeFilterToUse
         }
       );
       
@@ -311,6 +330,27 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
       }
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const handlePlatformSelect = (platform: string) => {
+    setSelectedPlatform(platform);
+    if (user?.isPro && searchPrompt.trim() && !isAiLoading) {
+      handleSearch(searchPrompt, platform, selectedMinRating, selectedTypeFilter);
+    }
+  };
+
+  const handleMinRatingSelect = (rating: number) => {
+    setSelectedMinRating(rating);
+    if (user?.isPro && searchPrompt.trim() && !isAiLoading) {
+      handleSearch(searchPrompt, selectedPlatform, rating, selectedTypeFilter);
+    }
+  };
+
+  const handleTypeFilterSelect = (type: 'Tous' | 'Films' | 'Séries TV') => {
+    setSelectedTypeFilter(type);
+    if (isSearchActive && searchPrompt.trim() && !isAiLoading) {
+      handleSearch(searchPrompt, selectedPlatform, selectedMinRating, type);
     }
   };
 
@@ -529,7 +569,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
               <button
                 key={type}
                 type="button"
-                onClick={() => setSelectedTypeFilter(type)}
+                onClick={() => handleTypeFilterSelect(type)}
                 className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-white text-black font-bold border border-white scale-105 shadow-sm'
@@ -542,19 +582,27 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onAiResultsFound, onAi
           })}
         </div>
 
-        {/* d.2) Filtres Avancés Pro (Plateformes & Notes minimales) */}
-        <div className="w-full mb-5 sm:mb-6 px-1">
-          <AdvancedSearchFilters
-            selectedPlatform={selectedPlatform}
-            onSelectPlatform={(p) => setSelectedPlatform(p)}
-            selectedMinRating={selectedMinRating}
-            onSelectMinRating={(r) => setSelectedMinRating(r)}
-            isPro={Boolean(user?.isPro)}
-            onTriggerProModal={() => {
-              showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
-              setIsProModalOpen(true);
-            }}
-          />
+        {/* d.2) Filtres Avancés Pro (Plateformes & Notes minimales) - Masqué par défaut, affiché uniquement après recherche */}
+        <div 
+          id="hero-advanced-search-filters"
+          className={`w-full px-1 transition-all duration-300 ${
+            isSearchActive ? 'block mb-5 sm:mb-6 animate-fade-in' : 'hidden'
+          }`}
+          style={{ display: isSearchActive ? undefined : 'none' }}
+        >
+          {isSearchActive && (
+            <AdvancedSearchFilters
+              selectedPlatform={selectedPlatform}
+              onSelectPlatform={handlePlatformSelect}
+              selectedMinRating={selectedMinRating}
+              onSelectMinRating={handleMinRatingSelect}
+              isPro={Boolean(user?.isPro)}
+              onTriggerProModal={() => {
+                showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+                setIsProModalOpen(true);
+              }}
+            />
+          )}
         </div>
 
         {/* e) Encart "À l'Affiche" & Actions du Film */}
