@@ -437,31 +437,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onKeyDown={handleKeyDown}
             />
 
-            {/* Integrated Quota Badge + Explorer Button with Cinema Accent */}
-            <div className="flex items-center gap-1.5 flex-shrink-0 self-end mb-0.5 sm:mb-1">
-              {/* Quota Badge */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsProModalOpen(true);
-                }}
-                title={user?.isPro ? "Pass Pro : Recherches IA illimitées" : `Il vous reste ${quota.remaining} recherche(s) gratuite(s) aujourd'hui sur 3`}
-                className={`text-[11px] font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-                  user?.isPro
-                    ? "bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
-                    : quota.remaining <= 0
-                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30"
-                    : "bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/10"
-                }`}
-              >
-                <span>{user?.isPro ? '👑' : (quota.remaining <= 0 ? '🔒' : '⚡')}</span>
-                <span className="hidden sm:inline font-bold">
-                  {user?.isPro ? 'Illimité' : `${quota.remaining}/3`}
-                </span>
-              </button>
-
-              {/* Action Submit Button - Rouge Cinéma #e50914 */}
+            {/* Explorer Action Button - Rouge Cinéma #e50914 */}
+            <div className="flex items-center flex-shrink-0 self-end mb-0.5 sm:mb-1">
               <button
                 type="submit"
                 disabled={isAiLoading}

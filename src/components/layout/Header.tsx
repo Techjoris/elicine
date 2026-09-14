@@ -180,15 +180,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Actions de droite (Soutenir, Installer, Langue, Connexion / Profil) */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Bouton Soutenir (masqué sur très petit écran ou réduit) */}
             <button
               type="button"
               onClick={handleOpenTip}
-              className="hidden sm:flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer"
-              title="Soutenir"
+              className="hidden sm:flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer font-medium"
+              title="Soutenir Éliciné"
             >
-              <Coffee size={14} className="text-amber-500" />
+              <Coffee size={14} className="text-amber-500 flex-shrink-0" />
               <span>Soutenir</span>
             </button>
 
@@ -197,12 +197,12 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={handleInstallClick}
-                className="flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer"
+                className="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer font-medium"
                 title="Installer l'application"
                 aria-label="Installer l'application sur votre appareil"
               >
-                <Download size={14} className="text-red-500" />
-                <span className="hidden md:inline">Installer</span>
+                <Download size={14} className="text-red-500 flex-shrink-0" />
+                <span>Installer<span className="hidden lg:inline"> l'application</span></span>
               </button>
             )}
 
@@ -223,11 +223,11 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => openAuthModal('login')}
-                className="flex items-center justify-center bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm"
-                title="Connexion"
+                className="flex items-center gap-1.5 bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm flex-shrink-0"
+                title="Se connecter"
               >
-                <LogIn size={14} className="sm:mr-1.5" />
-                <span className="hidden sm:inline">Connexion</span>
+                <LogIn size={14} className="flex-shrink-0" />
+                <span>Connexion</span>
               </button>
             )}
           </div>

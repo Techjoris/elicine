@@ -145,28 +145,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               disabled={isLoading}
             />
 
-            {/* Integrated Quota Badge + Explorer Button inside the pill */}
-            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-              {/* Quota Badge */}
-              <button
-                type="button"
-                onClick={() => setIsProModalOpen(true)}
-                title={user?.isPro ? "Pass Pro : Recherches IA illimitées" : `Il vous reste ${quota.remaining} recherche(s) gratuite(s) aujourd'hui sur 3`}
-                className={`text-[11px] font-semibold px-2 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-                  user?.isPro
-                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
-                    : quota.remaining <= 0
-                    ? "bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 hover:bg-rose-500/30"
-                    : "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
-                }`}
-              >
-                <span>{user?.isPro ? '👑' : (quota.remaining <= 0 ? '🔒' : '⚡')}</span>
-                <span className="hidden sm:inline font-bold">
-                  {user?.isPro ? 'Illimité' : `${quota.remaining}/3`}
-                </span>
-              </button>
-
-              {/* Explorer Button */}
+            {/* Explorer Action Button inside the pill */}
+            <div className="flex items-center flex-shrink-0">
               <button
                 type="button"
                 onClick={() => handleSearch()}
