@@ -121,35 +121,49 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
-  // 1. Qwen / DashScope (Alibaba Cloud — Moteur Principal)
+  // 1. DeepSeek (Moteur Principal - Niveau 1)
+  const deepseekKey = (
+    process.env.DEEPSEEK_API_KEY       ||
+    process.env.DEEPSEEK_KEY           ||
+    process.env.VITE_DEEPSEEK_API_KEY  ||
+    req.body?.deepseekApiKey           ||
+    (bearerToken.startsWith('sk-') ? bearerToken : '')
+  ).trim().replace(/^["']|["']$/g, '');
+
+  // 2. Qwen / DashScope (Alibaba Cloud — Secours 1)
   const qwenKey = (
     process.env.DASHSCOPE_API_KEY      ||
     process.env.QWEN_API_KEY           ||
     process.env.VITE_DASHSCOPE_API_KEY ||
-    (bearerToken.startsWith('sk-') && !bearerToken.startsWith('sk-deepseek') ? bearerToken : '')
-  ).trim();
+    req.body?.qwenApiKey               ||
+    ''
+  ).trim().replace(/^["']|["']$/g, '');
 
-  // 2. DeepSeek (Moteur Fallback Haute Disponibilité)
-  const deepseekKey = (
-    process.env.DEEPSEEK_API_KEY       ||
-    process.env.VITE_DEEPSEEK_API_KEY  ||
-    (bearerToken.startsWith('sk-deepseek') ? bearerToken : '')
-  ).trim();
+  // 3. Google Gemini (Secours 2)
+  const geminiKey = (
+    process.env.GEMINI_API_KEY         ||
+    process.env.GOOGLE_API_KEY         ||
+    process.env.VITE_GEMINI_API_KEY    ||
+    req.body?.geminiApiKey             ||
+    ''
+  ).trim().replace(/^["']|["']$/g, '');
 
-  // 3. Groq Cloud (Llama — Secours Supplémentaire)
+  // 4. Groq Cloud (Llama — Filet Supplémentaire)
   const groqKey = (
-    process.env.GROQ_API_KEY      ||
-    process.env.AI_API_KEY        ||
+    process.env.GROQ_API_KEY           ||
+    process.env.AI_API_KEY             ||
+    req.body?.groqApiKey               ||
     (bearerToken.startsWith('gsk_') ? bearerToken : '')
-  ).trim();
+  ).trim().replace(/^["']|["']$/g, '');
 
   // Modèles par défaut
   const DEFAULT_DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
   const DEFAULT_QWEN_MODEL = process.env.QWEN_MODEL || 'qwen-plus';
+  const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 
   // Helper fetch avec timeout pour éviter tout blocage réseau
-  const fetchWithTimeout = async (url, options, timeoutMs = 8000) => {
+  const fetchWithTimeout = async (url, options, timeoutMs = 12000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort(new Error(`Délai d'attente dépassé (${timeoutMs}ms)`));
@@ -166,9 +180,55 @@ export default async function handler(req, res) {
     }
   };
 
-  // ─── Étape 1 : Qwen DashScope (Moteur Principal) ─────────────────────────────
-  const tryQwen = async (customModel) => {
-    if (!qwenKey) throw new Error('Clé Qwen/DashScope (DASHSCOPE_API_KEY) non configurée');
+  // ─── Niveau 1 : DeepSeek-Flash / Chat (Moteur Principal) ─────────────────────
+  const tryDeepSeek = async (customModel = 'deepseek-chat') => {
+    const effectiveKey = (process.env.DEEPSEEK_API_KEY || deepseekKey || '').trim().replace(/^["']|["']$/g, '');
+    if (!effectiveKey) {
+      const err = new Error("Clé d'API DeepSeek absente : DEEPSEEK_API_KEY n'est pas configurée dans les variables d'environnement Vercel");
+      console.error("Détail Erreur DeepSeek:", err.message);
+      throw err;
+    }
+
+    const selectedModel = 'deepseek-chat';
+    const targetUrl = 'https://api.deepseek.com/chat/completions';
+
+    console.log(`[API /api/ai] Interrogation DeepSeek (${selectedModel}) sur ${targetUrl}...`);
+
+    const response = await fetchWithTimeout(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${effectiveKey}`,
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: finalMessages,
+        temperature: 0.2,
+        stream: false,
+        response_format: { type: 'json_object' }
+      }),
+    }, 12000);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      const err = new Error(`DeepSeek HTTP ${response.status}: ${errText}`);
+      console.error("Détail Erreur DeepSeek:", err);
+      throw err;
+    }
+
+    const data = await response.json();
+    console.log(`[API /api/ai] Réponse reçue avec succès de DeepSeek (${selectedModel}) !`);
+    return { ...data, provider_used: `DeepSeek (${selectedModel})` };
+  };
+
+  // ─── Secours 1 : Qwen DashScope (Alibaba Cloud) ──────────────────────────────
+  const tryQwen = async (customModel = DEFAULT_QWEN_MODEL) => {
+    const effectiveKey = (process.env.DASHSCOPE_API_KEY || qwenKey || '').trim().replace(/^["']|["']$/g, '');
+    if (!effectiveKey) {
+      const err = new Error("Clé Qwen/DashScope (DASHSCOPE_API_KEY) non configurée dans l'environnement");
+      console.error("Détail Erreur Qwen:", err.message);
+      throw err;
+    }
     const selectedModel = customModel || (model && model.includes('qwen') ? model : DEFAULT_QWEN_MODEL);
     const endpoints = [
       'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
@@ -182,14 +242,12 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${qwenKey}`,
+            'Authorization': `Bearer ${effectiveKey}`,
           },
           body: JSON.stringify({
             model: selectedModel,
             messages: finalMessages,
-            temperature,
-            ...(response_format ? { response_format } : {}),
-            ...(max_tokens ? { max_tokens } : {}),
+            temperature: 0.2,
             stream: false,
           }),
         }, 8000);
@@ -201,78 +259,112 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
+        console.log(`[API /api/ai] Réponse reçue avec succès de Qwen (${selectedModel}) !`);
         return { ...data, provider_used: `Qwen (${selectedModel})` };
       } catch (err) {
         lastError = err;
       }
     }
 
-    throw lastError || new Error('Tous les endpoints Qwen ont échoué ou dépassé le délai');
+    const err = lastError || new Error('Tous les endpoints Qwen ont échoué ou dépassé le délai');
+    console.error("Détail Erreur Qwen:", err.message);
+    throw err;
   };
 
-  // ─── Étape 3 : DeepSeek-Flash (Moteur Fallback Haute Disponibilité) ───────────
-  const tryDeepSeek = async (customModel) => {
-    if (!deepseekKey) throw new Error('Clé DeepSeek (DEEPSEEK_API_KEY) non configurée');
-    const selectedModel = customModel || DEFAULT_DEEPSEEK_MODEL;
-
-    const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${deepseekKey}`,
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: finalMessages,
-        temperature,
-        ...(response_format ? { response_format } : {}),
-        ...(max_tokens ? { max_tokens } : {}),
-        stream: false,
-      }),
-    }, 10000);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      // Repli automatique sur deepseek-chat si deepseek-flash n'est pas reconnu
-      if (response.status === 400 && errText.toLowerCase().includes('model') && selectedModel === 'deepseek-flash') {
-        console.warn('[API /api/ai] DeepSeek : Repli sur deepseek-chat suite au rejet de deepseek-flash');
-        return await tryDeepSeek('deepseek-chat');
-      }
-      throw new Error(`DeepSeek HTTP ${response.status}: ${errText}`);
+  // ─── Secours 2 : Google Gemini (gemini-2.0-flash / gemini-1.5-flash) ─────────
+  const tryGemini = async (customModel = DEFAULT_GEMINI_MODEL) => {
+    const effectiveKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || geminiKey || '').trim().replace(/^["']|["']$/g, '');
+    if (!effectiveKey) {
+      const err = new Error("Clé Gemini (GEMINI_API_KEY ou GOOGLE_API_KEY) non configurée");
+      console.error("Détail Erreur Gemini:", err.message);
+      throw err;
     }
 
-    const data = await response.json();
-    return { ...data, provider_used: `DeepSeek (${selectedModel})` };
+    // 1. Essai endpoint compatible OpenAI de Gemini
+    try {
+      const response = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${effectiveKey}`,
+        },
+        body: JSON.stringify({
+          model: customModel,
+          messages: finalMessages,
+          temperature: 0.2,
+        }),
+      }, 10000);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[API /api/ai] Réponse reçue avec succès de Gemini (${customModel}) !`);
+        return { ...data, provider_used: `Gemini (${customModel})` };
+      }
+    } catch (openAiErr) {
+      console.warn('[API /api/ai] Endpoint OpenAI Gemini échoué, repli sur generateContent native...', openAiErr?.message);
+    }
+
+    // 2. Fallback direct generateContent API native
+    const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${customModel}:generateContent?key=${effectiveKey}`;
+    const nativeResponse = await fetchWithTimeout(nativeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: finalMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n') }
+            ]
+          }
+        ]
+      })
+    }, 10000);
+
+    if (!nativeResponse.ok) {
+      const errText = await nativeResponse.text();
+      const err = new Error(`Gemini HTTP ${nativeResponse.status}: ${errText}`);
+      console.error("Détail Erreur Gemini:", err.message);
+      throw err;
+    }
+
+    const nativeData = await nativeResponse.json();
+    const textContent = nativeData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log(`[API /api/ai] Réponse reçue avec succès de Gemini native (${customModel}) !`);
+    return {
+      choices: [{ message: { content: textContent } }],
+      provider_used: `Gemini (${customModel})`
+    };
   };
 
-  // ─── Secours Supplémentaire : Groq Cloud (Llama 3.3) ─────────────────────────
-  const tryGroq = async (customModel) => {
-    if (!groqKey) throw new Error('Clé GROQ_API_KEY non configurée');
-    const selectedModel = customModel || (model && !model.includes('qwen') && !model.includes('deepseek') ? model : DEFAULT_GROQ_MODEL);
+  // ─── Filet Supplémentaire : Groq Cloud (Llama 3.3) ───────────────────────────
+  const tryGroq = async (customModel = DEFAULT_GROQ_MODEL) => {
+    const effectiveKey = (process.env.GROQ_API_KEY || process.env.AI_API_KEY || groqKey || '').trim().replace(/^["']|["']$/g, '');
+    if (!effectiveKey) throw new Error('Clé GROQ_API_KEY non configurée');
 
     const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`,
+        'Authorization': `Bearer ${effectiveKey}`,
       },
       body: JSON.stringify({
-        model: selectedModel,
+        model: customModel,
         messages: finalMessages,
-        temperature,
-        ...(response_format ? { response_format } : {}),
-        ...(max_tokens ? { max_tokens } : {}),
+        temperature: 0.2,
         stream: false,
       }),
     }, 8000);
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Groq HTTP ${response.status}: ${errText}`);
+      const err = new Error(`Groq HTTP ${response.status}: ${errText}`);
+      console.error("Détail Erreur Groq:", err.message);
+      throw err;
     }
 
     const data = await response.json();
-    return { ...data, provider_used: `Groq (${selectedModel})` };
+    console.log(`[API /api/ai] Réponse reçue avec succès de Groq (${customModel}) !`);
+    return { ...data, provider_used: `Groq (${customModel})` };
   };
 
   // ─── Enregistrement Quota dans Supabase pour les Utilisateurs Gratuits ───────
@@ -312,92 +404,89 @@ export default async function handler(req, res) {
     }
   };
 
-  // ─── Routage & Cascade Haute Disponibilité (DeepSeek-Flash -> Qwen DashScope -> Groq) ──
-  try {
-    // Cas 1 : Demande explicite de DeepSeek
-    if (provider === 'deepseek') {
+  // ─── Routage & Cascade Haute Disponibilité (DeepSeek -> Qwen -> Gemini -> Groq) ──
+  // Helper exécutant la cascade complète avec priorité absolue à DeepSeek
+  const executeFullCascade = async () => {
+    // 1. Tentative 1 : DeepSeek-Flash / Chat (Moteur Principal)
+    try {
+      console.log('[API /api/ai] [Niveau 1] Appel effectif de DeepSeek (deepseek-chat)...');
+      const deepseekResult = await tryDeepSeek('deepseek-chat');
+      await recordSearchInSupabase();
+      return res.status(200).json(deepseekResult);
+    } catch (error) {
+      console.error("Détail Erreur DeepSeek:", error);
+      console.warn("Basculement sur Qwen (Secours 1)...");
+
+      // 2. Tentative 2 : Qwen (DashScope - Secours 1)
       try {
-        const result = await tryDeepSeek(model || DEFAULT_DEEPSEEK_MODEL);
+        console.log('[API /api/ai] [Secours 1] Appel de secours Qwen (DashScope)...');
+        const qwenResult = await tryQwen(DEFAULT_QWEN_MODEL);
         await recordSearchInSupabase();
-        return res.status(200).json(result);
-      } catch (deepseekErr) {
-        console.warn("Basculement sur Qwen (Secours 1)...", deepseekErr?.message || deepseekErr);
-        if (qwenKey) {
-          const fallbackQwen = await tryQwen(DEFAULT_QWEN_MODEL);
+        return res.status(200).json(qwenResult);
+      } catch (qwenError) {
+        console.error("Détail Erreur Qwen:", qwenError);
+        console.warn("Basculement sur Gemini (Secours 2)...");
+
+        // 3. Tentative 3 : Gemini (gemini-2.0-flash - Secours 2)
+        try {
+          console.log('[API /api/ai] [Secours 2] Appel de secours Gemini (gemini-2.0-flash)...');
+          const geminiResult = await tryGemini(DEFAULT_GEMINI_MODEL);
           await recordSearchInSupabase();
-          return res.status(200).json(fallbackQwen);
+          return res.status(200).json(geminiResult);
+        } catch (geminiError) {
+          console.error("Détail Erreur Gemini:", geminiError);
+
+          // 4. Filet de secours ultime : Groq Cloud (Llama 3.3)
+          if (groqKey || process.env.GROQ_API_KEY) {
+            try {
+              console.log('[API /api/ai] [Secours 3] Filet de secours ultime : tentative Groq Cloud...');
+              const groqResult = await tryGroq(DEFAULT_GROQ_MODEL);
+              await recordSearchInSupabase();
+              return res.status(200).json(groqResult);
+            } catch (groqErr) {
+              console.error("Détail Erreur Groq:", groqErr);
+            }
+          }
+
+          throw new Error(`Tous les moteurs IA ont échoué : DeepSeek (${error?.message || error}) -> Qwen (${qwenError?.message || qwenError}) -> Gemini (${geminiError?.message || geminiError})`);
         }
-        throw deepseekErr;
       }
     }
+  };
 
-    // Cas 2 : Demande explicite de Qwen
+  try {
+    // Si l'utilisateur demande explicitement Qwen en priorité
     if (provider === 'qwen') {
       try {
         const result = await tryQwen(model || DEFAULT_QWEN_MODEL);
         await recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (qwenErr) {
-        console.warn('[API /api/ai] Échec Qwen explicite, repli vers DeepSeek...', qwenErr?.message);
-        if (deepseekKey) {
-          const fallbackDeepSeek = await tryDeepSeek(DEFAULT_DEEPSEEK_MODEL);
-          await recordSearchInSupabase();
-          return res.status(200).json(fallbackDeepSeek);
-        }
-        throw qwenErr;
+        console.error("Détail Erreur Qwen:", qwenErr);
+        console.warn("Basculement sur DeepSeek...");
+        return await executeFullCascade();
       }
     }
 
-    // Cas 3 : Demande explicite de Groq
+    // Si l'utilisateur demande explicitement Groq en priorité
     if (provider === 'groq') {
       try {
         const result = await tryGroq(model || DEFAULT_GROQ_MODEL);
         await recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (groqErr) {
-        console.warn('[API /api/ai] Échec Groq, repli vers DeepSeek/Qwen...', groqErr?.message);
+        console.error("Détail Erreur Groq:", groqErr);
+        return await executeFullCascade();
       }
     }
 
-    // CAS PAR DÉFAUT : Tentative 1 DeepSeek-Flash -> Basculement sur Qwen (Secours 1)
-    try {
-      // Tentative 1 : DeepSeek-Flash / Chat
-      console.log('[API /api/ai] [Tentative 1] Interrogation de DeepSeek (deepseek-chat / deepseek-flash)...');
-      const deepseekResult = await tryDeepSeek(model && model.includes('deepseek') ? model : DEFAULT_DEEPSEEK_MODEL);
-      await recordSearchInSupabase();
-      return res.status(200).json(deepseekResult);
-    } catch (deepseekErr) {
-      console.warn("Basculement sur Qwen (Secours 1)...", deepseekErr?.message || deepseekErr);
-
-      // Tentative 2 : Qwen (DashScope - Secours 1)
-      try {
-        console.log('[API /api/ai] [Tentative 2] Appel de secours Qwen (DashScope)...');
-        const qwenResult = await tryQwen(model && model.includes('qwen') ? model : DEFAULT_QWEN_MODEL);
-        await recordSearchInSupabase();
-        return res.status(200).json(qwenResult);
-      } catch (qwenErr) {
-        console.warn('[API /api/ai] Échec du secours Qwen :', qwenErr?.message || qwenErr);
-
-        // Filet de sécurité tertiaire si Groq est disponible
-        if (groqKey) {
-          console.log('[API /api/ai] Filet de secours ultime : tentative via Groq Cloud...');
-          try {
-            const groqResult = await tryGroq(DEFAULT_GROQ_MODEL);
-            await recordSearchInSupabase();
-            return res.status(200).json(groqResult);
-          } catch (groqErr) {
-            console.warn('[API /api/ai] Groq a également échoué :', groqErr?.message);
-          }
-        }
-
-        throw new Error(`DeepSeek (${deepseekErr.message}) et Qwen (${qwenErr.message}) ont tous deux échoué.`);
-      }
-    }
+    // Par défaut et pour provider === 'deepseek' : exécuter la cascade prioritaire DeepSeek -> Qwen -> Gemini -> Groq
+    return await executeFullCascade();
   } catch (finalErr) {
-    console.error('[API /api/ai] Erreur globale moteurs IA :', finalErr.message);
+    console.error('[API /api/ai] Erreur globale moteurs IA :', finalErr?.message || finalErr);
     return res.status(502).json({
       error: 'Tous les moteurs IA ont échoué',
-      details: finalErr.message,
+      details: finalErr?.message || String(finalErr),
       fallback_suggested: true,
     });
   }

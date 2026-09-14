@@ -253,6 +253,9 @@ RÈGLES DE SÉCURITÉ ABSOLUES (NON CONTOURNABLES) :
 {
   "movies": ["Titre exact 1", "Titre exact 2"]
 }
+RÈGLES STRICTES SUR LES TITRES :
+- Donne UNIQUEMENT les titres propres et reconnus des œuvres (ex: "Inception", "The Descent", "Shutter Island", "Alien").
+- N'inclus JAMAIS l'année de sortie (ex: PAS de "(2010)"), le nom du réalisateur ou le mot 'Film' dans la chaîne du titre.
 Aucun texte avant ou après le JSON.`;
 
   const userContent = `Trouve les œuvres cinématographiques (films ou séries) correspondant à la description ci-dessous :

@@ -800,7 +800,30 @@ export async function testAiApiKey(provider: 'groq' | 'openai', key?: string): P
 export function formatTmdbResults(results: any[]): Movie[] {
   if (!results || !Array.isArray(results)) return [];
 
-  return results.map((item) => ({
+  // Déplier les œuvres issues des fiches acteurs/réalisateurs (known_for)
+  const expandedItems: any[] = [];
+  for (const item of results) {
+    if (!item) continue;
+    if (item.media_type === 'person' && Array.isArray(item.known_for) && item.known_for.length > 0) {
+      for (const k of item.known_for) {
+        if (k && (k.media_type === 'movie' || k.media_type === 'tv' || !k.media_type)) {
+          expandedItems.push(k);
+        }
+      }
+    } else if (item.media_type === 'movie' || item.media_type === 'tv' || item.title || item.name) {
+      expandedItems.push(item);
+    }
+  }
+
+  // Dédupliquer par ID TMDB tout en préservant l'ordre
+  const seenIds = new Set<number>();
+  const uniqueItems = expandedItems.filter(item => {
+    if (!item?.id || seenIds.has(item.id)) return false;
+    seenIds.add(item.id);
+    return true;
+  });
+
+  return uniqueItems.map((item) => ({
     id: item.id,
     title: item.title || item.name,
     original_title: item.original_title || item.original_name,

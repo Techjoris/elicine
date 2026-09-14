@@ -121,7 +121,8 @@ export async function queryAiTitles(
   query: string,
   apiKey?: string,
   specificity?: SpecificityAnalysis,
-  filters?: AdvancedSearchFiltersOptions
+  filters?: AdvancedSearchFiltersOptions,
+  apiSettings?: ApiSettings
 ): Promise<{ titles: string[]; provider: string }> {
   const spec = specificity || analyzeQuerySpecificity(query);
 
@@ -190,6 +191,9 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     prompt,
     deviceId,
     supabaseToken,
+    deepseekApiKey: getDeepSeekKey(apiSettings) || undefined,
+    qwenApiKey: getQwenKey(apiSettings) || undefined,
+    groqApiKey: getGroqKey(apiSettings) || undefined,
     filters: filters ? {
       platform: filters.platform,
       minRating: filters.minRating,
@@ -310,32 +314,188 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
 }
 
 /**
+ * Nettoie rigoureusement un titre de film ou série pour maximiser la correspondance avec TMDB :
+ * - Supprime les années entre parenthèses : "(2010)", "(1997)", "(2024)"
+ * - Supprime les annotations descriptives : "(Film)", "(Série TV)", "(Film de David Fincher)"
+ * - Supprime les puces et numérotations : "1. ", "1 - ", "• ", "- ", "* "
+ * - Supprime les guillemets et apostrophes parasites : "Inception", « The Descent »
+ * - Supprime les suffixes descriptifs trop longs : "Buried - Un homme piégé dans un cercueil" -> "Buried"
+ */
+export function cleanMovieTitle(raw: string): string {
+  if (!raw) return '';
+  let cleaned = String(raw).trim();
+
+  // 1. Supprimer les balises HTML/XML éventuelles
+  cleaned = cleaned.replace(/<[^>]+>/g, '');
+
+  // 2. Supprimer les préfixes de liste numérotée (ex: "1. ", "1) ", "1 - ") ou à puces (ex: "- ", "* ", "• ")
+  // Note : exige impérativement une ponctuation (. ) - :) après les chiffres pour ne pas tronquer "10 Cloverfield Lane", "12 Angry Men" ou "28 Days Later"
+  cleaned = cleaned.replace(/^(\d+[\.)\-–—:]+\s*|[\*•\-–—]\s*)/, '');
+
+  // 3. Supprimer les guillemets et apostrophes encadrantes
+  cleaned = cleaned.replace(/^["'«“‘]+|["'»”’]+$/g, '').trim();
+
+  // 4. Supprimer les parenthèses de date ou d'information (ex: "(2010)", "(Film)", "(Série)")
+  cleaned = cleaned.replace(/\s*\((?:19\d\d|20\d\d|film|série|serie|série tv|tv|court-métrage|mini-série)[^)]*\)/gi, '');
+  // Supprimer toute parenthèse finale qui contient une date à 4 chiffres
+  cleaned = cleaned.replace(/\s*\(\d{4}\)$/g, '');
+
+  // 5. Si le titre contient " - " suivi d'une description longue, ne conserver que le titre principal
+  if (cleaned.includes(' - ') && cleaned.length > 25) {
+    const parts = cleaned.split(' - ');
+    if (parts[0].length >= 2 && parts[0].length <= 50) {
+      cleaned = parts[0].trim();
+    }
+  }
+
+  // 6. Nettoyage final des guillemets résiduels et espaces
+  cleaned = cleaned.replace(/^["'«“‘]+|["'»”’]+$/g, '').trim();
+
+  return cleaned;
+}
+
+/**
  * 2. EXTRACT TITLES SAFELY
- * Sépare par virgules ou retours à la ligne et nettoie les puces/chiffres/guillemets
+ * Analyse intelligemment la réponse brute de l'IA (DeepSeek / Qwen / Gemini / Groq) :
+ * - Élimine les balises de raisonnement (<think>...</think>) propres à DeepSeek
+ * - Détecte et parse les blocs JSON ({ "movies": [...] } ou [...])
+ * - Nettoie chaque titre avec cleanMovieTitle
+ * - Gère le découpage par ligne ou par virgule en repli
+ * - Déduplique les titres obtenus
  */
 export function extractTitlesFromText(rawText: string): string[] {
   if (!rawText) return [];
 
-  // Si l'IA a répondu en JSON par réflexe
-  try {
-    const cleanContent = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    if (cleanContent.startsWith('{') || cleanContent.startsWith('[')) {
-      const parsed = JSON.parse(cleanContent);
-      const arr = Array.isArray(parsed) ? parsed : (parsed.movies || parsed.titles || parsed.results || []);
-      if (Array.isArray(arr) && arr.length > 0) {
-        return arr
-          .map(t => typeof t === 'string' ? t.trim() : String(t.title || t.titre || t.name || '').trim())
-          .filter(t => t.length > 1);
+  // 1. Éliminer les balises de raisonnement de DeepSeek (<think>...</think>)
+  let text = String(rawText).replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // 2. Détection d'un bloc de code markdown ```json ... ``` ou ``` ... ```
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const potentialJson = codeBlockMatch ? codeBlockMatch[1].trim() : text;
+
+  // 3. Chercher un objet {...} ou tableau [...] JSON dans le texte
+  const jsonMatch = potentialJson.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      let list: any[] = [];
+      if (Array.isArray(parsed)) {
+        list = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        list = parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
       }
+      if (Array.isArray(list) && list.length > 0) {
+        const titles = list
+          .map(item => {
+            if (typeof item === 'string') return cleanMovieTitle(item);
+            if (item && typeof item === 'object') {
+              return cleanMovieTitle(item.title || item.titre || item.name || item.nom || '');
+            }
+            return '';
+          })
+          .filter(t => t.length > 1);
+
+        if (titles.length > 0) {
+          return Array.from(new Set(titles));
+        }
+      }
+    } catch (_) {
+      // Si parsing JSON échoue, on continue sur le découpage textuel
     }
-  } catch (e) {
-    // Continue sur le découpage standard
   }
 
-  return rawText
-    .split(/,|\n/)
-    .map(t => t.trim().replace(/^[-*•\d.]\s*/, '').replace(/^["']|["']$/g, '').trim())
-    .filter(t => t.length > 1);
+  // 4. Extraction textuelle résiliente (lignes numérotées, tirets ou virgules)
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const candidateTitles: string[] = [];
+
+  for (const line of lines) {
+    // Ignorer les lignes de politesse, d'introduction ou de métadonnées
+    if (/^(voici|voilà|je vous|recommandations|sélection|titres|bonjour|bien sûr|d'après votre)/i.test(line)) {
+      continue;
+    }
+    // Ignorer les lignes qui ressemblent à des fragments JSON résiduels
+    if (/^[\[\]{}\s":,]+$/.test(line) || /^"movies"\s*:/.test(line)) {
+      continue;
+    }
+
+    // Si la ligne contient des séparateurs par virgule, tester si c'est une liste à plat
+    if (line.includes(',') && !line.startsWith('-') && !line.startsWith('*') && !/^\d+\./.test(line)) {
+      const parts = line.split(',').map(p => cleanMovieTitle(p)).filter(p => p.length > 1);
+      if (parts.length > 1) {
+        candidateTitles.push(...parts);
+        continue;
+      }
+    }
+
+    const cleaned = cleanMovieTitle(line);
+    if (cleaned.length > 1 && cleaned.length < 100) {
+      candidateTitles.push(cleaned);
+    }
+  }
+
+  return Array.from(new Set(candidateTitles));
+}
+
+/**
+ * Résolution TMDB haute fidélité pour un titre :
+ * - Recherche Multi (Films & Séries) en français
+ * - Si 0 résultat, recherche Movie directe
+ * - Si 0 résultat, recherche Multi en anglais (pour titres originaux comme The Descent)
+ * - Dépliage automatique de known_for si une personne est renvoyée
+ */
+export async function resolveTitleToTmdb(rawTitle: string, tmdbKey?: string): Promise<any | null> {
+  const title = cleanMovieTitle(rawTitle);
+  if (!title || title.length < 2) return null;
+
+  const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
+
+  // 1. Essai search/multi en français (couvre films et séries)
+  try {
+    const url = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        const media = data.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
+        if (media) return media;
+        if (data.results[0]?.known_for?.length > 0) {
+          return data.results[0].known_for[0];
+        }
+        return data.results[0];
+      }
+    }
+  } catch (_) {}
+
+  // 2. Essai search/movie direct en français
+  try {
+    const url = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results[0];
+      }
+    }
+  } catch (_) {}
+
+  // 3. Essai search/multi en anglais (pour les titres anglophones ou non traduits)
+  try {
+    const url = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(title)}&language=en-US&include_adult=false${keyParam}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        const media = data.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
+        if (media) return media;
+        if (data.results[0]?.known_for?.length > 0) {
+          return data.results[0].known_for[0];
+        }
+        return data.results[0];
+      }
+    }
+  } catch (_) {}
+
+  return null;
 }
 
 export function extractRawMovieItems(rawText: string, userQuery?: string): RawAiMovieItem[] {
@@ -395,16 +555,13 @@ export async function fetchTmdbDetails(
   _fallbackIndex = 0,
   _tmdbLang?: string
 ): Promise<Movie | null> {
-  const cleanTitle = item.title.trim();
+  const cleanTitle = cleanMovieTitle(item.title);
   if (!cleanTitle) return null;
 
   try {
-    const url = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(cleanTitle)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.results && data.results.length > 0) {
-      const formatted = formatTmdbResults([data.results[0]]);
+    const rawMedia = await resolveTitleToTmdb(cleanTitle, tmdbKey);
+    if (rawMedia) {
+      const formatted = formatTmdbResults([rawMedia]);
       return formatted[0] || null;
     }
     return null;
@@ -474,8 +631,8 @@ export async function executeCinoraSearch(
     };
   }
 
-  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres (Qwen -> DeepSeek-Flash)
-  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity, filters);
+  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres (DeepSeek -> Qwen -> Gemini)
+  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity, filters, apiSettings);
   console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
   // 3. Hydratation depuis TMDB selon le volume adéquat
@@ -486,11 +643,8 @@ export async function executeCinoraSearch(
 
     const moviePromises = titlesToFetch.map(async (title) => {
       try {
-        const url = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return (data.results && data.results.length > 0) ? data.results[0] : null;
+        const rawMedia = await resolveTitleToTmdb(title, tmdbKey);
+        return rawMedia || null;
       } catch (err) {
         return null;
       }
@@ -525,34 +679,102 @@ export async function executeCinoraSearch(
     console.log(`[Éliciné AI] Fallback direct TMDB avec "${cleanQuery}"`);
     try {
       const fallbackLimit = specificity.maxResults;
-      const fallbackUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/movie')}&query=${encodeURIComponent(cleanQuery)}&language=fr-FR&include_adult=false${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-      const fallbackRes = await fetch(fallbackUrl);
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        if (fallbackData.results && fallbackData.results.length > 0) {
-          resolvedMovies = formatTmdbResults(fallbackData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-            ...m,
-            match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
-            ai_match_reason: specificity.level === 'ultra_targeted' 
-              ? `Correspondance TMDB directe pour "${cleanQuery}"`
-              : `Sélection TMDB pour "${cleanQuery}"`
-          }));
-        }
-      }
+      const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
 
-      // Si search/movie n'a rien retourné, essayer search/multi
-      if (resolvedMovies.length === 0) {
-        const multiUrl = `/api/tmdb?endpoint=${encodeURIComponent('search/multi')}&query=${encodeURIComponent(cleanQuery)}&language=fr-FR${tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : ''}`;
-        const multiRes = await fetch(multiUrl);
-        if (multiRes.ok) {
-          const multiData = await multiRes.json();
-          const valid = (multiData.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, fallbackLimit);
-          if (valid.length > 0) {
-            resolvedMovies = formatTmdbResults(valid).map((m, idx) => ({
+      // Nettoyage de la requête : retirer les préfixes conversationnels
+      // ex: "film de leonardo dicaprio" -> "leonardo dicaprio"
+      // ex: "films d'horreur claustrophobe" -> "horreur claustrophobe"
+      const strippedQuery = cleanQuery
+        .replace(/^(recommande(?:-moi)?|donne(?:-moi)?|trouve(?:-moi)?|cherche|montre(?:-moi)?)\s+/i, '')
+        .replace(/^(un\s+film|des\s+films|le\s+film|les\s+films|film|films|série|séries|serie|series)\s+(de|du|d'|des|avec|sur|dans)\s+/i, '')
+        .replace(/^(un\s+film|des\s+films|le\s+film|les\s+films|film|films|série|séries)\s+/i, '')
+        .trim();
+
+      const searchTarget = strippedQuery || cleanQuery;
+      console.log(`[Éliciné AI] Requête nettoyée pour fallback TMDB : "${searchTarget}" (original: "${cleanQuery}")`);
+
+      // 1. Recherche Multi (Films, Séries, Personnes) avec la requête nettoyée
+      const multiUrl = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(searchTarget)}&language=fr-FR&include_adult=false${keyParam}`;
+      const multiRes = await fetch(multiUrl);
+
+      if (multiRes.ok) {
+        const multiData = await multiRes.json();
+        const results = multiData.results || [];
+        if (results.length > 0) {
+          // formatTmdbResults déplie automatiquement les oeuvres de known_for si un profil d'acteur/réalisateur est renvoyé
+          const formatted = formatTmdbResults(results.slice(0, fallbackLimit));
+          if (formatted.length > 0) {
+            resolvedMovies = formatted.map((m, idx) => ({
               ...m,
               match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
               ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
             }));
+          }
+        }
+      }
+
+      // 2. Si search/multi n'a rien donné, essayer search/movie direct
+      if (resolvedMovies.length === 0) {
+        const movieUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(searchTarget)}&language=fr-FR&include_adult=false${keyParam}`;
+        const movieRes = await fetch(movieUrl);
+        if (movieRes.ok) {
+          const movieData = await movieRes.json();
+          if (movieData.results && movieData.results.length > 0) {
+            resolvedMovies = formatTmdbResults(movieData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+              ...m,
+              match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
+              ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
+            }));
+          }
+        }
+      }
+
+      // 3. Si toujours 0 résultat, essayer par mot-clé de genre incontournable
+      if (resolvedMovies.length === 0) {
+        const lower = cleanQuery.toLowerCase();
+        const GENRE_KEYWORD_MAP: Record<string, number> = {
+          'horreur': 27,
+          'peur': 27,
+          'angoisse': 27,
+          'claustrophobe': 27,
+          'action': 28,
+          'aventure': 12,
+          'animation': 16,
+          'animé': 16,
+          'comédie': 35,
+          'comedie': 35,
+          'drame': 18,
+          'thriller': 53,
+          'suspense': 53,
+          'sf': 878,
+          'science-fiction': 878,
+          'science fiction': 878,
+          'western': 37,
+          'romance': 10749,
+          'guerre': 10752
+        };
+
+        let matchedGenreId: number | null = null;
+        for (const [kw, gid] of Object.entries(GENRE_KEYWORD_MAP)) {
+          if (lower.includes(kw)) {
+            matchedGenreId = gid;
+            break;
+          }
+        }
+
+        if (matchedGenreId) {
+          console.log(`[Éliciné AI] Secours Discover par genre TMDB (${matchedGenreId}) pour "${cleanQuery}"`);
+          const discUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${matchedGenreId}&sort_by=vote_average.desc&vote_count.gte=100&language=fr-FR${keyParam}`;
+          const discRes = await fetch(discUrl);
+          if (discRes.ok) {
+            const discData = await discRes.json();
+            if (discData.results && discData.results.length > 0) {
+              resolvedMovies = formatTmdbResults(discData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+                ...m,
+                match_rate: Math.max(75, 92 - idx * 3),
+                ai_match_reason: `Les incontournables du genre pour "${cleanQuery}"`
+              }));
+            }
           }
         }
       }
