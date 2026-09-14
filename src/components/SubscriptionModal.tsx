@@ -316,73 +316,62 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
         </div>
 
-        {/* 6. Boutons d'action : S'abonner à Éliciné Pro & Soutenir le projet */}
-        <div className="flex flex-col gap-2.5 pt-1">
+        {/* 6. Boutons d'action : Appel à l'action Principal dynamique & Lien de don discret */}
+        <div className="flex flex-col gap-3 pt-1">
           {paymentMethod === 'paypal_card' ? (
-            <div className="flex flex-col gap-2 w-full">
-              {/* Bouton Principal : S'abonner à Éliciné Pro (1,99$) */}
-              <a
-                href={PAYPAL_PRO_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98]"
-              >
-                <span>👑 S'abonner à Éliciné Pro (1,99$)</span>
-                <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-              </a>
-
-              {/* Bouton Secondaire : Soutenir le projet Éliciné */}
-              <a
-                href={PAYPAL_SUPPORT_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs sm:text-sm transition-all border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 cursor-pointer text-center group active:scale-[0.98]"
-              >
-                <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
-                <span>Soutenir le projet Éliciné</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-              </a>
-            </div>
+            /* Mode PayPal & Carte Bancaire -> Lien PayPal Pro public direct */
+            <a
+              href={PAYPAL_PRO_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98]"
+            >
+              <span>👑 S'abonner à Éliciné Pro ({isYearly ? '15,99$' : '1,99$'})</span>
+              <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
           ) : (
-            <div className="flex flex-col gap-2 w-full">
-              <button
-                type="button"
-                onClick={handleCheckoutClick}
-                disabled={isProcessing}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                    Traitement sécurisé...
-                  </span>
-                ) : (
-                  <span>
-                    Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
-                  </span>
-                )}
-              </button>
-
-              {/* Bouton Secondaire : Soutenir le projet Éliciné */}
-              <a
-                href={PAYPAL_SUPPORT_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs sm:text-sm transition-all border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 cursor-pointer text-center group active:scale-[0.98]"
-              >
-                <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
-                <span>Soutenir le projet Éliciné</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-              </a>
-            </div>
+            /* Mode Paiement Mobile -> Déclencheur Saspay */
+            <button
+              type="button"
+              onClick={handleCheckoutClick}
+              disabled={isProcessing}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                  Traitement sécurisé en cours...
+                </span>
+              ) : (
+                <span>
+                  Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
+                </span>
+              )}
+            </button>
           )}
 
+          {/* Badges de réassurance */}
           <div className="flex items-center justify-center gap-3 text-[10px] text-slate-400">
             <span>🔒 Chiffrement SSL 256-bit</span>
             <span>•</span>
             <span>⚡ Activation immédiate</span>
             <span>•</span>
-            <span>✕ Annulable en 1 clic</span>
+            <span>✕ Sans engagement</span>
+          </div>
+
+          {/* Lien secondaire discret pour le don (ne fait plus concurrence à l'abonnement) */}
+          <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/70 flex items-center justify-center text-center">
+            <a
+              href={PAYPAL_SUPPORT_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer group py-1 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50"
+              title="Faire un don libre pour soutenir le projet Éliciné"
+            >
+              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20 group-hover:scale-110 transition-transform" />
+              <span>Vous aimez le projet ? <strong className="underline underline-offset-2">Soutenir Éliciné par un don libre</strong></span>
+              <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+            </a>
           </div>
         </div>
       </div>
