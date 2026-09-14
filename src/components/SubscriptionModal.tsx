@@ -4,6 +4,19 @@ import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
 import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
+import { Heart, ExternalLink, Sparkles } from 'lucide-react';
+
+const PAYPAL_PRO_LINK = 
+  process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
+  (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
+  (import.meta as any).env?.VITE_PAYPAL_PRO_LINK || 
+  'https://www.paypal.com';
+
+const PAYPAL_SUPPORT_LINK = 
+  process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
+  (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
+  (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || 
+  'https://www.paypal.com';
 
 export interface CheckoutPayload {
   currency: Currency;
@@ -303,97 +316,65 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
         </div>
 
-        {/* 6. Bouton d'action direct & Réassurance */}
+        {/* 6. Boutons d'action : S'abonner à Éliciné Pro & Soutenir le projet */}
         <div className="flex flex-col gap-2.5 pt-1">
           {paymentMethod === 'paypal_card' ? (
-            user ? (
-              <div className="w-full flex flex-col gap-2">
-                <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Paiement sécurisé par Carte ou PayPal
-                  </span>
-                  <span className="font-extrabold text-sky-600 dark:text-sky-400">
-                    {isYearly ? '15.99 $ USD / an' : '1.99 $ USD / mois'}
-                  </span>
-                </div>
+            <div className="flex flex-col gap-2 w-full">
+              {/* Bouton Principal : S'abonner à Éliciné Pro (1,99$) */}
+              <a
+                href={PAYPAL_PRO_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98]"
+              >
+                <span>👑 S'abonner à Éliciné Pro (1,99$)</span>
+                <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
 
-                <PayPalButton
-                  amount={isYearly ? 15.99 : 1.99}
-                  currency="USD"
-                  billingCycle={billingCycle}
-                  disabled={isProcessing}
-                  onSuccess={async (details, orderId) => {
-                    try {
-                      showToast('🔒 Transaction reçue, transmission pour vérification sécurisée...');
-                      const isCard = !!(details?.payment_source?.card || details?.payer?.funding_source === 'card');
-                      const chosenGateway = isCard ? 'card' : 'paypal';
-                      const res = await subscriptionService.recordPayPalPayment({
-                        orderId,
-                        userId: user.id,
-                        email: user.email,
-                        customerName: user.name,
-                        plan: billingCycle,
-                        amount: isYearly ? 15.99 : 1.99,
-                        currency: 'USD',
-                        details
-                      });
-
-                      onClose();
-                      const targetSubId = res.subscriptionId || `sub_paypal_${orderId}`;
-                      if (typeof sessionStorage !== 'undefined') {
-                        try {
-                          sessionStorage.setItem('checkout_gateway', chosenGateway);
-                          sessionStorage.setItem('payment_method', chosenGateway);
-                        } catch (_) {}
-                      }
-                      if (typeof window !== 'undefined') {
-                        window.location.href = `/payment/callback?provider=paypal&gateway=${chosenGateway}&subscription_id=${encodeURIComponent(targetSubId)}&order_id=${encodeURIComponent(orderId)}`;
-                      }
-                    } catch (err: any) {
-                      console.error('[SubscriptionModal] Erreur enregistrement PayPal:', err);
-                      showToast("Erreur lors de la transmission du paiement. Veuillez contacter le support.");
-                    }
-                  }}
-                  onError={(err) => {
-                    console.error('[SubscriptionModal] Erreur paiement:', err);
-                    showToast("Paiement refusé par l'émetteur de la carte ou PayPal. Vous pouvez réessayer.");
-                  }}
-                  onCancel={() => {
-                    showToast("Transaction annulée.");
-                  }}
-                />
-              </div>
-            ) : (
+              {/* Bouton Secondaire : Soutenir le projet Éliciné */}
+              <a
+                href={PAYPAL_SUPPORT_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs sm:text-sm transition-all border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 cursor-pointer text-center group active:scale-[0.98]"
+              >
+                <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
+                <span>Soutenir le projet Éliciné</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
               <button
                 type="button"
                 onClick={handleCheckoutClick}
                 disabled={isProcessing}
-                className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                <span>
-                  👑 Se connecter pour payer par Carte ou PayPal ({isYearly ? '15.99 $' : '1.99 $'}) →
-                </span>
+                {isProcessing ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                    Traitement sécurisé...
+                  </span>
+                ) : (
+                  <span>
+                    Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
+                  </span>
+                )}
               </button>
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={handleCheckoutClick}
-              disabled={isProcessing}
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-sm transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isProcessing ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                  Traitement sécurisé...
-                </span>
-              ) : (
-                <span>
-                  Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
-                </span>
-              )}
-            </button>
+
+              {/* Bouton Secondaire : Soutenir le projet Éliciné */}
+              <a
+                href={PAYPAL_SUPPORT_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs sm:text-sm transition-all border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 cursor-pointer text-center group active:scale-[0.98]"
+              >
+                <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
+                <span>Soutenir le projet Éliciné</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
+            </div>
           )}
 
           <div className="flex items-center justify-center gap-3 text-[10px] text-slate-400">

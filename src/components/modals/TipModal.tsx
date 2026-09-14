@@ -119,7 +119,12 @@ export const TipModal: React.FC = () => {
   };
 
   const handlePayPalCheckout = () => {
-    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+    const supportLink = 
+      process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
+      (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
+      (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || 
+      'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
+    window.open(supportLink, '_blank', 'noopener,noreferrer');
     showToast('Ouverture de la page sécurisée PayPal...');
     handleClose();
   };
