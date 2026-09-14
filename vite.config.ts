@@ -156,6 +156,11 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+    define: {
+      'process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_PRO_LINK || env.VITE_PAYPAL_PRO_LINK || process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || process.env.VITE_PAYPAL_PRO_LINK || ''),
+      'process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || env.VITE_PAYPAL_SUPPORT_LINK || process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || process.env.VITE_PAYPAL_SUPPORT_LINK || ''),
+    },
     server: {
       watch: {
         ignored: ['**/tools/**', '**/android/**'],

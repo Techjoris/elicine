@@ -10,13 +10,15 @@ const PAYPAL_PRO_LINK =
   process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
   (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
   (import.meta as any).env?.VITE_PAYPAL_PRO_LINK || 
-  'https://www.paypal.com';
+  process.env.VITE_PAYPAL_PRO_LINK ||
+  'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
 
 const PAYPAL_SUPPORT_LINK = 
   process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
   (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
   (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || 
-  'https://www.paypal.com';
+  process.env.VITE_PAYPAL_SUPPORT_LINK ||
+  'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
 
 export interface CheckoutPayload {
   currency: Currency;
