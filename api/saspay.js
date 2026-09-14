@@ -139,7 +139,7 @@ export async function queryGatewaySession(sessionId, apiKey) {
 
     const rawStatus = (data?.status || data?.data?.status || '').toUpperCase();
     const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID';
-    const isFailed = rawStatus === 'FAILED' || rawStatus === 'CANCELLED' || rawStatus === 'REJECTED';
+    const isFailed = rawStatus === 'FAILED' || rawStatus === 'CANCELLED' || rawStatus === 'REJECTED' || rawStatus === 'DECLINED' || rawStatus === 'CARD_DECLINED';
 
     return {
       isSuccess,

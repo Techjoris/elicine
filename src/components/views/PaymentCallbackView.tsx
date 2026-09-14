@@ -276,6 +276,7 @@ export const PaymentCallbackView: React.FC = () => {
   const [plan, setPlan] = useState<string>('yearly');
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isCardDecline, setIsCardDecline] = useState<boolean>(false);
   const [pollCount, setPollCount] = useState<number>(0);
 
   const isPollingRef = useRef<boolean>(false);
@@ -341,6 +342,33 @@ export const PaymentCallbackView: React.FC = () => {
     setGatewayType(detected);
     setPlan(extractedPlan);
 
+    // 4. Détection immédiate d'un rejet banque / carte ou d'un échec depuis l'URL
+    const urlStatus = (params.get('status') || params.get('payment_status') || '').toLowerCase().trim();
+    const rawError = (params.get('error') || params.get('error_code') || params.get('errorCode') || '').toLowerCase().trim();
+    const rawReason = (params.get('reason') || params.get('error_description') || params.get('message') || '').trim();
+    const isCancelled = params.get('cancel') === 'true' || urlStatus === 'cancelled' || urlStatus === 'canceled';
+
+    const hasFailureSignal = 
+      ['failed', 'declined', 'rejected', 'card_declined', 'refused'].includes(urlStatus) ||
+      rawError.includes('decline') ||
+      rawError.includes('reject') ||
+      rawError.includes('fail') ||
+      rawError.includes('denied') ||
+      rawError.includes('refus') ||
+      isCancelled;
+
+    if (hasFailureSignal) {
+      const isCard = detected === 'card' || rawError.includes('card') || urlStatus === 'card_declined';
+      setState('failed');
+      setIsCardDecline(isCard);
+      setErrorMessage(
+        isCard 
+          ? "Paiement rejeté par l'émetteur de la carte"
+          : (rawReason || "La transaction a été refusée ou annulée.")
+      );
+      return;
+    }
+
     // Démarrage de la vérification
     verifyTransaction(extractedSubId, extractedRef, 0, detected);
 
@@ -392,34 +420,55 @@ export const PaymentCallbackView: React.FC = () => {
         return;
       }
 
-      if (result.status === 'failed') {
+      if (result.status === 'failed' || result.status === 'cancelled' || (result.status as string) === 'declined') {
         setState('failed');
-        setErrorMessage(result.message || "La transaction a été rejetée ou annulée.");
+        const isCard = !!(result as any).isCardDecline || currentGateway === 'card' || /carte|card|émetteur|issuer|decline|refus/i.test(result.message || '');
+        setIsCardDecline(isCard);
+        setErrorMessage(
+          isCard 
+            ? "Paiement rejeté par l'émetteur de la carte"
+            : (result.message || "La transaction a été rejetée ou annulée.")
+        );
         isPollingRef.current = false;
         return;
       }
 
-      // Toujours en attente (webhook en cours de transit ou opérateur mobile / banque)
-      if (currentCount < 10) {
+      // Nombre de tentatives : 6 pour carte bancaire (autorisation rapide), 10 pour mobile money
+      const maxAttempts = currentGateway === 'card' ? 6 : 10;
+
+      if (currentCount < maxAttempts) {
         // Continuer le polling toutes les 2.5 secondes
         pollTimerRef.current = setTimeout(() => {
           isPollingRef.current = false;
           verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
         }, 2500);
       } else {
-        // Fin de tentative automatique : passage à l'état d'attente opérateur / banque
-        setState('pending_operator');
+        // Fin de tentative : pour une carte sans réponse, basculer vers un échec clair au lieu d'une attente infinie
+        if (currentGateway === 'card') {
+          setState('failed');
+          setIsCardDecline(true);
+          setErrorMessage("Paiement rejeté par l'émetteur de la carte");
+        } else {
+          setState('pending_operator');
+        }
         isPollingRef.current = false;
       }
     } catch (err: any) {
       console.warn('[PaymentCallbackView] Erreur vérification:', err);
-      if (currentCount < 10) {
+      const maxAttempts = currentGateway === 'card' ? 6 : 10;
+      if (currentCount < maxAttempts) {
         pollTimerRef.current = setTimeout(() => {
           isPollingRef.current = false;
           verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
         }, 2500);
       } else {
-        setState('pending_operator');
+        if (currentGateway === 'card') {
+          setState('failed');
+          setIsCardDecline(true);
+          setErrorMessage("Paiement rejeté par l'émetteur de la carte");
+        } else {
+          setState('pending_operator');
+        }
         isPollingRef.current = false;
       }
     }
@@ -592,6 +641,27 @@ export const PaymentCallbackView: React.FC = () => {
               ))}
             </div>
 
+            {/* Sortie de secours immédiate pour carte bancaire (évite l'attente indéfinie) */}
+            {gatewayType === 'card' && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <span>Votre banque a rejeté la transaction ou le délai 3D Secure a expiré ?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setState('failed');
+                    setIsCardDecline(true);
+                    setErrorMessage("Paiement rejeté par l'émetteur de la carte");
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 font-bold text-xs cursor-pointer whitespace-nowrap transition-colors"
+                >
+                  Voir le refus & Réessayer
+                </button>
+              </div>
+            )}
+
             {(subId || reference) && (
               <div className="text-[11px] text-slate-500 font-mono bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-left overflow-x-auto">
                 <div>Moyen de paiement : <span className="text-sky-400 font-semibold">{config.name}</span></div>
@@ -687,46 +757,129 @@ export const PaymentCallbackView: React.FC = () => {
           </div>
         )}
 
-        {/* ─── 4. ÉTAT : ÉCHEC OU REJET ──────────────────────────────────── */}
+        {/* ─── 4. ÉTAT : ÉCHEC OU REJET (AVEC GESTION EXPLICITE DU REJET CARTE) ─ */}
         {state === 'failed' && (
           <div className="relative space-y-6 animate-fade-in">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
-              <AlertTriangle className="w-10 h-10" />
-            </div>
+            {isCardDecline || gatewayType === 'card' ? (
+              <>
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-xl shadow-rose-500/15">
+                  <CreditCard className="w-10 h-10" />
+                </div>
 
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-black uppercase tracking-wider">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Échec de la transaction</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Paiement non confirmé
-              </h1>
-              <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                {errorMessage || `La transaction via ${config.name} a été annulée ou refusée.`}
-              </p>
-            </div>
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs font-black uppercase tracking-wider">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Autorisation Bancaire Refusée</span>
+                  </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  handleGoHome();
-                  setIsProModalOpen(true);
-                }}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-sky-500/20 cursor-pointer"
-              >
-                <span>Réessayer de s'abonner</span>
-              </button>
+                  <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    Paiement rejeté par l'émetteur de la carte
+                  </h1>
 
-              <button
-                type="button"
-                onClick={handleGoHome}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition-all border border-slate-700 cursor-pointer"
-              >
-                <span>Retour à l'accueil</span>
-              </button>
-            </div>
+                  <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+                    Votre établissement bancaire a refusé l'autorisation de débit pour cette transaction.
+                    <span className="text-emerald-400 font-semibold block mt-1.5">✓ Aucun montant n'a été prélevé sur votre compte.</span>
+                  </p>
+                </div>
+
+                {/* Boîte de diagnostic bancaire familier et réaliste */}
+                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-3 max-w-md mx-auto">
+                  <div className="flex items-center gap-2 font-bold text-amber-400">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span>Motifs fréquents de refus bancaire :</span>
+                  </div>
+                  <div className="space-y-2 text-slate-400">
+                    <div className="flex items-start gap-2">
+                      <span className="text-rose-400 font-bold">•</span>
+                      <span><strong>Plafond d'achat ou solde :</strong> Le plafond de paiement en ligne de votre carte est peut-être atteint.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-rose-400 font-bold">•</span>
+                      <span><strong>Validation 3D Secure :</strong> Le délai de confirmation dans l'application de votre banque a peut-être expiré.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-rose-400 font-bold">•</span>
+                      <span><strong>Paiements en ligne / internationaux :</strong> Vérifiez dans votre application bancaire que les paiements par Internet et en devises sont autorisés.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleGoHome();
+                      setIsProModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-black text-xs transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>Réessayer (ou utiliser une autre carte)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleGoHome();
+                      setIsProModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-bold text-xs transition-all border border-amber-500/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Payer avec Mobile Money</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGoHome}
+                    className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs transition-all border border-slate-700 cursor-pointer"
+                  >
+                    <span>Retour à l'accueil</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
+                  <AlertTriangle className="w-10 h-10" />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-black uppercase tracking-wider">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Échec de la transaction</span>
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    Paiement non confirmé
+                  </h1>
+                  <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                    {errorMessage || `La transaction via ${config.name} a été annulée ou refusée.`}
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleGoHome();
+                      setIsProModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Réessayer de s'abonner</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGoHome}
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition-all border border-slate-700 cursor-pointer"
+                  >
+                    <span>Retour à l'accueil</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
