@@ -46,6 +46,9 @@ export const aiSearchRequestSchema = z.object({
   userId: z.string().max(128).optional(),
   deviceId: z.string().max(128).regex(/^[a-zA-Z0-9_-]+$/, "Identifiant d'appareil non valide").optional(),
   supabaseToken: z.string().max(4096).optional(),
+  deepseekApiKey: z.string().max(256).optional(),
+  qwenApiKey: z.string().max(256).optional(),
+  groqApiKey: z.string().max(256).optional(),
   filters: z.object({
     platform: z.string().max(30).optional(),
     minRating: z.number().min(0).max(10).optional(),
