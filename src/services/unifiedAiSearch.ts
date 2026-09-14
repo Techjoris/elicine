@@ -199,7 +199,42 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     max_tokens: maxTokens
   };
 
-  // TENTATIVE 1 : QWEN (DASHSCOPE) AVEC FALLBACK SERVEUR AUTOMATIQUE VERS DEEPSEEK-FLASH
+  // TENTATIVE 1 : DEEPSEEK-FLASH / CHAT (MOTEUR PRINCIPAL) AVEC FALLBACK SERVEUR AUTOMATIQUE VERS QWEN
+  try {
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify({
+        ...payloadBase,
+        provider: 'deepseek',
+        model: 'deepseek-chat'
+      })
+    });
+
+    if (response.status === 403) {
+      const errJson = await response.json().catch(() => null);
+      if (errJson?.code === 'PRO_REQUIRED') {
+        throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
+      }
+      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.choices?.[0]?.message?.content || '';
+      const titles = extractTitlesFromText(rawText);
+      if (titles.length > 0) {
+        return { titles, provider: data.provider_used || 'DeepSeek (deepseek-chat)' };
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
+      throw err;
+    }
+    console.warn('[Éliciné AI] Tentative DeepSeek échouée ou basculée, repli client vers Qwen...', err?.message || err);
+  }
+
+  // TENTATIVE 2 : APPEL DE SECOURS QWEN (DASHSCOPE - SECOURS 1)
   try {
     const response = await fetch('/api/ai', {
       method: 'POST',
@@ -224,49 +259,14 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       const rawText = data.choices?.[0]?.message?.content || '';
       const titles = extractTitlesFromText(rawText);
       if (titles.length > 0) {
-        return { titles, provider: data.provider_used || 'Qwen / DeepSeek-Flash' };
+        return { titles, provider: data.provider_used || 'Qwen (qwen-plus)' };
       }
     }
   } catch (err: any) {
     if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
       throw err;
     }
-    console.warn('[Éliciné AI] Tentative Qwen échouée ou basculée, repli client...', err?.message || err);
-  }
-
-  // TENTATIVE 2 : APPEL DIRECT DEEPSEEK-FLASH (Secours Explicite)
-  try {
-    const response = await fetch('/api/ai', {
-      method: 'POST',
-      headers: buildHeaders(),
-      body: JSON.stringify({
-        ...payloadBase,
-        provider: 'deepseek',
-        model: 'deepseek-flash'
-      })
-    });
-
-    if (response.status === 403) {
-      const errJson = await response.json().catch(() => null);
-      if (errJson?.code === 'PRO_REQUIRED') {
-        throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
-      }
-      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
-    }
-
-    if (response.ok) {
-      const data = await response.json();
-      const rawText = data.choices?.[0]?.message?.content || '';
-      const titles = extractTitlesFromText(rawText);
-      if (titles.length > 0) {
-        return { titles, provider: data.provider_used || 'DeepSeek (deepseek-flash)' };
-      }
-    }
-  } catch (err: any) {
-    if (err?.message?.includes('Quota gratuit') || err?.message?.includes('Quota journalier') || err?.message?.includes('filtres avancés sont réservés')) {
-      throw err;
-    }
-    console.warn('[Éliciné AI] Échec DeepSeek-Flash explicite :', err?.message || err);
+    console.warn('[Éliciné AI] Échec Qwen explicite (Secours 1) :', err?.message || err);
   }
 
   // TENTATIVE 3 : FILET DE SECOURS SUPPLÉMENTAIRE (GROQ LLAMA 3.3)

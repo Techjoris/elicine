@@ -144,8 +144,8 @@ export default async function handler(req, res) {
   ).trim();
 
   // Modèles par défaut
-  const DEFAULT_QWEN_MODEL = 'qwen-plus';
-  const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash';
+  const DEFAULT_DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const DEFAULT_QWEN_MODEL = process.env.QWEN_MODEL || 'qwen-plus';
   const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 
   // Helper fetch avec timeout pour éviter tout blocage réseau
@@ -312,7 +312,7 @@ export default async function handler(req, res) {
     }
   };
 
-  // ─── Routage & Cascade Haute Disponibilité (Qwen -> DeepSeek-Flash -> Groq) ──
+  // ─── Routage & Cascade Haute Disponibilité (DeepSeek-Flash -> Qwen DashScope -> Groq) ──
   try {
     // Cas 1 : Demande explicite de DeepSeek
     if (provider === 'deepseek') {
@@ -321,7 +321,7 @@ export default async function handler(req, res) {
         await recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (deepseekErr) {
-        console.warn('[API /api/ai] Échec DeepSeek, repli vers Qwen...', deepseekErr?.message);
+        console.warn("Basculement sur Qwen (Secours 1)...", deepseekErr?.message || deepseekErr);
         if (qwenKey) {
           const fallbackQwen = await tryQwen(DEFAULT_QWEN_MODEL);
           await recordSearchInSupabase();
@@ -331,35 +331,52 @@ export default async function handler(req, res) {
       }
     }
 
-    // Cas 2 : Demande explicite de Groq
+    // Cas 2 : Demande explicite de Qwen
+    if (provider === 'qwen') {
+      try {
+        const result = await tryQwen(model || DEFAULT_QWEN_MODEL);
+        await recordSearchInSupabase();
+        return res.status(200).json(result);
+      } catch (qwenErr) {
+        console.warn('[API /api/ai] Échec Qwen explicite, repli vers DeepSeek...', qwenErr?.message);
+        if (deepseekKey) {
+          const fallbackDeepSeek = await tryDeepSeek(DEFAULT_DEEPSEEK_MODEL);
+          await recordSearchInSupabase();
+          return res.status(200).json(fallbackDeepSeek);
+        }
+        throw qwenErr;
+      }
+    }
+
+    // Cas 3 : Demande explicite de Groq
     if (provider === 'groq') {
       try {
         const result = await tryGroq(model || DEFAULT_GROQ_MODEL);
         await recordSearchInSupabase();
         return res.status(200).json(result);
       } catch (groqErr) {
-        console.warn('[API /api/ai] Échec Groq, repli vers Qwen/DeepSeek...', groqErr?.message);
+        console.warn('[API /api/ai] Échec Groq, repli vers DeepSeek/Qwen...', groqErr?.message);
       }
     }
 
-    // CAS PAR DÉFAUT : Qwen (DashScope) en Priorité Absolue
+    // CAS PAR DÉFAUT : Tentative 1 DeepSeek-Flash -> Basculement sur Qwen (Secours 1)
     try {
-      console.log('[API /api/ai] [Étape 1] Interrogation sécurisée de Qwen (DashScope)...');
-      const result = await tryQwen();
+      // Tentative 1 : DeepSeek-Flash / Chat
+      console.log('[API /api/ai] [Tentative 1] Interrogation de DeepSeek (deepseek-chat / deepseek-flash)...');
+      const deepseekResult = await tryDeepSeek(model && model.includes('deepseek') ? model : DEFAULT_DEEPSEEK_MODEL);
       await recordSearchInSupabase();
-      return res.status(200).json(result);
-    } catch (qwenErr) {
-      // Étape 2 : Interception de l'échec Qwen dans le try/catch
-      console.warn('[API /api/ai] [Étape 2] Échec ou timeout Qwen :', qwenErr?.message || qwenErr);
-      
-      // Étape 3 : Bascule automatique immédiate sur DeepSeek-Flash
-      console.log('[API /api/ai] [Étape 3] Bascule immédiate sur DeepSeek (deepseek-flash)...');
+      return res.status(200).json(deepseekResult);
+    } catch (deepseekErr) {
+      console.warn("Basculement sur Qwen (Secours 1)...", deepseekErr?.message || deepseekErr);
+
+      // Tentative 2 : Qwen (DashScope - Secours 1)
       try {
-        const deepseekResult = await tryDeepSeek(DEFAULT_DEEPSEEK_MODEL);
+        console.log('[API /api/ai] [Tentative 2] Appel de secours Qwen (DashScope)...');
+        const qwenResult = await tryQwen(model && model.includes('qwen') ? model : DEFAULT_QWEN_MODEL);
         await recordSearchInSupabase();
-        return res.status(200).json(deepseekResult);
-      } catch (deepseekErr) {
-        console.warn('[API /api/ai] Échec du fournisseur de secours DeepSeek :', deepseekErr?.message || deepseekErr);
+        return res.status(200).json(qwenResult);
+      } catch (qwenErr) {
+        console.warn('[API /api/ai] Échec du secours Qwen :', qwenErr?.message || qwenErr);
 
         // Filet de sécurité tertiaire si Groq est disponible
         if (groqKey) {
@@ -373,7 +390,7 @@ export default async function handler(req, res) {
           }
         }
 
-        throw new Error(`Qwen (${qwenErr.message}) et DeepSeek (${deepseekErr.message}) ont tous deux échoué.`);
+        throw new Error(`DeepSeek (${deepseekErr.message}) et Qwen (${qwenErr.message}) ont tous deux échoué.`);
       }
     }
   } catch (finalErr) {
