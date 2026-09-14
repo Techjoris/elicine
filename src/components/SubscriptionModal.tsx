@@ -10,7 +10,8 @@ export interface CheckoutPayload {
   amount: string;
   numericAmount: number;
   plan: PricingBillingCycle;
-  paymentMethod: 'mobile_money' | 'paypal_card';
+  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card';
+  gateway?: string;
   subscriptionId?: string;
   customerName?: string;
   customerEmail?: string;
@@ -47,7 +48,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   } = useApp();
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
-  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card'>('mobile_money');
+  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'card' | 'paypal' | 'paypal_card'>('mobile_money');
 
   // Restauration automatique de l'état mémorisé (méthode de paiement, plan, devise) lors de la réouverture
   useEffect(() => {
@@ -59,7 +60,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
         if (savedMethod === 'sasapay' || savedMethod === 'mobile_money') {
           setPaymentMethod('mobile_money');
-        } else if (savedMethod === 'paypal' || savedMethod === 'paypal_card') {
+        } else if (savedMethod === 'card') {
+          setPaymentMethod('card');
+        } else if (savedMethod === 'paypal') {
+          setPaymentMethod('paypal');
+        } else if (savedMethod === 'paypal_card') {
           setPaymentMethod('paypal_card');
         }
 
@@ -82,12 +87,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const numericAmount = isYearly ? currentPrice.rawYearly : currentPrice.rawMonthly;
 
   const handleCheckoutClick = () => {
+    const chosenGateway = paymentMethod === 'card' 
+      ? 'card' 
+      : (paymentMethod === 'paypal' || paymentMethod === 'paypal_card' ? 'paypal' : 'mobile_money');
+    
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem('checkout_gateway', chosenGateway);
+        sessionStorage.setItem('payment_method', chosenGateway);
+      } catch (_) {}
+    }
+
     onPay({
       currency,
       amount: amountToPay,
       numericAmount,
       plan: billingCycle,
-      paymentMethod
+      paymentMethod,
+      gateway: chosenGateway
     });
   };
 
@@ -218,11 +235,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             Choisissez votre mode de paiement
           </label>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* OPTION 1 : Mobile Money & Cartes via SasaPay */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* OPTION 1 : Mobile Money */}
             <div
               onClick={() => setPaymentMethod('mobile_money')}
-              className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+              className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
                 paymentMethod === 'mobile_money'
                   ? 'bg-sky-500/10 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
                   : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
@@ -230,46 +247,61 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             >
               <div className="flex items-center justify-between">
                 <span className="text-base">📱</span>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
                   paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
                 }`}>
                   {paymentMethod === 'mobile_money' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </span>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money (SasaPay)</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Orange, MTN, Wave, Moov, Carte</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Orange, MTN, Wave</p>
               </div>
             </div>
 
-            {/* OPTION 2 : PayPal */}
+            {/* OPTION 2 : Carte Bancaire */}
             <div
-              onClick={() => setPaymentMethod('paypal_card')}
-              className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
-                paymentMethod === 'paypal_card'
+              onClick={() => setPaymentMethod('card')}
+              className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                paymentMethod === 'card'
                   ? 'bg-sky-500/10 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
                   : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 text-base">
-                  <span>💳</span>
-                  <span className="text-xs font-bold text-[#0079C1]">PayPal</span>
-                </div>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
+                <span className="text-base">💳</span>
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                  paymentMethod === 'card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
                 }`}>
-                  {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  {paymentMethod === 'card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </span>
               </div>
               <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white">PayPal & Cartes</p>
-                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded">
-                    {isYearly ? '15.99 $' : '1.99 $'}
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Compte PayPal</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Carte Bancaire</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard</p>
+              </div>
+            </div>
+
+            {/* OPTION 3 : PayPal */}
+            <div
+              onClick={() => setPaymentMethod('paypal')}
+              className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                paymentMethod === 'paypal' || paymentMethod === 'paypal_card'
+                  ? 'bg-sky-500/10 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
+                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-[#0079C1]">PayPal</span>
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                  paymentMethod === 'paypal' || paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
+                }`}>
+                  {(paymentMethod === 'paypal' || paymentMethod === 'paypal_card') && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">PayPal</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Compte PayPal</p>
               </div>
             </div>
           </div>
@@ -277,13 +309,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
         {/* 6. Bouton d'action direct & Réassurance */}
         <div className="flex flex-col gap-2.5 pt-1">
-          {paymentMethod === 'paypal_card' ? (
+          {paymentMethod === 'card' || paymentMethod === 'paypal' || paymentMethod === 'paypal_card' ? (
             user ? (
               <div className="w-full flex flex-col gap-2">
                 <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
                   <span className="flex items-center gap-1.5 font-medium">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Paiement direct sécurisé PayPal
+                    {paymentMethod === 'card' ? 'Paiement sécurisé par Carte bancaire (Visa / Mastercard)' : 'Paiement direct sécurisé PayPal'}
                   </span>
                   <span className="font-extrabold text-sky-600 dark:text-sky-400">
                     {isYearly ? '15.99 $ USD / an' : '1.99 $ USD / mois'}
@@ -311,20 +343,28 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
                       onClose();
                       const targetSubId = res.subscriptionId || `sub_paypal_${orderId}`;
+                      const isCard = !!(details?.payment_source?.card || details?.payer?.funding_source === 'card') || paymentMethod === 'card';
+                      const chosenGateway = isCard ? 'card' : 'paypal';
+                      if (typeof sessionStorage !== 'undefined') {
+                        try {
+                          sessionStorage.setItem('checkout_gateway', chosenGateway);
+                          sessionStorage.setItem('payment_method', chosenGateway);
+                        } catch (_) {}
+                      }
                       if (typeof window !== 'undefined') {
-                        window.location.href = `/payment/callback?provider=paypal&subscription_id=${encodeURIComponent(targetSubId)}&order_id=${encodeURIComponent(orderId)}`;
+                        window.location.href = `/payment/callback?provider=paypal&gateway=${chosenGateway}&subscription_id=${encodeURIComponent(targetSubId)}&order_id=${encodeURIComponent(orderId)}`;
                       }
                     } catch (err: any) {
                       console.error('[SubscriptionModal] Erreur enregistrement PayPal:', err);
-                      showToast("Erreur lors de la transmission du paiement PayPal. Veuillez contacter le support.");
+                      showToast("Erreur lors de la transmission du paiement. Veuillez contacter le support.");
                     }
                   }}
                   onError={(err) => {
-                    console.error('[SubscriptionModal] Erreur PayPal:', err);
-                    showToast("Échec de la transaction PayPal. Vous pouvez réessayer ou payer avec SasaPay.");
+                    console.error('[SubscriptionModal] Erreur paiement:', err);
+                    showToast("Échec de la transaction. Vous pouvez réessayer ou payer via un autre moyen.");
                   }}
                   onCancel={() => {
-                    showToast("Transaction PayPal annulée.");
+                    showToast("Transaction annulée.");
                   }}
                 />
               </div>
@@ -336,7 +376,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <span>
-                  👑 Se connecter pour payer avec PayPal ({isYearly ? '15.99 $' : '1.99 $'}) →
+                  👑 Se connecter pour payer par {paymentMethod === 'card' ? 'Carte bancaire' : 'PayPal'} ({isYearly ? '15.99 $' : '1.99 $'}) →
                 </span>
               </button>
             )
@@ -354,7 +394,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               ) : (
                 <span>
-                  Payer avec SasaPay ({amountToPay} {currentPrice.symbol}) →
+                  Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
                 </span>
               )}
             </button>

@@ -97,6 +97,8 @@ export interface ProSubscription {
   status: SubscriptionStatus;
   paymentReference?: string;
   paymentProvider?: 'saspay' | 'paypal' | 'moneroo' | 'cinetpay' | 'notchpay';
+  gateway?: string;
+  paymentMethod?: string;
   termsAccepted: boolean;
   createdAt: string;
   updatedAt?: string;

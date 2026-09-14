@@ -28,14 +28,17 @@ export const ProModal: React.FC = () => {
 
     // 1. Interception par l'authentification si non connecté
     if (!user) {
-      const isPaypal = payload.paymentMethod === 'paypal_card';
-      const paymentMethodStr = isPaypal ? 'paypal' : 'sasapay';
+      const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
+      const isCard = payload.paymentMethod === 'card';
+      const paymentMethodStr = isCard ? 'card' : (isPaypal ? 'paypal' : 'sasapay');
+      const chosenGateway = isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money');
 
       // Sauvegarde dans sessionStorage selon l'instruction technique
       try {
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.setItem('pending_checkout', 'true');
           sessionStorage.setItem('payment_method', paymentMethodStr);
+          sessionStorage.setItem('checkout_gateway', chosenGateway);
           sessionStorage.setItem('checkout_plan', payload.plan);
           sessionStorage.setItem('checkout_currency', payload.currency);
           sessionStorage.setItem('checkout_amount', payload.amount);
@@ -51,7 +54,8 @@ export const ProModal: React.FC = () => {
         amount: payload.amount,
         numericAmount: payload.numericAmount,
         paymentMethod: payload.paymentMethod,
-        provider: isPaypal ? 'paypal' : 'saspay',
+        provider: (isPaypal || isCard) ? 'paypal' : 'saspay',
+        gateway: chosenGateway,
         timestamp: Date.now()
       });
 
@@ -66,13 +70,18 @@ export const ProModal: React.FC = () => {
     showToast('Sécurisation et initialisation de votre abonnement Pro...');
 
     try {
+      const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
+      const isCard = payload.paymentMethod === 'card';
+      const chosenGateway = isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money');
+
       const result = await subscriptionService.executeCheckoutWithIntent({
         plan: payload.plan,
         currency: payload.currency,
         amount: payload.amount,
         numericAmount: payload.numericAmount,
         paymentMethod: payload.paymentMethod,
-        provider: payload.paymentMethod === 'mobile_money' ? 'saspay' : 'paypal',
+        provider: (isPaypal || isCard) ? 'paypal' : 'saspay',
+        gateway: chosenGateway,
         timestamp: Date.now()
       }, user);
 
@@ -112,8 +121,8 @@ export const ProModal: React.FC = () => {
     if (user && isProModalOpen) {
       const pendingIntent = subscriptionService.getPendingCheckoutIntent();
       if (pendingIntent) {
-        // Pour PayPal, l'utilisateur connecté voit directement les Smart Buttons dans la modale
-        if (pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal') {
+        // Pour PayPal et Cartes bancaires, l'utilisateur connecté voit directement les Smart Buttons dans la modale
+        if (pendingIntent.paymentMethod === 'paypal' || pendingIntent.paymentMethod === 'card' || pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal') {
           subscriptionService.clearPendingCheckoutIntent();
           try {
             if (typeof sessionStorage !== 'undefined') {

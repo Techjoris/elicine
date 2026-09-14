@@ -248,6 +248,7 @@ export interface SaspayCheckoutParams {
   currency: Currency | string;
   paymentType?: 'pro' | 'tip';
   paymentMethod?: 'card' | 'mobile' | 'all';
+  gateway?: string;
   billingCycle?: PricingBillingCycle;
   subscriptionId?: string;
   email?: string;
@@ -407,9 +408,10 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
   const isPro = type === 'pro';
   const isYearly = params.billingCycle === 'yearly';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
+  const chosenGateway = (params.gateway || (params.paymentMethod === 'card' ? 'card' : 'mobile_money')).trim();
   const successCallbackUrl = (params.returnUrl || (isPro 
-    ? `${origin}/payment/callback?type=pro${params.subscriptionId ? `&subscription_id=${params.subscriptionId}` : ''}` 
-    : `${origin}/?payment_status=success&type=${type}`)).trim();
+    ? `${origin}/payment/callback?type=pro${params.subscriptionId ? `&subscription_id=${params.subscriptionId}` : ''}&gateway=${encodeURIComponent(chosenGateway)}` 
+    : `${origin}/?payment_status=success&type=${type}&gateway=${encodeURIComponent(chosenGateway)}`)).trim();
 
   // Normalisation de la devise et du montant pour SasPay
   const { amount: finalAmount, currency: formattedCurrency } = convertToSaspayCurrency(
@@ -438,6 +440,8 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
     customer_name: customerName,
     customer_email: customerEmail,
     paymentType: type,
+    paymentMethod: params.paymentMethod || chosenGateway,
+    gateway: chosenGateway,
     subscription_id: params.subscriptionId,
     subscriptionId: params.subscriptionId,
     billing_cycle: params.billingCycle,

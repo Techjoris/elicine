@@ -239,7 +239,8 @@ export default async function handler(req, res) {
     }
     subBody = subBody || {};
 
-    const { userId, email, customerName, phone, plan, currency, amount, termsAccepted } = subBody;
+    const { userId, email, customerName, phone, plan, currency, amount, termsAccepted, gateway, paymentMethod } = subBody;
+    const chosenGateway = gateway || paymentMethod || null;
 
     if (!termsAccepted) {
       return res.status(400).json({
@@ -269,6 +270,8 @@ export default async function handler(req, res) {
       currency: (currency || 'USD').toUpperCase(),
       amount: Number(amount) || 1.99,
       status: 'pending_payment',
+      gateway: chosenGateway,
+      paymentMethod: chosenGateway,
       termsAccepted: true,
       createdAt: now,
       updatedAt: now
@@ -383,12 +386,14 @@ export default async function handler(req, res) {
     // Si déjà actif en base, vérifier la date d'expiration
     if (sub.status === 'active') {
       const isExpired = sub.expires_at ? new Date(sub.expires_at).getTime() <= Date.now() : false;
+      const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : (sub.payment_reference?.startsWith('CARD') ? 'card' : null));
       return res.status(200).json({
         success: true,
         isPro: !isExpired,
         status: isExpired ? 'expired' : 'active',
         plan: sub.plan,
         expiresAt: sub.expires_at,
+        gateway: subGateway,
         subscription: sub
       });
     }
@@ -421,12 +426,14 @@ export default async function handler(req, res) {
 
         console.log('[SasPay verify-subscription] 👑 Souscription activée via confirmation autoritaire passerelle:', sub.id);
 
+        const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : null);
         return res.status(200).json({
           success: true,
           isPro: true,
           status: 'active',
           plan: sub.plan,
           expiresAt,
+          gateway: subGateway,
           subscription: sub
         });
       } else if (gatewayCheck && gatewayCheck.isFailed) {
@@ -448,18 +455,21 @@ export default async function handler(req, res) {
       }
     }
 
-    // Toujours en attente (attente du webhook ou de l'opérateur mobile money)
+    // Toujours en attente (attente du webhook ou de l'opérateur)
+    const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : null);
     return res.status(200).json({
       success: true,
       isPro: false,
       status: 'pending',
-      message: 'Paiement en cours de validation par votre opérateur (Orange / MTN / Moov / Wave).',
+      gateway: subGateway,
+      message: 'Paiement en cours de validation par votre établissement financier ou opérateur.',
       subscription: {
         id: sub.id,
         plan: sub.plan,
         amount: sub.amount,
         currency: sub.currency,
-        status: sub.status
+        status: sub.status,
+        gateway: subGateway
       }
     });
   }
@@ -796,9 +806,13 @@ export default async function handler(req, res) {
     }
 
     const rawReturnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/payment/callback').trim();
-    const returnUrl = verifiedSubscription
+    const gatewayParam = body.gateway || body.paymentMethod || body.payment_method || verifiedSubscription?.gateway || '';
+    let returnUrl = verifiedSubscription
       ? (rawReturnUrl.includes('?') ? `${rawReturnUrl}&subscription_id=${verifiedSubscription.id}` : `${rawReturnUrl}?subscription_id=${verifiedSubscription.id}`)
       : rawReturnUrl;
+    if (gatewayParam && !returnUrl.includes('gateway=')) {
+      returnUrl = returnUrl.includes('?') ? `${returnUrl}&gateway=${encodeURIComponent(gatewayParam)}` : `${returnUrl}?gateway=${encodeURIComponent(gatewayParam)}`;
+    }
 
     const cancelUrl = (body.cancel_url || returnUrl).trim();
     const description = verifiedSubscription

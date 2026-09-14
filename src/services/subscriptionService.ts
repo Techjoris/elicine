@@ -16,6 +16,8 @@ export interface InitSubscriptionParams {
   currency: Currency | string;
   amount: number;
   termsAccepted: boolean;
+  gateway?: string;
+  paymentMethod?: string;
 }
 
 export interface CheckoutIntent {
@@ -23,8 +25,9 @@ export interface CheckoutIntent {
   currency: Currency;
   amount: string;
   numericAmount: number;
-  paymentMethod: 'mobile_money' | 'paypal_card';
+  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card';
   provider: 'saspay' | 'paypal';
+  gateway?: string;
   phone?: string;
   timestamp: number;
 }
@@ -131,6 +134,8 @@ export const subscriptionService = {
       currency: params.currency,
       amount: params.amount,
       status: 'pending_payment',
+      gateway: params.gateway || params.paymentMethod,
+      paymentMethod: params.paymentMethod || params.gateway,
       termsAccepted: true,
       createdAt: now,
       updatedAt: now
@@ -217,6 +222,15 @@ export const subscriptionService = {
     const name = (user.name || (user as any)?.user_metadata?.full_name || 'Cinéphile Pro').trim();
     const userId = user.id || `usr_pro_${Date.now()}`;
 
+    const chosenGateway = intent.gateway || (intent.paymentMethod === 'card' ? 'card' : (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' ? 'paypal' : 'mobile_money'));
+
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem('checkout_gateway', chosenGateway);
+        sessionStorage.setItem('payment_method', chosenGateway);
+      } catch (_) {}
+    }
+
     // 1. Initialiser la souscription formelle en base
     const initRes = await this.initProSubscription({
       userId,
@@ -226,6 +240,8 @@ export const subscriptionService = {
       plan: intent.plan,
       currency: intent.currency,
       amount: intent.numericAmount,
+      gateway: chosenGateway,
+      paymentMethod: chosenGateway,
       termsAccepted: true
     });
 
@@ -239,7 +255,7 @@ export const subscriptionService = {
     this.clearPendingCheckoutIntent();
 
     // 3. Déclencher la passerelle choisie
-    if (intent.paymentMethod === 'paypal_card' || intent.provider === 'paypal') {
+    if (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' || intent.provider === 'paypal') {
       const paypalUrl = 'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
       if (typeof window !== 'undefined') {
         window.open(paypalUrl, '_blank', 'noopener,noreferrer');
@@ -256,11 +272,13 @@ export const subscriptionService = {
       currency: intent.currency,
       paymentType: 'pro',
       billingCycle: intent.plan,
+      paymentMethod: intent.paymentMethod === 'card' ? 'card' : 'mobile',
+      gateway: chosenGateway,
       subscriptionId: subscription.id,
       email,
       name,
       description: `Pass Pro Éliciné (${intent.amount} ${currSymbol} - ${isYearly ? 'Annuel' : 'Mensuel'})`,
-      returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/payment/callback?subscription_id=${subscription.id}`,
+      returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/payment/callback?subscription_id=${subscription.id}&gateway=${encodeURIComponent(chosenGateway)}`,
       openInNewTab: false,
       skipRedirect: false // Redirection automatique immédiate
     });
@@ -309,6 +327,7 @@ export const subscriptionService = {
     status: SubscriptionStatus | 'pending';
     plan?: 'monthly' | 'yearly';
     expiresAt?: string;
+    gateway?: string | null;
     message?: string;
     subscription?: ProSubscription;
   }> {
@@ -321,6 +340,7 @@ export const subscriptionService = {
         success: false,
         isPro: false,
         status: 'pending',
+        gateway: pending?.gateway || null,
         message: "Aucun identifiant de souscription fourni."
       };
     }
@@ -337,6 +357,8 @@ export const subscriptionService = {
 
       if (res.ok) {
         const data = await res.json();
+        const detectedGateway = data.gateway || data.subscription?.gateway || pending?.gateway || null;
+
         if (data?.success && data?.status === 'active' && data?.isPro) {
           // Mise à jour du cache local UNIQUEMENT après validation formelle du serveur
           const activeSub: ProSubscription = data.subscription || {
@@ -348,6 +370,8 @@ export const subscriptionService = {
             currency: data.subscription?.currency || 'USD',
             amount: data.subscription?.amount || 1.99,
             status: 'active',
+            gateway: detectedGateway,
+            paymentMethod: detectedGateway,
             termsAccepted: true,
             createdAt: data.subscription?.created_at || new Date().toISOString(),
             expiresAt: data.expiresAt
@@ -362,8 +386,9 @@ export const subscriptionService = {
             success: true,
             isPro: true,
             status: 'active',
-            plan: data.plan,
+            plan: data.plan || activeSub.plan,
             expiresAt: data.expiresAt,
+            gateway: detectedGateway,
             subscription: activeSub
           };
         } else if (data?.status === 'pending') {
@@ -371,13 +396,15 @@ export const subscriptionService = {
             success: true,
             isPro: false,
             status: 'pending',
-            message: data.message || "Paiement en cours de validation par votre opérateur..."
+            gateway: detectedGateway,
+            message: data.message || "Paiement en cours de validation par votre établissement financier ou opérateur."
           };
         } else if (data?.status === 'failed') {
           return {
             success: false,
             isPro: false,
             status: 'failed',
+            gateway: detectedGateway,
             message: data.message || "La transaction a été rejetée ou annulée par la passerelle."
           };
         }
@@ -404,6 +431,7 @@ export const subscriptionService = {
               status: 'active',
               plan: dbSub.plan,
               expiresAt: dbSub.expires_at,
+              gateway: dbSub.gateway || pending?.gateway || null,
               subscription: dbSub
             };
           }
@@ -415,6 +443,7 @@ export const subscriptionService = {
       success: true,
       isPro: false,
       status: 'pending',
+      gateway: pending?.gateway || null,
       message: "En attente de la confirmation bancaire par Webhook sécurisé."
     };
   },
@@ -519,6 +548,34 @@ export const subscriptionService = {
         : 'Cinéphile Pro')
     );
 
+    const isCard = !!(params.details?.payment_source?.card || params.details?.payer?.funding_source === 'card');
+    const gateway = isCard ? 'card' : 'paypal';
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('checkout_gateway', gateway);
+        sessionStorage.setItem('payment_method', gateway);
+      }
+      const pendingSub: ProSubscription = {
+        id: subId,
+        userId: params.userId || 'usr_paypal',
+        email,
+        customerName: name,
+        plan: params.plan,
+        currency: params.currency || 'USD',
+        amount: params.amount,
+        status: 'pending_payment',
+        paymentReference: params.orderId,
+        paymentProvider: 'paypal',
+        gateway,
+        paymentMethod: gateway,
+        termsAccepted: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(PENDING_SUB_STORAGE_KEY, JSON.stringify(pendingSub));
+    } catch (_) {}
+
     // Transmission au backend serverless Vercel /api/paypal
     try {
       const res = await fetch('/api/paypal?action=record-payment', {
@@ -533,6 +590,8 @@ export const subscriptionService = {
           plan: params.plan,
           currency: params.currency || 'USD',
           amount: params.amount,
+          gateway,
+          paymentMethod: gateway,
           details: params.details
         })
       });

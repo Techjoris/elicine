@@ -6,16 +6,265 @@ import {
   Clock, 
   AlertTriangle, 
   Crown, 
-  Sparkles, 
   RefreshCw, 
   ArrowRight, 
   Lock, 
   CheckCircle2,
-  ExternalLink
+  CreditCard,
+  Smartphone
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 type VerificationState = 'verifying' | 'active_confirmed' | 'pending_operator' | 'failed';
+
+export type PaymentGatewayType = 
+  | 'card' 
+  | 'paypal' 
+  | 'orangemoney' 
+  | 'mtn' 
+  | 'wave' 
+  | 'moov' 
+  | 'mobile_money'
+  | 'generic';
+
+interface GatewayConfig {
+  name: string;
+  badgeText: string;
+  badgeClass: string;
+  icon: 'card' | 'phone' | 'shield';
+  networkBadges: { label: string; bg: string; text: string }[];
+  verifyingTitle: string;
+  verifyingDescription: string;
+  verifyingStep2: string;
+  pendingBadge: string;
+  pendingTitle: string;
+  pendingDescription: string;
+  pendingNoticeTitle: string;
+  pendingNoticePoints: string[];
+  confirmedSubtitle: string;
+}
+
+const GATEWAY_CONFIGS: Record<PaymentGatewayType, GatewayConfig> = {
+  card: {
+    name: 'Carte Bancaire',
+    badgeText: 'Paiement par Carte Bancaire',
+    badgeClass: 'bg-sky-500/10 border-sky-500/30 text-sky-400',
+    icon: 'card',
+    networkBadges: [
+      { label: 'VISA', bg: 'bg-blue-600/20 border-blue-500/40', text: 'text-blue-400' },
+      { label: 'Mastercard', bg: 'bg-rose-600/20 border-rose-500/40', text: 'text-rose-400' },
+      { label: 'CB', bg: 'bg-emerald-600/20 border-emerald-500/40', text: 'text-emerald-400' },
+      { label: '3D Secure', bg: 'bg-sky-600/20 border-sky-500/40', text: 'text-sky-300' }
+    ],
+    verifyingTitle: 'Validation de votre paiement par carte bancaire en cours...',
+    verifyingDescription: 'Nous interrogeons le réseau bancaire (Visa / Mastercard) et vérifions l\'autorisation sécurisée 3D Secure...',
+    verifyingStep2: '2. Contrôle de l\'autorisation 3D Secure et signature...',
+    pendingBadge: 'Autorisation Bancaire en Cours',
+    pendingTitle: 'Validation de votre paiement par carte bancaire en cours...',
+    pendingDescription: 'Votre transaction a bien été transmise à votre établissement bancaire (Visa / Mastercard). La confirmation définitive de l\'autorisation prend généralement de quelques secondes à une minute.',
+    pendingNoticeTitle: 'Sécurité Bancaire 3D Secure :',
+    pendingNoticePoints: [
+      'Authentification sécurisée : Si une invite de confirmation 3D Secure vous a été envoyée par SMS ou via l\'application de votre banque, veuillez la valider pour finaliser la transaction.',
+      'Garantie zéro double débit : Si votre compte a été débité, votre accès Pro sera débloqué automatiquement dès réception de la confirmation bancaire.'
+    ],
+    confirmedSubtitle: 'Votre paiement par carte bancaire a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  orangemoney: {
+    name: 'Orange Money',
+    badgeText: 'Orange Money',
+    badgeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-400',
+    icon: 'phone',
+    networkBadges: [
+      { label: 'Orange Money', bg: 'bg-orange-600/20 border-orange-500/40', text: 'text-orange-400' },
+      { label: '#144# ou App Orange', bg: 'bg-amber-600/20 border-amber-500/40', text: 'text-amber-300' }
+    ],
+    verifyingTitle: 'Validation Orange Money en cours...',
+    verifyingDescription: 'Nous interrogeons le serveur Orange Money pour confirmer la validation de votre transaction...',
+    verifyingStep2: '2. Vérification du débit Orange Money (#144# ou App)...',
+    pendingBadge: 'Validation Orange Money en Cours',
+    pendingTitle: 'Validation opérateur en cours (Orange Money)...',
+    pendingDescription: 'Votre demande de paiement a bien été envoyée à Orange Money. Si une invite USSD (#144#) ou une notification s\'affiche sur votre téléphone, veuillez valider avec votre code secret.',
+    pendingNoticeTitle: 'Garantie Orange Money :',
+    pendingNoticePoints: [
+      'Validation sur mobile : Confirmez le débit sur votre ligne Orange Money pour débloquer votre abonnement.',
+      'Débit sécurisé : Seul le montant convenu est prélevé. Dès saisie de votre code secret, votre Pass Pro est activé.'
+    ],
+    confirmedSubtitle: 'Votre paiement via Orange Money a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  mtn: {
+    name: 'MTN Mobile Money',
+    badgeText: 'MTN MoMo',
+    badgeClass: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+    icon: 'phone',
+    networkBadges: [
+      { label: 'MTN MoMo', bg: 'bg-yellow-500/20 border-yellow-400/40', text: 'text-yellow-400' },
+      { label: 'Code PIN MoMo', bg: 'bg-amber-500/20 border-amber-400/40', text: 'text-amber-300' }
+    ],
+    verifyingTitle: 'Validation MTN Mobile Money en cours...',
+    verifyingDescription: 'Nous attendons la confirmation de débit de votre compte MTN MoMo...',
+    verifyingStep2: '2. Contrôle de la validation par code PIN MoMo...',
+    pendingBadge: 'Validation MTN MoMo en Cours',
+    pendingTitle: 'Validation opérateur en cours (MTN MoMo)...',
+    pendingDescription: 'Votre demande a bien été envoyée à MTN Mobile Money. Veuillez approuver l\'invite sur votre téléphone avec votre code secret PIN MoMo.',
+    pendingNoticeTitle: 'Garantie MTN Mobile Money :',
+    pendingNoticePoints: [
+      'Validation MoMo : Tapez votre code secret MTN pour autoriser le paiement sur votre mobile.',
+      'Activation en temps réel : Dès confirmation de votre code PIN, vos privilèges Pro sont automatiquement débloqués.'
+    ],
+    confirmedSubtitle: 'Votre paiement via MTN MoMo a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  wave: {
+    name: 'Wave',
+    badgeText: 'Wave Mobile Money',
+    badgeClass: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400',
+    icon: 'phone',
+    networkBadges: [
+      { label: 'Wave', bg: 'bg-cyan-600/20 border-cyan-500/40', text: 'text-cyan-400' },
+      { label: '0% Frais', bg: 'bg-sky-600/20 border-sky-500/40', text: 'text-sky-300' }
+    ],
+    verifyingTitle: 'Validation Wave en cours...',
+    verifyingDescription: 'Nous interrogeons Wave pour confirmer la validation de votre paiement...',
+    verifyingStep2: '2. Contrôle du transfert sécurisé Wave...',
+    pendingBadge: 'Validation Wave en Cours',
+    pendingTitle: 'Validation opérateur en cours (Wave)...',
+    pendingDescription: 'Votre transaction a bien été transmise à Wave. Veuillez ouvrir votre application mobile Wave pour confirmer le paiement.',
+    pendingNoticeTitle: 'Garantie Wave :',
+    pendingNoticePoints: [
+      'Paiement sans frais caché : Transaction instantanée et sécurisée via l\'application Wave.',
+      'Dès validation dans l\'app Wave, votre compte Pro est synchronisé sans aucune action supplémentaire.'
+    ],
+    confirmedSubtitle: 'Votre paiement Wave a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  moov: {
+    name: 'Moov Money',
+    badgeText: 'Moov Money',
+    badgeClass: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+    icon: 'phone',
+    networkBadges: [
+      { label: 'Moov Money', bg: 'bg-blue-600/20 border-blue-500/40', text: 'text-blue-400' }
+    ],
+    verifyingTitle: 'Validation Moov Money en cours...',
+    verifyingDescription: 'Nous interrogeons Moov Money pour confirmer la transaction en temps réel...',
+    verifyingStep2: '2. Contrôle du signal de débit Moov Money...',
+    pendingBadge: 'Validation Moov en Cours',
+    pendingTitle: 'Validation opérateur en cours (Moov Money)...',
+    pendingDescription: 'Votre transaction a été transmise à Moov Money. Veuillez valider le débit sur votre téléphone mobile.',
+    pendingNoticeTitle: 'Garantie Moov Money :',
+    pendingNoticePoints: [
+      'Débit sécurisé par votre opérateur téléphonique.',
+      'Votre Pass Pro s\'activera dès réception de la confirmation.'
+    ],
+    confirmedSubtitle: 'Votre paiement Moov Money a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  mobile_money: {
+    name: 'Mobile Money',
+    badgeText: 'Mobile Money Sécurisé',
+    badgeClass: 'bg-sky-500/10 border-sky-500/30 text-sky-400',
+    icon: 'phone',
+    networkBadges: [
+      { label: 'Orange Money', bg: 'bg-orange-600/20 border-orange-500/40', text: 'text-orange-400' },
+      { label: 'MTN', bg: 'bg-yellow-500/20 border-yellow-400/40', text: 'text-yellow-400' },
+      { label: 'Wave', bg: 'bg-cyan-600/20 border-cyan-500/40', text: 'text-cyan-400' }
+    ],
+    verifyingTitle: 'Validation de votre paiement Mobile Money en cours...',
+    verifyingDescription: 'Nous interrogeons votre opérateur téléphonique pour confirmer la transaction en temps réel...',
+    verifyingStep2: '2. Contrôle du signal de validation de l\'opérateur...',
+    pendingBadge: 'Validation Opérateur en Cours',
+    pendingTitle: 'Validation opérateur en cours (Orange Money / MTN)...',
+    pendingDescription: 'Votre transaction a bien été transmise à votre opérateur Mobile Money (Orange Money, MTN, Wave). Le traitement de la confirmation prend parfois quelques instants.',
+    pendingNoticeTitle: 'Garantie Opérateur Mobile :',
+    pendingNoticePoints: [
+      'Débit maîtrisé : Seul votre opérateur téléphonique peut autoriser la transaction après saisie de votre code secret.',
+      'Activation automatique : Dès réception du signal de confirmation, votre compte Pro est immédiatement débloqué.'
+    ],
+    confirmedSubtitle: 'Votre paiement Mobile Money a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  paypal: {
+    name: 'PayPal',
+    badgeText: 'Paiement Sécurisé PayPal',
+    badgeClass: 'bg-blue-600/15 border-blue-500/30 text-sky-400',
+    icon: 'card',
+    networkBadges: [
+      { label: 'PayPal', bg: 'bg-blue-600/20 border-blue-500/40', text: 'text-sky-300' },
+      { label: 'Protection des Achats', bg: 'bg-emerald-600/20 border-emerald-500/40', text: 'text-emerald-300' }
+    ],
+    verifyingTitle: 'Validation de votre paiement PayPal en cours...',
+    verifyingDescription: 'Nous interrogeons PayPal et validons la capture officielle et la signature de votre ordre...',
+    verifyingStep2: '2. Capture et confirmation cryptographique de l\'ordre...',
+    pendingBadge: 'Confirmation PayPal en Cours',
+    pendingTitle: 'Validation de votre paiement PayPal en cours...',
+    pendingDescription: 'Votre paiement PayPal a été transmis avec succès. La finalisation de l\'autorisation et de la capture est en cours de traitement par PayPal.',
+    pendingNoticeTitle: 'Garantie & Protection PayPal :',
+    pendingNoticePoints: [
+      'Protection des Achats : Votre transaction bénéficie de l\'intégralité des garanties de sécurité PayPal.',
+      'Validation automatique : Dès la capture de l\'ordre confirmée par PayPal, vos droits Pro sont immédiatement débloqués.'
+    ],
+    confirmedSubtitle: 'Votre paiement PayPal a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+  },
+  generic: {
+    name: 'Paiement Sécurisé',
+    badgeText: 'Sécurité Bancaire Maximale',
+    badgeClass: 'bg-sky-500/10 border-sky-500/30 text-sky-400',
+    icon: 'shield',
+    networkBadges: [
+      { label: 'Chiffrement SHA-256', bg: 'bg-sky-600/20 border-sky-500/40', text: 'text-sky-300' }
+    ],
+    verifyingTitle: 'Vérification Cryptographique du Paiement',
+    verifyingDescription: 'Nous interrogeons la passerelle de paiement sécurisée et validons la signature de votre transaction...',
+    verifyingStep2: '2. Contrôle de la signature du Webhook serveur...',
+    pendingBadge: 'Validation en Cours',
+    pendingTitle: 'Paiement en cours de validation',
+    pendingDescription: 'Votre transaction a bien été initiée auprès de votre organisme financier. Le traitement de la confirmation prend parfois quelques instants.',
+    pendingNoticeTitle: 'Garantie de sécurité Éliciné :',
+    pendingNoticePoints: [
+      'Aucun accès anticipé sans preuve : Votre compte Pro sera automatiquement débloqué dès confirmation officielle.',
+      'Vous n\'avez pas besoin de repayer : Si votre compte a été débité, la synchronisation s\'effectuera en tâche de fond.'
+    ],
+    confirmedSubtitle: 'Votre transaction bancaire a été validée avec succès. Votre Pass Pro est immédiatement actif.'
+  }
+};
+
+function detectGatewayType(raw: string | null | undefined): PaymentGatewayType {
+  if (!raw) return 'generic';
+  const clean = raw.toLowerCase().trim();
+
+  // Carte bancaire (Visa, Mastercard, etc.)
+  if (['card', 'credit_card', 'carte', 'carte_bancaire', 'visa', 'mastercard', 'cb', 'debit_card'].includes(clean)) {
+    return 'card';
+  }
+
+  // PayPal
+  if (['paypal', 'paypal_card', 'paypal_account'].includes(clean)) {
+    return 'paypal';
+  }
+
+  // Orange Money
+  if (['orange', 'orangemoney', 'orange_money', 'om'].includes(clean)) {
+    return 'orangemoney';
+  }
+
+  // MTN Mobile Money
+  if (['mtn', 'mtnmomo', 'mtn_momo', 'momo'].includes(clean)) {
+    return 'mtn';
+  }
+
+  // Wave
+  if (['wave', 'wave_money', 'wave_ci', 'wave_sn'].includes(clean)) {
+    return 'wave';
+  }
+
+  // Moov
+  if (['moov', 'moovmoney', 'moov_money', 'flooz'].includes(clean)) {
+    return 'moov';
+  }
+
+  // Mobile Money général
+  if (['mobile_money', 'mobile', 'momo_all', 'saspay', 'notchpay', 'cinetpay'].includes(clean)) {
+    return 'mobile_money';
+  }
+
+  return 'generic';
+}
 
 export const PaymentCallbackView: React.FC = () => {
   const { setActiveView, refreshUserProStatus, setIsProModalOpen } = useApp();
@@ -23,7 +272,7 @@ export const PaymentCallbackView: React.FC = () => {
   const [state, setState] = useState<VerificationState>('verifying');
   const [subId, setSubId] = useState<string>('');
   const [reference, setReference] = useState<string>('');
-  const [provider, setProvider] = useState<string>('saspay');
+  const [gatewayType, setGatewayType] = useState<PaymentGatewayType>('generic');
   const [plan, setPlan] = useState<string>('yearly');
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -32,7 +281,7 @@ export const PaymentCallbackView: React.FC = () => {
   const isPollingRef = useRef<boolean>(false);
   const pollTimerRef = useRef<any>(null);
 
-  // Extraction des paramètres d'URL de retour
+  // Extraction des paramètres d'URL de retour et détection contextuelle du moyen de paiement
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -53,16 +302,47 @@ export const PaymentCallbackView: React.FC = () => {
       ''
     ).trim();
 
-    const extractedProvider = (params.get('provider') || 'saspay').toLowerCase();
+    const rawGatewayParam = (
+      params.get('gateway') || 
+      params.get('method') || 
+      params.get('payment_method') || 
+      params.get('channel') || 
+      params.get('provider') || 
+      ''
+    ).trim();
+
     const extractedPlan = params.get('plan') || params.get('cycle') || 'yearly';
+
+    // 1. Détection initiale à partir de l'URL
+    let detected = detectGatewayType(rawGatewayParam);
+
+    // 2. Si non spécifié dans l'URL, vérifier dans le sessionStorage
+    if (detected === 'generic' && typeof sessionStorage !== 'undefined') {
+      try {
+        const sessionGateway = sessionStorage.getItem('checkout_gateway') || sessionStorage.getItem('payment_method');
+        if (sessionGateway) {
+          detected = detectGatewayType(sessionGateway);
+        }
+      } catch (_) {}
+    }
+
+    // 3. Repli sur le localStorage (souscription en attente)
+    if (detected === 'generic' && typeof localStorage !== 'undefined') {
+      try {
+        const pendingSub = subscriptionService.getPendingSubscription();
+        if (pendingSub?.gateway || pendingSub?.paymentMethod) {
+          detected = detectGatewayType(pendingSub.gateway || pendingSub.paymentMethod);
+        }
+      } catch (_) {}
+    }
 
     setSubId(extractedSubId);
     setReference(extractedRef);
-    setProvider(extractedProvider);
+    setGatewayType(detected);
     setPlan(extractedPlan);
 
     // Démarrage de la vérification
-    verifyTransaction(extractedSubId, extractedRef, 0);
+    verifyTransaction(extractedSubId, extractedRef, 0, detected);
 
     return () => {
       if (pollTimerRef.current) {
@@ -71,13 +351,27 @@ export const PaymentCallbackView: React.FC = () => {
     };
   }, []);
 
-  const verifyTransaction = async (targetSubId: string, targetRef: string, currentCount: number) => {
+  const verifyTransaction = async (
+    targetSubId: string, 
+    targetRef: string, 
+    currentCount: number,
+    currentGateway: PaymentGatewayType
+  ) => {
     if (isPollingRef.current && currentCount > 0) return;
     isPollingRef.current = true;
     setPollCount(currentCount);
 
     try {
       const result = await subscriptionService.verifySubscriptionStatus(targetSubId, targetRef);
+
+      // Si le backend nous communique un moyen de paiement précis, mettre à jour le contexte
+      if (result.gateway) {
+        const serverDetected = detectGatewayType(result.gateway);
+        if (serverDetected !== 'generic') {
+          setGatewayType(serverDetected);
+          currentGateway = serverDetected;
+        }
+      }
 
       if (result.isPro && result.status === 'active') {
         setState('active_confirmed');
@@ -105,15 +399,15 @@ export const PaymentCallbackView: React.FC = () => {
         return;
       }
 
-      // Toujours en attente (webhook en cours de transit ou opérateur mobile money)
+      // Toujours en attente (webhook en cours de transit ou opérateur mobile / banque)
       if (currentCount < 10) {
         // Continuer le polling toutes les 2.5 secondes
         pollTimerRef.current = setTimeout(() => {
           isPollingRef.current = false;
-          verifyTransaction(targetSubId, targetRef, currentCount + 1);
+          verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
         }, 2500);
       } else {
-        // Fin de tentative automatique : passage à l'état d'attente opérateur
+        // Fin de tentative automatique : passage à l'état d'attente opérateur / banque
         setState('pending_operator');
         isPollingRef.current = false;
       }
@@ -122,7 +416,7 @@ export const PaymentCallbackView: React.FC = () => {
       if (currentCount < 10) {
         pollTimerRef.current = setTimeout(() => {
           isPollingRef.current = false;
-          verifyTransaction(targetSubId, targetRef, currentCount + 1);
+          verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
         }, 2500);
       } else {
         setState('pending_operator');
@@ -133,16 +427,18 @@ export const PaymentCallbackView: React.FC = () => {
 
   const handleManualRetry = () => {
     setState('verifying');
-    verifyTransaction(subId, reference, 0);
+    verifyTransaction(subId, reference, 0, gatewayType);
   };
 
   const handleGoHome = () => {
-    // Nettoyage de l'URL
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, document.title, '/');
     }
     setActiveView('home');
   };
+
+  // Configuration contextuelle active
+  const config = GATEWAY_CONFIGS[gatewayType] || GATEWAY_CONFIGS.generic;
 
   return (
     <div className="max-w-2xl mx-auto py-10 px-4 animate-fade-in">
@@ -152,7 +448,14 @@ export const PaymentCallbackView: React.FC = () => {
         <div className={`absolute -inset-1 rounded-3xl blur-2xl pointer-events-none opacity-40 transition-all duration-700 ${
           state === 'active_confirmed' ? 'bg-gradient-to-tr from-amber-500 via-yellow-400 to-sky-500' :
           state === 'verifying' ? 'bg-gradient-to-tr from-sky-500 via-indigo-500 to-cyan-400 animate-pulse' :
-          state === 'pending_operator' ? 'bg-gradient-to-tr from-amber-500 to-orange-500' :
+          state === 'pending_operator' ? (
+            gatewayType === 'card' ? 'bg-gradient-to-tr from-blue-600 to-sky-500' :
+            gatewayType === 'orangemoney' ? 'bg-gradient-to-tr from-orange-500 to-amber-500' :
+            gatewayType === 'mtn' ? 'bg-gradient-to-tr from-yellow-500 to-amber-500' :
+            gatewayType === 'wave' ? 'bg-gradient-to-tr from-cyan-500 to-blue-500' :
+            gatewayType === 'paypal' ? 'bg-gradient-to-tr from-blue-600 to-sky-500' :
+            'bg-gradient-to-tr from-amber-500 to-orange-500'
+          ) :
           'bg-gradient-to-tr from-rose-600 to-red-500'
         }`} />
 
@@ -162,24 +465,46 @@ export const PaymentCallbackView: React.FC = () => {
             <div className="relative w-24 h-24 mx-auto">
               <div className="absolute inset-0 rounded-full border-4 border-sky-500/20 border-t-sky-500 animate-spin" />
               <div className="w-full h-full rounded-full flex items-center justify-center bg-sky-500/10 text-sky-400">
-                <Lock className="w-10 h-10 animate-pulse" />
+                {config.icon === 'card' ? (
+                  <CreditCard className="w-10 h-10 animate-pulse" />
+                ) : config.icon === 'phone' ? (
+                  <Smartphone className="w-10 h-10 animate-pulse" />
+                ) : (
+                  <Lock className="w-10 h-10 animate-pulse" />
+                )}
               </div>
             </div>
 
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-black uppercase tracking-wider">
+              <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-black uppercase tracking-wider ${config.badgeClass}`}>
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Sécurité Bancaire Maximale</span>
+                <span>{config.badgeText}</span>
               </div>
+              
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Vérification Cryptographique du Paiement
+                {config.verifyingTitle}
               </h1>
+              
               <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                Nous interrogeons la passerelle de paiement sécurisée et validons la signature de votre transaction...
+                {config.verifyingDescription}
               </p>
+
+              {/* Badges d'authentification contextuels */}
+              {config.networkBadges.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                  {config.networkBadges.map((b, idx) => (
+                    <span 
+                      key={idx} 
+                      className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-bold ${b.bg} ${b.text}`}
+                    >
+                      {b.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Stepper de progression */}
+            {/* Stepper de progression dynamique */}
             <div className="max-w-md mx-auto bg-slate-950/60 rounded-2xl p-4 border border-slate-800/80 text-left space-y-3">
               <div className="flex items-center gap-3 text-xs text-emerald-400">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
@@ -187,7 +512,7 @@ export const PaymentCallbackView: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-xs text-sky-400 font-semibold animate-pulse">
                 <RefreshCw className="w-4 h-4 flex-shrink-0 animate-spin" />
-                <span>2. Contrôle de la signature du Webhook serveur...</span>
+                <span>{config.verifyingStep2}</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <Crown className="w-4 h-4 flex-shrink-0" />
@@ -202,44 +527,75 @@ export const PaymentCallbackView: React.FC = () => {
           </div>
         )}
 
-        {/* ─── 2. ÉTAT : EN ATTENTE DE L'OPÉRATEUR ────────────────────────── */}
+        {/* ─── 2. ÉTAT : EN ATTENTE DE L'OPÉRATEUR OU DE LA BANQUE ────────── */}
         {state === 'pending_operator' && (
           <div className="relative space-y-6 animate-fade-in">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
-              <Clock className="w-10 h-10 animate-bounce" />
+            <div className={`w-20 h-20 mx-auto rounded-3xl border flex items-center justify-center shadow-lg ${
+              gatewayType === 'card' 
+                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 shadow-sky-500/10' :
+              gatewayType === 'orangemoney' 
+                ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 shadow-orange-500/10' :
+              gatewayType === 'mtn' 
+                ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 shadow-yellow-500/10' :
+              gatewayType === 'wave' 
+                ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-cyan-500/10' :
+              gatewayType === 'paypal' 
+                ? 'bg-blue-600/15 border-blue-500/30 text-sky-400 shadow-blue-500/10' :
+                'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-amber-500/10'
+            }`}>
+              {config.icon === 'card' ? (
+                <CreditCard className="w-10 h-10 animate-pulse" />
+              ) : (
+                <Clock className="w-10 h-10 animate-bounce" />
+              )}
             </div>
 
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider">
+              <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-black uppercase tracking-wider ${config.badgeClass}`}>
                 <Clock className="w-3.5 h-3.5" />
-                <span>Validation Opérateur en Cours</span>
+                <span>{config.pendingBadge}</span>
               </div>
+              
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Paiement en cours de validation
+                {config.pendingTitle}
               </h1>
+              
               <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-                Votre transaction a bien été initiée auprès de votre opérateur téléphonique (Orange Money, MTN, Wave, Moov ou PayPal). 
-                Le traitement de la confirmation bancaire prend parfois quelques instants.
+                {config.pendingDescription}
               </p>
+
+              {/* Badges spécifiques au moyen de paiement */}
+              {config.networkBadges.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                  {config.networkBadges.map((b, idx) => (
+                    <span 
+                      key={idx} 
+                      className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-bold ${b.bg} ${b.text}`}
+                    >
+                      {b.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Avertissement de sécurité bienveillant */}
-            <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200/90 text-left space-y-2">
+            {/* Avertissement et garanties ciblés */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-400">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Garantie de sécurité Éliciné :</span>
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>{config.pendingNoticeTitle}</span>
               </div>
-              <p>
-                • <strong>Aucun accès anticipé sans débit réel :</strong> Votre compte Pro sera automatiquement débloqué dès que nous recevons la preuve officielle de votre banque.
-              </p>
-              <p>
-                • <strong>Vous n'avez pas besoin de repayer :</strong> Si votre compte a été débité, la synchronisation s'effectuera en tâche de fond automatiquement.
-              </p>
+              {config.pendingNoticePoints.map((point, idx) => (
+                <p key={idx} className="leading-relaxed">
+                  • {point}
+                </p>
+              ))}
             </div>
 
             {(subId || reference) && (
               <div className="text-[11px] text-slate-500 font-mono bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-left overflow-x-auto">
-                <div>Souscription : <span className="text-slate-300">{subId || 'N/A'}</span></div>
+                <div>Moyen de paiement : <span className="text-sky-400 font-semibold">{config.name}</span></div>
+                {subId && <div>Souscription : <span className="text-slate-300">{subId}</span></div>}
                 {reference && <div>Réf. Transaction : <span className="text-slate-300">{reference}</span></div>}
               </div>
             )}
@@ -286,11 +642,18 @@ export const PaymentCallbackView: React.FC = () => {
                 Bienvenue dans Éliciné Pro !
               </h1>
               <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-                Votre transaction bancaire a été validée avec succès. Votre Pass Pro est immédiatement actif.
+                {config.confirmedSubtitle}
               </p>
             </div>
 
-            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-left space-y-2 text-xs">
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-left space-y-2.5 text-xs">
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Règlement :</span>
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  {config.icon === 'card' ? <CreditCard className="w-3.5 h-3.5 text-sky-400" /> : <Smartphone className="w-3.5 h-3.5 text-amber-400" />}
+                  {config.name}
+                </span>
+              </div>
               <div className="flex items-center justify-between text-slate-400">
                 <span>Formule souscrite :</span>
                 <span className="font-extrabold text-amber-400 uppercase tracking-wider">
@@ -340,7 +703,7 @@ export const PaymentCallbackView: React.FC = () => {
                 Paiement non confirmé
               </h1>
               <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                {errorMessage || "La transaction a été annulée, refusée par votre opérateur ou le délai d'attente a expiré."}
+                {errorMessage || `La transaction via ${config.name} a été annulée ou refusée.`}
               </p>
             </div>
 
