@@ -586,7 +586,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div 
           id="hero-advanced-search-filters"
           className={`w-full px-1 transition-all duration-300 ${
-            isSearchActive ? 'block mb-5 sm:mb-6 animate-fade-in' : 'hidden'
+            isSearchActive ? 'block mb-3 sm:mb-4 animate-fade-in' : 'hidden'
           }`}
           style={{ display: isSearchActive ? undefined : 'none' }}
         >
