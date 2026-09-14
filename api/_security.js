@@ -256,22 +256,46 @@ export async function verifyServerSession(req) {
           return result;
         }
 
-        // Vérification des métadonnées utilisateur
-        if (authData.user.user_metadata?.isPro === true) {
-          result.isPro = true;
-        }
-
-        // Vérification en base de données dans la table subscriptions
+        // 🔒 SÉCURITÉ STRICTE : Vérification obligatoire et exclusive dans la table subscriptions
+        // Ne JAMAIS faire confiance aux métadonnées utilisateur user_metadata.isPro modifiables côté client.
         try {
-          const { data: subData } = await supabaseServer
+          // 1. Recherche par user_id
+          let { data: subData } = await supabaseServer
             .from('subscriptions')
-            .select('id, status, plan, created_at')
+            .select('id, status, plan, expires_at, created_at')
             .eq('user_id', authData.user.id)
             .eq('status', 'active')
             .maybeSingle();
 
+          // 2. Recherche par email en secours si non rattaché par user_id
+          if (!subData?.id && email) {
+            const { data: emailSub } = await supabaseServer
+              .from('subscriptions')
+              .select('id, status, plan, expires_at, created_at')
+              .eq('email', email)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (emailSub?.id) {
+              subData = emailSub;
+            }
+          }
+
           if (subData?.id) {
-            result.isPro = true;
+            // Contrôle strict de la date d'expiration
+            if (subData.expires_at) {
+              const expiresAtMs = new Date(subData.expires_at).getTime();
+              if (expiresAtMs > Date.now()) {
+                result.isPro = true;
+              } else {
+                console.log(`[Security] Souscription expirée pour ${email} (ID: ${subData.id}, expiré le: ${subData.expires_at})`);
+                result.isPro = false;
+              }
+            } else {
+              // Si pas de date d'expiration spécifiée, actif
+              result.isPro = true;
+            }
           }
         } catch (dbErr) {
           console.warn('[Security] Erreur requête table subscriptions:', dbErr?.message);

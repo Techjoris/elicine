@@ -86,6 +86,14 @@ export default async function handler(req, res) {
       const cleanName = customerName || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro');
       const numericAmount = Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
 
+      const expiresDate = new Date();
+      if (plan === 'yearly') {
+        expiresDate.setFullYear(expiresDate.getFullYear() + 1);
+      } else {
+        expiresDate.setDate(expiresDate.getDate() + 30);
+      }
+      const expiresAt = expiresDate.toISOString();
+
       if (supabase) {
         try {
           await supabase.from('subscriptions').upsert({
@@ -100,7 +108,8 @@ export default async function handler(req, res) {
             payment_reference: orderId,
             terms_accepted: true,
             created_at: now,
-            updated_at: now
+            updated_at: now,
+            expires_at: expiresAt
           });
         } catch (sbErr) {
           console.warn('[PayPal Server] Erreur upsert Supabase:', sbErr);

@@ -297,8 +297,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   disabled={isProcessing}
                   onSuccess={async (details, orderId) => {
                     try {
-                      showToast('👑 Transaction PayPal validée ! Activation de votre compte Pro...');
-                      await subscriptionService.recordPayPalPayment({
+                      showToast('🔒 Transaction reçue, transmission pour vérification sécurisée...');
+                      const res = await subscriptionService.recordPayPalPayment({
                         orderId,
                         userId: user.id,
                         email: user.email,
@@ -309,18 +309,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                         details
                       });
 
-                      upgradeToPro(billingCycle);
                       onClose();
-                      if (setIsProSuccessModalOpen) {
-                        setIsProSuccessModalOpen(true);
+                      const targetSubId = res.subscriptionId || `sub_paypal_${orderId}`;
+                      if (typeof window !== 'undefined') {
+                        window.location.href = `/payment/callback?provider=paypal&subscription_id=${encodeURIComponent(targetSubId)}&order_id=${encodeURIComponent(orderId)}`;
                       }
                     } catch (err: any) {
-                      console.error('[SubscriptionModal] Erreur activation PayPal:', err);
-                      upgradeToPro(billingCycle);
-                      onClose();
-                      if (setIsProSuccessModalOpen) {
-                        setIsProSuccessModalOpen(true);
-                      }
+                      console.error('[SubscriptionModal] Erreur enregistrement PayPal:', err);
+                      showToast("Erreur lors de la transmission du paiement PayPal. Veuillez contacter le support.");
                     }
                   }}
                   onError={(err) => {

@@ -16,6 +16,7 @@ import { authService } from '../services/authService';
 import { supabase, signInWithGoogle } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
+import { subscriptionService } from '../services/subscriptionService';
 
 interface AppContextType {
   // Quota & AI
@@ -36,6 +37,7 @@ interface AppContextType {
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
+  refreshUserProStatus: () => Promise<boolean>;
 
   // API Settings & Status
   apiSettings: ApiSettings;
@@ -491,35 +493,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // 12. Synchronisation réactive avec AuthContext
+  // 12. Synchronisation réactive avec AuthContext et vérification STRICTE du statut Pro en base
   useEffect(() => {
-    if (authUser) {
-      setUser(prev => {
+    let isCancelled = false;
+
+    const syncAndVerifyUser = async () => {
+      let currentUser: UserProfile | null = null;
+
+      if (authUser) {
         const formatted = formatUser({
           ...authUser,
           token: authSession?.access_token || authUser.token
         });
-        const isMasterAdmin = (authUser.email || '').toLowerCase() === 'ivanjoris959@gmail.com';
-        const updatedUser = {
-          ...formatted,
-          isPro: isMasterAdmin || prev?.isPro || (authUser.user_metadata as any)?.isPro || (authUser as any)?.isPro || false
+        currentUser = formatted;
+        setIsAuthModalOpen(false);
+      } else {
+        const stored = authService.getStoredUser();
+        if (stored) {
+          currentUser = stored;
+        }
+      }
+
+      if (!currentUser) {
+        if (!isCancelled) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 🔒 VÉRIFICATION SÉCURISÉE DE LA SOUSCRIPTION PRO EN BASE DE DONNÉES
+      // Si aucune souscription active valide n'est trouvée, isPro passe à false.
+      const proCheck = await subscriptionService.checkUserProStatus(currentUser);
+
+      if (!isCancelled) {
+        const updatedUser: UserProfile = {
+          ...currentUser,
+          isPro: proCheck.isPro,
+          proPlanType: proCheck.plan || currentUser.proPlanType,
+          proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? currentUser.proPlanExpiresAt : null)
         };
+
+        setUser(updatedUser);
         try {
           localStorage.setItem('cineia_user', JSON.stringify(updatedUser));
         } catch (_) {}
-        return updatedUser;
-      });
-      setIsAuthModalOpen(false);
-    } else {
-      // Préserver la session locale en cas d'absence de session Supabase distante
-      const stored = authService.getStoredUser();
-      if (stored) {
-        setUser(stored);
-      } else {
-        setUser(null);
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    syncAndVerifyUser();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [authUser, authSession]);
 
   // Quota Management (3 recherches gratuites / jour, illimité pour les membres Pro et Admin)
@@ -668,36 +695,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Déconnexion réussie.');
   };
 
-  const upgradeToPro = (cycle: PricingBillingCycle = 'yearly') => {
+  /**
+   * Rafraîchit formellement le statut Pro en interrogeant la vérité en base de données.
+   * Empêche toute élévation de privilège locale sans preuve bancaire.
+   */
+  const refreshUserProStatus = async (): Promise<boolean> => {
+    if (!user) return false;
+    const proCheck = await subscriptionService.checkUserProStatus(user);
+
     setUser(prev => {
-      if (!prev) {
-        return {
-          id: 'usr_' + Date.now(),
-          email: 'vip@cineia.com',
-          name: 'Membre VIP',
-          isPro: true,
-          proPlanType: cycle,
-          proPlanExpiresAt: cycle === 'yearly' ? 'Pass Annuel Actif' : 'Pass Mensuel Actif',
-          referralCode: 'VIP-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
-          createdAt: new Date().toISOString()
-        };
-      }
-      return {
+      if (!prev) return null;
+      const updated: UserProfile = {
         ...prev,
-        isPro: true,
-        proPlanType: cycle,
-        proPlanExpiresAt: cycle === 'yearly' ? 'Pass Annuel Actif' : 'Pass Mensuel Actif'
+        isPro: proCheck.isPro,
+        proPlanType: proCheck.plan || prev.proPlanType,
+        proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? prev.proPlanExpiresAt : null)
       };
+      try {
+        localStorage.setItem('cineia_user', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
     });
 
-    setIsProModalOpen(false);
-    confetti({
-      particleCount: 120,
-      spread: 80,
-      origin: { y: 0.6 },
-      colors: ['#0ea5e9', '#2563eb', '#f59e0b', '#ffffff']
+    return proCheck.isPro;
+  };
+
+  /**
+   * @deprecated Ne plus utiliser pour l'élévation directe.
+   * Déclenche une vérification asynchrone formelle auprès de la base de données.
+   */
+  const upgradeToPro = (cycle: PricingBillingCycle = 'yearly') => {
+    console.warn('[Security] upgradeToPro() appelé. Vérification des droits auprès de la base de données...');
+    refreshUserProStatus().then(isPro => {
+      if (isPro) {
+        setIsProModalOpen(false);
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#0ea5e9', '#2563eb', '#f59e0b', '#ffffff']
+        });
+        showToast(`👑 Votre Pass Pro ${cycle === 'yearly' ? 'Annuel' : 'Mensuel'} est actif !`);
+      }
     });
-    showToast(`👑 Félicitations ! Votre Pass Pro ${cycle === 'yearly' ? 'Annuel' : 'Mensuel'} est actif !`);
   };
 
   // API Settings update & clear
@@ -834,6 +874,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithGoogle,
         logout,
         upgradeToPro,
+        refreshUserProStatus,
         apiSettings,
         updateApiSettings,
         clearApiSettings,

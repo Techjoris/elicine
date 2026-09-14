@@ -11,6 +11,7 @@ import { AlertsView } from './components/views/AlertsView';
 import { AdminView } from './components/views/AdminView';
 import { TermsView } from './components/views/TermsView';
 import { ResetPasswordView } from './components/views/ResetPasswordView';
+import { PaymentCallbackView } from './components/views/PaymentCallbackView';
 import { Footer } from './components/layout/Footer';
 
 // Modals
@@ -88,20 +89,22 @@ export const AppContent: React.FC = () => {
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
 
-  // Intercept payment return URL params and route to the correct modal
+  // Intercept payment return URL params and route to the correct modal or callback view
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const path = window.location.pathname.toLowerCase();
 
-    // --- PRO SUBSCRIPTION SUCCESS ---
-    // Triggered by ?subscription=pro_success OR ?payment=pro_success OR ?payment_status=success&type=pro
-    const isProSuccess =
+    // --- PRO SUBSCRIPTION RETURN ---
+    const isProReturn =
+      path.startsWith('/payment/callback') ||
+      path.startsWith('/success') ||
       params.get('subscription') === 'pro_success' ||
       params.get('payment') === 'pro_success' ||
       params.get('payment') === 'saspay_pro_success' ||
-      (params.get('payment_status') === 'success' && params.get('type') === 'pro');
+      (params.get('payment_status') === 'success' && params.get('type') === 'pro') ||
+      Boolean(params.get('subscription_id') && (params.get('type') === 'pro' || params.get('payment_status') === 'success'));
 
     // --- TIP / DONATION SUCCESS ---
-    // Triggered by ?payment=success OR ?tip=success OR ?payment=saspay_success OR ?payment=moneroo_success OR ?payment_status=success&type=don
     const isTipSuccess =
       (params.get('payment') === 'success' && params.get('subscription') !== 'pro_success') ||
       params.get('payment') === 'saspay_success' ||
@@ -109,21 +112,10 @@ export const AppContent: React.FC = () => {
       (params.get('payment_status') === 'success' && params.get('type') === 'don') ||
       params.get('tip') === 'success';
 
-    if (isProSuccess) {
-      // 1. Validation de la souscription enregistrée
-      const returnedSubId = params.get('subscription_id') || undefined;
-      const returnedRef = params.get('reference') || params.get('id') || undefined;
-      subscriptionService.markSubscriptionPaid(returnedSubId, returnedRef);
-
-      // 2. Détection du cycle souscrit
-      const detectedCycle = params.get('cycle') === 'monthly' || params.get('billing_cycle') === 'monthly' ? 'monthly' : 'yearly';
-      upgradeToPro(detectedCycle);
-
-      // 3. Ouvrir la modale de bienvenue Pro
-      setIsProSuccessModalOpen(true);
-
-      // 4. Nettoyage de l'URL
-      window.history.replaceState({}, document.title, window.location.pathname);
+    if (isProReturn) {
+      // 🔒 SÉCURITÉ : Aucun passage automatique en Pro côté client !
+      // Redirection vers la vue de vérification cryptographique et interrogation de la base de données.
+      setActiveView('payment-callback');
     } else if (isTipSuccess) {
       // Show the donation thank-you modal
       setShowThankYouModal(true);
@@ -131,7 +123,7 @@ export const AppContent: React.FC = () => {
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [upgradeToPro, setIsProSuccessModalOpen]);
+  }, [setActiveView]);
 
   // 2 & 3. Restauration et réouverture automatique de la modale de paiement après authentification
   useEffect(() => {
@@ -189,6 +181,13 @@ export const AppContent: React.FC = () => {
 
     if (path === '/admin' || hash === '#admin' || search.includes('view=admin')) {
       setActiveView('admin');
+    } else if (
+      path.startsWith('/payment/callback') || 
+      path.startsWith('/success') || 
+      search.includes('subscription_id=') ||
+      search.includes('payment_status=')
+    ) {
+      setActiveView('payment-callback');
     }
   }, [setActiveView]);
 
@@ -198,7 +197,11 @@ export const AppContent: React.FC = () => {
       if (window.location.pathname !== '/admin') {
         window.history.pushState(null, '', '/admin');
       }
-    } else if (window.location.pathname === '/admin') {
+    } else if (activeView === 'payment-callback') {
+      if (!window.location.pathname.startsWith('/payment/callback')) {
+        window.history.pushState(null, '', '/payment/callback' + window.location.search);
+      }
+    } else if (window.location.pathname === '/admin' || window.location.pathname.startsWith('/payment/callback')) {
       window.history.pushState(null, '', '/');
     }
   }, [activeView]);
@@ -403,6 +406,7 @@ export const AppContent: React.FC = () => {
           {activeView === 'admin' && <AdminView />}
           {activeView === 'terms' && <TermsView />}
           {(activeView === 'reset-password' || activeView === 'update-password') && <ResetPasswordView />}
+          {activeView === 'payment-callback' && <PaymentCallbackView />}
 
         </main>
       </div>

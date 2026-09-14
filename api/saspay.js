@@ -57,6 +57,103 @@ export function getSaspayCredentials(req) {
 }
 
 /**
+ * Calcule la date d'expiration formelle en fonction de la formule souscrite.
+ */
+export function computeSubscriptionExpiry(plan) {
+  const expiresAt = new Date();
+  if (plan === 'yearly') {
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+  } else {
+    expiresAt.setDate(expiresAt.getDate() + 30);
+  }
+  return expiresAt.toISOString();
+}
+
+/**
+ * Valide la signature cryptographique du Webhook (HMAC-SHA256).
+ * Supporte les passerelles SasPay, Notch Pay, CinetPay.
+ */
+export function verifyWebhookSignature(req, rawBodyStr, secretKey) {
+  const signature = 
+    req.headers['x-saspay-signature'] ||
+    req.headers['x-signature'] ||
+    req.headers['x-notch-signature'] ||
+    req.headers['x-cinetpay-signature'] ||
+    req.headers['x-webhook-signature'] ||
+    '';
+
+  if (!signature || !secretKey) {
+    return false;
+  }
+
+  try {
+    const cleanSignature = String(signature).trim();
+    const hmac = crypto.createHmac('sha256', secretKey);
+    hmac.update(rawBodyStr || '');
+    const calculated = hmac.digest('hex');
+
+    const signatureBuffer = Buffer.from(cleanSignature, 'utf8');
+    const calculatedBuffer = Buffer.from(calculated, 'utf8');
+
+    if (signatureBuffer.length !== calculatedBuffer.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(signatureBuffer, calculatedBuffer);
+  } catch (err) {
+    console.warn('[SasPay Security] Erreur comparaison signature HMAC:', err);
+    return false;
+  }
+}
+
+/**
+ * Interroge de manière autoritaire l'API officielle de la passerelle
+ * pour vérifier cryptographiquement l'état réel de la transaction côté serveur.
+ */
+export async function queryGatewaySession(sessionId, apiKey) {
+  if (!sessionId || !apiKey) return null;
+
+  try {
+    let response = await fetch(`https://api.saspay.me/api/v1/checkout-sessions/${encodeURIComponent(sessionId)}/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok && response.status === 405) {
+      response = await fetch(`https://api.saspay.me/api/v1/checkout-sessions/${encodeURIComponent(sessionId)}/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json'
+        }
+      });
+    }
+
+    const text = await response.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch (_) { data = { message: text }; }
+
+    const rawStatus = (data?.status || data?.data?.status || '').toUpperCase();
+    const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID';
+    const isFailed = rawStatus === 'FAILED' || rawStatus === 'CANCELLED' || rawStatus === 'REJECTED';
+
+    return {
+      isSuccess,
+      isFailed,
+      rawStatus,
+      data: data?.data || data
+    };
+  } catch (err) {
+    console.error('[queryGatewaySession Exception]:', err.message);
+    return null;
+  }
+}
+
+/**
  * Extrait un message d'erreur textuel lisible depuis n'importe quel objet d'erreur ou réponse API.
  * Empêche formellement l'affichage de '[object Object]'.
  */
@@ -240,9 +337,178 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, subscription: found });
   }
 
-  // 2. Traitement Webhook (action=webhook ou POST avec structure d'événement)
+  // 1.7. Vérification sécurisée du statut d'une souscription (utilisé par /payment/callback)
+  if (action === 'verify-subscription' || action === 'check-subscription-status') {
+    const subId = (req.query?.id || req.query?.subscription_id || req.body?.subscription_id || '').trim();
+    const reference = (req.query?.reference || req.query?.session_id || req.body?.reference || '').trim();
+    const email = (req.query?.email || req.body?.email || '').trim().toLowerCase();
+
+    if (!subId && !reference && !email) {
+      return res.status(400).json({ success: false, error: 'Identifiant de souscription ou référence manquant.' });
+    }
+
+    let sub = null;
+    if (subId) sub = globalSubscriptions.get(subId);
+    if (!sub && reference) sub = globalSubscriptions.get(reference);
+    if (!sub && email) sub = globalSubscriptions.get(`email:${email}`);
+
+    if (supabase) {
+      try {
+        let query = supabase.from('subscriptions').select('*');
+        if (subId) {
+          query = query.eq('id', subId);
+        } else if (reference) {
+          query = query.eq('payment_reference', reference);
+        } else if (email) {
+          query = query.eq('email', email).order('created_at', { ascending: false }).limit(1);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) {
+          sub = data;
+        }
+      } catch (sbErr) {
+        console.warn('[SasPay verify-subscription] Erreur lecture Supabase:', sbErr?.message);
+      }
+    }
+
+    if (!sub) {
+      return res.status(404).json({
+        success: false,
+        isPro: false,
+        status: 'not_found',
+        message: 'Aucune souscription trouvée.'
+      });
+    }
+
+    // Si déjà actif en base, vérifier la date d'expiration
+    if (sub.status === 'active') {
+      const isExpired = sub.expires_at ? new Date(sub.expires_at).getTime() <= Date.now() : false;
+      return res.status(200).json({
+        success: true,
+        isPro: !isExpired,
+        status: isExpired ? 'expired' : 'active',
+        plan: sub.plan,
+        expiresAt: sub.expires_at,
+        subscription: sub
+      });
+    }
+
+    // Si en attente et qu'une référence de transaction est disponible, contre-vérification serveur auprès de la passerelle
+    const txRef = reference || sub.payment_reference || sub.paymentReference;
+    if (sub.status === 'pending_payment' && txRef && apiKey) {
+      const gatewayCheck = await queryGatewaySession(txRef, apiKey);
+      if (gatewayCheck && gatewayCheck.isSuccess) {
+        const now = new Date().toISOString();
+        const expiresAt = computeSubscriptionExpiry(sub.plan);
+
+        sub.status = 'active';
+        sub.expires_at = expiresAt;
+        sub.updated_at = now;
+        sub.payment_reference = txRef;
+
+        globalSubscriptions.set(sub.id, sub);
+
+        if (supabase) {
+          try {
+            await supabase.from('subscriptions').update({
+              status: 'active',
+              payment_reference: txRef,
+              expires_at: expiresAt,
+              updated_at: now
+            }).eq('id', sub.id);
+          } catch (_) {}
+        }
+
+        console.log('[SasPay verify-subscription] 👑 Souscription activée via confirmation autoritaire passerelle:', sub.id);
+
+        return res.status(200).json({
+          success: true,
+          isPro: true,
+          status: 'active',
+          plan: sub.plan,
+          expiresAt,
+          subscription: sub
+        });
+      } else if (gatewayCheck && gatewayCheck.isFailed) {
+        sub.status = 'failed';
+        if (supabase) {
+          try {
+            await supabase.from('subscriptions').update({
+              status: 'failed',
+              updated_at: new Date().toISOString()
+            }).eq('id', sub.id);
+          } catch (_) {}
+        }
+        return res.status(200).json({
+          success: false,
+          isPro: false,
+          status: 'failed',
+          message: 'La transaction a été rejetée ou annulée par la passerelle de paiement.'
+        });
+      }
+    }
+
+    // Toujours en attente (attente du webhook ou de l'opérateur mobile money)
+    return res.status(200).json({
+      success: true,
+      isPro: false,
+      status: 'pending',
+      message: 'Paiement en cours de validation par votre opérateur (Orange / MTN / Moov / Wave).',
+      subscription: {
+        id: sub.id,
+        plan: sub.plan,
+        amount: sub.amount,
+        currency: sub.currency,
+        status: sub.status
+      }
+    });
+  }
+
+  // 1.8. Vérification de l'état Pro d'un utilisateur par userId ou email
+  if (action === 'check-user-status') {
+    const userId = (req.query?.userId || req.body?.userId || '').trim();
+    const email = (req.query?.email || req.body?.email || '').trim().toLowerCase();
+
+    // Exemption Master Admin
+    if (email === 'ivanjoris959@gmail.com') {
+      return res.status(200).json({
+        isPro: true,
+        plan: 'yearly',
+        expiresAt: 'Illimité (Fondateur)'
+      });
+    }
+
+    if (!userId && !email) {
+      return res.status(400).json({ isPro: false, error: 'userId ou email requis.' });
+    }
+
+    if (supabase) {
+      try {
+        let query = supabase.from('subscriptions').select('*').eq('status', 'active');
+        if (userId) query = query.eq('user_id', userId);
+        else query = query.eq('email', email);
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!error && data) {
+          const isExpired = data.expires_at ? new Date(data.expires_at).getTime() <= Date.now() : false;
+          return res.status(200).json({
+            isPro: !isExpired,
+            plan: data.plan,
+            expiresAt: data.expires_at
+          });
+        }
+      } catch (err) {
+        console.warn('[SasPay check-user-status] Erreur Supabase:', err?.message);
+      }
+    }
+
+    return res.status(200).json({ isPro: false });
+  }
+
+  // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle
   if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
     let webhookBody = req.body;
+    let rawBodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
     if (typeof webhookBody === 'string') {
       try {
         webhookBody = JSON.parse(webhookBody);
@@ -253,30 +519,108 @@ export default async function handler(req, res) {
 
     const event = webhookBody?.event || 'transaction.unknown';
     const transactionData = webhookBody?.data || {};
+    const txId = transactionData?.id || transactionData?.reference || req.query?.id;
     const rawStatus = (transactionData?.status || '').toUpperCase();
 
-    console.log(`[SasPay Webhook] Événement reçu: ${event}, Statut: ${rawStatus}, Transaction ID: ${transactionData?.id || 'N/A'}`);
+    console.log(`[SasPay Webhook] Événement reçu: ${event}, Statut: ${rawStatus}, Transaction ID: ${txId || 'N/A'}`);
 
-    // Détection de succès
-    const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID' || event === 'transaction.success';
+    // VÉRIFICATION CRYPTOGRAPHIQUE & SOURCE :
+    const webhookSecret = process.env.SASPAY_WEBHOOK_SECRET || process.env.SASPAY_SECRET_KEY || apiKey;
+    const hasSignature = Boolean(
+      req.headers['x-saspay-signature'] || 
+      req.headers['x-signature'] || 
+      req.headers['x-notch-signature'] || 
+      req.headers['x-cinetpay-signature']
+    );
 
-    if (isSuccess && transactionData?.id) {
-      const txId = transactionData.id;
+    let isCryptographicallyVerified = false;
+
+    // 1. Signature HMAC si en-tête présent
+    if (hasSignature) {
+      isCryptographicallyVerified = verifyWebhookSignature(req, rawBodyStr, webhookSecret);
+      if (!isCryptographicallyVerified) {
+        console.warn('[SasPay Webhook Security] ❌ Signature électronique non valide ! Rejet 401.');
+        return res.status(401).json({ error: 'Signature électronique du webhook invalide.' });
+      }
+      console.log('[SasPay Webhook Security] ✓ Signature cryptographique HMAC validée avec succès.');
+    }
+
+    // 2. Si pas de signature d'en-tête ou pour double-check, contre-vérification serveur auprès de la passerelle
+    if (!isCryptographicallyVerified && txId && apiKey) {
+      const gatewayCheck = await queryGatewaySession(txId, apiKey);
+      if (gatewayCheck && gatewayCheck.isSuccess) {
+        isCryptographicallyVerified = true;
+        console.log('[SasPay Webhook Security] ✓ Preuve serveur-à-serveur validée auprès de la passerelle.');
+      } else {
+        console.warn('[SasPay Webhook Security] ❌ Échec de vérification autoritaire auprès de la passerelle pour tx:', txId);
+      }
+    }
+
+    const isSuccess = (rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID' || event === 'transaction.success') && isCryptographicallyVerified;
+
+    if (isSuccess && txId) {
+      const now = new Date().toISOString();
+      const subId = transactionData?.subscription_id || transactionData?.subscriptionId;
+
+      let targetSub = null;
+      if (subId) targetSub = globalSubscriptions.get(subId);
+      if (!targetSub && supabase) {
+        try {
+          const query = supabase.from('subscriptions').select('*');
+          if (subId) query.eq('id', subId);
+          else query.eq('payment_reference', txId);
+          const { data } = await query.maybeSingle();
+          if (data) targetSub = data;
+        } catch (_) {}
+      }
+
+      const plan = targetSub?.plan || 'monthly';
+      const expiresAt = computeSubscriptionExpiry(plan);
+
+      // Mise à jour de la mémoire globale
       for (const [key, sub] of globalSubscriptions.entries()) {
-        if (sub && (sub.paymentReference === txId || sub.id === transactionData?.subscription_id)) {
+        if (sub && (sub.paymentReference === txId || sub.id === subId || sub.id === targetSub?.id)) {
           sub.status = 'active';
-          sub.updatedAt = new Date().toISOString();
+          sub.paymentReference = txId;
+          sub.expiresAt = expiresAt;
+          sub.activatedAt = now;
+          sub.updatedAt = now;
+          sub.signatureVerified = true;
           globalSubscriptions.set(key, sub);
-          if (supabase) {
-            try {
-              await supabase.from('subscriptions').update({ 
-                status: 'active', 
-                updated_at: sub.updatedAt 
-              }).eq('id', sub.id);
-            } catch (subErr) {
-              console.warn('[SasPay Webhook] Erreur mise à jour statut Supabase:', subErr?.message || subErr);
-            }
+        }
+      }
+
+      // ÉCRITURE EXCLUSIVE DU STATUT PRO EN BASE DE DONNÉES
+      if (supabase) {
+        try {
+          const updatePayload = {
+            status: 'active',
+            payment_reference: txId,
+            expires_at: expiresAt,
+            updated_at: now
+          };
+
+          let updateQuery = supabase.from('subscriptions').update(updatePayload);
+          if (subId) {
+            updateQuery = updateQuery.eq('id', subId);
+          } else if (targetSub?.id) {
+            updateQuery = updateQuery.eq('id', targetSub.id);
+          } else {
+            updateQuery = updateQuery.eq('payment_reference', txId);
           }
+
+          const { error: updErr } = await updateQuery;
+          if (updErr) {
+            console.error('[SasPay Webhook] Erreur mise à jour Supabase:', updErr);
+          } else {
+            console.log('[SasPay Webhook] 👑 Statut Pro activé en base de données suite au Webhook validé:', {
+              subId: subId || targetSub?.id,
+              txId,
+              expiresAt
+            });
+          }
+        } catch (sbErr) {
+          console.error('[SasPay Webhook] Exception Supabase:', sbErr);
         }
       }
     }
@@ -284,8 +628,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       received: true,
       event,
-      status: isSuccess ? 'processed' : 'pending',
-      transactionId: transactionData?.id || null
+      verified: isCryptographicallyVerified,
+      status: isSuccess ? 'processed' : (isCryptographicallyVerified ? 'pending' : 'unverified'),
+      transactionId: txId || null
     });
   }
 
@@ -450,7 +795,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const rawReturnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/?payment_status=success').trim();
+    const rawReturnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/payment/callback').trim();
     const returnUrl = verifiedSubscription
       ? (rawReturnUrl.includes('?') ? `${rawReturnUrl}&subscription_id=${verifiedSubscription.id}` : `${rawReturnUrl}?subscription_id=${verifiedSubscription.id}`)
       : rawReturnUrl;

@@ -83,7 +83,7 @@ export interface UserProfile {
   token?: string;
 }
 
-export type SubscriptionStatus = 'pending_payment' | 'active' | 'cancelled' | 'expired';
+export type SubscriptionStatus = 'pending_payment' | 'active' | 'cancelled' | 'expired' | 'failed';
 
 export interface ProSubscription {
   id: string;
@@ -96,10 +96,13 @@ export interface ProSubscription {
   amount: number;
   status: SubscriptionStatus;
   paymentReference?: string;
-  paymentProvider?: 'saspay' | 'paypal' | 'moneroo';
+  paymentProvider?: 'saspay' | 'paypal' | 'moneroo' | 'cinetpay' | 'notchpay';
   termsAccepted: boolean;
   createdAt: string;
   updatedAt?: string;
+  activatedAt?: string;
+  expiresAt?: string;
+  signatureVerified?: boolean;
 }
 
 export interface AdminUserData {
@@ -191,4 +194,4 @@ export interface SearchHistoryItem {
   mood?: string;
 }
 
-export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password';
+export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password' | 'payment-callback';

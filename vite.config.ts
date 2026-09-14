@@ -109,6 +109,26 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.5. ROUTE /api/paypal
+            if (pathname.startsWith('/api/paypal')) {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/paypal.js')).href;
+                const paypalHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await paypalHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 4. ROUTE /api/auth (login, register, send-verification, google)
             if (pathname.startsWith('/api/auth')) {
               adaptResponse();

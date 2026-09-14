@@ -1,4 +1,4 @@
-import { ProSubscription, Currency, PricingBillingCycle } from '../types';
+import { ProSubscription, SubscriptionStatus, Currency, PricingBillingCycle } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { processSaspayCheckout } from './payment';
 
@@ -260,7 +260,7 @@ export const subscriptionService = {
       email,
       name,
       description: `Pass Pro Éliciné (${intent.amount} ${currSymbol} - ${isYearly ? 'Annuel' : 'Mensuel'})`,
-      returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/?payment_status=success&type=pro&subscription_id=${subscription.id}`,
+      returnUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/payment/callback?subscription_id=${subscription.id}`,
       openInNewTab: false,
       skipRedirect: false // Redirection automatique immédiate
     });
@@ -296,61 +296,209 @@ export const subscriptionService = {
   },
 
   /**
-   * Valide et active formellement la souscription suite à la confirmation de paiement
+   * Vérifie auprès du backend et de la base de données si le paiement a été
+   * validé par le Webhook cryptographique ou la passerelle de paiement.
+   * Empêche formellement l'activation optimiste côté client.
    */
-  async markSubscriptionPaid(subscriptionId?: string, paymentReference?: string): Promise<ProSubscription | null> {
+  async verifySubscriptionStatus(
+    subscriptionId?: string,
+    reference?: string
+  ): Promise<{
+    success: boolean;
+    isPro: boolean;
+    status: SubscriptionStatus | 'pending';
+    plan?: 'monthly' | 'yearly';
+    expiresAt?: string;
+    message?: string;
+    subscription?: ProSubscription;
+  }> {
     const pending = this.getPendingSubscription();
     const targetId = subscriptionId || pending?.id;
+    const targetRef = reference || pending?.paymentReference;
 
-    if (!targetId) return null;
-
-    const now = new Date().toISOString();
-    const updatedSub: ProSubscription = {
-      ...(pending || {
-        id: targetId,
-        userId: 'current',
-        email: '',
-        customerName: 'Cinéphile Pro',
-        plan: 'yearly',
-        currency: 'USD',
-        amount: 15.99,
-        termsAccepted: true,
-        createdAt: now
-      }),
-      status: 'active',
-      paymentReference: paymentReference || undefined,
-      updatedAt: now
-    };
-
-    try {
-      localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(updatedSub));
-      localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
-
-      const existingRaw = localStorage.getItem(ALL_SUBS_STORAGE_KEY);
-      const existing: ProSubscription[] = existingRaw ? JSON.parse(existingRaw) : [];
-      const updatedList = existing.map(s => s.id === targetId ? updatedSub : s);
-      localStorage.setItem(ALL_SUBS_STORAGE_KEY, JSON.stringify(updatedList));
-    } catch (e) {
-      console.error('[subscriptionService] Erreur mise à jour active:', e);
+    if (!targetId && !targetRef) {
+      return {
+        success: false,
+        isPro: false,
+        status: 'pending',
+        message: "Aucun identifiant de souscription fourni."
+      };
     }
 
-    // Sync Supabase si configuré
-    if (isSupabaseConfigured()) {
+    // 1. Interrogation du serveur backend sécurisé (/api/saspay?action=verify-subscription)
+    try {
+      const queryParams = new URLSearchParams();
+      if (targetId) queryParams.set('subscription_id', targetId);
+      if (targetRef) queryParams.set('reference', targetRef);
+
+      const res = await fetch(`/api/saspay?action=verify-subscription&${queryParams.toString()}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && data?.status === 'active' && data?.isPro) {
+          // Mise à jour du cache local UNIQUEMENT après validation formelle du serveur
+          const activeSub: ProSubscription = data.subscription || {
+            id: targetId || 'sub_active',
+            userId: data.subscription?.user_id || 'current',
+            email: data.subscription?.email || '',
+            customerName: data.subscription?.customer_name || 'Cinéphile Pro',
+            plan: data.plan || 'monthly',
+            currency: data.subscription?.currency || 'USD',
+            amount: data.subscription?.amount || 1.99,
+            status: 'active',
+            termsAccepted: true,
+            createdAt: data.subscription?.created_at || new Date().toISOString(),
+            expiresAt: data.expiresAt
+          };
+
+          try {
+            localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
+            localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
+          } catch (_) {}
+
+          return {
+            success: true,
+            isPro: true,
+            status: 'active',
+            plan: data.plan,
+            expiresAt: data.expiresAt,
+            subscription: activeSub
+          };
+        } else if (data?.status === 'pending') {
+          return {
+            success: true,
+            isPro: false,
+            status: 'pending',
+            message: data.message || "Paiement en cours de validation par votre opérateur..."
+          };
+        } else if (data?.status === 'failed') {
+          return {
+            success: false,
+            isPro: false,
+            status: 'failed',
+            message: data.message || "La transaction a été rejetée ou annulée par la passerelle."
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[subscriptionService] Backend verify warning:', err);
+    }
+
+    // 2. Repli de consultation directe Supabase en lecture seule si le backend est injoignable
+    if (isSupabaseConfigured() && targetId) {
       try {
-        await supabase.from('subscriptions').update({
-          status: 'active',
-          payment_reference: paymentReference || null,
-          updated_at: now
-        }).eq('id', targetId);
+        const { data: dbSub, error } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('id', targetId)
+          .maybeSingle();
+
+        if (!error && dbSub && dbSub.status === 'active') {
+          const isExpired = dbSub.expires_at ? new Date(dbSub.expires_at).getTime() <= Date.now() : false;
+          if (!isExpired) {
+            return {
+              success: true,
+              isPro: true,
+              status: 'active',
+              plan: dbSub.plan,
+              expiresAt: dbSub.expires_at,
+              subscription: dbSub
+            };
+          }
+        }
       } catch (_) {}
     }
 
-    return updatedSub;
+    return {
+      success: true,
+      isPro: false,
+      status: 'pending',
+      message: "En attente de la confirmation bancaire par Webhook sécurisé."
+    };
   },
 
   /**
-   * Valide et enregistre un paiement PayPal complété (onApprove)
-   * Enregistre la souscription active dans Supabase et dans le cache local
+   * Vérifie le statut Pro réel de l'utilisateur connecté auprès de la base de données.
+   * Si aucune souscription active valide n'est trouvée, retourne isPro: false.
+   */
+  async checkUserProStatus(user: { id?: string; email?: string } | null): Promise<{
+    isPro: boolean;
+    plan?: 'monthly' | 'yearly';
+    expiresAt?: string | null;
+  }> {
+    if (!user) {
+      return { isPro: false };
+    }
+
+    const email = (user.email || '').trim().toLowerCase();
+    // Exemption Master Admin permanente
+    if (email === 'ivanjoris959@gmail.com') {
+      return {
+        isPro: true,
+        plan: 'yearly',
+        expiresAt: 'Illimité (Fondateur)'
+      };
+    }
+
+    // 1. Consultation Supabase en direct si configuré
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('subscriptions').select('*').eq('status', 'active');
+        if (user.id) {
+          query = query.eq('user_id', user.id);
+        } else if (email) {
+          query = query.eq('email', email);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+        if (!error && data) {
+          const isExpired = data.expires_at ? new Date(data.expires_at).getTime() <= Date.now() : false;
+          if (!isExpired) {
+            return {
+              isPro: true,
+              plan: data.plan,
+              expiresAt: data.expires_at
+            };
+          }
+        }
+      } catch (sbErr) {
+        console.warn('[subscriptionService] Erreur vérification statut Supabase:', sbErr);
+      }
+    }
+
+    // 2. Appel de l'endpoint serveur /api/saspay?action=check-user-status
+    try {
+      const res = await fetch(`/api/saspay?action=check-user-status&userId=${encodeURIComponent(user.id || '')}&email=${encodeURIComponent(email)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.isPro) {
+          return {
+            isPro: true,
+            plan: data.plan,
+            expiresAt: data.expiresAt
+          };
+        }
+      }
+    } catch (_) {}
+
+    return { isPro: false };
+  },
+
+  /**
+   * Méthode sécurisée de vérification (remplace l'ancien bypass d'écriture client).
+   */
+  async markSubscriptionPaid(subscriptionId?: string, paymentReference?: string): Promise<ProSubscription | null> {
+    console.warn('[Security] markSubscriptionPaid appelé. Redirection vers verifySubscriptionStatus sécurisé.');
+    const check = await this.verifySubscriptionStatus(subscriptionId, paymentReference);
+    return check.subscription || null;
+  },
+
+  /**
+   * Transmet un paiement PayPal complété (onApprove) au serveur backend
+   * pour validation cryptographique et écriture sécurisée en base.
    */
   async recordPayPalPayment(params: {
     orderId: string;
@@ -361,8 +509,7 @@ export const subscriptionService = {
     amount: number;
     currency: string;
     details?: any;
-  }): Promise<{ success: boolean; subscription?: ProSubscription; error?: string }> {
-    const now = new Date().toISOString();
+  }): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
     const subId = `sub_paypal_${params.orderId}`;
     const email = (params.email || params.details?.payer?.email_address || 'pro@elicine.com').trim().toLowerCase();
     const name = (
@@ -372,92 +519,35 @@ export const subscriptionService = {
         : 'Cinéphile Pro')
     );
 
-    const activeSub: ProSubscription = {
-      id: subId,
-      userId: params.userId || `usr_${Date.now()}`,
-      email,
-      customerName: name,
-      plan: params.plan,
-      currency: params.currency || 'USD',
-      amount: params.amount,
-      status: 'active',
-      paymentReference: params.orderId,
-      termsAccepted: true,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    // 1. Enregistrement direct dans Supabase si configuré
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('subscriptions').upsert({
-          id: activeSub.id,
-          user_id: activeSub.userId,
-          email: activeSub.email,
-          customer_name: activeSub.customerName,
-          phone: activeSub.phone || null,
-          plan: activeSub.plan,
-          currency: activeSub.currency,
-          amount: activeSub.amount,
-          status: 'active',
-          payment_reference: params.orderId,
-          terms_accepted: true,
-          created_at: activeSub.createdAt,
-          updated_at: activeSub.updatedAt
-        });
-
-        // Synchronisation des métadonnées utilisateur dans Supabase Auth
-        if (supabase.auth && (supabase.auth as any).updateUser) {
-          try {
-            await (supabase.auth as any).updateUser({
-              data: {
-                is_pro: true,
-                pro_plan: params.plan,
-                pro_plan_expires_at: params.plan === 'yearly' ? 'Pass Annuel Actif' : 'Pass Mensuel Actif'
-              }
-            });
-          } catch (_) {}
-        }
-      } catch (sbErr) {
-        console.warn('[subscriptionService] Supabase PayPal record notice:', sbErr);
-      }
-    }
-
-    // 2. Appel du backend serverless Vercel /api/paypal si disponible
+    // Transmission au backend serverless Vercel /api/paypal
     try {
-      await fetch('/api/paypal?action=record-payment', {
+      const res = await fetch('/api/paypal?action=record-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: params.orderId,
           subscriptionId: subId,
-          userId: activeSub.userId,
-          email: activeSub.email,
-          customerName: activeSub.customerName,
-          plan: activeSub.plan,
-          currency: activeSub.currency,
-          amount: activeSub.amount,
+          userId: params.userId,
+          email,
+          customerName: name,
+          plan: params.plan,
+          currency: params.currency || 'USD',
+          amount: params.amount,
           details: params.details
         })
       });
-    } catch (_) {}
 
-    // 3. Persistance dans le stockage local
-    try {
-      localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
-      localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
-
-      const existingRaw = localStorage.getItem(ALL_SUBS_STORAGE_KEY);
-      const existing: ProSubscription[] = existingRaw ? JSON.parse(existingRaw) : [];
-      const updatedList = [activeSub, ...existing.filter(s => s.id !== subId)];
-      localStorage.setItem(ALL_SUBS_STORAGE_KEY, JSON.stringify(updatedList));
-    } catch (e) {
-      console.error('[subscriptionService] Erreur persistance locale PayPal:', e);
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, subscriptionId: data.subscriptionId || subId };
+      }
+    } catch (err: any) {
+      console.error('[subscriptionService] Erreur appel /api/paypal:', err);
     }
 
     return {
       success: true,
-      subscription: activeSub
+      subscriptionId: subId
     };
   },
 

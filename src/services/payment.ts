@@ -407,7 +407,9 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
   const isPro = type === 'pro';
   const isYearly = params.billingCycle === 'yearly';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://elicine.vercel.app';
-  const successCallbackUrl = (params.returnUrl || `${origin}/?payment_status=success&type=${type}`).trim();
+  const successCallbackUrl = (params.returnUrl || (isPro 
+    ? `${origin}/payment/callback?type=pro${params.subscriptionId ? `&subscription_id=${params.subscriptionId}` : ''}` 
+    : `${origin}/?payment_status=success&type=${type}`)).trim();
 
   // Normalisation de la devise et du montant pour SasPay
   const { amount: finalAmount, currency: formattedCurrency } = convertToSaspayCurrency(
