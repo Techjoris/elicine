@@ -119,7 +119,44 @@ export const searchQuotaService = {
     // 1. Lecture immédiate du cache local (optimiste)
     let local = readLocalQuotaRecord(effectiveUserId, today);
 
-    // 2. Synchronisation en arrière-plan avec Supabase si connecté
+    // 2. Synchronisation prioritaire avec le serveur (vérification du quota IP & Supabase)
+    try {
+      let authHeader: string | undefined;
+      if (isSupabaseConfigured()) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          authHeader = `Bearer ${session.access_token}`;
+        }
+      }
+
+      const res = await fetch('/api/search?action=quota', {
+        headers: authHeader ? { Authorization: authHeader } : undefined
+      });
+
+      if (res.ok) {
+        const serverData = await res.json();
+        if (typeof serverData.searchCount === 'number') {
+          const mergedCount = Math.max(local.searchCount, serverData.searchCount);
+          local = {
+            userId: effectiveUserId,
+            searchDate: today,
+            searchCount: mergedCount,
+            remaining: Math.max(0, MAX_FREE_DAILY_SEARCHES - mergedCount),
+            max: MAX_FREE_DAILY_SEARCHES
+          };
+          saveLocalQuotaRecord(local);
+          return {
+            remaining: local.remaining,
+            max: MAX_FREE_DAILY_SEARCHES,
+            lastResetDate: today
+          };
+        }
+      }
+    } catch (apiErr) {
+      // Fallback gracieux sur Supabase direct
+    }
+
+    // 3. Repli direct sur Supabase si l'API route n'est pas joignable
     if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase

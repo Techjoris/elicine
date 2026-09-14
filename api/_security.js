@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,6 +17,81 @@ const supabaseAnonKey =
 export const supabaseServer = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+/**
+ * Extrait l'adresse IP cliente réelle depuis les en-têtes HTTP standards (Vercel, proxies, Cloudflare)
+ */
+export function getRealClientIp(req) {
+  if (!req) return '127.0.0.1';
+
+  const getHeader = (name) => {
+    if (!req.headers) return '';
+    if (typeof req.headers.get === 'function') {
+      return req.headers.get(name) || '';
+    }
+    return req.headers[name.toLowerCase()] || req.headers[name] || '';
+  };
+
+  const forwarded = getHeader('x-forwarded-for');
+  if (forwarded) {
+    const client = String(forwarded).split(',')[0].trim();
+    if (client) return client;
+  }
+
+  const realIp = getHeader('x-real-ip') || 
+                 getHeader('cf-connecting-ip') || 
+                 getHeader('x-client-ip') ||
+                 getHeader('true-client-ip');
+  if (realIp) {
+    return String(realIp).split(',')[0].trim();
+  }
+
+  return req.socket?.remoteAddress || req.connection?.remoteAddress || '127.0.0.1';
+}
+
+/**
+ * Génère un hash SHA-256 déterministe et conforme RGPD pour une adresse IP
+ */
+export function hashClientIp(ip) {
+  let cleanIp = String(ip || '127.0.0.1').trim().toLowerCase();
+  cleanIp = cleanIp.replace(/^::ffff:/, ''); // Normalisation IPv4 mappé IPv6
+  if (cleanIp.includes(':') && !cleanIp.includes('::') && cleanIp.includes('.')) {
+    cleanIp = cleanIp.split(':')[0]; // Suppression du port si présent
+  }
+  return crypto.createHash('sha256').update(`elicine_quota_salt_${cleanIp}`).digest('hex');
+}
+
+// ─── Cache mémoire local pour les quotas journaliers par IP ─────────────────
+const ipDailyQuotaMap = new Map();
+
+if (typeof setInterval !== 'undefined') {
+  const cleanupTimer = setInterval(() => {
+    const today = new Date().toISOString().split('T')[0];
+    for (const [key, data] of ipDailyQuotaMap.entries()) {
+      if (data.date !== today) {
+        ipDailyQuotaMap.delete(key);
+      }
+    }
+  }, 30 * 60 * 1000);
+  if (cleanupTimer.unref) cleanupTimer.unref();
+}
+
+export function getMemoryDailyQuota(ipHash, date) {
+  const record = ipDailyQuotaMap.get(ipHash);
+  if (record && record.date === date) {
+    return record.count || 0;
+  }
+  return 0;
+}
+
+export function incrementMemoryDailyQuota(ipHash, date) {
+  const current = getMemoryDailyQuota(ipHash, date);
+  ipDailyQuotaMap.set(ipHash, {
+    count: current + 1,
+    date
+  });
+  return current + 1;
+}
 
 // ============================================================================
 // 1. SCHÉMAS DE VALIDATION ZOD
@@ -124,20 +200,23 @@ export async function verifyServerSession(req) {
     isBypassQuotas: false,
     user: null,
     effectiveUserId: '',
-    clientIp: ''
+    clientIp: '',
+    ipHash: ''
   };
 
-  // Résolution de l'adresse IP cliente
-  const rawIp = (req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
-  result.clientIp = rawIp;
+  // Résolution robuste de l'adresse IP cliente réelle et de son hash SHA-256
+  const clientIp = getRealClientIp(req);
+  const ipHash = hashClientIp(clientIp);
+  result.clientIp = clientIp;
+  result.ipHash = ipHash;
 
-  // Résolution par défaut de l'identifiant effectif (deviceId ou IP)
+  // Résolution par défaut de l'identifiant effectif (deviceId ou hash IP)
   const fallbackDeviceId = req.body?.deviceId || req.query?.deviceId;
   if (fallbackDeviceId) {
     const cleanDev = String(fallbackDeviceId).trim().slice(0, 80);
     result.effectiveUserId = cleanDev.startsWith('dev_') ? cleanDev : `dev_${cleanDev}`;
-  } else if (result.clientIp) {
-    result.effectiveUserId = `ip_${result.clientIp}`;
+  } else {
+    result.effectiveUserId = `ip_${ipHash}`;
   }
 
   if (!supabaseServer) {

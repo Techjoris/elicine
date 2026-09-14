@@ -4,7 +4,9 @@ import {
   verifyServerSession, 
   sanitizeUserQuery, 
   buildSecuredPrompt, 
-  supabaseServer 
+  supabaseServer,
+  getMemoryDailyQuota,
+  incrementMemoryDailyQuota
 } from './_security.js';
 
 export default async function handler(req, res) {
@@ -71,28 +73,74 @@ export default async function handler(req, res) {
     });
   }
 
-  // B. Validation systématique du quota journalier (3 recherches gratuites / jour)
+  // B. Validation systématique du quota journalier (3 recherches gratuites / jour liées à l'adresse IP)
   // L'administrateur principal (ivanjoris959@gmail.com) et les membres Pro sont exemptés de toute restriction
-  if (!isPro && !isBypassQuotas && effectiveUserKey && supabaseServer) {
-    try {
-      const { data: searchRecord } = await supabaseServer
-        .from('user_searches')
-        .select('search_count')
-        .eq('user_id', effectiveUserKey)
-        .eq('search_date', todayDate)
-        .maybeSingle();
+  if (!isPro && !isBypassQuotas) {
+    const ipHash = sessionInfo.ipHash;
+    const ipStorageKey = `ip_${ipHash}`;
 
-      if (searchRecord && searchRecord.search_count >= 3) {
-        return res.status(403).json({
-          error: "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro (1.99$) pour un accès illimité.",
-          code: "QUOTA_EXCEEDED",
-          quotaExceeded: true,
-          remaining: 0,
-          max: 3
-        });
+    // 1. Vérification rapide en mémoire vive (bloque instantanément sans latence)
+    const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
+    if (memoryCount >= 3) {
+      return res.status(403).json({
+        error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro (1.99$) pour un accès illimité.",
+        code: "QUOTA_EXCEEDED",
+        quotaExceeded: true,
+        remaining: 0,
+        max: 3,
+        ipLimited: true
+      });
+    }
+
+    // 2. Vérification persistante dans Supabase
+    if (supabaseServer) {
+      try {
+        // A) Vérification stricte du compteur associé au hash de l'adresse IP
+        const { data: ipSearchRecord } = await supabaseServer
+          .from('user_searches')
+          .select('search_count')
+          .eq('user_id', ipStorageKey)
+          .eq('search_date', todayDate)
+          .maybeSingle();
+
+        const currentIpCount = Math.max(
+          ipSearchRecord?.search_count || 0,
+          memoryCount
+        );
+
+        if (currentIpCount >= 3) {
+          return res.status(403).json({
+            error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro (1.99$) pour un accès illimité.",
+            code: "QUOTA_EXCEEDED",
+            quotaExceeded: true,
+            remaining: 0,
+            max: 3,
+            ipLimited: true
+          });
+        }
+
+        // B) Vérification complémentaire du compte connecté (si utilisateur connecté)
+        if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+          const { data: userSearchRecord } = await supabaseServer
+            .from('user_searches')
+            .select('search_count')
+            .eq('user_id', effectiveUserKey)
+            .eq('search_date', todayDate)
+            .maybeSingle();
+
+          if (userSearchRecord && userSearchRecord.search_count >= 3) {
+            return res.status(403).json({
+              error: "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro (1.99$) pour un accès illimité.",
+              code: "QUOTA_EXCEEDED",
+              quotaExceeded: true,
+              remaining: 0,
+              max: 3
+            });
+          }
+        }
+      } catch (quotaErr) {
+        console.warn('[API /api/ai] Erreur vérification quota Supabase :', quotaErr?.message);
       }
-    } catch (quotaErr) {
-      console.warn('[API /api/ai] Erreur vérification quota Supabase :', quotaErr?.message);
     }
   }
 
@@ -373,34 +421,81 @@ export default async function handler(req, res) {
   // ─── Enregistrement Quota dans Supabase pour les Utilisateurs Gratuits ───────
   const recordSearchInSupabase = async () => {
     // Si membre Pro ou Administrateur principal : AUCUNE décrémentation ni incrémentation de compteur
-    if (!supabaseServer || !effectiveUserKey || isPro || isBypassQuotas) return;
-    try {
-      const { data: existing } = await supabaseServer
-        .from('user_searches')
-        .select('id, search_count')
-        .eq('user_id', effectiveUserKey)
-        .eq('search_date', todayDate)
-        .maybeSingle();
+    if (isPro || isBypassQuotas) return;
 
-      if (existing?.id) {
-        await supabaseServer
+    const ipHash = sessionInfo.ipHash;
+    const ipStorageKey = `ip_${ipHash}`;
+
+    // 1. Incrémentation immédiate en mémoire vive
+    if (ipHash) {
+      incrementMemoryDailyQuota(ipHash, todayDate);
+    }
+
+    if (!supabaseServer) return;
+
+    try {
+      // 2. Enregistrement / Incrémentation du compteur de l'adresse IP
+      if (ipStorageKey) {
+        const { data: existingIp } = await supabaseServer
           .from('user_searches')
-          .update({
-            search_count: (existing.search_count || 0) + 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabaseServer
+          .select('id, search_count')
+          .eq('user_id', ipStorageKey)
+          .eq('search_date', todayDate)
+          .maybeSingle();
+
+        if (existingIp?.id) {
+          await supabaseServer
+            .from('user_searches')
+            .update({
+              search_count: (existingIp.search_count || 0) + 1,
+              ip_address: ipHash,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingIp.id);
+        } else {
+          await supabaseServer
+            .from('user_searches')
+            .insert({
+              user_id: ipStorageKey,
+              ip_address: ipHash,
+              search_date: todayDate,
+              search_count: 1,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+        }
+      }
+
+      // 3. Enregistrement / Incrémentation du compteur du compte connecté (si utilisateur authentifié)
+      if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+        const { data: existingUser } = await supabaseServer
           .from('user_searches')
-          .insert({
-            user_id: effectiveUserKey,
-            ip_address: sessionInfo.clientIp || null,
-            search_date: todayDate,
-            search_count: 1,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
+          .select('id, search_count')
+          .eq('user_id', effectiveUserKey)
+          .eq('search_date', todayDate)
+          .maybeSingle();
+
+        if (existingUser?.id) {
+          await supabaseServer
+            .from('user_searches')
+            .update({
+              search_count: (existingUser.search_count || 0) + 1,
+              ip_address: ipHash,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingUser.id);
+        } else {
+          await supabaseServer
+            .from('user_searches')
+            .insert({
+              user_id: effectiveUserKey,
+              ip_address: ipHash,
+              search_date: todayDate,
+              search_count: 1,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+        }
       }
     } catch (e) {
       console.warn('[API /api/ai] Erreur incrémentation user_searches:', e?.message);
