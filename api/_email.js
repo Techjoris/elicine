@@ -61,10 +61,10 @@ export async function sendEmailWithResend({ to, subject, html, text }) {
 }
 
 /**
- * Template HTML Dark Theme Responsive pour la bienvenue Éliciné Pro
+ * Template HTML Dark Theme Responsive pour la confirmation d'activation Pass Pro (Minimaliste & Épuré)
  */
 export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'monthly' }) {
-  const planLabel = plan === 'yearly' ? 'Pass Pro Annuel' : 'Pass Pro Mensuel';
+  const planLabel = plan === 'yearly' ? 'Formule Annuelle' : 'Formule Mensuelle';
 
   return `
 <!DOCTYPE html>
@@ -72,36 +72,36 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bienvenue dans Éliciné Pro</title>
+  <title>Votre Pass Pro Éliciné est activé</title>
   <style>
     body {
       margin: 0;
       padding: 0;
-      background-color: #070709;
+      background-color: #08080a;
       color: #e4e4e7;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     .wrapper {
       width: 100%;
-      background-color: #070709;
+      background-color: #08080a;
       padding: 40px 16px;
     }
     .container {
       max-width: 560px;
       margin: 0 auto;
-      background-color: #121214;
+      background-color: #121215;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 16px;
+      border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
     }
     .header {
-      padding: 36px 32px 16px 32px;
+      padding: 32px 32px 16px 32px;
       text-align: left;
     }
     .brand {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
       letter-spacing: 2px;
       text-transform: uppercase;
@@ -117,40 +117,34 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
     }
     .subtitle {
       font-size: 13px;
-      color: #a1a1aa;
+      color: #71717a;
       margin: 0;
     }
     .content {
       padding: 16px 32px 32px 32px;
     }
-    .greeting {
-      font-size: 15px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0 0 14px 0;
-    }
     .paragraph {
       font-size: 14.5px;
       line-height: 1.65;
       color: #d4d4d8;
-      margin: 0 0 20px 0;
+      margin: 0 0 16px 0;
     }
-    .features-card {
-      background-color: #18181b;
+    .benefits-card {
+      background-color: #18181c;
       border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 20px 0 24px 0;
     }
-    .features-header {
+    .benefits-title {
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #f59e0b;
+      letter-spacing: 0.6px;
+      color: #a1a1aa;
       margin-bottom: 12px;
     }
-    .feature-item {
+    .benefit-item {
       display: flex;
       align-items: flex-start;
       margin-bottom: 10px;
@@ -158,17 +152,18 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
       color: #e4e4e7;
       line-height: 1.5;
     }
-    .feature-item:last-child {
+    .benefit-item:last-child {
       margin-bottom: 0;
     }
-    .feature-dot {
+    .benefit-bullet {
       color: #e50914;
-      margin-right: 10px;
       font-weight: bold;
+      margin-right: 10px;
+      line-height: 1.4;
     }
     .cta-wrapper {
       text-align: left;
-      padding: 8px 0 16px 0;
+      padding: 12px 0 20px 0;
     }
     .cta-btn {
       display: inline-block;
@@ -178,10 +173,16 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
       font-weight: 700;
       text-decoration: none;
       padding: 12px 28px;
-      border-radius: 10px;
+      border-radius: 8px;
+    }
+    .signature {
+      font-size: 13.5px;
+      color: #a1a1aa;
+      margin: 20px 0 0 0;
+      line-height: 1.6;
     }
     .footer {
-      padding: 20px 32px;
+      padding: 18px 32px;
       background-color: #0c0c0e;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
       text-align: left;
@@ -200,44 +201,43 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
     <div class="container">
       <div class="header">
         <div class="brand">Éliciné Pro</div>
-        <h1 class="title">Bienvenue dans Éliciné Pro</h1>
-        <p class="subtitle">Votre compte est activé avec succès (${planLabel})</p>
+        <h1 class="title">Votre Pass Pro est activé</h1>
+        <p class="subtitle">Confirmation d'abonnement (${planLabel})</p>
       </div>
 
       <div class="content">
-        <p class="greeting">Bonjour ${customerName},</p>
+        <p class="paragraph">Bonjour ${customerName},</p>
         <p class="paragraph">
-          Votre abonnement <strong>Éliciné Pro</strong> est désormais actif. Vous bénéficiez d'un accès sans restriction à l'ensemble des fonctionnalités et de l'intelligence artificielle d'Éliciné.
+          Votre abonnement au <strong>Pass Pro Éliciné</strong> a bien été activé.
         </p>
 
-        <div class="features-card">
-          <div class="features-header">Vos privilèges Pro inclus :</div>
-          <div class="feature-item">
-            <span class="feature-dot">•</span>
-            <span><strong>Recherches IA illimitées :</strong> Décrivez toute ambiance, émotion ou souvenir de film sans restriction.</span>
+        <div class="benefits-card">
+          <div class="benefits-title">Vos avantages inclus :</div>
+          <div class="benefit-item">
+            <span class="benefit-bullet">•</span>
+            <span><strong>Recherches & recommandations IA illimitées :</strong> Décrivez n'importe quelle émotion, scène ou thème sans aucune restriction.</span>
           </div>
-          <div class="feature-item">
-            <span class="feature-dot">•</span>
-            <span><strong>Filtres streaming complets :</strong> Ciblez directement vos plateformes favorites (Netflix, Prime Video, Disney+, Canal+, Apple TV+).</span>
+          <div class="benefit-item">
+            <span class="benefit-bullet">•</span>
+            <span><strong>Traitement prioritaire :</strong> Recommandations cinématographiques ultra-rapides et personnalisées.</span>
           </div>
-          <div class="feature-item">
-            <span class="feature-dot">•</span>
-            <span><strong>Notes critiques sur-mesure :</strong> Filtrez les pépites selon vos exigences de notation.</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-dot">•</span>
-            <span><strong>Mode autonome plein écran :</strong> Installation sur écran d'accueil sans interface de navigateur.</span>
+          <div class="benefit-item">
+            <span class="benefit-bullet">•</span>
+            <span><strong>Filtres streaming & catalogue étendu :</strong> Ciblez directement vos plateformes favorites (Netflix, Prime Video, Canal+, Disney+, Apple TV+).</span>
           </div>
         </div>
 
         <div class="cta-wrapper">
-          <a href="https://elicine.app" class="cta-btn">Accéder à Éliciné Pro</a>
+          <a href="https://elicine.app" class="cta-btn">Accéder à ma plateforme</a>
         </div>
+
+        <p class="signature">
+          L'équipe Éliciné — L'intelligence artificielle au service du cinéma d'exception.
+        </p>
       </div>
 
       <div class="footer">
-        <p style="margin: 0 0 6px 0;"><strong>Éliciné</strong> — Le cinéma d'exception, élu pour vous.</p>
-        <p style="margin: 0;">Besoin d'aide ? Contactez notre équipe à <a href="mailto:support@elicine.app">support@elicine.app</a></p>
+        <p style="margin: 0;">Besoin d'assistance ? Contactez notre support à <a href="mailto:support@elicine.app">support@elicine.app</a></p>
       </div>
     </div>
   </div>
@@ -369,13 +369,13 @@ export function getDonationThankYouEmailHtml({ customerName = 'Généreux Donate
 /**
  * Déclenche l'envoi de l'email de bienvenue Pro
  */
-export async function sendProWelcomeEmail(email, { customerName, plan = 'monthly' } = {}) {
+export async function sendProWelcomeEmail(email, { customerName = 'Cinéphile', plan = 'monthly' } = {}) {
   const html = getProWelcomeEmailHtml({ customerName, plan });
   return sendEmailWithResend({
     to: email,
-    subject: '👑 Bienvenue dans Éliciné Pro ! Vos avantages sont activés',
+    subject: 'Votre Pass Pro Éliciné est activé 🎬',
     html,
-    text: `Bienvenue dans Éliciné Pro ! Votre compte est activé avec succès. Rendez-vous sur https://elicine.app pour profiter de vos recherches IA illimitées.`
+    text: `Bonjour ${customerName},\n\nVotre abonnement au Pass Pro Éliciné a bien été activé.\n\nVos avantages inclus :\n- Recherches et recommandations IA illimitées\n- Traitement prioritaire de vos requêtes\n- Filtres streaming et catalogue étendu (Netflix, Prime Video, Canal+, Disney+, Apple TV+...)\n\nAccéder à ma plateforme : https://elicine.app\n\nL'équipe Éliciné — L'intelligence artificielle au service du cinéma d'exception.`
   });
 }
 
