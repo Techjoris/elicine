@@ -44,6 +44,7 @@ export default async function handler(req, res) {
     const rawStatus = String(
       body?.status || 
       body?.data?.status || 
+      body?.data?.object?.status ||
       body?.event || 
       body?.event_type || 
       body?.type || 
@@ -72,29 +73,79 @@ export default async function handler(req, res) {
       rawStatus === 'payment.capture.completed'
     );
 
-    // 2. Extraction et nettoyage de l'adresse email
-    const rawEmail = 
-      body?.email || 
-      body?.data?.email || 
-      body?.customer_email || 
-      body?.customer?.email ||
-      body?.data?.customer?.email ||
-      body?.data?.customer_email ||
-      body?.payer_email || 
-      body?.payer?.email_address ||
-      body?.resource?.payer?.email_address ||
-      body?.metadata?.email ||
-      body?.data?.metadata?.email ||
-      body?.custom_fields?.email ||
-      body?.user_email ||
-      '';
+    // 2. Extraction exhaustive et multi-chemins de l'adresse e-mail
+    const emailCandidatePaths = [
+      body?.email,
+      body?.data?.email,
+      body?.data?.object?.customer_email,
+      body?.data?.object?.customer_details?.email,
+      body?.data?.object?.billing_details?.email,
+      body?.data?.object?.receipt_email,
+      body?.data?.object?.metadata?.email,
+      body?.data?.customer_email,
+      body?.data?.customer?.email,
+      body?.data?.attributes?.customer_email,
+      body?.data?.attributes?.customer?.email,
+      body?.data?.attributes?.email,
+      body?.data?.payer?.email_address,
+      body?.data?.metadata?.email,
+      body?.customer_email,
+      body?.customer?.email,
+      body?.payer_email,
+      body?.payer?.email_address,
+      body?.resource?.payer?.email_address,
+      body?.resource?.customer_email,
+      body?.resource?.custom_fields?.email,
+      body?.resource?.email,
+      body?.payload?.email,
+      body?.payload?.customer?.email,
+      body?.payload?.customer_email,
+      body?.payload?.payer_email,
+      body?.metadata?.email,
+      body?.metadata?.customer_email,
+      body?.custom_fields?.email,
+      body?.user_email,
+      body?.donorEmail,
+      body?.donor_email
+    ];
 
-    if (!rawEmail || typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
-      console.warn('[Webhook Vercel] ⚠️ Email non trouvé dans le payload:', body);
-      return res.status(400).json({ error: "Email de l'acheteur manquant ou invalide." });
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    let foundEmail = null;
+
+    for (const candidate of emailCandidatePaths) {
+      if (typeof candidate === 'string') {
+        const clean = candidate.trim().toLowerCase();
+        if (emailRegex.test(clean)) {
+          foundEmail = clean;
+          break;
+        }
+      }
     }
 
-    const cleanEmail = rawEmail.trim().toLowerCase();
+    // Recherche récursive profonde dans tout le payload si non trouvé par chemin direct
+    if (!foundEmail) {
+      try {
+        const bodyStr = JSON.stringify(body);
+        const allMatches = bodyStr.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+        if (allMatches && allMatches.length > 0) {
+          const valid = allMatches.find(e => {
+            const lower = e.toLowerCase();
+            return !lower.includes('sentry') && !lower.includes('github') && !lower.includes('vercel');
+          });
+          if (valid) foundEmail = valid.toLowerCase().trim();
+        }
+      } catch (_) {}
+    }
+
+    // Fallback de sécurité : support@elicine.app
+    const cleanEmail = foundEmail || 'support@elicine.app';
+
+    if (!foundEmail) {
+      console.warn('[Webhook Vercel] ⚠️ Aucun e-mail trouvé dans le payload. Utilisation du fallback de sécurité :', cleanEmail);
+      console.log('[Webhook Vercel] Inspection complète du payload sans email extrait :', JSON.stringify(body, null, 2));
+    } else {
+      console.log('[Webhook Vercel] ✓ E-mail donateur extrait avec succès :', cleanEmail);
+    }
 
     // 3. Extraction du nom du client
     const customerName = 

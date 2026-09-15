@@ -394,8 +394,8 @@ export async function sendDonationThankYouEmail(email, { customerName, amount = 
   const html = getDonationThankYouEmailHtml({ customerName, amount });
   return sendEmailWithResend({
     to: email,
-    subject: '❤️ Merci pour votre précieux soutien à Éliciné !',
+    subject: 'Un immense merci pour votre soutien à Éliciné ! 🎬',
     html,
-    text: `Merci pour votre don à Éliciné ! Votre soutien permet de financer les serveurs et le développement continu de la plateforme. Rendez-vous sur https://elicine.app`
+    text: `Un immense merci pour votre soutien à Éliciné ! Votre don de ${amount} permet de financer les serveurs et le développement continu de la plateforme. Rendez-vous sur https://elicine.app`
   });
 }

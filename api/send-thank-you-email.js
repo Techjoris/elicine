@@ -47,20 +47,46 @@ export default async function handler(req, res) {
 
     console.log('[Direct Thank You API] Requête reçue :', JSON.stringify(body, null, 2));
 
-    const email = (
-      body.email ||
-      body.customerEmail ||
-      body.customer_email ||
-      body.payer_email ||
-      body.donorEmail ||
-      ''
-    ).trim().toLowerCase();
+    const emailCandidates = [
+      body.email,
+      body.customerEmail,
+      body.customer_email,
+      body.payer_email,
+      body.donorEmail,
+      body.donor_email,
+      body.data?.email,
+      body.data?.customer_email,
+      body.data?.object?.customer_email,
+      body.metadata?.email,
+      body.user_email
+    ];
 
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({
-        success: false,
-        error: "Adresse email du donateur manquante ou invalide."
-      });
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    let foundEmail = null;
+
+    for (const c of emailCandidates) {
+      if (typeof c === 'string') {
+        const clean = c.trim().toLowerCase();
+        if (emailRegex.test(clean)) {
+          foundEmail = clean;
+          break;
+        }
+      }
+    }
+
+    if (!foundEmail) {
+      try {
+        const str = JSON.stringify(body);
+        const matches = str.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+        if (matches && matches.length > 0) {
+          foundEmail = matches[0].toLowerCase().trim();
+        }
+      } catch (_) {}
+    }
+
+    const email = foundEmail || 'support@elicine.app';
+    if (!foundEmail) {
+      console.warn('[Direct Thank You API] ⚠️ Aucun email trouvé, utilisation du fallback support@elicine.app');
     }
 
     const customerName = (
