@@ -2,18 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Send, 
-  Sparkles, 
-  Bug, 
-  Film, 
-  CreditCard, 
-  Lightbulb, 
-  MessageSquare, 
   CheckCircle2, 
   Loader2, 
   Clapperboard, 
   Mail, 
   ShieldCheck,
-  ArrowRight
+  ChevronDown
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -22,64 +16,34 @@ export type FeedbackCategory = 'missing_movie' | 'ai_bug' | 'pro_payment' | 'fea
 interface CategoryOption {
   id: FeedbackCategory;
   label: string;
-  shortLabel: string;
-  icon: React.ElementType;
-  color: string;
-  bgLight: string;
   placeholder: string;
-  description: string;
 }
 
 const CATEGORIES: CategoryOption[] = [
   {
     id: 'missing_movie',
-    label: 'Suggérer un film ou une série manquant(e)',
-    shortLabel: 'Film manquant',
-    icon: Film,
-    color: 'text-amber-400',
-    bgLight: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
-    placeholder: 'Ex: Le film "Dune 2" ou la série "Shōgun" n\'apparaît pas sur les plateformes FR ou le synopsis est incomplet...',
-    description: 'Titre, année, plateforme ou détails manquants'
+    label: '🎬 Suggérer un film ou une série manquant(e)',
+    placeholder: 'Indiquez le titre, l\'année ou la plateforme concernée...'
   },
   {
     id: 'ai_bug',
-    label: 'Signaler un bug de recherche IA',
-    shortLabel: 'Bug recherche IA',
-    icon: Bug,
-    color: 'text-rose-400',
-    bgLight: 'bg-rose-500/10 border-rose-500/30 text-rose-300',
-    placeholder: 'Ex: J\'ai cherché "film de science-fiction dystopique" et les résultats renvoyaient des comédies romantiques...',
-    description: 'Recherche imprécise, hallucination ou erreur technique'
+    label: '⚡ Signaler un bug de recherche IA',
+    placeholder: 'Décrivez votre recherche et le résultat inattendu...'
   },
   {
     id: 'pro_payment',
-    label: 'Question Pass Pro & Paiement',
-    shortLabel: 'Pass Pro / Paiement',
-    icon: CreditCard,
-    color: 'text-emerald-400',
-    bgLight: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300',
-    placeholder: 'Ex: Question concernant mon abonnement Pro, ma facture ou le moyen de paiement utilisé...',
-    description: 'Mobile Money, Carte, PayPal ou activation'
+    label: '👑 Question Pass Pro & Paiement',
+    placeholder: 'Question sur votre abonnement, reçu ou activation...'
   },
   {
     id: 'feature_idea',
-    label: 'Idée d\'amélioration ou nouvelle fonction',
-    shortLabel: 'Idée / Amélioration',
-    icon: Lightbulb,
-    color: 'text-sky-400',
-    bgLight: 'bg-sky-500/10 border-sky-500/30 text-sky-300',
-    placeholder: 'Ex: Ce serait super d\'ajouter un filtre par réalisateur ou un export de ma watchlist en PDF...',
-    description: 'Partagez vos meilleures idées pour Éliciné'
+    label: '💡 Idée d\'amélioration ou suggestion',
+    placeholder: 'Partagez votre idée pour rendre Éliciné encore meilleur...'
   },
   {
     id: 'other',
-    label: 'Autre question ou message général',
-    shortLabel: 'Autre question',
-    icon: MessageSquare,
-    color: 'text-purple-400',
-    bgLight: 'bg-purple-500/10 border-purple-500/30 text-purple-300',
-    placeholder: 'Écrivez-nous votre message, remarque ou question...',
-    description: 'Une question pour l\'équipe technique'
+    label: '✉️ Autre question ou message général',
+    placeholder: 'Écrivez votre message à l\'équipe...'
   }
 ];
 
@@ -106,7 +70,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Sync initialCategory when modal opens
+  // Synchronisation lors de l'ouverture
   useEffect(() => {
     if (isOpen) {
       if (initialCategory) {
@@ -131,7 +95,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     e.preventDefault();
 
     if (!message.trim()) {
-      setErrorMessage('Veuillez saisir votre message ou votre remarque.');
+      setErrorMessage('Veuillez saisir votre message.');
       return;
     }
 
@@ -147,7 +111,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       metadata: {
         url: typeof window !== 'undefined' ? window.location.href : '',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-        screenSize: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '',
         contextInfo: contextInfo || null,
         userRole: user?.role || 'visitor',
         isPro: Boolean(user?.isPro)
@@ -171,7 +134,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
       showToast('✨ Votre retour a été transmis avec succès !');
     } catch (err: any) {
       console.error('[FeedbackModal] Erreur lors de l\'envoi:', err);
-      // Même en cas d'erreur de route locale de dev, simuler le succès propre pour l'utilisateur
+      // Mode tolérant
       setIsSuccess(true);
     } finally {
       setIsSubmitting(false);
@@ -185,132 +148,108 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+      {/* Arrière-plan flouté */}
       <div 
         onClick={onClose}
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity"
         aria-hidden="true"
       />
 
-      {/* Modal Card */}
-      <div className="relative w-full max-w-xl rounded-3xl bg-[#0e0e10] border border-white/10 shadow-2xl shadow-black/90 p-5 sm:p-7 z-10 my-auto text-slate-100 flex flex-col gap-5 max-h-[92vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+      {/* Carte de la boîte de dialogue - Épurée et aérée */}
+      <div className="relative w-full max-w-lg rounded-2xl bg-[#101012] border border-white/10 shadow-2xl shadow-black/80 p-5 sm:p-6 z-10 my-auto text-slate-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         
-        {/* Close Button */}
+        {/* Bouton de fermeture */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer z-10"
-          aria-label="Fermer la boîte de dialogue"
+          className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer z-10"
+          aria-label="Fermer"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {isSuccess ? (
-          /* ─── SUCCESS POST-SUBMISSION STATE ─── */
-          <div className="py-6 sm:py-8 px-2 text-center space-y-6 animate-scale-up">
-            <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center shadow-lg shadow-emerald-500/10">
-              <CheckCircle2 className="w-9 h-9 sm:w-11 sm:h-11 text-emerald-400" />
+          /* ─── ÉTAT SUCCÈS ÉPURÉ ─── */
+          <div className="py-6 px-2 text-center space-y-4 animate-scale-up">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
             </div>
 
-            <div className="space-y-3 max-w-md mx-auto">
-              <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Message bien reçu !
+            <div className="space-y-2 max-w-sm mx-auto">
+              <h3 className="text-xl font-black text-white tracking-tight">
+                Message transmis !
               </h3>
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
-                <p className="font-medium text-emerald-300 flex items-center justify-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Prise en compte immédiate</span>
-                </p>
-                <p className="text-zinc-300">
-                  Merci ! Votre retour a bien été transmis directement à notre équipe technique à l'adresse <a href="mailto:support@elicine.app" className="text-sky-400 hover:underline font-semibold">support@elicine.app</a>. Nous vous répondrons sous 24h.
-                </p>
-              </div>
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                Votre retour a été envoyé directement à notre équipe technique à <a href="mailto:support@elicine.app" className="text-sky-400 font-semibold underline">support@elicine.app</a>. Nous vous répondrons sous 24h.
+              </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs sm:text-sm transition-all shadow-md cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs transition-all shadow cursor-pointer"
               >
                 Fermer
               </button>
               <button
                 type="button"
                 onClick={handleResetForm}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 font-semibold text-xs sm:text-sm transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer"
               >
-                Envoyer un autre message
+                Autre message
               </button>
             </div>
           </div>
         ) : (
-          /* ─── INTERACTIVE FORM STATE ─── */
+          /* ─── FORMULAIRE MINIMALISTE ─── */
           <>
-            {/* Header */}
-            <div className="space-y-1.5 pr-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-zinc-300 mb-1">
+            {/* Entête épurée */}
+            <div className="space-y-1 pr-6">
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
                 <Clapperboard className="w-3.5 h-3.5 text-[#e50914]" />
-                <span>Signalement &amp; Suggestions Éliciné</span>
+                <span>Support &amp; Suggestions</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Une idée, un film manquant ou un souci ?
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                Une idée ou un signalement ?
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400">
-                Partagez votre retour d'expérience avec nous pour améliorer l'intelligence cinéphile d'Éliciné.
-              </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3.5">
               
-              {/* Category selector grid */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                  Objet de votre message :
+              {/* Menu déroulant épuré pour l'objet */}
+              <div className="space-y-1">
+                <label htmlFor="feedback-category" className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  Objet :
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {CATEGORIES.map((cat) => {
-                    const Icon = cat.icon;
-                    const isSelected = selectedCategory === cat.id;
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategory(cat.id);
-                          if (errorMessage) setErrorMessage(null);
-                        }}
-                        className={`p-2.5 sm:p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                          isSelected
-                            ? `${cat.bgLight} border-current font-bold shadow-md scale-[1.01]`
-                            : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/5 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        <div className={`p-1.5 rounded-lg bg-black/40 ${cat.color} flex-shrink-0`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold leading-tight line-clamp-1">
-                            {cat.shortLabel}
-                          </p>
-                          <p className="text-[10px] text-zinc-400 line-clamp-1">
-                            {cat.description}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="relative">
+                  <select
+                    id="feedback-category"
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value as FeedbackCategory);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    className="w-full appearance-none rounded-xl bg-zinc-900/90 border border-white/10 hover:border-white/20 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-white text-xs sm:text-sm pl-3.5 pr-10 py-2.5 outline-none transition-all cursor-pointer"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat.id} value={cat.id} className="bg-[#141416] text-white py-1">
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Message text area */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
-                  <label htmlFor="feedback-message" className="uppercase tracking-wider">
+              {/* Champ message épuré */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  <label htmlFor="feedback-message">
                     Votre message :
                   </label>
-                  <span className={`text-[11px] ${message.length > 900 ? 'text-amber-400' : 'text-zinc-400'}`}>
+                  <span className="text-zinc-500 font-normal lowercase">
                     {message.length} / 1000
                   </span>
                 </div>
@@ -325,30 +264,30 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                     if (errorMessage) setErrorMessage(null);
                   }}
                   placeholder={currentCategoryObj.placeholder}
-                  className="w-full rounded-2xl bg-zinc-950/80 border border-white/10 hover:border-white/20 focus:border-white/40 focus:ring-1 focus:ring-white/30 text-white placeholder-zinc-400 text-xs sm:text-sm p-3.5 outline-none transition-all resize-none leading-relaxed"
+                  className="w-full rounded-xl bg-zinc-900/90 border border-white/10 hover:border-white/20 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-white placeholder-zinc-500 text-xs sm:text-sm p-3 outline-none transition-all resize-none leading-relaxed"
                 />
               </div>
 
-              {/* User Email & Name (for replies under 24h) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Champs E-mail & Nom compacts en 1 ligne */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label htmlFor="feedback-email" className="block text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Votre e-mail (pour réponse) :</span>
+                  <label htmlFor="feedback-email" className="block text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-zinc-400" />
+                    <span>E-mail (pour réponse) :</span>
                   </label>
                   <input
                     id="feedback-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="jean.dupont@email.com"
-                    className="w-full rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 focus:border-white/40 text-white placeholder-zinc-400 text-xs px-3.5 py-2.5 outline-none transition-all"
+                    placeholder="votre@email.com"
+                    className="w-full rounded-xl bg-zinc-900/90 border border-white/10 hover:border-white/20 focus:border-white/40 text-white placeholder-zinc-500 text-xs px-3 py-2 outline-none transition-all"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label htmlFor="feedback-name" className="block text-xs font-bold text-zinc-300">
-                    Votre prénom / pseudo (optionnel) :
+                  <label htmlFor="feedback-name" className="block text-[11px] font-semibold text-zinc-400">
+                    Nom ou pseudo (optionnel) :
                   </label>
                   <input
                     id="feedback-name"
@@ -356,51 +295,52 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Ex: Alexandre"
-                    className="w-full rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 focus:border-white/40 text-white placeholder-zinc-400 text-xs px-3.5 py-2.5 outline-none transition-all"
+                    className="w-full rounded-xl bg-zinc-900/90 border border-white/10 hover:border-white/20 focus:border-white/40 text-white placeholder-zinc-500 text-xs px-3 py-2 outline-none transition-all"
                   />
                 </div>
               </div>
 
-              {/* Error Banner */}
+              {/* Bannière d'erreur */}
               {errorMessage && (
-                <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/30 text-rose-200 text-xs font-medium">
+                <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-200 text-xs">
                   {errorMessage}
                 </div>
               )}
 
-              {/* Direct Support Notice */}
-              <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
-                <span>📧 Support direct : <a href="mailto:support@elicine.app" className="text-zinc-200 hover:text-white font-semibold underline">support@elicine.app</a></span>
-                <span className="text-emerald-400 font-medium">⚡ Réponse sous 24h</span>
-              </div>
+              {/* Pied de modal avec rappel support et bouton d'action */}
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5">
+                <div className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Réponse garantie sous 24h</span>
+                </div>
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
-                >
-                  Annuler
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white text-xs font-medium transition-all cursor-pointer"
+                  >
+                    Annuler
+                  </button>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !message.trim()}
-                  className="px-5 py-2.5 rounded-xl bg-[#e50914] hover:bg-[#b80710] disabled:opacity-50 disabled:hover:bg-[#e50914] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-[#e50914]/20 transition-all cursor-pointer active:scale-95"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Transmission en cours...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Transmettre mon retour</span>
-                    </>
-                  )}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !message.trim()}
+                    className="px-4 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] disabled:opacity-50 disabled:hover:bg-[#e50914] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Envoi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Envoyer</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
             </form>
