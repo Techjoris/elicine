@@ -14,18 +14,30 @@
     <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon.png" />
     <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    
+    <!-- Theme Colors (Dark & Light Mode aware) -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0c" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f9fc" />
     <meta name="theme-color" content="#0a0a0c" />
 
-    <!-- iOS / Apple PWA Metadata & Fullscreen Status -->
+    <!-- Web App Manifest (PWA Standalone) -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS / Apple PWA Fullscreen & Standalone Experience -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-touch-fullscreen" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Éliciné" />
+    <meta name="apple-touch-fullscreen" content="yes" />
+
+    <!-- Android / Chrome / Windows Standalone Mode -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Éliciné" />
+    <meta name="msapplication-TileColor" content="#0a0a0c" />
+    <meta name="msapplication-navbutton-color" content="#0a0a0c" />
+    <meta name="msapplication-starturl" content="/?source=pwa" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="Éliciné : moteur de recommandation cinématographique intelligent. Trouvez instantanément les meilleurs films et séries selon votre humeur et vos catalogues de streaming." />
-    <link rel="manifest" href="/manifest.json" />
     <title>Éliciné — Le cinéma d'exception, élu pour vous</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -100,4 +100,22 @@ body:not(.light) ::-webkit-scrollbar-thumb:hover {
   font-family: 'Cinzel', serif;
 }
 
+/* PWA Standalone & Safe Area Insets (iOS notch & Android system navigation) */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .pwa-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pwa-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media all and (display-mode: standalone) {
+  /* Évite le pull-to-refresh involontaire qui casse l'immersion PWA */
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+
 
