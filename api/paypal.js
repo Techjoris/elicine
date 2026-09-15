@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { paypalRecordPaymentSchema } from './_security.js';
+import { sendProWelcomeEmail } from './_email.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -111,9 +112,24 @@ export default async function handler(req, res) {
             updated_at: now,
             expires_at: expiresAt
           });
+
+          // Activation is_pro dans profiles
+          if (cleanEmail) {
+            await supabase.from('profiles').update({
+              is_pro: true,
+              updated_at: now
+            }).eq('email', cleanEmail);
+          }
         } catch (sbErr) {
           console.warn('[PayPal Server] Erreur upsert Supabase:', sbErr);
         }
+      }
+
+      // Envoi de l'email de bienvenue Pro via Resend
+      if (cleanEmail) {
+        sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan }).catch(e => {
+          console.warn('[PayPal Server] Erreur envoi email bienvenue:', e?.message || e);
+        });
       }
 
       return res.status(200).json({
@@ -141,7 +157,7 @@ export default async function handler(req, res) {
       if (eventType === 'PAYMENT.CAPTURE.COMPLETED' || eventType === 'CHECKOUT.ORDER.APPROVED') {
         const resource = event.resource || {};
         const orderId = resource.id || resource.supplementary_data?.related_ids?.order_id;
-        const payerEmail = resource.payer?.email_address;
+        const payerEmail = (resource.payer?.email_address || '').trim().toLowerCase();
         const amountValue = resource.amount?.value ? Number(resource.amount.value) : 1.99;
         const currencyCode = resource.amount?.currency_code || 'USD';
 
@@ -159,6 +175,18 @@ export default async function handler(req, res) {
             terms_accepted: true,
             updated_at: now
           });
+
+          if (payerEmail) {
+            await supabase.from('profiles').update({
+              is_pro: true,
+              updated_at: now
+            }).eq('email', payerEmail);
+
+            sendProWelcomeEmail(payerEmail, {
+              customerName: resource.payer?.name?.given_name || 'Cinéphile Pro',
+              plan: amountValue > 10 ? 'yearly' : 'monthly'
+            }).catch(() => {});
+          }
         }
       }
 

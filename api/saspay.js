@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -421,6 +422,18 @@ export default async function handler(req, res) {
               expires_at: expiresAt,
               updated_at: now
             }).eq('id', sub.id);
+
+            if (sub.email) {
+              await supabase.from('profiles').update({
+                is_pro: true,
+                updated_at: now
+              }).eq('email', sub.email.toLowerCase().trim());
+
+              sendProWelcomeEmail(sub.email, {
+                customerName: sub.customerName || sub.customer_name,
+                plan: sub.plan
+              }).catch(e => console.warn('[SasPay] Erreur envoi email Pro:', e?.message));
+            }
           } catch (_) {}
         }
 
@@ -628,6 +641,18 @@ export default async function handler(req, res) {
               txId,
               expiresAt
             });
+
+            if (targetSub?.email) {
+              await supabase.from('profiles').update({
+                is_pro: true,
+                updated_at: now
+              }).eq('email', targetSub.email.toLowerCase().trim());
+
+              sendProWelcomeEmail(targetSub.email, {
+                customerName: targetSub.customer_name || targetSub.customerName,
+                plan
+              }).catch(e => console.warn('[SasPay Webhook] Erreur envoi email bienvenue:', e?.message));
+            }
           }
         } catch (sbErr) {
           console.error('[SasPay Webhook] Exception Supabase:', sbErr);

@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from '../../../api/_email.js';
+import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
 
-// Initialisation du client Supabase administrateur (contourne les RLS)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -9,26 +8,37 @@ const supabaseAdmin = (supabaseUrl && supabaseKey)
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
-function jsonResponse(data, status = 200) {
-  if (typeof Response !== 'undefined' && Response.json) {
-    return Response.json(data, { status });
+/**
+ * Handler Serverless Vercel pour /api/webhook
+ * Traite les notifications de paiement (SasPay, PayPal, Moneroo, etc.)
+ * Différencie les Abonnements Pro des Dons et envoie les emails automatiques via Resend
+ */
+export default async function handler(req, res) {
+  // Entêtes CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
 
-export async function POST(req) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Méthode non autorisée. POST requis.' });
+  }
+
   try {
-    let body = {};
-    try {
-      body = await req.json();
-    } catch (_) {
-      body = {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (_) {
+        body = {};
+      }
     }
+    body = body || {};
 
-    console.log('[Webhook Payment] Payload reçu :', JSON.stringify(body));
+    console.log('[Webhook Vercel] Payload reçu :', JSON.stringify(body));
 
     // 1. Extraction et nettoyage de l'adresse email
     const rawEmail = 
@@ -43,10 +53,7 @@ export async function POST(req) {
       '';
 
     if (!rawEmail || typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
-      return jsonResponse(
-        { error: "Email de l'acheteur manquant ou invalide." },
-        400
-      );
+      return res.status(400).json({ error: "Email de l'acheteur manquant ou invalide." });
     }
 
     const cleanEmail = rawEmail.trim().toLowerCase();
@@ -121,7 +128,6 @@ export async function POST(req) {
       console.log(`[Webhook] Traitement Don/Soutien pour ${cleanEmail} (${numericAmount} ${currency})`);
 
       if (supabaseAdmin) {
-        // Enregistrement dans la table donations si elle existe, sinon dans subscriptions (type donation)
         try {
           await supabaseAdmin.from('donations').insert({
             email: cleanEmail,
@@ -152,12 +158,12 @@ export async function POST(req) {
         amount: String(numericAmount)
       });
 
-      return jsonResponse({
+      return res.status(200).json({
         success: true,
         type: 'donation',
         emailSent: emailRes.success,
         message: 'Don enregistré avec succès et email de remerciement envoyé.'
-      }, 200);
+      });
     }
 
     // ==========================================
@@ -212,19 +218,18 @@ export async function POST(req) {
       plan
     });
 
-    return jsonResponse({
+    return res.status(200).json({
       success: true,
       type: 'subscription',
       isPro: true,
       emailSent: emailRes.success,
       message: 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
-    }, 200);
+    });
 
   } catch (err) {
     console.error('[Webhook Internal Error]:', err);
-    return jsonResponse(
-      { error: 'Erreur interne du serveur lors du traitement du webhook.' },
-      500
-    );
+    return res.status(500).json({
+      error: 'Erreur interne du serveur lors du traitement du webhook.'
+    });
   }
 }
