@@ -298,56 +298,119 @@ async function resolveByTitles(extractedTitles, matches) {
 
 // ============================================================================
 // ÉTAPE 2 — Phase B : Fallback textuel sur overview / genres / moods
-// Déclenchée uniquement si Phase A retourne 0 résultat.
+// Si Supabase ne trouve rien (ou n'est pas dispo), bascule sur TMDB directement.
 // ============================================================================
-async function resolveByKeywords(rawQuery, extractedTitles) {
-  if (!supabaseServer) return [];
+async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
+  // ── Phase B.1 : Recherche Supabase par mots-clés ────────────────────────
+  if (supabaseServer) {
+    const keywords = extractKeywords(rawQuery);
+    for (const title of (extractedTitles || [])) {
+      for (const w of extractKeywords(title)) {
+        if (!keywords.includes(w)) keywords.push(w);
+      }
+    }
+    const uniqueKeywords = [...new Set(keywords)].slice(0, 7);
 
-  const keywords = extractKeywords(rawQuery);
-  for (const title of (extractedTitles || [])) {
-    for (const w of extractKeywords(title)) {
-      if (!keywords.includes(w)) keywords.push(w);
+    if (uniqueKeywords.length > 0) {
+      console.log('[API /api/search] [Phase B.1] Mots-clés Supabase :', uniqueKeywords);
+
+      const orClauses = [];
+      for (const kw of uniqueKeywords) {
+        orClauses.push(`overview.ilike.%${kw}%`);
+        orClauses.push(`genres.ilike.%${kw}%`);
+      }
+      for (const kw of uniqueKeywords.slice(0, 3)) {
+        orClauses.push(`moods.ilike.%${kw}%`);
+        orClauses.push(`setting.ilike.%${kw}%`);
+      }
+
+      const orFilter = orClauses.join(',');
+      let results = [];
+
+      try {
+        const { data, error } = await supabaseServer
+          .from('movies').select('*').or(orFilter).order('vote_average', { ascending: false }).limit(12);
+        if (!error && Array.isArray(data) && data.length > 0) results = data;
+      } catch (err) {
+        console.warn('[API /api/search] [Phase B.1] table movies :', err?.message);
+      }
+
+      if (results.length === 0) {
+        try {
+          const { data, error } = await supabaseServer
+            .from('movies_embeddings')
+            .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
+            .or(orFilter).order('vote_average', { ascending: false }).limit(12);
+          if (!error && Array.isArray(data) && data.length > 0) results = data;
+        } catch (err) {
+          console.warn('[API /api/search] [Phase B.1] table movies_embeddings :', err?.message);
+        }
+      }
+
+      if (results.length > 0) {
+        return enrichWithBadges(results, [], 'Recherche par contexte & mots-clés');
+      }
     }
   }
-  const uniqueKeywords = [...new Set(keywords)].slice(0, 7);
-  if (uniqueKeywords.length === 0) return [];
 
-  console.log('[API /api/search] [Phase B] Mots-clés :', uniqueKeywords);
-
-  const orClauses = [];
-  for (const kw of uniqueKeywords) {
-    orClauses.push(`overview.ilike.%${kw}%`);
-    orClauses.push(`genres.ilike.%${kw}%`);
-  }
-  for (const kw of uniqueKeywords.slice(0, 3)) {
-    orClauses.push(`moods.ilike.%${kw}%`);
-    orClauses.push(`setting.ilike.%${kw}%`);
+  // ── Phase B.2 : Fallback TMDB (si Supabase indispo ou 0 résultat) ─────────
+  const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
+  if (!tmdbKey) {
+    console.warn('[API /api/search] [Phase B.2] Clé TMDB absente, impossible d\'interroger TMDB.');
+    return [];
   }
 
-  const orFilter = orClauses.join(',');
-  let results = [];
+  // Recherche TMDB multi (films + séries) avec la requête brute
+  const searchTerms = [
+    rawQuery.slice(0, 100), // Requête complète
+    extractKeywords(rawQuery).slice(0, 4).join(' ') // Mots-clés principaux
+  ].filter(Boolean);
 
-  try {
-    const { data, error } = await supabaseServer
-      .from('movies').select('*').or(orFilter).order('vote_average', { ascending: false }).limit(12);
-    if (!error && Array.isArray(data) && data.length > 0) results = data;
-  } catch (err) {
-    console.warn('[API /api/search] [Phase B] table movies :', err?.message);
-  }
-
-  if (results.length === 0) {
+  for (const term of searchTerms) {
+    if (!term || term.length < 3) continue;
     try {
-      const { data, error } = await supabaseServer
-        .from('movies_embeddings')
-        .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
-        .or(orFilter).order('vote_average', { ascending: false }).limit(12);
-      if (!error && Array.isArray(data) && data.length > 0) results = data;
-    } catch (err) {
-      console.warn('[API /api/search] [Phase B] table movies_embeddings :', err?.message);
+      console.log(`[API /api/search] [Phase B.2] TMDB search : "${term.slice(0, 60)}"`);
+      const tmdbRes = await fetchWithTimeout(
+        `https://api.themoviedb.org/3/search/multi?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(term)}&language=fr-FR&page=1&include_adult=false`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+        6000
+      );
+
+      if (!tmdbRes.ok) continue;
+
+      const tmdbData = await tmdbRes.json();
+      const tmdbMovies = (tmdbData.results || [])
+        .filter(m => m.media_type === 'movie' || m.media_type === 'tv')
+        .slice(0, 10)
+        .map(m => ({
+          id: m.id,
+          tmdb_id: m.id,
+          title: m.title || m.name || '',
+          original_title: m.original_title || m.original_name || '',
+          overview: m.overview || '',
+          poster_path: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+          backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
+          release_date: m.release_date || m.first_air_date || '',
+          vote_average: m.vote_average || 0,
+          vote_count: m.vote_count || 0,
+          genres: Array.isArray(m.genre_ids) ? m.genre_ids.join(',') : '',
+          media_type: m.media_type,
+          ai_badge: 'Recherche TMDB',
+          badge: 'Recherche TMDB',
+          ai_match_reason: 'Résultat TMDB correspondant à votre description',
+          match_rate: 75
+        }));
+
+      if (tmdbMovies.length > 0) {
+        console.log(`[API /api/search] [Phase B.2] ${tmdbMovies.length} résultat(s) TMDB.`);
+        return tmdbMovies;
+      }
+    } catch (tmdbErr) {
+      console.warn('[API /api/search] [Phase B.2] TMDB échoué :', tmdbErr?.message);
     }
   }
 
-  return enrichWithBadges(results, [], 'Recherche par contexte & mots-clés');
+  return [];
 }
 
 // ============================================================================
@@ -556,11 +619,15 @@ export default async function handler(req, res) {
       console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
     }
 
-    // ─── ÉTAPE 2 — Phase B : Fallback textuel (overview / genres / moods) ─────
+    // ─── ÉTAPE 2 — Phase B : Fallback textuel + TMDB si Phase A vide ─────────
     if (resolvedMovies.length === 0) {
-      console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie par mots-clés...');
-      resolvedMovies = await resolveByKeywords(effectiveQuery, extractedTitles);
-      console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s) par mots-clés.`);
+      console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie...');
+      resolvedMovies = await resolveByKeywords(
+        effectiveQuery,
+        extractedTitles,
+        req.body?.tmdbApiKey || ''
+      );
+      console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
     }
 
     // Incrémentation du quota pour les recherches exécutées (si non-pro)

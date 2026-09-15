@@ -1119,6 +1119,7 @@ export async function executeCinoraSearch(
         groqApiKey: groqKey || undefined,
         deepseekApiKey: deepseekKey || undefined,
         qwenApiKey: qwenKey || undefined,
+        tmdbApiKey: getApiKey('tmdb', apiSettings) || undefined,
         filters: filters ? {
           platform: filters.platform,
           minRating: filters.minRating,
