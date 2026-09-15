@@ -1085,15 +1085,36 @@ export async function executeCinoraSearch(
   // ÉTAPE 1, 2 & 3 : PIPELINE LLM-FIRST (Backend /api/search -> Supabase)
   // ============================================================================
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
+    // Résolution du token Supabase (même logique que queryAiTitles)
+    let supabaseToken: string | undefined;
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.access_token) { supabaseToken = parsed.access_token; break; }
+            }
+          }
+        }
+      } catch (_) {}
+      if (!supabaseToken) {
+        supabaseToken = localStorage.getItem('supabase_access_token') || undefined;
+      }
+    }
+
+    const searchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (supabaseToken) {
+      searchHeaders['Authorization'] = `Bearer ${supabaseToken}`;
+      searchHeaders['x-supabase-token'] = supabaseToken;
+    }
+
     const searchRes = await fetch('/api/search', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
+      headers: searchHeaders,
       body: JSON.stringify({
-        action: 'llm-first',
         query: cleanQuery,
         groqApiKey: groqKey || undefined,
         deepseekApiKey: deepseekKey || undefined,
@@ -1141,12 +1162,11 @@ export async function executeCinoraSearch(
           };
         }
 
-        // Cas B : ÉTAPE 3 — Gestion du Cas Zéro Résultat (Filet de Sécurité)
-        // STRICT : Aucun film aléatoire ou blockbuster par défaut (Spider-Man, Vaiana, etc.)
+        // Cas B : Zéro résultat (Phase A + Phase B épuisées) — filet de sécurité strict
         if (searchData.isEmpty || (Array.isArray(searchData.movies) && searchData.movies.length === 0)) {
           console.log(`[Éliciné LLM-First] 0 correspondance Supabase. Déclenchement du filet de sécurité strict.`);
           return {
-            thought: "Notre IA cherche la perle rare, mais cette description est un peu trop mystérieuse...",
+            thought: searchData.message || "Notre IA a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
             moodDetected: cleanQuery,
             recommendedMovies: [],
             isFallbackMode: true,
