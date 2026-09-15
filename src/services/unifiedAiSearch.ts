@@ -1163,29 +1163,11 @@ export async function executeCinoraSearch(
           };
         }
 
-        // Cas B : Zéro résultat (Phase A + Phase B épuisées) — filet de sécurité strict
+        // Cas B : Zéro résultat de /api/search → on laisse tomber vers le pipeline TMDB
+        // (queryAiTitles → TMDB résolution) qui est déjà éprouvé et fonctionnel.
         if (searchData.isEmpty || (Array.isArray(searchData.movies) && searchData.movies.length === 0)) {
-          console.log(`[Éliciné LLM-First] 0 correspondance Supabase. Déclenchement du filet de sécurité strict.`);
-          return {
-            thought: searchData.message || "Notre IA a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
-            moodDetected: cleanQuery,
-            recommendedMovies: [],
-            isFallbackMode: true,
-            providerUsed: searchData.providerUsed || 'LLM-First (Filet de sécurité Zéro Résultat)',
-            suggestedPrompts: searchData.suggestedPrompts || [
-              "Un voyage dans l'espace avec des trous noirs",
-              "Un film de braquage qui tourne mal",
-              "Un film angoissant où des personnages sont coincés sous terre",
-              "Un thriller psychologique avec un twist final"
-            ],
-            cascade: {
-              tierReached: 2,
-              criteria: offlineCriteria,
-              tier1Count: 0,
-              tier2Count: 0,
-              tier3Count: 0
-            }
-          };
+          console.log('[Éliciné LLM-First] 0 correspondance dans /api/search → repli sur pipeline TMDB standard.');
+          // On NE retourne PAS ici — on laisse le code continuer vers queryAiTitles + TMDB
         }
       }
     }
