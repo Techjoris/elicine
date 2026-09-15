@@ -152,17 +152,18 @@ export default async function handler(req, res) {
         }
       }
 
-      // Envoi immédiat de l'email de remerciement don via Resend
-      const emailRes = await sendDonationThankYouEmail(cleanEmail, {
+      // Envoi non-bloquant de l'email de remerciement don via Resend
+      sendDonationThankYouEmail(cleanEmail, {
         customerName,
         amount: String(numericAmount)
+      }).catch(emailErr => {
+        console.warn('[Webhook Don] Erreur envoi email remerciement (non-bloquant) :', emailErr?.message || emailErr);
       });
 
       return res.status(200).json({
         success: true,
         type: 'donation',
-        emailSent: emailRes.success,
-        message: 'Don enregistré avec succès et email de remerciement envoyé.'
+        message: 'Don enregistré avec succès et email de remerciement en cours d\'envoi.'
       });
     }
 
@@ -212,18 +213,19 @@ export default async function handler(req, res) {
       }).catch(subErr => console.warn('[Webhook Subscriptions Upsert Warning]:', subErr?.message));
     }
 
-    // 3. Envoi immédiat de l'email de bienvenue Pro via Resend
-    const emailRes = await sendProWelcomeEmail(cleanEmail, {
+    // 3. Envoi non-bloquant de l'email de bienvenue Pro via Resend
+    sendProWelcomeEmail(cleanEmail, {
       customerName,
       plan
+    }).catch(emailErr => {
+      console.warn('[Webhook Pro] Erreur envoi email bienvenue (non-bloquant) :', emailErr?.message || emailErr);
     });
 
     return res.status(200).json({
       success: true,
       type: 'subscription',
       isPro: true,
-      emailSent: emailRes.success,
-      message: 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
+      message: 'Abonnement Pro activé avec succès et email de bienvenue en cours d\'envoi.'
     });
 
   } catch (err) {

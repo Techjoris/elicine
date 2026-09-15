@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { paypalRecordPaymentSchema } from './_security.js';
-import { sendProWelcomeEmail } from './_email.js';
+import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -125,11 +125,26 @@ export default async function handler(req, res) {
         }
       }
 
-      // Envoi de l'email de bienvenue Pro via Resend
+      // Détection don vs abonnement Pro
+      const isDonation = (
+        (validation.data.plan === 'donation' || validation.data.plan === 'don') ||
+        String(validation.data.details?.purchase_units?.[0]?.description || '').toLowerCase().includes('don') ||
+        String(req.body?.itemType || req.body?.type || '').toLowerCase() === 'donation' ||
+        (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(validation.data.plan))
+      );
+
+      // Envoi email de bienvenue Pro ou remerciement don (silencieux en cas d'échec réseau)
       if (cleanEmail) {
-        sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan }).catch(e => {
-          console.warn('[PayPal Server] Erreur envoi email bienvenue:', e?.message || e);
-        });
+        if (isDonation) {
+          sendDonationThankYouEmail(cleanEmail, {
+            customerName: cleanName,
+            amount: String(numericAmount)
+          }).catch(e => console.warn('[PayPal Server] Erreur email remerciement don:', e?.message || e));
+        } else {
+          sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan }).catch(e => {
+            console.warn('[PayPal Server] Erreur envoi email bienvenue:', e?.message || e);
+          });
+        }
       }
 
       return res.status(200).json({
@@ -177,15 +192,33 @@ export default async function handler(req, res) {
           });
 
           if (payerEmail) {
+            const payerName = resource.payer?.name?.given_name || 'Cinéphile';
+            const detectedPlan = amountValue > 10 ? 'yearly' : 'monthly';
+
+            // Détection don vs abonnement (items custom_fields ou montant non standard)
+            const purchaseDesc = String(
+              resource.purchase_units?.[0]?.description ||
+              resource.purchase_units?.[0]?.items?.[0]?.name ||
+              ''
+            ).toLowerCase();
+            const isDonation = purchaseDesc.includes('don') || purchaseDesc.includes('soutien') || purchaseDesc.includes('tip');
+
             await supabase.from('profiles').update({
-              is_pro: true,
+              is_pro: !isDonation,
               updated_at: now
             }).eq('email', payerEmail);
 
-            sendProWelcomeEmail(payerEmail, {
-              customerName: resource.payer?.name?.given_name || 'Cinéphile Pro',
-              plan: amountValue > 10 ? 'yearly' : 'monthly'
-            }).catch(() => {});
+            if (isDonation) {
+              sendDonationThankYouEmail(payerEmail, {
+                customerName: payerName,
+                amount: String(amountValue)
+              }).catch(() => console.warn('[PayPal Webhook] Erreur email remerciement don.'));
+            } else {
+              sendProWelcomeEmail(payerEmail, {
+                customerName: payerName,
+                plan: detectedPlan
+              }).catch(() => console.warn('[PayPal Webhook] Erreur email bienvenue Pro.'));
+            }
           }
         }
       }
