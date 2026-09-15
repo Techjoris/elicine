@@ -43,7 +43,7 @@ export {
   THEMATIC_GENRE_TAXONOMY,
   type SearchCascadeInfo
 } from './unifiedAiSearch';
-export { extractHardCriteriaAndEntities, type ExtractedCriteria } from './searchRouterService';
+export { extractHardCriteriaAndEntities, evaluateMovieNarrativeRelevance, type ExtractedCriteria } from './searchRouterService';
 
 
 function getUnifiedSystemPrompt(specificity: SpecificityAnalysis): string {

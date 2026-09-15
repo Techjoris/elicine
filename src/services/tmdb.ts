@@ -1,6 +1,7 @@
 import { Movie, StreamingProvider } from '../types';
 import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
 import { getCachedCountryCode, MOBILE_MONEY_COUNTRIES } from './geoService';
+import { KNOWN_TWIST_MOVIES, KNOWN_NON_TWIST_MOVIES } from './searchRouterService';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -746,7 +747,8 @@ export async function searchPersonAndGetWorks(
   personName: string,
   role?: 'cast' | 'crew',
   apiKey?: string,
-  language?: string
+  language?: string,
+  thematicFilter?: { isTwistRequested?: boolean; themes?: string[]; narrativeCues?: string[] }
 ): Promise<Movie[]> {
   const cleanName = (personName || '').trim();
   if (!cleanName || cleanName.length < 2) return [];
@@ -766,7 +768,7 @@ export async function searchPersonAndGetWorks(
     const person = data.results?.[0];
     if (!person || !person.id) return [];
 
-    // 2. Récupération des crédits complets pour avoir une liste riche triée par popularité
+    // 2. Récupération des crédits complets pour avoir une liste riche avec re-ranking
     try {
       const creditsRes = await fetchTmdbEndpoint(`person/${person.id}/combined_credits`, {
         language: lang
@@ -783,10 +785,49 @@ export async function searchPersonAndGetWorks(
           pool = [...(creditsData.cast || []), ...(creditsData.crew || [])];
         }
 
-        const sorted = pool
+        // Re-ranking thématique / sémantique des crédits
+        const evaluated = pool
           .filter((m: any) => m && (m.vote_count || 0) >= 15)
-          .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
-          .slice(0, 10);
+          .map((m: any) => {
+            let score = m.popularity || 0;
+            const tLower = (m.title || m.name || '').toLowerCase().trim();
+            const oLower = (m.original_title || m.original_name || '').toLowerCase().trim();
+            const ovLower = (m.overview || '').toLowerCase();
+            const genreIds = (m.genre_ids || []) as number[];
+
+            if (thematicFilter?.isTwistRequested) {
+              if (KNOWN_TWIST_MOVIES.has(tLower) || KNOWN_TWIST_MOVIES.has(oLower)) {
+                score += 10000;
+              } else if (KNOWN_NON_TWIST_MOVIES.has(tLower) || KNOWN_NON_TWIST_MOVIES.has(oLower)) {
+                score -= 10000;
+              } else {
+                // Bonus pour les genres propices aux twists (Thriller, Mystère, SF, Horreur)
+                if (genreIds.some(id => [53, 9648, 878, 27].includes(id))) {
+                  score += 500;
+                }
+                if (['twist', 'dénouement', 'retournement', 'vérité', 'illusion', 'asile', 'psychiatrique', 'schizophr', 'secret'].some(k => ovLower.includes(k))) {
+                  score += 350;
+                }
+                // Pénalisation des comédies/romances pures si on cherche un twist
+                if (genreIds.length > 0 && genreIds.every(id => [18, 10749, 35, 36].includes(id))) {
+                  score -= 500;
+                }
+              }
+            } else if (thematicFilter?.narrativeCues && thematicFilter.narrativeCues.length > 0) {
+              for (const cue of thematicFilter.narrativeCues) {
+                if (ovLower.includes(cue.toLowerCase()) || tLower.includes(cue.toLowerCase())) {
+                  score += 400;
+                }
+              }
+            }
+
+            return { item: m, score };
+          });
+
+        const sorted = evaluated
+          .sort((a: any, b: any) => b.score - a.score)
+          .map((e: any) => e.item)
+          .slice(0, 12);
 
         if (sorted.length > 0) {
           return formatTmdbResults(sorted);

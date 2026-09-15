@@ -315,6 +315,9 @@ export interface ExtractedCriteria {
   year?: number;
   format?: 'film' | 'serie' | 'all';
   themes: string[];
+  narrativeCues: string[];
+  isTwistRequested: boolean;
+  hasNarrativeConstraint: boolean;
   primaryEntity?: string;
   hasHardCriteria: boolean;
 }
@@ -420,7 +423,10 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   const dirMatch = clean.match(dirPattern);
   if (dirMatch && dirMatch[1]) {
     const candidate = dirMatch[1].trim();
-    if (candidate.length > 2 && !directors.some(d => d.toLowerCase() === candidate.toLowerCase())) {
+    const candidateLower = candidate.toLowerCase();
+    const firstWord = candidateLower.split(/\s+/)[0];
+    const isStopPrefix = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette', 'du', 'de', 'd', 'au', 'aux'].includes(firstWord);
+    if (!isStopPrefix && candidate.length > 2 && !directors.some(d => d.toLowerCase() === candidateLower)) {
       directors.push(candidate);
     }
   }
@@ -438,13 +444,15 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   }
 
   // Détection contextuelle 'avec ...' ou 'joué par ...'
-  const actorPattern = /\b(?:avec|joué par|joue par|mettant en vedette)\s+(?:l'acteur\s+|l'actrice\s+)?([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
+  const actorPattern = /\b(?:joué par|joue par|mettant en vedette|avec l'acteur|avec l'actrice|avec)\s+([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
   const actorMatch = clean.match(actorPattern);
   if (actorMatch && actorMatch[1]) {
     const candidate = actorMatch[1].trim();
     const candidateLower = candidate.toLowerCase();
-    const isStopWord = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette'].includes(candidateLower);
-    if (!isStopWord && candidate.length > 2 && !actors.some(a => a.toLowerCase() === candidateLower)) {
+    const firstWord = candidateLower.split(/\s+/)[0];
+    const isStopPrefix = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette', 'du', 'de', 'd', 'au', 'aux', 'comme'].includes(firstWord);
+    const isTropeWord = ['fin', 'twist', 'intrigue', 'histoire', 'ambiance', 'musique', 'scenario', 'scénario', 'suspense', 'acteur', 'actrice'].some(w => candidateLower.includes(w));
+    if (!isStopPrefix && !isTropeWord && candidate.length > 2 && !actors.some(a => a.toLowerCase() === candidateLower)) {
       actors.push(candidate);
     }
   }
@@ -472,7 +480,39 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  // 7. Entité Principale (pour le Recadrage Niveau 3)
+  // 7. Détection approfondie des contraintes narratives & twists
+  const narrativeCues: string[] = [];
+  let isTwistRequested = false;
+
+  if (TWIST_PATTERNS.some(p => p.test(clean))) {
+    isTwistRequested = true;
+    if (!narrativeCues.includes('twist')) narrativeCues.push('twist');
+    if (!themes.includes('twist')) themes.push('twist');
+  }
+
+  for (const p of SPECIFIC_PLOT_PATTERNS) {
+    const m = clean.match(p);
+    if (m && m[0] && !narrativeCues.includes(m[0].toLowerCase())) {
+      narrativeCues.push(m[0].toLowerCase());
+    }
+  }
+
+  for (const p of SETTING_PATTERNS) {
+    const m = clean.match(p);
+    if (m && m[0] && !narrativeCues.includes(m[0].toLowerCase())) {
+      narrativeCues.push(m[0].toLowerCase());
+    }
+  }
+
+  for (const t of themes) {
+    if (!narrativeCues.includes(t.toLowerCase())) {
+      narrativeCues.push(t.toLowerCase());
+    }
+  }
+
+  const hasNarrativeConstraint = isTwistRequested || narrativeCues.length > 0;
+
+  // 8. Entité Principale (pour le Recadrage Niveau 3)
   // Priorité : Acteur majeur > Réalisateur majeur > Genre majeur > Thème dominant > Mots clés
   let primaryEntity: string | undefined;
   if (actors.length > 0) {
@@ -507,8 +547,147 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     year,
     format,
     themes,
+    narrativeCues,
+    isTwistRequested,
+    hasNarrativeConstraint,
     primaryEntity,
     hasHardCriteria
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BASE SÉMANTIQUE DE TWISTS & RE-RANKING NARRATIF
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Liste des chefs-d'œuvre reconnus du cinéma à retournement / twist final
+export const KNOWN_TWIST_MOVIES = new Set([
+  'shutter island', 'inception', 'les infiltrés', 'the departed',
+  'fight club', 'sixième sens', 'sixieme sens', 'the sixth sense',
+  'les autres', 'the others', 'usual suspects', 'the usual suspects',
+  'memento', 'le prestige', 'the prestige', 'seven', 'se7en',
+  'gone girl', 'oldboy', 'peur primale', 'primal fear',
+  'interstellar', 'saw', 'the mist', 'incendies', 'get out',
+  'parasite', 'mulholland drive', 'donnie darko', 'american psycho',
+  'prisoners', 'identity', 'vanilla sky', "l'armée des 12 singes",
+  '12 monkeys', 'split', 'ex machina', 'premier contact', 'arrival',
+  'predestination', "l'effet papillon", 'the butterfly effect',
+  'coherence', 'triangle', 'the game', 'black swan', 'mystic river'
+]);
+
+// Œuvres populaires sans twist (romances, comédies, biopics, aventures historiques)
+// Ces films ne doivent JAMAIS passer le Niveau 1 si la requête exige un twist ou thriller psychologique.
+export const KNOWN_NON_TWIST_MOVIES = new Set([
+  'titanic', 'le loup de wall street', 'the wolf of wall street',
+  'django unchained', 'the revenant', 'gangs of new york',
+  'gatsby le magnifique', 'the great gatsby', 'arrête-moi si tu peux',
+  'arrete-moi si tu peux', 'catch me if you can', 'blood diamond',
+  'aviator', 'the aviator', 'j. edgar', 'la plage', 'the beach',
+  'la la land', 'forrest gump', 'le parrain', 'the godfather',
+  'gladiator', 'braveheart', 'notting hill', 'coup de foudre à notting hill'
+]);
+
+/**
+ * Évalue si une œuvre cinématographique respecte la contrainte narrative (ex: twist final)
+ * Permet d'éliminer les faux positifs (comme Titanic pour "dicaprio twist") du Niveau 1.
+ */
+export function evaluateMovieNarrativeRelevance(
+  movie: { title?: string; original_title?: string; overview?: string; genre_ids?: number[]; genres?: any[] },
+  criteria: ExtractedCriteria,
+  rawItem?: { tier?: number; match_rate?: number; reason?: string }
+): { matches: boolean; score: number; reason: string } {
+  if (!criteria.hasNarrativeConstraint) {
+    return { matches: true, score: 95, reason: 'Aucune contrainte narrative restrictive' };
+  }
+
+  const titleLower = (movie.title || '').toLowerCase().trim();
+  const origLower = (movie.original_title || '').toLowerCase().trim();
+  const overviewLower = (movie.overview || '').toLowerCase();
+  const genreIds = (movie.genre_ids || movie.genres?.map((g: any) => typeof g === 'number' ? g : g.id) || []) as number[];
+
+  // 1. Si un twist / dénouement surprenant est requis
+  if (criteria.isTwistRequested) {
+    // A. Élimination négative formelle des hors-sujets majeurs
+    if (KNOWN_NON_TWIST_MOVIES.has(titleLower) || KNOWN_NON_TWIST_MOVIES.has(origLower)) {
+      return {
+        matches: false,
+        score: 60,
+        reason: `Exclu du Niveau 1 : "${movie.title}" ne comporte aucun twist ou retournement de situation (hors-sujet thématique)`
+      };
+    }
+
+    // B. Validation positive immédiate pour les classiques du genre à twist
+    if (KNOWN_TWIST_MOVIES.has(titleLower) || KNOWN_TWIST_MOVIES.has(origLower)) {
+      return {
+        matches: true,
+        score: 99,
+        reason: 'Chef-d\'œuvre à retournement de situation culte (twist final mémorable)'
+      };
+    }
+
+    // C. Analyse des genres et mots-clés du synopsis
+    const hasThrillerOrMysteryGenre = genreIds.some(id => [53, 9648, 878, 27, 80].includes(id));
+    const twistKeywords = [
+      'twist', 'retournement', 'dénouement', 'denouement', 'révélation', 'revelation',
+      'chute', 'vérité', 'verite', 'illusion', 'hallucination', 'psychiatrique', 'asile',
+      'schizophr', 'paranoï', 'paranoi', 'double jeu', 'mensonge', 'machination',
+      'secret', 'énigme', 'enigme', 'manipulation', 'doute', 'rêve', 'reve', 'infiltr',
+      'cerveau', 'subconscient', 'faux coupable', 'complot', 'soupçon'
+    ];
+    const matchingKw = twistKeywords.filter(kw => overviewLower.includes(kw));
+
+    if (hasThrillerOrMysteryGenre && matchingKw.length >= 1) {
+      return {
+        matches: true,
+        score: 95,
+        reason: `Thriller / Mystère avec intrigue psychologique et révélation (${matchingKw.slice(0, 2).join(', ')})`
+      };
+    }
+
+    if (rawItem?.reason && (rawItem.reason.toLowerCase().includes('twist') || rawItem.reason.toLowerCase().includes('retournement'))) {
+      return {
+        matches: true,
+        score: rawItem.match_rate || 92,
+        reason: rawItem.reason
+      };
+    }
+
+    // D. Pénalisation stricte des films purement romantiques ou comiques
+    const isPureDramaOrRomance = genreIds.length > 0 && genreIds.every(id => [18, 10749, 35, 36, 10751].includes(id));
+    if (isPureDramaOrRomance) {
+      return {
+        matches: false,
+        score: 65,
+        reason: 'Drame ou comédie sans composante de suspense ou retournement final'
+      };
+    }
+
+    return {
+      matches: false,
+      score: 70,
+      reason: 'Absence d\'éléments confirmés de twist ou de thriller psychologique'
+    };
+  }
+
+  // 2. Autres contraintes narratives (huis clos, amnésie, braquage, etc.)
+  let matchedCues = 0;
+  for (const cue of criteria.narrativeCues) {
+    if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) {
+      matchedCues++;
+    }
+  }
+
+  if (matchedCues > 0) {
+    return {
+      matches: true,
+      score: 93,
+      reason: `Correspondance avec le thème "${criteria.narrativeCues[0]}"`
+    };
+  }
+
+  return {
+    matches: false,
+    score: 72,
+    reason: 'Thème narratif spécifique non retrouvé dans le synopsis'
   };
 }
 

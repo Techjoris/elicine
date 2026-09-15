@@ -3,9 +3,10 @@ import { searchMoviesTmdb, formatTmdbResults, searchPersonAndGetWorks, fetchEnti
 import { 
   analyzeSearchIntent, 
   analyzeQuerySpecificity, 
-  SpecificityAnalysis,
-  extractHardCriteriaAndEntities,
-  ExtractedCriteria
+  SpecificityAnalysis, 
+  extractHardCriteriaAndEntities, 
+  ExtractedCriteria,
+  evaluateMovieNarrativeRelevance
 } from './searchRouterService';
 
 export interface RawAiMovieItem {
@@ -1091,6 +1092,15 @@ export async function executeCinoraSearch(
   console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
 
   // Consolidation des critères extraits
+  const rawNarrativeCues = [
+    ...(offlineCriteria.narrativeCues || []),
+    ...(aiCriteria?.themes || [])
+  ];
+  const isTwistReq = offlineCriteria.isTwistRequested || 
+    Boolean(offlineCriteria.themes?.some(t => t.includes('twist'))) || 
+    cleanQuery.toLowerCase().includes('twist') ||
+    cleanQuery.toLowerCase().includes('retournement');
+
   const criteria: ExtractedCriteria = {
     actors: Array.from(new Set([...(offlineCriteria.actors || []), ...(aiCriteria?.actors || [])])),
     directors: Array.from(new Set([...(offlineCriteria.directors || []), ...(aiCriteria?.directors || [])])),
@@ -1101,6 +1111,9 @@ export async function executeCinoraSearch(
       ? (filters.mediaType === 'Films' ? 'film' : 'serie')
       : (offlineCriteria.format !== 'all' ? offlineCriteria.format : (aiCriteria?.format || 'all')),
     themes: Array.from(new Set([...(offlineCriteria.themes || []), ...(aiCriteria?.themes || [])])),
+    narrativeCues: Array.from(new Set(rawNarrativeCues)),
+    isTwistRequested: isTwistReq,
+    hasNarrativeConstraint: offlineCriteria.hasNarrativeConstraint || isTwistReq || rawNarrativeCues.length > 0,
     primaryEntity: offlineCriteria.primaryEntity || aiCriteria?.primaryEntity,
     hasHardCriteria: offlineCriteria.hasHardCriteria || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length)
   };
@@ -1124,29 +1137,43 @@ export async function executeCinoraSearch(
   // Recherche des crédits de la personne si un acteur ou réalisateur est explicite
   let personCandidateWorks: Movie[] = [];
   const primaryPerson = criteria.actors[0] || criteria.directors[0];
-  if (primaryPerson && initialResolved.length < 4) {
+  if (primaryPerson) {
     const isCrew = Boolean(criteria.directors[0] && !criteria.actors[0]);
-    personCandidateWorks = await searchPersonAndGetWorks(primaryPerson, isCrew ? 'crew' : 'cast', tmdbKey);
+    personCandidateWorks = await searchPersonAndGetWorks(
+      primaryPerson,
+      isCrew ? 'crew' : 'cast',
+      tmdbKey,
+      undefined,
+      {
+        isTwistRequested: criteria.isTwistRequested,
+        themes: criteria.themes,
+        narrativeCues: criteria.narrativeCues
+      }
+    );
   }
 
   // ============================================================================
-  // NIVEAU 1 : RECHERCHE STRICTE & CIBLÉE
+  // NIVEAU 1 : RECHERCHE STRICTE & CIBLÉE (CONJONCTION TOUS CRITÈRES)
   // ============================================================================
   const tier1Movies: Movie[] = [];
   const tier2Candidates: Movie[] = [];
 
-  const allCandidatePool = [...initialResolved];
-  for (const pw of personCandidateWorks) {
-    if (!allCandidatePool.some(m => m.id === pw.id)) {
-      allCandidatePool.push(pw);
+  const allCandidatePool: Movie[] = [];
+  const seenIds = new Set<number>();
+
+  // Si une contrainte narrative avec une personne est demandée, on injecte en priorité ses œuvres filtrées sémantiquement
+  const sourcePool = (criteria.hasNarrativeConstraint && personCandidateWorks.length > 0)
+    ? [...personCandidateWorks, ...initialResolved]
+    : [...initialResolved, ...personCandidateWorks];
+
+  for (const m of sourcePool) {
+    if (m?.id && !seenIds.has(m.id)) {
+      seenIds.add(m.id);
+      allCandidatePool.push(m);
     }
   }
 
   for (const movie of allCandidatePool) {
-    let isStrictMatch = false;
-    let strictScore = 95;
-    let matchDetail = '';
-
     const matchingRawItem = rawItems.find(
       r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
     );
@@ -1160,77 +1187,71 @@ export async function executeCinoraSearch(
     }
 
     // 2. Filtrage par année
+    let matchesYear = true;
     if (criteria.year) {
       const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
-      if (movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1) {
-        isStrictMatch = true;
-        strictScore = Math.max(strictScore, 97);
-        matchDetail = `Sorti en ${criteria.year}`;
+      matchesYear = movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1;
+      if (!matchesYear) {
+        continue;
       }
     }
 
     // 3. Filtrage par acteur ou réalisateur
+    let matchesPerson = true;
     if (primaryPerson) {
       const personLower = primaryPerson.toLowerCase();
       const inOverview = (movie.overview || '').toLowerCase().includes(personLower);
       const inCast = personCandidateWorks.some(pw => pw.id === movie.id);
-      if (inOverview || inCast) {
-        isStrictMatch = true;
-        strictScore = Math.max(strictScore, 98);
-        matchDetail = `${primaryPerson}`;
-      }
+      matchesPerson = inOverview || inCast;
     }
 
-    // 4. Tag explicite de l'IA (tier: 1 ou match_rate >= 90)
-    if (matchingRawItem) {
-      if (matchingRawItem.tier === 1 || (matchingRawItem.match_rate && matchingRawItem.match_rate >= 90)) {
-        isStrictMatch = true;
-        strictScore = Math.max(strictScore, matchingRawItem.match_rate || 96);
-        if (matchingRawItem.reason) {
-          matchDetail = matchingRawItem.reason;
-        }
-      }
-    }
+    // 4. Évaluation stricte de la contrainte narrative (twist final / thriller psychologique)
+    const narrativeEval = evaluateMovieNarrativeRelevance(movie, criteria, matchingRawItem);
+    const matchesNarrative = criteria.hasNarrativeConstraint ? narrativeEval.matches : true;
 
-    // 5. Requête de souvenir ultra-ciblée
-    if (specificity.level === 'ultra_targeted') {
-      const poolIdx = allCandidatePool.indexOf(movie);
-      if (poolIdx === 0) {
-        isStrictMatch = true;
-        strictScore = 99;
-        matchDetail = "Correspondance exacte avec votre description";
-      } else if (poolIdx === 1) {
-        isStrictMatch = true;
-        strictScore = 95;
-        matchDetail = "Alternative très proche partageant le même trope";
-      }
-    }
+    // RÈGLE CRITIQUE DU NIVEAU 1 : CONJONCTION STRICTE (AND)
+    // Le film DOIT impérativement respecter la personne ET le format ET l'année ET la contrainte de scénario !
+    const isStrictMatch = matchesPerson && matchesYear && matchesNarrative;
 
-    if (criteria.hasHardCriteria) {
-      if (isStrictMatch) {
-        tier1Movies.push({
-          ...movie,
-          match_rate: strictScore,
-          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${matchDetail || 'Critères stricts satisfaits'}`
-        });
-      } else {
-        tier2Candidates.push(movie);
-      }
+    if (isStrictMatch) {
+      const strictScore = Math.min(99, Math.max(92, narrativeEval.score));
+      tier1Movies.push({
+        ...movie,
+        match_rate: strictScore,
+        ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${narrativeEval.reason}`
+      });
     } else {
-      if (strictScore >= 90) {
-        tier1Movies.push({
-          ...movie,
-          match_rate: strictScore,
-          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${matchDetail || `Sélection pour "${cleanQuery}"`}`
-        });
+      // RÉTROGRADATION EN NIVEAU 2 :
+      // Les films comme Titanic ou Le Loup de Wall Street (ayant DiCaprio mais aucun twist)
+      // ne doivent JAMAIS apparaître dans le Niveau 1 pour cette requête.
+      let tier2Reason = '';
+      let tier2Score = 80;
+
+      if (matchesPerson && !matchesNarrative) {
+        tier2Reason = `✨ Élargissement : Œuvre culte de ${primaryPerson} (hors thématique ${criteria.isTwistRequested ? 'twist' : 'demandée'})`;
+        tier2Score = 78;
+      } else if (matchesNarrative && !matchesPerson) {
+        tier2Reason = `✨ Élargissement : Œuvre à retournement ou suspense (trope similaire)`;
+        tier2Score = 85;
       } else {
-        tier2Candidates.push(movie);
+        tier2Reason = `✨ Élargissement : Recommandation liée à votre recherche`;
+        tier2Score = 80;
       }
+
+      tier2Candidates.push({
+        ...movie,
+        match_rate: tier2Score,
+        ai_match_reason: tier2Reason
+      });
     }
   }
 
+  // Tri qualitatif du Niveau 1 : les œuvres les plus fidèles au twist et critères en tête (ex: Shutter Island 99%)
+  tier1Movies.sort((a, b) => (b.match_rate || 0) - (a.match_rate || 0));
+
   // Seuil minimal pour l'arrêt au Niveau 1
-  const minStrictThreshold = specificity.level === 'ultra_targeted' ? 2 : 3;
+  // Si la requête combine un critère dur (acteur) ET une contrainte de twist, 2 correspondances exactes suffisent pour valider le Niveau 1
+  const minStrictThreshold = (specificity.level === 'ultra_targeted' || (criteria.hasHardCriteria && criteria.hasNarrativeConstraint)) ? 2 : 3;
 
   // Si des correspondances pertinentes avec score élevé sont trouvées en nombre suffisant :
   // ARRÊT AU NIVEAU 1
@@ -1322,8 +1343,8 @@ export async function executeCinoraSearch(
   // Formatage Niveau 2
   const formattedTier2 = tier2Movies.map((m, idx) => ({
     ...m,
-    match_rate: Math.max(78, 89 - idx * 2),
-    ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : Ambiance & thèmes associés`
+    match_rate: m.match_rate || Math.max(78, 89 - idx * 2),
+    ai_match_reason: m.ai_match_reason || `✨ Élargissement sémantique (Niveau 2) : Ambiance & thèmes associés`
   }));
 
   // Combinaison : Tier 1 en tête avec priorité, complété par Tier 2
