@@ -88,10 +88,23 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
         if (!error && data) {
           setIsPro(Boolean(data.is_pro));
+          if (data.is_pro) return;
         }
       }
+
+      // C. Repli serveur via Service Role (Bypasse le blocage RLS Supabase côté client)
+      try {
+        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData?.isPro) {
+            setIsPro(true);
+            return;
+          }
+        }
+      } catch (_) {}
     } catch (err) {
-      console.warn('[ProfileMenu] Erreur interrogation directe profiles Supabase:', err);
+      console.warn('[ProfileMenu] Erreur interrogation profiles Supabase:', err);
     }
   }, [user?.id, user?.email, appUser?.id, appUser?.email]);
 

@@ -507,6 +507,26 @@ export default async function handler(req, res) {
 
     if (supabase) {
       try {
+        // 1. Vérification prioritaire dans la table profiles (is_pro)
+        let profQuery = null;
+        if (email) {
+          profQuery = supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
+        } else if (userId) {
+          profQuery = supabase.from('profiles').select('id, email, is_pro').eq('id', userId).maybeSingle();
+        }
+        if (profQuery) {
+          const { data: profData } = await profQuery;
+          if (profData && (profData.is_pro === true || String(profData.is_pro) === 'true')) {
+            return res.status(200).json({
+              isPro: true,
+              plan: 'monthly',
+              expiresAt: null,
+              source: 'profiles'
+            });
+          }
+        }
+
+        // 2. Vérification dans subscriptions
         let query = supabase.from('subscriptions').select('*').eq('status', 'active');
         if (userId) query = query.eq('user_id', userId);
         else query = query.eq('email', email);

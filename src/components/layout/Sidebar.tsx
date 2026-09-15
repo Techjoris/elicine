@@ -106,6 +106,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const { data, error } = await supabase.from('profiles').select('is_pro').eq('email', email).maybeSingle();
           if (!error && data) {
             setIsPro(Boolean(data.is_pro));
+            if (data.is_pro) return;
+          }
+        }
+
+        // Repli serveur via Service Role (bypasse d'éventuels blocages RLS client)
+        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData?.isPro) {
+            setIsPro(true);
           }
         }
       } catch (_) {}

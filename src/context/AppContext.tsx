@@ -801,25 +801,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
         let prof: any = null;
         if (email) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, pro_expires_at, role').eq('email', email).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
           if (data) prof = data;
         }
         if (!prof && currentUser.id && isUuid(currentUser.id)) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, pro_expires_at, role').eq('id', currentUser.id).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('id', currentUser.id).maybeSingle();
           if (data) prof = data;
         }
-        if (prof) {
-          if (prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin') {
-            const isExpired = prof.pro_expires_at ? new Date(prof.pro_expires_at).getTime() <= Date.now() : false;
-            if (!isExpired) {
-              isProDirect = true;
-              expiresAtDirect = prof.pro_expires_at || null;
-            }
-          }
+        if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
+          isProDirect = true;
         }
       }
     } catch (profErr) {
-      console.warn('[AppContext] Erreur re-fetch profiles:', profErr);
+      console.warn('[AppContext] Erreur re-fetch profiles direct:', profErr);
+    }
+
+    // Repli serveur via Service Role (bypasse d'éventuels blocages RLS client)
+    if (!isProDirect && (email || currentUser.id)) {
+      try {
+        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(currentUser.id || '')}&email=${encodeURIComponent(email)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData?.isPro) {
+            isProDirect = true;
+            if (checkData.plan) planDirect = checkData.plan;
+            if (checkData.expiresAt) expiresAtDirect = checkData.expiresAt;
+          }
+        }
+      } catch (_) {}
     }
 
     const proCheck = await subscriptionService.checkUserProStatus(currentUser);

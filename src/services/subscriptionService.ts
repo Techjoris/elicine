@@ -581,29 +581,23 @@ export const subscriptionService = {
         // Helper de validation UUID pour PostgreSQL
         const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
-        // 1.A. Vérification prioritaire de la table profiles (is_pro = true ou pass_status = 'pro')
+        // 1.A. Vérification prioritaire de la table profiles (is_pro = true)
         let profileData: any = null;
         if (email) {
-          const { data } = await supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role').eq('email', email).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
           if (data) profileData = data;
         }
         if (!profileData && user.id && isUuid(user.id)) {
-          const { data } = await supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role').eq('id', user.id).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('id', user.id).maybeSingle();
           if (data) profileData = data;
         }
 
-        if (profileData) {
-          const isProProfile = profileData.is_pro === true || profileData.pass_status === 'pro' || profileData.role === 'admin';
-          if (isProProfile) {
-            const isExpired = profileData.pro_expires_at ? new Date(profileData.pro_expires_at).getTime() <= Date.now() : false;
-            if (!isExpired) {
-              return {
-                isPro: true,
-                plan: 'monthly',
-                expiresAt: profileData.pro_expires_at || null
-              };
-            }
-          }
+        if (profileData && (profileData.is_pro === true || String(profileData.is_pro) === 'true')) {
+          return {
+            isPro: true,
+            plan: 'monthly',
+            expiresAt: null
+          };
         }
 
         // 1.B. Vérification de la table subscriptions
@@ -628,20 +622,36 @@ export const subscriptionService = {
           }
         }
       } catch (sbErr) {
-        console.warn('[subscriptionService] Erreur vérification statut Supabase:', sbErr);
+        console.warn('[subscriptionService] Erreur vérification statut Supabase direct:', sbErr);
       }
     }
 
-    // 2. Appel de l'endpoint serveur /api/saspay?action=check-user-status
+    // 2. Appel serveur de secours (Service Role Supabase - Bypasse RLS côté serveur)
     try {
+      // 2.A. Endpoint officiel /api/activate-pro?action=check-status
+      const resPro = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(user.id || '')}&email=${encodeURIComponent(email)}`);
+      if (resPro.ok) {
+        const dataPro = await resPro.json();
+        if (dataPro?.isPro) {
+          return {
+            isPro: true,
+            plan: dataPro.plan || 'monthly',
+            expiresAt: dataPro.expiresAt || null
+          };
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // 2.B. Endpoint secondaire /api/saspay?action=check-user-status
       const res = await fetch(`/api/saspay?action=check-user-status&userId=${encodeURIComponent(user.id || '')}&email=${encodeURIComponent(email)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.isPro) {
           return {
             isPro: true,
-            plan: data.plan,
-            expiresAt: data.expiresAt
+            plan: data.plan || 'monthly',
+            expiresAt: data.expiresAt || null
           };
         }
       }

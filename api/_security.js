@@ -257,13 +257,13 @@ export async function verifyServerSession(req) {
           return result;
         }
 
-        // 🔒 SÉCURITÉ : Vérification obligatoire dans la table profiles (is_pro, pass_status)
+        // 🔒 SÉCURITÉ : Vérification obligatoire dans la table profiles (is_pro)
         try {
           let profData = null;
           if (email) {
             const { data } = await supabaseServer
               .from('profiles')
-              .select('is_pro, pass_status, pro_expires_at, role, is_admin')
+              .select('id, email, is_pro')
               .eq('email', email)
               .maybeSingle();
             if (data) profData = data;
@@ -271,26 +271,19 @@ export async function verifyServerSession(req) {
           if (!profData && authData.user.id) {
             const { data } = await supabaseServer
               .from('profiles')
-              .select('is_pro, pass_status, pro_expires_at, role, is_admin')
+              .select('id, email, is_pro')
               .eq('id', authData.user.id)
               .maybeSingle();
             if (data) profData = data;
           }
 
           if (profData) {
-            if (profData.role === 'admin' || profData.is_admin === true) {
-              result.isAdmin = true;
-            }
-            const isProProfile = profData.is_pro === true || profData.pass_status === 'pro' || profData.role === 'admin';
-            if (isProProfile) {
-              const isExpired = profData.pro_expires_at ? new Date(profData.pro_expires_at).getTime() <= Date.now() : false;
-              if (!isExpired) {
-                result.isPro = true;
-              }
+            if (profData.is_pro === true || String(profData.is_pro) === 'true') {
+              result.isPro = true;
             }
           }
         } catch (profErr) {
-          console.warn('[Security] Erreur requête table profiles:', profErr?.message);
+          console.warn('[_security] Note vérification profiles:', profErr?.message);
         }
 
         // 🔒 VÉRIFICATION COMPLÉMENTAIRE : Table subscriptions si non encore confirmé Pro
@@ -356,15 +349,12 @@ export async function verifyServerSession(req) {
           if (supabaseServer) {
             const { data: profByEmail } = await supabaseServer
               .from('profiles')
-              .select('is_pro, pass_status, pro_expires_at, role')
+              .select('id, email, is_pro')
               .eq('email', rawClientEmail)
               .maybeSingle();
 
-            if (profByEmail && (profByEmail.is_pro === true || profByEmail.pass_status === 'pro')) {
-              const isExpired = profByEmail.pro_expires_at ? new Date(profByEmail.pro_expires_at).getTime() <= Date.now() : false;
-              if (!isExpired) {
-                result.isPro = true;
-              }
+            if (profByEmail && (profByEmail.is_pro === true || String(profByEmail.is_pro) === 'true')) {
+              result.isPro = true;
             }
           }
         } catch (_) {}

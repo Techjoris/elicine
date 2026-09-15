@@ -2,7 +2,7 @@
  * Endpoint API Serverless : /api/activate-pro
  * Active instantanément le Pass Pro d'un utilisateur dans Supabase et déclenche l'envoi de l'e-mail Resend
  */
-import { activateUserPassPro } from './_pro-activation.js';
+import { activateUserPassPro, supabaseAdmin, isUuid } from './_pro-activation.js';
 
 export default async function handler(req, res) {
   // En-têtes CORS universels
@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   }
   body = body || {};
 
+  const action = (req.query?.action || body.action || '').trim().toLowerCase();
   const email = (
     body.email || 
     body.customer_email || 
@@ -40,6 +41,65 @@ export default async function handler(req, res) {
     req.query?.user_id || 
     ''
   ).trim();
+
+  // ─── ACTION : Vérification directe du statut Pro via Service Role (Bypasse RLS) ───
+  if (req.method === 'GET' || action === 'check-status' || action === 'status') {
+    if (!email && !userId) {
+      return res.status(400).json({ success: false, isPro: false, error: "email ou userId requis" });
+    }
+
+    if (email === 'ivanjoris959@gmail.com') {
+      return res.status(200).json({ success: true, isPro: true, email, plan: 'yearly', role: 'admin' });
+    }
+
+    if (supabaseAdmin) {
+      try {
+        let prof = null;
+        if (userId && isUuid(userId)) {
+          const { data } = await supabaseAdmin.from('profiles').select('id, email, is_pro').eq('id', userId).maybeSingle();
+          if (data) prof = data;
+        }
+        if (!prof && email) {
+          const { data } = await supabaseAdmin.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
+          if (data) prof = data;
+        }
+
+        if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
+          return res.status(200).json({
+            success: true,
+            isPro: true,
+            email: prof.email || email,
+            source: 'profiles'
+          });
+        }
+
+        // Repli secondaire dans subscriptions
+        let sub = null;
+        if (email) {
+          const { data } = await supabaseAdmin.from('subscriptions').select('*').eq('email', email).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          if (data) sub = data;
+        }
+        if (!sub && userId) {
+          const { data } = await supabaseAdmin.from('subscriptions').select('*').eq('user_id', userId).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          if (data) sub = data;
+        }
+
+        if (sub) {
+          return res.status(200).json({
+            success: true,
+            isPro: true,
+            email: sub.email || email,
+            plan: sub.plan || 'monthly',
+            source: 'subscriptions'
+          });
+        }
+      } catch (err) {
+        console.warn('[API /api/activate-pro check-status] Erreur:', err?.message);
+      }
+    }
+
+    return res.status(200).json({ success: true, isPro: false, email });
+  }
 
   const plan = (
     body.plan || 

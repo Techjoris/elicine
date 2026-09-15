@@ -95,6 +95,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('[AuthContext] enrichUserWithProfile warning:', err);
     }
 
+    // Repli serveur via Service Role (bypasse les restrictions RLS Supabase client)
+    if (!isPro && (email || userId)) {
+      try {
+        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData?.isPro) {
+            isPro = true;
+            passStatus = 'pro';
+          }
+        }
+      } catch (_) {}
+    }
+
     // Double vérification avec le cache local
     try {
       const rawLocal = localStorage.getItem('cineia_user');
