@@ -89,10 +89,10 @@ export const AdminView: React.FC = () => {
     showToast('Session administrateur verrouillée.');
   };
 
-  const handleTogglePro = async (userId: string, currentPro: boolean) => {
-    const newStatus = await authService.toggleUserPro(userId);
+  const handleTogglePro = async (userId: string, currentPro: boolean, email?: string) => {
+    const newStatus = await authService.toggleUserPro(userId, currentPro, email);
     setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
+      if (u.id === userId || (email && u.email.toLowerCase() === email.toLowerCase())) {
         return {
           ...u,
           isPro: newStatus,
@@ -116,7 +116,7 @@ export const AdminView: React.FC = () => {
       };
     });
 
-    showToast(newStatus ? 'Pass Pro accordé à l\'utilisateur ! 👑' : 'Pass Pro révoqué.');
+    showToast(newStatus ? 'Pass Pro accordé à l\'utilisateur ! 👑 (Supabase synchronisé)' : 'Pass Pro révoqué.');
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -625,7 +625,7 @@ export const AdminView: React.FC = () => {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => handleTogglePro(u.id, u.isPro)}
+                            onClick={() => handleTogglePro(u.id, u.isPro, u.email)}
                             className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition-all cursor-pointer border ${
                               u.isPro
                                 ? 'bg-zinc-900 hover:bg-red-950/40 text-zinc-400 hover:text-red-300 border-zinc-800 hover:border-red-500/40'

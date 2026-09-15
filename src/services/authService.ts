@@ -1,6 +1,8 @@
 import { UserProfile, Movie, AdminUserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
+export const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
+
 export const ADMIN_EMAILS = [
   'ivanjoris959@gmail.com',
   'techjoris@gmail.com',
@@ -29,6 +31,23 @@ interface StoredAccount {
 }
 
 const ADMIN_SEED_USERS: AdminUserData[] = [
+  {
+    id: 'usr_master_admin_01',
+    username: 'ivanjoris',
+    email: 'ivanjoris959@gmail.com',
+    name: 'Ivan Joris (Fondateur & Master Admin)',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+    provider: 'google',
+    role: 'admin',
+    isPro: true,
+    proPlanType: 'yearly',
+    proPlanExpiresAt: 'Illimité (Fondateur)',
+    referralCode: 'ELICINE-MASTER',
+    createdAt: '2026-08-01T10:00:00.000Z',
+    moviesInListCount: 54,
+    aiQueriesCount: 230,
+    lastActiveAt: 'En direct'
+  },
   {
     id: 'usr_creator_01',
     username: 'techjoris',
@@ -282,6 +301,9 @@ export const authService = {
       }
     }
 
+    const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
+    const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
+
     const userId = supabaseUserId || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const sessionToken = supabaseToken || `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const fullUser: UserProfile = {
@@ -291,13 +313,32 @@ export const authService = {
       name: cleanUsername || (cleanEmail.split('@')[0] ? cleanEmail.split('@')[0] : 'Cinéphile'),
       avatar: undefined,
       provider: 'credentials',
-      role: ADMIN_EMAILS.includes(cleanEmail.toLowerCase()) ? 'admin' : 'user',
-      isPro: false,
+      role: isAdminUser ? 'admin' : 'user',
+      isPro: isMasterAdmin ? true : false,
+      proPlanType: isMasterAdmin ? 'yearly' : undefined,
+      proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
       referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       createdAt: new Date().toISOString(),
       myList: [],
       token: sessionToken
     };
+
+    // Synchronisation automatique dans Supabase (table profiles) pour le Master Admin
+    if (isSupabaseConfigured() && (supabaseUserId || isMasterAdmin)) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: userId,
+          email: cleanEmail,
+          full_name: fullUser.name,
+          role: isAdminUser ? 'admin' : 'user',
+          is_admin: isAdminUser,
+          is_pro: isMasterAdmin,
+          updated_at: new Date().toISOString()
+        });
+      } catch (upsertErr) {
+        console.warn('[authService.register] Supabase profiles sync warning:', upsertErr);
+      }
+    }
 
     // Sauvegarde immédiate dans le coffre local
     await this.saveLocalAccount(fullUser, password);
@@ -324,6 +365,9 @@ export const authService = {
       return { success: false, error: "Veuillez saisir une adresse email valide." };
     }
 
+    const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
+    const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
+
     // 1. Tenter Supabase si configuré
     if (isSupabaseConfigured()) {
       try {
@@ -341,13 +385,30 @@ export const authService = {
             name: data.user.user_metadata?.full_name || (data.user.email ? data.user.email.split('@')[0] : 'Cinéphile'),
             avatar: data.user.user_metadata?.avatar_url || undefined,
             provider: 'credentials',
-            role: (data.user.user_metadata?.role as any) || (ADMIN_EMAILS.includes(cleanEmail) ? 'admin' : 'user'),
-            isPro: false,
+            role: isAdminUser ? 'admin' : ((data.user.user_metadata?.role as any) || 'user'),
+            isPro: isMasterAdmin ? true : ((data.user.user_metadata?.is_pro as any) ?? false),
+            proPlanType: isMasterAdmin ? 'yearly' : undefined,
+            proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
             referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
             createdAt: data.user.created_at || new Date().toISOString(),
             myList: savedList,
             token: data.session?.access_token
           };
+
+          // Assurer la persistance du rôle admin & pass pro dans la table profiles de Supabase
+          if (isMasterAdmin) {
+            try {
+              await supabase.from('profiles').upsert({
+                id: data.user.id,
+                email: cleanEmail,
+                full_name: fullUser.name,
+                role: 'admin',
+                is_admin: true,
+                is_pro: true,
+                updated_at: new Date().toISOString()
+              });
+            } catch (_) {}
+          }
 
           await this.saveLocalAccount(fullUser, password);
           if (data.session?.access_token) {
@@ -402,10 +463,10 @@ export const authService = {
         name: match.name || cleanEmail.split('@')[0],
         avatar: match.avatar,
         provider: match.provider || 'credentials',
-        role: match.role || (ADMIN_EMAILS.includes(match.email.toLowerCase()) ? 'admin' : 'user'),
-        isPro: match.isPro,
-        proPlanType: match.proPlanType,
-        proPlanExpiresAt: match.proPlanExpiresAt,
+        role: isAdminUser ? 'admin' : (match.role || 'user'),
+        isPro: isMasterAdmin ? true : match.isPro,
+        proPlanType: isMasterAdmin ? 'yearly' : match.proPlanType,
+        proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : match.proPlanExpiresAt,
         referralCode: match.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
         createdAt: match.createdAt,
         myList: this.getUserWatchlist(match.id),
@@ -429,10 +490,10 @@ export const authService = {
         name: seedUser.name,
         avatar: seedUser.avatar,
         provider: seedUser.provider || 'credentials',
-        role: seedUser.role || 'user',
-        isPro: seedUser.isPro,
-        proPlanType: seedUser.proPlanType,
-        proPlanExpiresAt: seedUser.proPlanExpiresAt,
+        role: isAdminUser ? 'admin' : (seedUser.role || 'user'),
+        isPro: isMasterAdmin ? true : seedUser.isPro,
+        proPlanType: isMasterAdmin ? 'yearly' : seedUser.proPlanType,
+        proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : seedUser.proPlanExpiresAt,
         referralCode: seedUser.referralCode,
         createdAt: seedUser.createdAt,
         myList: this.getUserWatchlist(seedUser.id),
@@ -445,7 +506,6 @@ export const authService = {
     }
 
     // 4. Authentification fluide résiliente : si identifiants valides
-    // Garantit l'accès même si Supabase bloque avec "Email not confirmed" ou clé API non configurée
     const autoUsername = cleanEmail.split('@')[0];
     const autoName = autoUsername.charAt(0).toUpperCase() + autoUsername.slice(1);
     const fallbackUser: UserProfile = {
@@ -454,8 +514,10 @@ export const authService = {
       email: cleanEmail,
       name: autoName,
       provider: 'credentials',
-      role: ADMIN_EMAILS.includes(cleanEmail) ? 'admin' : 'user',
-      isPro: false,
+      role: isAdminUser ? 'admin' : 'user',
+      isPro: isMasterAdmin ? true : false,
+      proPlanType: isMasterAdmin ? 'yearly' : undefined,
+      proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
       referralCode: `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       createdAt: new Date().toISOString(),
       myList: [],
@@ -584,7 +646,9 @@ export const authService = {
       if (isMasterUnlocked) return true;
     }
     if (!user) return false;
+    if (user.email && user.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) return true;
     if (user.role === 'admin') return true;
+    if ((user as any).is_admin === true) return true;
     if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) return true;
     return false;
   },
@@ -633,15 +697,18 @@ export const authService = {
       conversionRate: string;
     };
   }> {
-    // 1. Tenter l'appel API serveur si disponible
+    // 1. Tenter l'appel API serveur sécurisé avec Supabase
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
       const res = await fetch('/api/admin/users', {
-        headers: { 'x-admin-secret': 'elicine2026' }
+        headers: {
+          'x-admin-secret': 'elicine2026',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       if (res.ok) {
         const data = await res.json();
         if (data.users && data.users.length > 0) {
-          // Fusionner avec les utilisateurs locaux pour complétude
           const localAccounts = getStoredAccounts();
           const serverUsers: AdminUserData[] = data.users;
           const userMap = new Map<string, AdminUserData>();
@@ -650,6 +717,7 @@ export const authService = {
 
           localAccounts.forEach(acc => {
             const list = this.getUserWatchlist(acc.id);
+            const isMaster = acc.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
             userMap.set(acc.id, {
               id: acc.id,
               username: acc.username,
@@ -657,10 +725,10 @@ export const authService = {
               name: acc.name,
               avatar: acc.avatar,
               provider: acc.provider || 'credentials',
-              role: acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user'),
-              isPro: acc.isPro,
-              proPlanType: acc.proPlanType,
-              proPlanExpiresAt: acc.proPlanExpiresAt,
+              role: isMaster ? 'admin' : (acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user')),
+              isPro: isMaster ? true : acc.isPro,
+              proPlanType: isMaster ? 'yearly' : acc.proPlanType,
+              proPlanExpiresAt: isMaster ? 'Illimité (Fondateur)' : acc.proPlanExpiresAt,
               referralCode: acc.referralCode,
               createdAt: acc.createdAt,
               moviesInListCount: list.length,
@@ -689,20 +757,19 @@ export const authService = {
           };
         }
       }
-    } catch {
-      // Basculer sur le stockage consolidé local
+    } catch (apiErr) {
+      console.warn('[authService.getAllAdminUsers] API fallback to local:', apiErr);
     }
 
     // 2. Traitement local consolidé
     const localAccounts = getStoredAccounts();
     const userMap = new Map<string, AdminUserData>();
 
-    // Initialiser avec les seed users pour avoir des métriques immédiatement exploitables
     ADMIN_SEED_USERS.forEach(u => userMap.set(u.id, u));
 
-    // Injecter les comptes locaux réels créés lors des tests ou par l'utilisateur
     localAccounts.forEach(acc => {
       const list = this.getUserWatchlist(acc.id);
+      const isMaster = acc.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
       userMap.set(acc.id, {
         id: acc.id,
         username: acc.username,
@@ -710,10 +777,10 @@ export const authService = {
         name: acc.name,
         avatar: acc.avatar,
         provider: acc.provider || 'credentials',
-        role: acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user'),
-        isPro: acc.isPro,
-        proPlanType: acc.proPlanType,
-        proPlanExpiresAt: acc.proPlanExpiresAt,
+        role: isMaster ? 'admin' : (acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user')),
+        isPro: isMaster ? true : acc.isPro,
+        proPlanType: isMaster ? 'yearly' : acc.proPlanType,
+        proPlanExpiresAt: isMaster ? 'Illimité (Fondateur)' : acc.proPlanExpiresAt,
         referralCode: acc.referralCode,
         createdAt: acc.createdAt,
         moviesInListCount: list.length,
@@ -746,14 +813,45 @@ export const authService = {
   },
 
   /**
-   * Bascule le statut Pro d'un utilisateur par l'administrateur
+   * Bascule le statut Pro d'un utilisateur par l'administrateur avec persistance Supabase
    */
-  async toggleUserPro(userId: string): Promise<boolean> {
+  async toggleUserPro(userId: string, currentPro?: boolean, email?: string): Promise<boolean> {
     const accounts = getStoredAccounts();
-    const index = accounts.findIndex(a => a.id === userId);
+    const index = accounts.findIndex(a => a.id === userId || (email && a.email.toLowerCase() === email.toLowerCase()));
+    
+    let targetPro: boolean;
+    if (typeof currentPro === 'boolean') {
+      targetPro = !currentPro;
+    } else if (index >= 0) {
+      targetPro = !accounts[index].isPro;
+    } else {
+      targetPro = true;
+    }
+
+    // 1. Appel PATCH serveur pour mise à jour Supabase en arrière-plan
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
+      await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': 'elicine2026',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId,
+          email,
+          isPro: targetPro
+        })
+      });
+    } catch (e) {
+      console.warn('[authService.toggleUserPro] API update notice:', e);
+    }
+
+    // 2. Mise à jour du stockage local
     if (index >= 0) {
-      accounts[index].isPro = !accounts[index].isPro;
-      if (accounts[index].isPro) {
+      accounts[index].isPro = targetPro;
+      if (targetPro) {
         accounts[index].proPlanType = 'yearly';
         accounts[index].proPlanExpiresAt = 'Accordé par Admin';
       } else {
@@ -761,8 +859,8 @@ export const authService = {
         accounts[index].proPlanExpiresAt = null;
       }
       saveStoredAccounts(accounts);
-      return accounts[index].isPro;
     }
-    return false;
+
+    return targetPro;
   }
 };
