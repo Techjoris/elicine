@@ -578,16 +578,21 @@ export const subscriptionService = {
     // 1. Consultation Supabase en direct si configuré
     if (isSupabaseConfigured()) {
       try {
-        // 1.A. Vérification de la table profiles (is_pro = true ou pass_status = 'pro')
-        let profileQuery = supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role');
-        if (user.id) {
-          profileQuery = profileQuery.eq('id', user.id);
-        } else if (email) {
-          profileQuery = profileQuery.eq('email', email);
+        // Helper de validation UUID pour PostgreSQL
+        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+        // 1.A. Vérification prioritaire de la table profiles (is_pro = true ou pass_status = 'pro')
+        let profileData: any = null;
+        if (email) {
+          const { data } = await supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role').eq('email', email).maybeSingle();
+          if (data) profileData = data;
+        }
+        if (!profileData && user.id && isUuid(user.id)) {
+          const { data } = await supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role').eq('id', user.id).maybeSingle();
+          if (data) profileData = data;
         }
 
-        const { data: profileData, error: profileErr } = await profileQuery.maybeSingle();
-        if (!profileErr && profileData) {
+        if (profileData) {
           const isProProfile = profileData.is_pro === true || profileData.pass_status === 'pro' || profileData.role === 'admin';
           if (isProProfile) {
             const isExpired = profileData.pro_expires_at ? new Date(profileData.pro_expires_at).getTime() <= Date.now() : false;
@@ -602,22 +607,23 @@ export const subscriptionService = {
         }
 
         // 1.B. Vérification de la table subscriptions
-        let query = supabase.from('subscriptions').select('*').eq('status', 'active');
-        if (user.id) {
-          query = query.eq('user_id', user.id);
-        } else if (email) {
-          query = query.eq('email', email);
+        let subData: any = null;
+        if (email) {
+          const { data } = await supabase.from('subscriptions').select('*').eq('email', email).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          if (data) subData = data;
+        }
+        if (!subData && user.id && isUuid(user.id)) {
+          const { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          if (data) subData = data;
         }
 
-        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
-
-        if (!error && data) {
-          const isExpired = data.expires_at ? new Date(data.expires_at).getTime() <= Date.now() : false;
+        if (subData) {
+          const isExpired = subData.expires_at ? new Date(subData.expires_at).getTime() <= Date.now() : false;
           if (!isExpired) {
             return {
               isPro: true,
-              plan: data.plan,
-              expiresAt: data.expires_at
+              plan: subData.plan,
+              expiresAt: subData.expires_at
             };
           }
         }

@@ -12,6 +12,7 @@ export interface AuthContextType {
   signInWithPassword: (email: string, password: string) => Promise<{ data?: any; error?: any }>;
   signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<{ data?: any; error?: any }>;
   setAuthUser: (user: any) => void;
+  refreshProfile: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,7 +22,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | any | null>(() => {
     if (typeof window !== 'undefined') {
       try {
-        // A. Jeton / Session Supabase standard
+        // A. Compte utilisateur sauvegardé localement
+        const localUser = authService.getStoredUser();
+        if (localUser) return localUser;
+
+        // B. Jeton / Session Supabase standard
         const authKey = Object.keys(localStorage).find(
           key => key.includes('auth-token') || key.startsWith('sb-')
         );
@@ -33,11 +38,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (u?.email || u?.id) return u;
           }
         }
-
-        // B. Compte utilisateur sauvegardé localement
-        const localUser = authService.getStoredUser();
-        if (localUser) return localUser;
-
       } catch (_) {}
     }
     return null;
@@ -63,33 +63,119 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    // 2. Récupération initiale synchrone/asynchrone de la session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+  // Helper pour enrichir l'utilisateur avec son profil Supabase (is_pro, role, pass_status)
+  const enrichUserWithProfile = async (rawUser: any) => {
+    if (!rawUser) return rawUser;
+    const email = (rawUser.email || '').trim().toLowerCase();
+    const userId = rawUser.id;
+    const isMaster = email === 'ivanjoris959@gmail.com';
+    let isPro = isMaster || Boolean(rawUser.isPro || rawUser.is_pro || rawUser.user_metadata?.is_pro || rawUser.pass_status === 'pro');
+    let passStatus = isMaster ? 'pro' : (rawUser.pass_status || (isPro ? 'pro' : 'free'));
+    let role = isMaster ? 'admin' : (rawUser.role || 'user');
+    let fullName = rawUser.user_metadata?.full_name || rawUser.name;
+
+    try {
+      const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+      let prof: any = null;
+      if (email) {
+        const { data } = await supabase.from('profiles').select('*').eq('email', email).maybeSingle();
+        if (data) prof = data;
+      }
+      if (!prof && userId && isUuid(userId)) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        if (data) prof = data;
+      }
+      if (prof) {
+        isPro = isMaster || prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin';
+        passStatus = prof.pass_status || (isPro ? 'pro' : 'free');
+        role = isMaster ? 'admin' : (prof.role || role);
+        if (prof.full_name) fullName = prof.full_name;
+      }
+    } catch (err) {
+      console.warn('[AuthContext] enrichUserWithProfile warning:', err);
+    }
+
+    // Double vérification avec le cache local
+    try {
+      const rawLocal = localStorage.getItem('cineia_user');
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        if (parsed?.isPro && (parsed?.email?.toLowerCase() === email || parsed?.id === userId)) {
+          isPro = true;
+        }
+      }
+    } catch (_) {}
+
+    return {
+      ...rawUser,
+      isPro,
+      is_pro: isPro,
+      pass_status: passStatus,
+      role,
+      name: fullName || email.split('@')[0] || 'Cinéphile',
+      user_metadata: {
+        ...(rawUser.user_metadata || {}),
+        isPro,
+        is_pro: isPro,
+        pass_status: passStatus,
+        full_name: fullName
+      }
+    };
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession();
       if (session?.user) {
-        setUser(session.user);
+        const enriched = await enrichUserWithProfile(session.user);
+        setUser(enriched);
+        setSession(session);
+        return enriched;
+      }
+    } catch (err) {
+      console.warn('[AuthContext] refreshProfile error:', err);
+    }
+
+    const currentUser = user || authService.getStoredUser();
+    if (currentUser) {
+      const enriched = await enrichUserWithProfile(currentUser);
+      setUser(enriched);
+      return enriched;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    // 2. Récupération initiale synchrone/asynchrone de la session et enrichissement du profil
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const enriched = await enrichUserWithProfile(session.user);
+        setUser(enriched);
         setSession(session);
       } else {
         const stored = authService.getStoredUser();
         if (stored) {
-          setUser(stored);
+          const enriched = await enrichUserWithProfile(stored);
+          setUser(enriched);
         }
       }
       setLoading(false);
-    }).catch(err => {
+    }).catch(async err => {
       console.warn('[AuthContext] getSession fallback to local:', err);
       const stored = authService.getStoredUser();
       if (stored) {
-        setUser(stored);
+        const enriched = await enrichUserWithProfile(stored);
+        setUser(enriched);
       }
       setLoading(false);
     });
 
     // 3. Écouteur en temps réel de tous les changements d'état (login, logout, OAuth callback)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AuthContext] onAuthStateChange event:', event, session?.user?.email);
       if (session?.user) {
-        setUser(session.user);
+        const enriched = await enrichUserWithProfile(session.user);
+        setUser(enriched);
         setSession(session);
         
         // Nettoyage de l'URL après un callback OAuth réussi
@@ -180,7 +266,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signInWithGoogle,
       signInWithPassword,
       signUpWithPassword,
-      setAuthUser
+      setAuthUser,
+      refreshProfile
     }}>
       {children}
     </AuthContext.Provider>

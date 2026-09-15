@@ -76,6 +76,8 @@ export interface UserProfile {
   provider?: 'google' | 'credentials';
   role?: 'admin' | 'user';
   isPro: boolean;
+  is_pro?: boolean;
+  pass_status?: 'pro' | 'free' | string;
   proPlanType?: 'monthly' | 'yearly';
   proPlanExpiresAt?: string | null;
   referralCode: string;

@@ -38,6 +38,7 @@ interface AppContextType {
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
   refreshUserProStatus: () => Promise<boolean>;
+  refetchProfile: () => Promise<boolean>;
 
   // API Settings & Status
   apiSettings: ApiSettings;
@@ -126,6 +127,14 @@ export const formatUser = (rawUser: any): UserProfile => {
   const email = rawUser.email || meta.email || identityMeta.email || '';
 
   const isMasterAdmin = email.toLowerCase() === 'ivanjoris959@gmail.com';
+  const isPro = isMasterAdmin || Boolean(
+    rawUser.isPro === true ||
+    rawUser.is_pro === true ||
+    rawUser.pass_status === 'pro' ||
+    meta.isPro === true ||
+    meta.is_pro === true ||
+    meta.pass_status === 'pro'
+  );
 
   return {
     ...rawUser,
@@ -135,7 +144,7 @@ export const formatUser = (rawUser: any): UserProfile => {
     avatar: avatar || undefined,
     provider: 'google',
     role: isMasterAdmin ? 'admin' : (meta.role || rawUser.role || 'user'),
-    isPro: isMasterAdmin ? true : (rawUser.isPro ?? false),
+    isPro,
     referralCode: rawUser.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
     createdAt: rawUser.created_at || rawUser.createdAt || new Date().toISOString()
   };
@@ -444,15 +453,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
     const email = sbUser.email || meta.email || identityMeta.email || '';
 
+    const isMaster = email.toLowerCase() === 'ivanjoris959@gmail.com';
+    const isPro = isMaster || Boolean(
+      sbUser.isPro === true ||
+      sbUser.is_pro === true ||
+      sbUser.pass_status === 'pro' ||
+      meta.isPro === true ||
+      meta.is_pro === true ||
+      meta.pass_status === 'pro'
+    );
+
     const updatedUser: UserProfile = {
       id: sbUser.id,
       email,
       name,
       avatar: avatar || undefined,
       provider: 'google',
-      role: (meta.role as any) || 'user',
-      isPro: false,
-      proPlanType: undefined,
+      role: isMaster ? 'admin' : ((meta.role as any) || 'user'),
+      isPro,
+      proPlanType: isPro ? 'monthly' : undefined,
       proPlanExpiresAt: undefined,
       referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       createdAt: sbUser.created_at || new Date().toISOString(),
@@ -464,8 +483,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const merged: UserProfile = {
         ...updatedUser,
         avatar: avatar || prev?.avatar,
-        isPro: prev?.isPro ?? false,
-        proPlanType: prev?.proPlanType,
+        isPro: isPro || (prev?.isPro ?? false),
+        proPlanType: prev?.proPlanType || updatedUser.proPlanType,
         proPlanExpiresAt: prev?.proPlanExpiresAt,
         referralCode: prev?.referralCode || updatedUser.referralCode,
         createdAt: prev?.createdAt || updatedUser.createdAt,
@@ -757,10 +776,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /**
    * Rafraîchit formellement et instantanément le statut Pro en interrogeant Supabase.
-   * Actualise la session Supabase, l'état global React et déverrouille les quotas IA.
+   * Actualise la session Supabase, la table profiles, l'état global React et déverrouille les quotas IA.
    */
   const refreshUserProStatus = async (): Promise<boolean> => {
-    // 1. Revalidation de la session Supabase Auth
+    // 1. Revalidation formelle de la session Supabase Auth
     try {
       if (supabase?.auth) {
         await supabase.auth.refreshSession();
@@ -770,13 +789,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentUser = user || authService.getStoredUser();
     if (!currentUser) return false;
 
+    const email = (currentUser.email || '').trim().toLowerCase();
+    const isMaster = email === 'ivanjoris959@gmail.com';
+    let isProDirect = isMaster;
+    let planDirect: 'monthly' | 'yearly' = 'monthly';
+    let expiresAtDirect: string | null = null;
+
+    // 2. Invalidation & Re-fetch direct de la table profiles
+    try {
+      if (supabase) {
+        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+        let prof: any = null;
+        if (email) {
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, pro_expires_at, role').eq('email', email).maybeSingle();
+          if (data) prof = data;
+        }
+        if (!prof && currentUser.id && isUuid(currentUser.id)) {
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, pro_expires_at, role').eq('id', currentUser.id).maybeSingle();
+          if (data) prof = data;
+        }
+        if (prof) {
+          if (prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin') {
+            const isExpired = prof.pro_expires_at ? new Date(prof.pro_expires_at).getTime() <= Date.now() : false;
+            if (!isExpired) {
+              isProDirect = true;
+              expiresAtDirect = prof.pro_expires_at || null;
+            }
+          }
+        }
+      }
+    } catch (profErr) {
+      console.warn('[AppContext] Erreur re-fetch profiles:', profErr);
+    }
+
     const proCheck = await subscriptionService.checkUserProStatus(currentUser);
+    const finalIsPro = isProDirect || proCheck.isPro;
 
     const updated: UserProfile = {
       ...currentUser,
-      isPro: proCheck.isPro,
-      proPlanType: proCheck.plan || currentUser.proPlanType || 'monthly',
-      proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? currentUser.proPlanExpiresAt : null)
+      isPro: finalIsPro,
+      is_pro: finalIsPro,
+      pass_status: finalIsPro ? 'pro' : (currentUser as any)?.pass_status || 'free',
+      proPlanType: proCheck.plan || currentUser.proPlanType || planDirect,
+      proPlanExpiresAt: expiresAtDirect || (proCheck.expiresAt ?? (finalIsPro ? currentUser.proPlanExpiresAt : null))
     };
 
     setUser(updated);
@@ -787,13 +842,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (_) {}
     authService.saveLocalAccount(updated);
 
-    // 2. Déblocage instantané des quotas IA illimités pour le compte Pro
+    // 3. Déblocage instantané des quotas IA illimités pour le compte Pro
     try {
       const updatedQuota = await searchQuotaService.getQuota(updated);
       setQuota(updatedQuota);
     } catch (_) {}
 
-    return proCheck.isPro;
+    return finalIsPro;
   };
 
   /**
@@ -951,6 +1006,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         upgradeToPro,
         refreshUserProStatus,
+        refetchProfile: refreshUserProStatus,
         apiSettings,
         updateApiSettings,
         clearApiSettings,

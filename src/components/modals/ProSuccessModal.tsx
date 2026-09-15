@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { X, Crown, Sparkles, ArrowRight, Zap, Infinity, Star } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { supabase } from '../../lib/supabase';
+import { useApp } from '../../context/AppContext';
 
 interface ProSuccessModalProps {
   isOpen: boolean;
@@ -8,9 +10,19 @@ interface ProSuccessModalProps {
 }
 
 export const ProSuccessModal: React.FC<ProSuccessModalProps> = ({ isOpen, onClose }) => {
+  const { refreshUserProStatus } = useApp();
+
   useEffect(() => {
     if (isOpen) {
-      // Confettis premium dorés + bleus Pro
+      // 1. Rafraîchissement instantané de la session et synchronisation du statut Pro
+      try {
+        if (supabase?.auth) {
+          supabase.auth.refreshSession();
+        }
+      } catch (_) {}
+      refreshUserProStatus();
+
+      // 2. Confettis premium dorés + bleus Pro
       confetti({
         particleCount: 180,
         spread: 100,

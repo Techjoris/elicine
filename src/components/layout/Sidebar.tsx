@@ -396,7 +396,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Carte Profil Utilisateur Connecté */}
         {(() => {
-          const activeUser = user || appUser;
+          const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
+          const isPro = isMaster || Boolean(
+            appUser?.isPro ||
+            (appUser as any)?.is_pro ||
+            (appUser as any)?.pass_status === 'pro' ||
+            (user as any)?.isPro ||
+            (user as any)?.is_pro ||
+            (user as any)?.pass_status === 'pro' ||
+            (user as any)?.user_metadata?.isPro ||
+            (user as any)?.user_metadata?.is_pro ||
+            (user as any)?.user_metadata?.pass_status === 'pro'
+          );
+          const activeUser = user ? { ...user, ...(appUser || {}), isPro } : appUser ? { ...appUser, isPro } : null;
           const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
           if (isConnected) {
@@ -412,7 +424,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center gap-2.5 min-w-0">
                   {/* Round Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-                    (activeUser as any)?.isPro
+                    isPro
                       ? 'bg-amber-400 text-black ring-1 ring-amber-400/50'
                       : 'bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-white border border-slate-300 dark:border-white/10'
                   }`}>
@@ -432,12 +444,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {/* Badge */}
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 flex-shrink-0 ${
-                  (activeUser as any)?.isPro
+                  isPro
                     ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
                     : 'bg-slate-200 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-400 border border-slate-300 dark:border-white/10'
                 }`}>
-                  {(activeUser as any)?.isPro && <Crown className="w-2.5 h-2.5" />}
-                  {(activeUser as any)?.isPro ? 'Pro' : 'Gratuit'}
+                  {isPro && <Crown className="w-2.5 h-2.5" />}
+                  {isPro ? 'Pro' : 'Gratuit'}
                 </span>
               </div>
             );

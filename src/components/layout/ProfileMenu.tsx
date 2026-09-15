@@ -29,7 +29,19 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const activeUser = user || appUser;
+  const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
+  const isPro = isMaster || Boolean(
+    appUser?.isPro ||
+    (appUser as any)?.is_pro ||
+    (appUser as any)?.pass_status === 'pro' ||
+    (user as any)?.isPro ||
+    (user as any)?.is_pro ||
+    (user as any)?.pass_status === 'pro' ||
+    (user as any)?.user_metadata?.isPro ||
+    (user as any)?.user_metadata?.is_pro ||
+    (user as any)?.user_metadata?.pass_status === 'pro'
+  );
+  const activeUser = user ? { ...user, ...(appUser || {}), isPro } : appUser ? { ...appUser, isPro } : null;
   const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
   const displayAvatar = (activeUser as any)?.user_metadata?.avatar_url || (activeUser as any)?.user_metadata?.picture || (activeUser as any)?.avatar;
 
@@ -88,7 +100,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
         title="Menu Profil"
       >
         <div className={`w-8 h-8 rounded-full sm:w-7 sm:h-7 sm:rounded-lg overflow-hidden flex items-center justify-center font-black text-[11px] flex-shrink-0 shadow-sm ${
-          (activeUser as any)?.isPro
+          isPro
             ? 'ring-1 ring-amber-400/60'
             : 'ring-1 ring-slate-900/10 dark:ring-white/10'
         }`}>
@@ -101,7 +113,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${
-              (activeUser as any)?.isPro
+              isPro
                 ? 'bg-[#1a1500] text-amber-300 border border-amber-500/40 font-black'
                 : 'bg-slate-100 dark:bg-[#1e1e1e] text-slate-800 dark:text-zinc-200 border border-slate-200 dark:border-white/10'
             }`}>
@@ -142,7 +154,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {/* Header Profil */}
             <div className="p-3 mb-1.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm ${
-                (activeUser as any)?.isPro
+                isPro
                   ? 'bg-amber-400 text-black ring-2 ring-amber-400/40'
                   : 'bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-white'
               }`}>
@@ -161,7 +173,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
                     {displayName}
                   </span>
-                  {(activeUser as any)?.isPro && (
+                  {isPro && (
                     <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5">
                       <Crown className="w-2.5 h-2.5" />
                       Pro
@@ -245,7 +257,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                <span className="font-bold text-xs">{(activeUser as any)?.isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
+                <span className="font-bold text-xs">{isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
               </button>
 
               {/* ☕ Soutenir le projet */}

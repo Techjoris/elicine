@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { subscriptionService } from '../../services/subscriptionService';
+import { supabase } from '../../lib/supabase';
 import { 
   ShieldCheck, 
   Clock, 
@@ -403,6 +404,13 @@ export const PaymentCallbackView: React.FC = () => {
               colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff']
             });
 
+            // Rafraîchissement explicite de la session Supabase Auth et re-fetch du profil
+            try {
+              if (supabase?.auth) {
+                await supabase.auth.refreshSession();
+              }
+            } catch (_) {}
+
             await refreshUserProStatus();
             return true;
           }
@@ -480,6 +488,13 @@ export const PaymentCallbackView: React.FC = () => {
           colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff']
         });
 
+        // Rafraîchissement explicite de la session Supabase Auth
+        try {
+          if (supabase?.auth) {
+            await supabase.auth.refreshSession();
+          }
+        } catch (_) {}
+
         // Synchroniser le contexte utilisateur global
         await refreshUserProStatus();
         isPollingRef.current = false;
@@ -545,7 +560,13 @@ export const PaymentCallbackView: React.FC = () => {
     verifyTransaction(subId, reference, 0, gatewayType);
   };
 
-  const handleGoHome = () => {
+  const handleGoHome = async () => {
+    try {
+      if (supabase?.auth) {
+        await supabase.auth.refreshSession();
+      }
+    } catch (_) {}
+    await refreshUserProStatus();
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, document.title, '/');
     }
