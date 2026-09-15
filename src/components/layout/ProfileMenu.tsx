@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Crown, 
   LogOut, 
@@ -11,6 +11,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
+import { supabase } from '../../lib/supabase';
 
 interface ProfileMenuProps {
   onOpenSettings?: () => void;
@@ -23,24 +24,122 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenPro,
   onOpenTip
 }) => {
-  const { user, loading, signOut } = useAuth();
-  const { user: appUser, setIsAuthModalOpen, openAuthModal, setActiveView, watchlist, setIsTipModalOpen } = useApp();
+  const { user, loading, signOut, refreshProfile } = useAuth();
+  const { user: appUser, setIsAuthModalOpen, openAuthModal, setActiveView, watchlist, setIsTipModalOpen, refreshUserProStatus } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
-  const isPro = isMaster || Boolean(
-    appUser?.isPro ||
-    (appUser as any)?.is_pro ||
-    (appUser as any)?.pass_status === 'pro' ||
-    (user as any)?.isPro ||
-    (user as any)?.is_pro ||
-    (user as any)?.pass_status === 'pro' ||
-    (user as any)?.user_metadata?.isPro ||
-    (user as any)?.user_metadata?.is_pro ||
-    (user as any)?.user_metadata?.pass_status === 'pro'
-  );
+  // 1. État local réactif pour le statut Pro alimenté directement depuis la table profiles
+  const [isPro, setIsPro] = useState<boolean>(() => {
+    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
+    return isMaster || Boolean(
+      appUser?.isPro ||
+      (appUser as any)?.is_pro ||
+      (appUser as any)?.pass_status === 'pro' ||
+      (user as any)?.isPro ||
+      (user as any)?.is_pro ||
+      (user as any)?.pass_status === 'pro'
+    );
+  });
+
+  // 2. Requête directe de la table profiles dans Supabase (Source de vérité)
+  const fetchProStatus = useCallback(async (forceSessionRefresh = false) => {
+    try {
+      if (forceSessionRefresh) {
+        await supabase.auth.refreshSession().catch(() => null);
+      }
+
+      const email = (user?.email || appUser?.email || '').trim().toLowerCase();
+      if (email === 'ivanjoris959@gmail.com') {
+        setIsPro(true);
+        return;
+      }
+
+      const userId = user?.id || appUser?.id;
+      if (!userId && !email) {
+        setIsPro(false);
+        return;
+      }
+
+      const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+      // A. Requête directe de la table profiles par id (Supabase)
+      if (userId && isUuid(userId)) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('is_pro')
+          .eq('id', userId)
+          .single();
+
+        if (!error && data) {
+          setIsPro(Boolean(data.is_pro));
+          return;
+        }
+      }
+
+      // B. Repli par email si l'id n'est pas un UUID ou n'a pas répondu
+      if (email) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('is_pro')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (!error && data) {
+          setIsPro(Boolean(data.is_pro));
+        }
+      }
+    } catch (err) {
+      console.warn('[ProfileMenu] Erreur interrogation directe profiles Supabase:', err);
+    }
+  }, [user?.id, user?.email, appUser?.id, appUser?.email]);
+
+  // 3. Exécution au montage du composant & synchronisation post-paiement
+  useEffect(() => {
+    fetchProStatus(false);
+
+    // Détection d'une redirection après paiement (URL search params)
+    const searchParams = typeof window !== 'undefined' ? window.location.search : '';
+    const isPostPaymentRedirect = Boolean(
+      searchParams.includes('subscription_id') ||
+      searchParams.includes('order_id') ||
+      searchParams.includes('session_id') ||
+      searchParams.includes('payment=success') ||
+      searchParams.includes('status=completed') ||
+      searchParams.includes('status=success') ||
+      searchParams.includes('status=active') ||
+      searchParams.includes('pro_activated=true')
+    );
+
+    if (isPostPaymentRedirect) {
+      console.log('[ProfileMenu] 💳 Redirection post-paiement détectée : rafraîchissement forcé session et table profiles');
+      fetchProStatus(true).then(() => {
+        if (typeof refreshUserProStatus === 'function') refreshUserProStatus();
+        if (typeof refreshProfile === 'function') refreshProfile();
+      });
+    }
+
+    // Écoute des événements d'activation (Callback view, Modale Pro, etc.)
+    const handleProEvent = () => {
+      fetchProStatus(true);
+    };
+    window.addEventListener('elicine:pro-status-changed', handleProEvent);
+    window.addEventListener('storage', handleProEvent);
+
+    return () => {
+      window.removeEventListener('elicine:pro-status-changed', handleProEvent);
+      window.removeEventListener('storage', handleProEvent);
+    };
+  }, [fetchProStatus, refreshUserProStatus, refreshProfile]);
+
+  // Re-fetch à l'ouverture du menu pour garantir la fraîcheur de l'état
+  useEffect(() => {
+    if (open) {
+      fetchProStatus(false);
+    }
+  }, [open, fetchProStatus]);
+
   const activeUser = user ? { ...user, ...(appUser || {}), isPro } : appUser ? { ...appUser, isPro } : null;
   const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
   const displayAvatar = (activeUser as any)?.user_metadata?.avatar_url || (activeUser as any)?.user_metadata?.picture || (activeUser as any)?.avatar;
@@ -173,10 +272,14 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
                     {displayName}
                   </span>
-                  {isPro && (
+                  {isPro ? (
                     <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5">
                       <Crown className="w-2.5 h-2.5" />
                       Pro
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 text-[9px] font-bold uppercase tracking-wider">
+                      Gratuit
                     </span>
                   )}
                 </div>

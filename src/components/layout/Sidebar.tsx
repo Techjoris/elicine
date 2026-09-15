@@ -23,6 +23,7 @@ import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { InstallModal } from '../modals/InstallModal';
+import { supabase } from '../../lib/supabase';
 
 export interface SidebarProps {
   onGoHome?: () => void;
@@ -71,6 +72,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const isIosStandalone = (window.navigator as any)?.standalone === true;
     return Boolean(isDisplayStandalone || isIosStandalone);
   });
+
+  // État local réactif pour le statut Pro (alimenté directement par Supabase)
+  const [isPro, setIsPro] = useState<boolean>(() => {
+    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
+    return isMaster || Boolean(
+      appUser?.isPro ||
+      (appUser as any)?.is_pro ||
+      (user as any)?.isPro ||
+      (user as any)?.is_pro
+    );
+  });
+
+  useEffect(() => {
+    const checkDbPro = async () => {
+      const email = (user?.email || appUser?.email || '').trim().toLowerCase();
+      if (email === 'ivanjoris959@gmail.com') {
+        setIsPro(true);
+        return;
+      }
+      const userId = user?.id || appUser?.id;
+      if (!userId && !email) return;
+
+      try {
+        if (userId) {
+          const { data, error } = await supabase.from('profiles').select('is_pro').eq('id', userId).maybeSingle();
+          if (!error && data) {
+            setIsPro(Boolean(data.is_pro));
+            return;
+          }
+        }
+        if (email) {
+          const { data, error } = await supabase.from('profiles').select('is_pro').eq('email', email).maybeSingle();
+          if (!error && data) {
+            setIsPro(Boolean(data.is_pro));
+          }
+        }
+      } catch (_) {}
+    };
+
+    checkDbPro();
+
+    const handleProChange = () => {
+      checkDbPro();
+    };
+    window.addEventListener('elicine:pro-status-changed', handleProChange);
+    window.addEventListener('storage', handleProChange);
+    return () => {
+      window.removeEventListener('elicine:pro-status-changed', handleProChange);
+      window.removeEventListener('storage', handleProChange);
+    };
+  }, [user?.id, user?.email, appUser?.id, appUser?.email]);
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -396,18 +448,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Carte Profil Utilisateur Connecté */}
         {(() => {
-          const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
-          const isPro = isMaster || Boolean(
-            appUser?.isPro ||
-            (appUser as any)?.is_pro ||
-            (appUser as any)?.pass_status === 'pro' ||
-            (user as any)?.isPro ||
-            (user as any)?.is_pro ||
-            (user as any)?.pass_status === 'pro' ||
-            (user as any)?.user_metadata?.isPro ||
-            (user as any)?.user_metadata?.is_pro ||
-            (user as any)?.user_metadata?.pass_status === 'pro'
-          );
           const activeUser = user ? { ...user, ...(appUser || {}), isPro } : appUser ? { ...appUser, isPro } : null;
           const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
