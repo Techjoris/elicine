@@ -41,6 +41,13 @@ export function computePlanExpiry(plan = 'monthly') {
 }
 
 /**
+ * Valide le format UUID v4 standard
+ */
+export function isUuid(val) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || '').trim());
+}
+
+/**
  * Fonction centrale d'activation du Pass Pro et enregistrement Supabase + Resend
  * 
  * @param {string} email - Adresse e-mail du client
@@ -106,21 +113,25 @@ export async function activateUserPassPro(email, planDetails = {}) {
   let dbSuccess = false;
   if (supabaseAdmin) {
     try {
+      const validUserUuid = (userId && isUuid(userId)) ? userId : null;
+
       // 1.A. Mise à jour du profil utilisateur
       if (!isDonation) {
         const profileUpdatePayload = {
           is_pro: true,
           pass_status: 'pro',
-          pro_expires_at: expiresAt,
           updated_at: now
         };
+        if (expiresAt) {
+          profileUpdatePayload.pro_expires_at = expiresAt;
+        }
 
         let profileQuery = supabaseAdmin
           .from('profiles')
           .update(profileUpdatePayload);
 
-        if (userId) {
-          profileQuery = profileQuery.eq('id', userId);
+        if (validUserUuid) {
+          profileQuery = profileQuery.or(`id.eq.${validUserUuid},email.eq.${rawEmail}`);
         } else {
           profileQuery = profileQuery.eq('email', rawEmail);
         }
@@ -128,6 +139,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
         const { error: profileError } = await profileQuery;
 
         if (profileError) {
+          console.warn('[Activation Pro Supabase] Note mise à jour profile étendue:', profileError.message);
           // Fallback avec mise à jour minimale si certaines colonnes (pass_status/pro_expires_at) n'existent pas encore
           const { error: fallbackErr } = await supabaseAdmin
             .from('profiles')
@@ -138,25 +150,52 @@ export async function activateUserPassPro(email, planDetails = {}) {
             .eq('email', rawEmail);
 
           if (fallbackErr) {
-            console.warn('[Activation Pro Supabase] Note mise à jour profile:', fallbackErr.message);
+            console.warn('[Activation Pro Supabase] Note mise à jour profile repli:', fallbackErr.message);
           } else {
             console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true (fallback)`);
           }
         } else {
           console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true & pass_status = 'pro'`);
         }
+
+        // Si le profil n'existe pas encore et qu'on a un UUID d'authentification valide, création proactive
+        try {
+          const { data: existingProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('id, is_pro')
+            .eq('email', rawEmail)
+            .maybeSingle();
+
+          if (!existingProfile && validUserUuid) {
+            await supabaseAdmin
+              .from('profiles')
+              .insert({
+                id: validUserUuid,
+                email: rawEmail,
+                username: cleanName,
+                is_pro: true,
+                pass_status: 'pro',
+                pro_expires_at: expiresAt,
+                created_at: now,
+                updated_at: now
+              });
+            console.log(`[Activation Pro Supabase] 🆕 Profil créé pour ${rawEmail} (ID: ${validUserUuid})`);
+          }
+        } catch (insertErr) {
+          console.warn('[Activation Pro Supabase] Note création profil:', insertErr?.message);
+        }
       }
 
-      // 1.B. Upsert dans la table subscriptions
-      const { error: subError } = await supabaseAdmin
-        .from('subscriptions')
-        .upsert({
+      // 1.B. Upsert dans la table subscriptions (uniquement pour les abonnements Pro mensuels ou annuels)
+      if (!isDonation) {
+        const subPlan = (normalizedPlan === 'yearly') ? 'yearly' : 'monthly';
+        const subPayload = {
           id: targetSubId,
-          user_id: userId || `usr_${rawEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
+          user_id: validUserUuid || `usr_${rawEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
           email: rawEmail,
           customer_name: cleanName,
           phone: phone || null,
-          plan: normalizedPlan,
+          plan: subPlan,
           amount: numericAmount,
           currency: currency.toUpperCase(),
           status: 'active',
@@ -164,14 +203,18 @@ export async function activateUserPassPro(email, planDetails = {}) {
           payment_provider: gateway,
           terms_accepted: true,
           created_at: now,
-          updated_at: now,
-          expires_at: expiresAt
-        });
+          updated_at: now
+        };
 
-      if (subError) {
-        console.warn('[Activation Pro Supabase] Note upsert subscriptions:', subError.message);
-      } else {
-        console.log(`[Activation Pro Supabase] ✅ Souscription ${targetSubId} enregistrée en statut active`);
+        const { error: subError } = await supabaseAdmin
+          .from('subscriptions')
+          .upsert(subPayload);
+
+        if (subError) {
+          console.warn('[Activation Pro Supabase] Note upsert subscriptions:', subError.message);
+        } else {
+          console.log(`[Activation Pro Supabase] ✅ Souscription ${targetSubId} enregistrée en statut active`);
+        }
       }
 
       dbSuccess = true;

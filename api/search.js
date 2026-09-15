@@ -473,258 +473,296 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Limiteur de requêtes : 20 requêtes par minute par IP
-  const limiter = checkRateLimit(req, res, { max: 20, windowMs: 60 * 1000 });
-  if (!limiter.allowed) {
-    return;
-  }
-
-  const sessionInfo = await verifyServerSession(req);
-  const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
-  const effectiveUserKey = sessionInfo.effectiveUserId;
-  const ipHash = sessionInfo.ipHash;
-  const ipStorageKey = `ip_${ipHash}`;
-  const todayDate = new Date().toISOString().split('T')[0];
-
-  const action = req.query?.action || req.body?.action;
-
-  // ─── Action : Consultation du quota quotidien ──────────────────────────────
-  if (action === 'quota' || (req.method === 'GET' && !action)) {
-    if (isPro) {
-      return res.status(200).json({
-        remaining: 999,
-        max: 3,
-        searchCount: 0,
-        today: todayDate,
-        isPro: true,
-        isAdmin: Boolean(sessionInfo.isAdmin)
-      });
+  try {
+    // Limiteur de requêtes : 20 requêtes par minute par IP
+    const limiter = checkRateLimit(req, res, { max: 20, windowMs: 60 * 1000 });
+    if (!limiter.allowed) {
+      return;
     }
 
-    let count = getMemoryDailyQuota(ipHash, todayDate);
+    const sessionInfo = await verifyServerSession(req);
+    const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
+    const effectiveUserKey = sessionInfo.effectiveUserId;
+    const ipHash = sessionInfo.ipHash;
+    const ipStorageKey = `ip_${ipHash}`;
+    const todayDate = new Date().toISOString().split('T')[0];
 
-    if (supabaseServer) {
-      try {
-        const { data: ipData } = await supabaseServer
-          .from('user_searches')
-          .select('search_count')
-          .eq('user_id', ipStorageKey)
-          .eq('search_date', todayDate)
-          .maybeSingle();
+    const action = req.query?.action || req.body?.action;
 
-        if (ipData && typeof ipData.search_count === 'number') {
-          count = Math.max(count, ipData.search_count);
-        }
-
-        if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
-          const { data: userData } = await supabaseServer
-            .from('user_searches')
-            .select('search_count')
-            .eq('user_id', effectiveUserKey)
-            .eq('search_date', todayDate)
-            .maybeSingle();
-
-          if (userData && typeof userData.search_count === 'number') {
-            count = Math.max(count, userData.search_count);
-          }
-        }
-      } catch (err) {
-        console.warn('[API /api/search] Erreur lecture quota Supabase :', err?.message);
-      }
-    }
-
-    const remaining = Math.max(0, 3 - count);
-    return res.status(200).json({
-      remaining,
-      max: 3,
-      searchCount: count,
-      today: todayDate,
-      isPro: false
-    });
-  }
-
-  // ─── Action : Recherche vectorielle directe Supabase (Compatibilité existante) ──
-  if (req.method === 'POST' && action === 'vector') {
-    const { queryEmbedding, matchThreshold = 0.40, matchCount = 10 } = req.body || {};
-    
-    if (supabaseServer && Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
-      try {
-        const { data, error } = await supabaseServer.rpc('match_movies', {
-          query_embedding: queryEmbedding,
-          match_threshold: Number(matchThreshold) || 0.40,
-          match_count: Number(matchCount) || 10
-        });
-
-        if (!error && Array.isArray(data)) {
-          const topScore = data[0]?.similarity || 0;
-          return res.status(200).json({
-            success: true,
-            movies: data,
-            similarityScore: topScore,
-            isLowSimilarity: topScore < (Number(matchThreshold) || 0.40)
-          });
-        }
-      } catch (rpcErr) {
-        console.warn('[API /api/search] RPC match_movies non disponible :', rpcErr?.message);
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      movies: [],
-      similarityScore: 0,
-      isLowSimilarity: true,
-      message: "Recherche vectorielle native non disponible ou aucun résultat au-dessus du seuil"
-    });
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // ARCHITECTURE "LLM-FIRST" (Routage par IA & Supabase)
-  // ════════════════════════════════════════════════════════════════════════════
-  if (req.method === 'POST') {
-    const rawQuery = req.body?.query || req.body?.searchQuery || req.body?.prompt || '';
-    const cleanQuery = sanitizeUserQuery(rawQuery);
-
-    if (!cleanQuery) {
-      return res.status(400).json({
-        error: "Requête de recherche vide ou invalide après assainissement.",
-        success: false
-      });
-    }
-
-    // Contrôle du quota journalier (3 recherches / jour pour les utilisateurs gratuits)
-    if (!isPro) {
-      const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
-      if (memoryCount >= 3) {
-        return res.status(403).json({
-          error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro pour un accès illimité.",
-          code: "QUOTA_EXCEEDED",
-          quotaExceeded: true,
-          remaining: 0,
-          max: 3
+    // ─── Action : Consultation du quota quotidien ──────────────────────────────
+    if (action === 'quota' || (req.method === 'GET' && !action)) {
+      if (isPro) {
+        return res.status(200).json({
+          remaining: 999,
+          max: 3,
+          searchCount: 0,
+          today: todayDate,
+          isPro: true,
+          isAdmin: Boolean(sessionInfo.isAdmin)
         });
       }
-    }
 
-    console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}"`);
+      let count = getMemoryDailyQuota(ipHash, todayDate);
 
-    // ─── ÉTAPE 1 : Cerveau LLM — Extraction & Correction ─────────────────────
-    const { matches, correctedQuery, provider } = await queryLlmCandidates(cleanQuery, {
-      groqApiKey:     req.body?.groqApiKey,
-      deepseekApiKey: req.body?.deepseekApiKey,
-      qwenApiKey:     req.body?.qwenApiKey,
-      geminiApiKey:   req.body?.geminiApiKey
-    });
-
-    const extractedTitles = matches.map(m => m.title);
-    const effectiveQuery  = correctedQuery || cleanQuery;
-    console.log(`[API /api/search] [Étape 1] ${matches.length} candidat(s) via ${provider} :`, extractedTitles);
-    if (correctedQuery && correctedQuery !== cleanQuery) {
-      console.log(`[API /api/search] [Étape 1] Requête corrigée : "${cleanQuery}" → "${correctedQuery}"`);
-    }
-
-    // ─── ÉTAPE 2 — Phase A : Résolution par titres (ilike souple) ─────────────
-    let resolvedMovies = [];
-    if (extractedTitles.length > 0) {
-      resolvedMovies = await resolveByTitles(extractedTitles, matches);
-      console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
-    }
-
-    // ─── ÉTAPE 2 — Phase B : Fallback textuel + TMDB si Phase A vide ─────────
-    if (resolvedMovies.length === 0) {
-      console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie...');
-      resolvedMovies = await resolveByKeywords(
-        effectiveQuery,
-        extractedTitles,
-        req.body?.tmdbApiKey || ''
-      );
-      console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
-    }
-
-    // Incrémentation du quota pour les recherches exécutées (si non-pro)
-    if (!isPro && ipHash) {
-      incrementMemoryDailyQuota(ipHash, todayDate);
       if (supabaseServer) {
         try {
-          const { data: existingIp } = await supabaseServer
+          const { data: ipData } = await supabaseServer
             .from('user_searches')
-            .select('id, search_count')
+            .select('search_count')
             .eq('user_id', ipStorageKey)
             .eq('search_date', todayDate)
             .maybeSingle();
 
-          if (existingIp?.id) {
-            await supabaseServer
-              .from('user_searches')
-              .update({
-                search_count: (existingIp.search_count || 0) + 1,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingIp.id);
-          } else {
-            await supabaseServer
-              .from('user_searches')
-              .insert({
-                user_id: ipStorageKey,
-                ip_address: ipHash,
-                search_date: todayDate,
-                search_count: 1,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
+          if (ipData && typeof ipData.search_count === 'number') {
+            count = Math.max(count, ipData.search_count);
           }
-        } catch (qErr) {
-          console.warn('[API /api/search] Erreur enregistrement quota :', qErr?.message);
+
+          if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+            const { data: userData } = await supabaseServer
+              .from('user_searches')
+              .select('search_count')
+              .eq('user_id', effectiveUserKey)
+              .eq('search_date', todayDate)
+              .maybeSingle();
+
+            if (userData && typeof userData.search_count === 'number') {
+              count = Math.max(count, userData.search_count);
+            }
+          }
+        } catch (err) {
+          console.warn('[API /api/search] Erreur lecture quota Supabase :', err?.message);
         }
       }
+
+      const remaining = Math.max(0, 3 - count);
+      return res.status(200).json({
+        remaining,
+        max: 3,
+        searchCount: count,
+        today: todayDate,
+        isPro: false
+      });
     }
 
-    // ─── Résultats trouvés (Phase A ou Phase B) ─────────────────────────────
-    if (resolvedMovies.length > 0) {
-      const isPhaseB     = resolvedMovies.some(m => m.badge === 'Recherche par contexte & mots-clés');
-      const badgeLabel   = isPhaseB ? 'Recherche par contexte IA' : 'Recherche Intelligente LLM';
-      const thoughtMsg   = isPhaseB
-        ? `🔍 Recherche élargie : ${resolvedMovies.length} film(s) correspondant à l'ambiance et au contexte`
-        : `✨ Recherche Intelligente LLM : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`;
+    // ─── Action : Recherche vectorielle directe Supabase (Compatibilité existante) ──
+    if (req.method === 'POST' && action === 'vector') {
+      const { queryEmbedding, matchThreshold = 0.40, matchCount = 10 } = req.body || {};
+      
+      if (supabaseServer && Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
+        try {
+          const { data, error } = await supabaseServer.rpc('match_movies', {
+            query_embedding: queryEmbedding,
+            match_threshold: Number(matchThreshold) || 0.40,
+            match_count: Number(matchCount) || 10
+          });
+
+          if (!error && Array.isArray(data)) {
+            const topScore = data[0]?.similarity || 0;
+            return res.status(200).json({
+              success: true,
+              movies: data,
+              similarityScore: topScore,
+              isLowSimilarity: topScore < (Number(matchThreshold) || 0.40)
+            });
+          }
+        } catch (rpcErr) {
+          console.warn('[API /api/search] RPC match_movies non disponible :', rpcErr?.message);
+        }
+      }
 
       return res.status(200).json({
         success: true,
-        movies: resolvedMovies,
-        count: resolvedMovies.length,
-        badge: badgeLabel,
-        providerUsed: `LLM-First (${provider})`,
+        movies: [],
+        similarityScore: 0,
+        isLowSimilarity: true,
+        message: "Recherche vectorielle native non disponible ou aucun résultat au-dessus du seuil"
+      });
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ARCHITECTURE "LLM-FIRST" (Routage par IA & Supabase)
+    // ════════════════════════════════════════════════════════════════════════════
+    if (req.method === 'POST') {
+      const rawQuery = req.body?.query || req.body?.searchQuery || req.body?.prompt || '';
+      const cleanQuery = sanitizeUserQuery(rawQuery);
+
+      if (!cleanQuery) {
+        return res.status(400).json({
+          error: "Requête de recherche vide ou invalide après assainissement.",
+          success: false
+        });
+      }
+
+      // Vérification des filtres avancés réservés aux membres Pro
+      const filters = req.body?.filters;
+      const hasActiveFilters = Boolean(
+        filters && (
+          (filters.platform && filters.platform !== 'all') ||
+          (filters.minRating && Number(filters.minRating) > 0) ||
+          (filters.mediaType && filters.mediaType !== 'Tous')
+        )
+      );
+
+      if (hasActiveFilters && !isPro) {
+        return res.status(403).json({
+          success: false,
+          code: "PRO_REQUIRED",
+          error: "Les filtres de recherche avancés (note minimale, plateformes de streaming) sont réservés aux abonnés Pass Pro. Activez votre Pass Pro pour débloquer ces options."
+        });
+      }
+
+      // Contrôle du quota journalier (3 recherches / jour pour les utilisateurs gratuits)
+      if (!isPro) {
+        const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
+        if (memoryCount >= 3) {
+          return res.status(403).json({
+            error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro pour un accès illimité.",
+            code: "QUOTA_EXCEEDED",
+            quotaExceeded: true,
+            remaining: 0,
+            max: 3
+          });
+        }
+      }
+
+      console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}"`);
+
+      // ─── ÉTAPE 1 : Cerveau LLM — Extraction & Correction ─────────────────────
+      const { matches, correctedQuery, provider } = await queryLlmCandidates(cleanQuery, {
+        groqApiKey:     req.body?.groqApiKey,
+        deepseekApiKey: req.body?.deepseekApiKey,
+        qwenApiKey:     req.body?.qwenApiKey,
+        geminiApiKey:   req.body?.geminiApiKey,
+        openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
+      });
+
+      const extractedTitles = matches.map(m => m.title);
+      const effectiveQuery  = correctedQuery || cleanQuery;
+      console.log(`[API /api/search] [Étape 1] ${matches.length} candidat(s) via ${provider} :`, extractedTitles);
+      if (correctedQuery && correctedQuery !== cleanQuery) {
+        console.log(`[API /api/search] [Étape 1] Requête corrigée : "${cleanQuery}" → "${correctedQuery}"`);
+      }
+
+      // ─── ÉTAPE 2 — Phase A : Résolution par titres (ilike souple) ─────────────
+      let resolvedMovies = [];
+      if (extractedTitles.length > 0) {
+        resolvedMovies = await resolveByTitles(extractedTitles, matches);
+        console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
+      }
+
+      // ─── ÉTAPE 2 — Phase B : Fallback textuel + TMDB si Phase A vide ─────────
+      if (resolvedMovies.length === 0) {
+        console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie...');
+        resolvedMovies = await resolveByKeywords(
+          effectiveQuery,
+          extractedTitles,
+          req.body?.tmdbApiKey || ''
+        );
+        console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
+      }
+
+      // Application des filtres Pro (ex: note minimale) si demandés
+      if (filters?.minRating && Number(filters.minRating) > 0 && resolvedMovies.length > 0) {
+        const minVal = Number(filters.minRating);
+        resolvedMovies = resolvedMovies.filter(m => {
+          const rating = Number(m.vote_average || m.rating || 0);
+          return rating >= minVal;
+        });
+      }
+
+      // Incrémentation du quota pour les recherches exécutées (si non-pro)
+      if (!isPro && ipHash) {
+        incrementMemoryDailyQuota(ipHash, todayDate);
+        if (supabaseServer) {
+          try {
+            const { data: existingIp } = await supabaseServer
+              .from('user_searches')
+              .select('id, search_count')
+              .eq('user_id', ipStorageKey)
+              .eq('search_date', todayDate)
+              .maybeSingle();
+
+            if (existingIp?.id) {
+              await supabaseServer
+                .from('user_searches')
+                .update({
+                  search_count: (existingIp.search_count || 0) + 1,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingIp.id);
+            } else {
+              await supabaseServer
+                .from('user_searches')
+                .insert({
+                  user_id: ipStorageKey,
+                  ip_address: ipHash,
+                  search_date: todayDate,
+                  search_count: 1,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                });
+            }
+          } catch (qErr) {
+            console.warn('[API /api/search] Erreur enregistrement quota :', qErr?.message);
+          }
+        }
+      }
+
+      // ─── Résultats trouvés (Phase A ou Phase B) ─────────────────────────────
+      if (resolvedMovies.length > 0) {
+        const isPhaseB     = resolvedMovies.some(m => m.badge === 'Recherche par contexte & mots-clés');
+        const badgeLabel   = isPhaseB ? 'Recherche par contexte IA' : 'Recherche Intelligente LLM';
+        const thoughtMsg   = isPhaseB
+          ? `🔍 Recherche élargie : ${resolvedMovies.length} film(s) correspondant à l'ambiance et au contexte`
+          : `✨ Recherche Intelligente LLM : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`;
+
+        return res.status(200).json({
+          success: true,
+          movies: resolvedMovies,
+          count: resolvedMovies.length,
+          badge: badgeLabel,
+          providerUsed: `LLM-First (${provider})`,
+          correctedQuery: correctedQuery || null,
+          thought: thoughtMsg,
+          extractedTitles,
+          suggestedPrompts: [
+            'Un film de science-fiction dystopique sombre',
+            'Un thriller psychologique avec un twist final',
+            'Un film de braquage haletant qui tourne mal'
+          ]
+        });
+      }
+
+      // ─── ÉTAPE 3 : Filet de sécurité — Zéro résultat absolu ─────────────────
+      // Atteint UNIQUEMENT si Phase A (titres) + Phase B (mots-clés) ont toutes les deux échoué.
+      // INTERDIT ABSOLU : aucun film aléatoire ou blockbuster par défaut.
+      console.log('[API /api/search] [Étape 3] Phase A + Phase B : 0 résultat. Retour [] strict.');
+      return res.status(200).json({
+        success: true,
+        movies: [],
+        isEmpty: true,
+        badge: 'Recherche Intelligente LLM',
+        providerUsed: `LLM-First (${provider} → 0 résultat)`,
         correctedQuery: correctedQuery || null,
-        thought: thoughtMsg,
+        message: "Notre IA a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
         extractedTitles,
         suggestedPrompts: [
-          'Un film de science-fiction dystopique sombre',
-          'Un thriller psychologique avec un twist final',
-          'Un film de braquage haletant qui tourne mal'
+          "Un voyage dans l'espace avec des trous noirs",
+          "Un film de braquage qui tourne mal",
+          "Un film angoissant où des personnages sont coincés sous terre",
+          "Un thriller psychologique avec un twist final"
         ]
       });
     }
 
-    // ─── ÉTAPE 3 : Filet de sécurité — Zéro résultat absolu ─────────────────
-    // Atteint UNIQUEMENT si Phase A (titres) + Phase B (mots-clés) ont toutes les deux échoué.
-    // INTERDIT ABSOLU : aucun film aléatoire ou blockbuster par défaut.
-    console.log('[API /api/search] [Étape 3] Phase A + Phase B : 0 résultat. Retour [] strict.');
-    return res.status(200).json({
-      success: true,
+    return res.status(200).json({ success: true, message: "Service de recherche actif" });
+  } catch (err) {
+    console.error('[API /api/search] Erreur non gérée :', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || "Une erreur interne est survenue lors du traitement de la recherche.",
       movies: [],
-      isEmpty: true,
-      badge: 'Recherche Intelligente LLM',
-      providerUsed: `LLM-First (${provider} → 0 résultat)`,
-      correctedQuery: correctedQuery || null,
-      message: "Notre IA a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
-      extractedTitles,
-      suggestedPrompts: [
-        "Un voyage dans l'espace avec des trous noirs",
-        "Un film de braquage qui tourne mal",
-        "Un film angoissant où des personnages sont coincés sous terre",
-        "Un thriller psychologique avec un twist final"
-      ]
+      isEmpty: true
     });
   }
-
-  return res.status(200).json({ success: true, message: "Service de recherche actif" });
 }

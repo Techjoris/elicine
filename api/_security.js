@@ -8,14 +8,15 @@ const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 
   'https://xwhrxtzbxvakqjlajjlc.supabase.co';
 
-const supabaseAnonKey = 
+const supabaseServerKey = 
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 
   process.env.VITE_SUPABASE_ANON_KEY || 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
   process.env.SUPABASE_ANON_KEY ||
   '';
 
-export const supabaseServer = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabaseServer = (supabaseUrl && supabaseServerKey && supabaseServerKey.length > 20)
+  ? createClient(supabaseUrl, supabaseServerKey)
   : null;
 
 /**
@@ -238,7 +239,7 @@ export async function verifyServerSession(req) {
   }
 
   // 1. Si un token JWT Supabase est fourni, le valider cryptographiquement
-  if (token && token.length > 20) {
+  if (token && token.length > 20 && supabaseServer) {
     try {
       const { data: authData, error: authError } = await supabaseServer.auth.getUser(token);
       if (!authError && authData?.user) {
@@ -256,53 +257,118 @@ export async function verifyServerSession(req) {
           return result;
         }
 
-        // 🔒 SÉCURITÉ STRICTE : Vérification obligatoire et exclusive dans la table subscriptions
-        // Ne JAMAIS faire confiance aux métadonnées utilisateur user_metadata.isPro modifiables côté client.
+        // 🔒 SÉCURITÉ : Vérification obligatoire dans la table profiles (is_pro, pass_status)
         try {
-          // 1. Recherche par user_id
-          let { data: subData } = await supabaseServer
-            .from('subscriptions')
-            .select('id, status, plan, expires_at, created_at')
-            .eq('user_id', authData.user.id)
-            .eq('status', 'active')
-            .maybeSingle();
+          let profData = null;
+          if (email) {
+            const { data } = await supabaseServer
+              .from('profiles')
+              .select('is_pro, pass_status, pro_expires_at, role, is_admin')
+              .eq('email', email)
+              .maybeSingle();
+            if (data) profData = data;
+          }
+          if (!profData && authData.user.id) {
+            const { data } = await supabaseServer
+              .from('profiles')
+              .select('is_pro, pass_status, pro_expires_at, role, is_admin')
+              .eq('id', authData.user.id)
+              .maybeSingle();
+            if (data) profData = data;
+          }
 
-          // 2. Recherche par email en secours si non rattaché par user_id
-          if (!subData?.id && email) {
-            const { data: emailSub } = await supabaseServer
+          if (profData) {
+            if (profData.role === 'admin' || profData.is_admin === true) {
+              result.isAdmin = true;
+            }
+            const isProProfile = profData.is_pro === true || profData.pass_status === 'pro' || profData.role === 'admin';
+            if (isProProfile) {
+              const isExpired = profData.pro_expires_at ? new Date(profData.pro_expires_at).getTime() <= Date.now() : false;
+              if (!isExpired) {
+                result.isPro = true;
+              }
+            }
+          }
+        } catch (profErr) {
+          console.warn('[Security] Erreur requête table profiles:', profErr?.message);
+        }
+
+        // 🔒 VÉRIFICATION COMPLÉMENTAIRE : Table subscriptions si non encore confirmé Pro
+        if (!result.isPro) {
+          try {
+            // 1. Recherche par user_id
+            let { data: subData } = await supabaseServer
               .from('subscriptions')
               .select('id, status, plan, expires_at, created_at')
-              .eq('email', email)
+              .eq('user_id', authData.user.id)
               .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(1)
               .maybeSingle();
-            if (emailSub?.id) {
-              subData = emailSub;
-            }
-          }
 
-          if (subData?.id) {
-            // Contrôle strict de la date d'expiration
-            if (subData.expires_at) {
-              const expiresAtMs = new Date(subData.expires_at).getTime();
-              if (expiresAtMs > Date.now()) {
-                result.isPro = true;
-              } else {
-                console.log(`[Security] Souscription expirée pour ${email} (ID: ${subData.id}, expiré le: ${subData.expires_at})`);
-                result.isPro = false;
+            // 2. Recherche par email en secours si non rattaché par user_id
+            if (!subData?.id && email) {
+              const { data: emailSub } = await supabaseServer
+                .from('subscriptions')
+                .select('id, status, plan, expires_at, created_at')
+                .eq('email', email)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (emailSub?.id) {
+                subData = emailSub;
               }
-            } else {
-              // Si pas de date d'expiration spécifiée, actif
-              result.isPro = true;
             }
+
+            if (subData?.id) {
+              // Contrôle strict de la date d'expiration
+              if (subData.expires_at) {
+                const expiresAtMs = new Date(subData.expires_at).getTime();
+                if (expiresAtMs > Date.now()) {
+                  result.isPro = true;
+                } else {
+                  console.log(`[Security] Souscription expirée pour ${email} (ID: ${subData.id}, expiré le: ${subData.expires_at})`);
+                  result.isPro = false;
+                }
+              } else {
+                result.isPro = true;
+              }
+            }
+          } catch (dbErr) {
+            console.warn('[Security] Erreur requête table subscriptions:', dbErr?.message);
           }
-        } catch (dbErr) {
-          console.warn('[Security] Erreur requête table subscriptions:', dbErr?.message);
         }
       }
     } catch (tokenErr) {
       console.warn('[Security] Erreur validation JWT Supabase:', tokenErr?.message);
+    }
+  }
+
+  // 2. Repli sécurisé : Si non authentifié via JWT mais un email est transmis, vérification stricte en DB
+  if (!result.isPro) {
+    const rawClientEmail = (req.body?.email || req.query?.email || '').trim().toLowerCase();
+    if (rawClientEmail && rawClientEmail.includes('@')) {
+      if (isMasterAdminEmail(rawClientEmail)) {
+        result.isPro = true;
+        result.isAdmin = true;
+        result.isBypassQuotas = true;
+      } else {
+        try {
+          if (supabaseServer) {
+            const { data: profByEmail } = await supabaseServer
+              .from('profiles')
+              .select('is_pro, pass_status, pro_expires_at, role')
+              .eq('email', rawClientEmail)
+              .maybeSingle();
+
+            if (profByEmail && (profByEmail.is_pro === true || profByEmail.pass_status === 'pro')) {
+              const isExpired = profByEmail.pro_expires_at ? new Date(profByEmail.pro_expires_at).getTime() <= Date.now() : false;
+              if (!isExpired) {
+                result.isPro = true;
+              }
+            }
+          }
+        } catch (_) {}
+      }
     }
   }
 
