@@ -1081,6 +1081,100 @@ export async function executeCinoraSearch(
     }
   }
 
+  // ============================================================================
+  // ÉTAPE 1, 2 & 3 : PIPELINE LLM-FIRST (Backend /api/search -> Supabase)
+  // ============================================================================
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
+    const searchRes = await fetch('/api/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        action: 'llm-first',
+        query: cleanQuery,
+        groqApiKey: groqKey || undefined,
+        deepseekApiKey: deepseekKey || undefined,
+        qwenApiKey: qwenKey || undefined,
+        filters: filters ? {
+          platform: filters.platform,
+          minRating: filters.minRating,
+          mediaType: filters.mediaType
+        } : undefined
+      })
+    });
+
+    if (searchRes.status === 403) {
+      const errJson = await searchRes.json().catch(() => null);
+      if (errJson?.code === 'PRO_REQUIRED') {
+        throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
+      }
+      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+    }
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.success) {
+        // Cas A : Des correspondances réelles ont été trouvées dans Supabase
+        if (Array.isArray(searchData.movies) && searchData.movies.length > 0) {
+          console.log(`[Éliciné LLM-First] ${searchData.movies.length} films trouvés dans le catalogue Supabase avec badge`);
+          return {
+            thought: searchData.thought || `✨ Recherche Intelligente LLM : ${searchData.movies.length} film(s) correspondant(s) dans notre catalogue`,
+            moodDetected: cleanQuery,
+            recommendedMovies: searchData.movies,
+            isFallbackMode: false,
+            providerUsed: searchData.providerUsed || 'Recherche Intelligente LLM (Supabase)',
+            suggestedPrompts: searchData.suggestedPrompts || [
+              'Un film de science-fiction dystopique sombre',
+              'Un thriller psychologique avec un twist final',
+              'Un film de braquage haletant qui tourne mal'
+            ],
+            cascade: {
+              tierReached: 1,
+              criteria: offlineCriteria,
+              tier1Count: searchData.movies.length,
+              tier2Count: 0,
+              tier3Count: 0
+            }
+          };
+        }
+
+        // Cas B : ÉTAPE 3 — Gestion du Cas Zéro Résultat (Filet de Sécurité)
+        // STRICT : Aucun film aléatoire ou blockbuster par défaut (Spider-Man, Vaiana, etc.)
+        if (searchData.isEmpty || (Array.isArray(searchData.movies) && searchData.movies.length === 0)) {
+          console.log(`[Éliciné LLM-First] 0 correspondance Supabase. Déclenchement du filet de sécurité strict.`);
+          return {
+            thought: "Notre IA cherche la perle rare, mais cette description est un peu trop mystérieuse...",
+            moodDetected: cleanQuery,
+            recommendedMovies: [],
+            isFallbackMode: true,
+            providerUsed: searchData.providerUsed || 'LLM-First (Filet de sécurité Zéro Résultat)',
+            suggestedPrompts: searchData.suggestedPrompts || [
+              "Un voyage dans l'espace avec des trous noirs",
+              "Un film de braquage qui tourne mal",
+              "Un film angoissant où des personnages sont coincés sous terre",
+              "Un thriller psychologique avec un twist final"
+            ],
+            cascade: {
+              tierReached: 2,
+              criteria: offlineCriteria,
+              tier1Count: 0,
+              tier2Count: 0,
+              tier3Count: 0
+            }
+          };
+        }
+      }
+    }
+  } catch (backendErr: any) {
+    if (backendErr?.message?.includes('Quota gratuit') || backendErr?.message?.includes('Quota journalier') || backendErr?.message?.includes('abonnés Pro')) {
+      throw backendErr;
+    }
+    console.warn('[Éliciné LLM-First] Backend /api/search indisponible ou erreur, repli sur pipeline unifié :', backendErr?.message);
+  }
+
   // Enrichissement du prompt avec filtres Pro si présents
   let promptWithFilters = cleanQuery;
   if (filters?.platform && filters.platform !== 'all') {

@@ -104,7 +104,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
         {/* Gradient Overlay Cinématographique */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent dark:from-[#121212] dark:via-[#121212]/20 dark:to-black/40 opacity-75 group-hover:opacity-40 transition-opacity duration-500" />
         
-        {/* Top-Left: Type & Match Rate */}
+        {/* Top-Left: Type & Match Rate & AI Badge */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
           <div className="flex items-center gap-1">
             <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
@@ -116,6 +116,11 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
               </span>
             )}
           </div>
+          {(movie.ai_badge || movie.badge === 'Recherche Intelligente LLM') && (
+            <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-[#e50914] to-amber-600 backdrop-blur-md border border-white/20 text-white text-[8px] font-extrabold tracking-wide uppercase shadow-sm">
+              ✨ {movie.ai_badge || movie.badge}
+            </span>
+          )}
         </div>
 
         {/* Top-Right: Quick Actions */}

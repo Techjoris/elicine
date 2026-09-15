@@ -31,6 +31,8 @@ export interface Movie {
   providers?: StreamingProvider[] | any;
   isAvailableInRegion?: boolean;
   ai_match_reason?: string;
+  ai_badge?: string;
+  badge?: string;
   match_rate?: number;
   synopsis?: string;
   is_ai_overview?: boolean;
