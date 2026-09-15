@@ -1,6 +1,7 @@
 import { ProSubscription, SubscriptionStatus, Currency, PricingBillingCycle } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { processSaspayCheckout } from './payment';
+import { getPayPalProCheckoutUrl } from './paypalService';
 
 const PENDING_SUB_STORAGE_KEY = 'cineia_pending_subscription';
 const ACTIVE_SUB_STORAGE_KEY = 'cineia_active_subscription';
@@ -262,7 +263,14 @@ export const subscriptionService = {
 
     // 3. Déclencher la passerelle choisie
     if (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' || intent.provider === 'paypal') {
-      const paypalUrl = 'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
+      const paypalUrl = getPayPalProCheckoutUrl({
+        plan: intent.plan,
+        amount: intent.numericAmount,
+        currency: intent.currency,
+        email,
+        customerName: name,
+        subscriptionId: subscription.id
+      });
       if (typeof window !== 'undefined') {
         window.open(paypalUrl, '_blank', 'noopener,noreferrer');
       }

@@ -4,21 +4,8 @@ import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
 import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
+import { getPayPalProCheckoutUrl, getPayPalDonationUrl } from '../services/paypalService';
 import { Heart, ExternalLink, Sparkles } from 'lucide-react';
-
-const PAYPAL_PRO_LINK = 
-  process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
-  (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_PRO_LINK || 
-  (import.meta as any).env?.VITE_PAYPAL_PRO_LINK || 
-  process.env.VITE_PAYPAL_PRO_LINK ||
-  'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
-
-const PAYPAL_SUPPORT_LINK = 
-  process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
-  (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
-  (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || 
-  process.env.VITE_PAYPAL_SUPPORT_LINK ||
-  'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
 
 export interface CheckoutPayload {
   currency: Currency;
@@ -321,16 +308,25 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         {/* 6. Boutons d'action : Appel à l'action Principal dynamique & Lien de don discret */}
         <div className="flex flex-col gap-3 pt-1">
           {paymentMethod === 'paypal_card' ? (
-            /* Mode PayPal & Carte Bancaire -> Lien PayPal Pro public direct */
-            <a
-              href={PAYPAL_PRO_LINK}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98]"
+            /* Mode PayPal & Carte Bancaire -> Déclencheur PayPal Checkout avec URLs de retour sécurisées */
+            <button
+              type="button"
+              onClick={handleCheckoutClick}
+              disabled={isProcessing}
+              className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98] disabled:opacity-50"
             >
-              <span>👑 S'abonner à Éliciné Pro ({isYearly ? '15,99$' : '1,99$'})</span>
-              <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </a>
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Préparation PayPal Checkout...
+                </span>
+              ) : (
+                <>
+                  <span>👑 S'abonner avec PayPal & CB ({amountToPay} {currentPrice.symbol})</span>
+                  <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </>
+              )}
+            </button>
           ) : (
             /* Mode Paiement Mobile -> Déclencheur Saspay */
             <button
@@ -361,10 +357,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <span>✕ Sans engagement</span>
           </div>
 
-          {/* Lien secondaire discret pour le don (ne fait plus concurrence à l'abonnement) */}
+          {/* Lien secondaire discret pour le don */}
           <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/70 flex items-center justify-center text-center">
             <a
-              href={PAYPAL_SUPPORT_LINK}
+              href={getPayPalDonationUrl({ email: user?.email })}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer group py-1 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50"

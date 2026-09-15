@@ -11,6 +11,7 @@ import {
   isAfricanCurrency,
   formatPaymentErrorMessage
 } from '../services/payment';
+import { getPayPalDonationUrl } from '../services/paypalService';
 import { Currency } from '../types';
 
 export interface SaspayTipPayload {
@@ -103,7 +104,14 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   }, [isOpen]);
 
   const handlePayPalCheckout = () => {
-    window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+    const rawNum = Number(freeAmount);
+    const donationAmount = rawNum > 0 ? rawNum : 2;
+    const url = getPayPalDonationUrl({
+      amount: donationAmount,
+      currency: 'USD',
+      email: user?.email
+    });
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {

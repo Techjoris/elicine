@@ -17,6 +17,7 @@ import {
   convertToSaspayCurrency,
   formatPaymentErrorMessage
 } from '../../services/payment';
+import { getPayPalDonationUrl } from '../../services/paypalService';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -119,11 +120,13 @@ export const TipModal: React.FC = () => {
   };
 
   const handlePayPalCheckout = () => {
-    const supportLink = 
-      process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
-      (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || 
-      (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || 
-      'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
+    const rawNum = Number(amount);
+    const donationAmount = rawNum > 0 ? rawNum : 5;
+    const supportLink = getPayPalDonationUrl({
+      amount: donationAmount,
+      currency: selectedCurrency || currency || 'USD',
+      email: user?.email
+    });
     window.open(supportLink, '_blank', 'noopener,noreferrer');
     showToast('Ouverture de la page sécurisée PayPal...');
     handleClose();

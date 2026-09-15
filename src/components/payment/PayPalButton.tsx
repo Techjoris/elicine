@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PricingBillingCycle } from '../../types';
+import { getPayPalProCheckoutUrl } from '../../services/paypalService';
 
 declare global {
   interface Window {
@@ -89,7 +90,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
 
-  // Normalisation de la devise pour PayPal : si la devise n'est pas acceptée (ex: XOF, XAF), on bascule sur USD à 1.99 $
+  // Normalisation de la devise pour PayPal : si la devise n'est pas acceptée (ex: XOF, XAF), on bascule sur USD
   const normalizedCurrency = PAYPAL_SUPPORTED_CURRENCIES.includes(currency.toUpperCase())
     ? currency.toUpperCase()
     : 'USD';
@@ -105,14 +106,28 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   const envClientId = (
     (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
     (import.meta as any).env?.PAYPAL_CLIENT_ID ||
-    'sb'
+    ''
   ).trim();
+
+  const isLiveSdkAvailable = Boolean(envClientId && envClientId !== 'sb' && envClientId.length > 10);
 
   useEffect(() => {
     let isMounted = true;
+
+    // Si aucun Client ID de production n'est configuré, basculer directement sur le bouton de redirection sécurisé
+    if (!isLiveSdkAvailable) {
+      setIsLoading(false);
+      setHasError(false);
+      return;
+    }
+
     setIsLoading(true);
     setHasError(false);
     setErrorMessage('');
+
+    const origin = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+      ? window.location.origin
+      : 'https://elicine.app';
 
     loadPayPalSdk(envClientId, normalizedCurrency)
       .then(() => {
@@ -158,7 +173,9 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   application_context: {
                     brand_name: 'Éliciné',
                     shipping_preference: 'NO_SHIPPING',
-                    user_action: 'PAY_NOW'
+                    user_action: 'PAY_NOW',
+                    return_url: `${origin}/payment-callback?gateway=paypal&status=success&plan=${billingCycle}`,
+                    cancel_url: `${origin}/?payment=cancelled`
                   }
                 });
               },
@@ -203,7 +220,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         if (isMounted) {
           setIsLoading(false);
           setHasError(true);
-          setErrorMessage("Impossible de charger le module de paiement PayPal (vérifiez votre connexion ou bloqueur de publicité).");
+          setErrorMessage("Impossible de charger le module de paiement PayPal.");
         }
       });
 
@@ -213,14 +230,35 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         containerRef.current.innerHTML = '';
       }
     };
-  }, [envClientId, normalizedCurrency, formattedAmount, billingCycle]);
+  }, [envClientId, normalizedCurrency, formattedAmount, billingCycle, isLiveSdkAvailable]);
 
-  // Repli sécurisé : lien hébergé officiel si blocage SDK
-  const handleFallbackClick = () => {
+  // Redirection sécurisée PayPal
+  const handleDirectCheckout = () => {
+    const paypalUrl = getPayPalProCheckoutUrl({
+      plan: billingCycle,
+      amount: numericValue,
+      currency: normalizedCurrency
+    });
+
     if (typeof window !== 'undefined') {
-      window.open('https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN', '_blank', 'noopener,noreferrer');
+      window.open(paypalUrl, '_blank', 'noopener,noreferrer');
     }
   };
+
+  // Si le SDK n'est pas configuré avec un Client ID réel en Live
+  if (!isLiveSdkAvailable) {
+    return (
+      <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <button
+          type="button"
+          onClick={handleDirectCheckout}
+          className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer text-center active:scale-[0.98]"
+        >
+          <span>💳 Payer avec PayPal & CB ({formattedAmount} {normalizedCurrency}) →</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -258,7 +296,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
           </p>
           <button
             type="button"
-            onClick={handleFallbackClick}
+            onClick={handleDirectCheckout}
             className="w-full py-2.5 px-4 rounded-xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
           >
             <span>💳 Payer via le portail sécurisé PayPal ({formattedAmount} {normalizedCurrency}) →</span>
@@ -270,3 +308,4 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 };
 
 export default PayPalButton;
+
