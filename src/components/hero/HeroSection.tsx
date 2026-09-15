@@ -358,6 +358,35 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
   };
 
+  // Synchronisation dynamique : permet de déclencher une recherche depuis n'importe quel composant (ex: suggestions Zero State)
+  const handleSearchRef = useRef(handleSearch);
+  useEffect(() => {
+    handleSearchRef.current = handleSearch;
+  });
+
+  useEffect(() => {
+    const handleTriggerSearch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ prompt?: string }>;
+      const prompt = customEvent?.detail?.prompt;
+      if (prompt && typeof prompt === 'string') {
+        const cleanPrompt = prompt.trim();
+        if (cleanPrompt) {
+          setSearchPrompt(cleanPrompt);
+          const searchInput = document.getElementById('main-ai-search');
+          if (searchInput) {
+            searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          handleSearchRef.current(cleanPrompt);
+        }
+      }
+    };
+
+    window.addEventListener('elicine-trigger-search', handleTriggerSearch);
+    return () => {
+      window.removeEventListener('elicine-trigger-search', handleTriggerSearch);
+    };
+  }, []);
+
   return (
     <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
       

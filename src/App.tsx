@@ -386,6 +386,7 @@ export const AppContent: React.FC = () => {
                   movies={aiResults.movies}
                   aiThought={aiResults.thought}
                   aiMood={aiResults.mood}
+                  suggestedPrompts={aiResults.suggestedPrompts}
                   showAiMatch={true}
                 />
               )}

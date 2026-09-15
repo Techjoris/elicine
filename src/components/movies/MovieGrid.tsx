@@ -1,7 +1,7 @@
 import React from 'react';
 import { MovieCard } from './MovieCard';
 import { Movie } from '../../types';
-import { Sparkles, Clapperboard, HelpCircle } from 'lucide-react';
+import { Sparkles, Clapperboard, HelpCircle, Compass, ArrowRight, Film } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 interface MovieGridProps {
@@ -15,7 +15,18 @@ interface MovieGridProps {
   sentinelRef?: React.RefCallback<HTMLDivElement>;
   isLoadingMore?: boolean;
   hasMore?: boolean;
+  suggestedPrompts?: string[];
+  onSelectPrompt?: (prompt: string) => void;
 }
+
+const DEFAULT_CURATED_PROMPTS = [
+  "Un voyage dans l'espace avec des trous noirs",
+  "Un film de braquage qui tourne mal",
+  "Un thriller psychologique sombre sous la pluie",
+  "Une comédie romantique feel-good à New York",
+  "Une enquête policière pleine de faux-semblants",
+  "Un film de science-fiction avec une IA consciente"
+];
 
 /** Discreet dark cinema animated skeleton card */
 const MovieCardSkeleton: React.FC = () => (
@@ -42,9 +53,40 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   showAiMatch = false,
   sentinelRef,
   isLoadingMore = false,
-  hasMore = false
+  hasMore = false,
+  suggestedPrompts,
+  onSelectPrompt
 }) => {
   const { openFeedbackModal } = useApp();
+
+  const promptsToDisplay = React.useMemo(() => {
+    const list: string[] = [];
+    if (suggestedPrompts && Array.isArray(suggestedPrompts)) {
+      suggestedPrompts.forEach((p) => {
+        const clean = typeof p === 'string' ? p.trim() : '';
+        if (clean && !list.includes(clean)) {
+          list.push(clean);
+        }
+      });
+    }
+    DEFAULT_CURATED_PROMPTS.forEach((p) => {
+      if (!list.includes(p)) {
+        list.push(p);
+      }
+    });
+    return list.slice(0, 6);
+  }, [suggestedPrompts]);
+
+  const handleSelectPrompt = (promptText: string) => {
+    if (onSelectPrompt) {
+      onSelectPrompt(promptText);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('elicine-trigger-search', { detail: { prompt: promptText } })
+      );
+    }
+  };
 
   return (
     <section id="results-section" className="w-full space-y-6">
@@ -97,18 +139,86 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
         </div>
       </div>
 
-      {/* Grid — posters immersifs */}
+      {/* Grid — posters immersifs ou Zero State enrichi */}
       {movies.length === 0 && !isLoadingMore && !hasMore ? (
-        <div className="text-center py-12 sm:py-16 px-4 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/[0.08] shadow-sm space-y-4">
-          <p className="text-slate-600 dark:text-zinc-400 font-medium text-sm">Aucun résultat trouvé pour cette sélection.</p>
-          <button
-            type="button"
-            onClick={() => openFeedbackModal('missing_movie')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
-          >
-            <Clapperboard className="w-3.5 h-3.5" />
-            <span>Suggérer ce film ou cette série à l'équipe</span>
-          </button>
+        <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-b from-white to-slate-50 dark:from-[#131313] dark:to-[#0a0a0a] border border-slate-200 dark:border-white/[0.08] p-6 sm:p-10 shadow-lg dark:shadow-2xl relative overflow-hidden space-y-8 animate-fade-in text-center">
+          {/* Subtle glowing halo accent */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 sm:w-96 h-72 sm:h-96 bg-[#e50914]/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* 1. Message engageant et narratif */}
+          <div className="relative z-10 max-w-2xl mx-auto space-y-3">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#e50914]/10 border border-[#e50914]/20 text-[#e50914] shadow-inner mb-1">
+              <Sparkles className="w-7 h-7 animate-pulse" />
+            </div>
+
+            <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
+              Notre IA cherche la perle rare, mais cette description est un peu trop mystérieuse...
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto">
+              L'algorithme n'a pas encore déniché l'œuvre exacte correspondant à ces critères. Essayez d'élargir votre formulation, de décrire une émotion dominante ou testez l'une de nos idées ci-dessous en un clic.
+            </p>
+          </div>
+
+          {/* 2. Suggestions dynamiques en un clic */}
+          <div className="relative z-10 space-y-3.5 max-w-4xl mx-auto text-left">
+            <div className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+              <Compass className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <span>Inspirations cinéphiles à explorer en 1 clic</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {promptsToDisplay.map((promptText, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectPrompt(promptText)}
+                  className="group flex items-center justify-between gap-2.5 p-3.5 rounded-xl bg-white dark:bg-[#181818] border border-slate-200 dark:border-white/10 hover:border-[#e50914]/60 dark:hover:border-[#e50914]/60 hover:bg-slate-50 dark:hover:bg-[#202020] shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99] text-left"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-400 group-hover:text-[#e50914] group-hover:bg-[#e50914]/10 flex items-center justify-center text-xs font-bold transition-colors">
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs sm:text-sm font-medium text-slate-800 dark:text-zinc-200 group-hover:text-slate-900 dark:group-hover:text-white line-clamp-2 transition-colors">
+                      "{promptText}"
+                    </span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 dark:text-zinc-500 group-hover:text-[#e50914] group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Ligne de séparation épurée */}
+          <div className="relative z-10 max-w-3xl mx-auto border-t border-slate-200 dark:border-white/10" />
+
+          {/* 3. Mise en valeur élégante de la suggestion à l'équipe */}
+          <div className="relative z-10 max-w-3xl mx-auto">
+            <div className="p-4 sm:p-5 rounded-2xl bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4 text-left">
+              <div className="flex items-start gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Film className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Votre film ou votre série manque à l'appel ?
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-zinc-400">
+                    Notre catalogue s'enrichit chaque jour grâce à la communauté. Dites-nous quelle œuvre ajouter en priorité !
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openFeedbackModal('missing_movie')}
+                className="w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
+              >
+                <Clapperboard className="w-4 h-4" />
+                <span>Proposer ce film à l'équipe</span>
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">
