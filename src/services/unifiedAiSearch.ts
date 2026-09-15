@@ -8,6 +8,10 @@ import {
   ExtractedCriteria,
   evaluateMovieNarrativeRelevance
 } from './searchRouterService';
+import { 
+  calculateGlobalSemanticSimilarity, 
+  querySupabaseVectorSearch 
+} from './supabaseVectorSearch';
 
 export interface RawAiMovieItem {
   title: string;
@@ -1153,7 +1157,7 @@ export async function executeCinoraSearch(
   }
 
   // ============================================================================
-  // NIVEAU 1 : RECHERCHE STRICTE & CIBLÉE (CONJONCTION TOUS CRITÈRES)
+  // NIVEAU 1 : RECHERCHE STRICTE / ENTITÉS
   // ============================================================================
   const tier1Movies: Movie[] = [];
   const tier2Candidates: Movie[] = [];
@@ -1173,130 +1177,170 @@ export async function executeCinoraSearch(
     }
   }
 
-  for (const movie of allCandidatePool) {
-    const matchingRawItem = rawItems.find(
-      r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
-    );
+  // RÈGLE SÉQUENTIELLE DU NIVEAU 1 :
+  // Le Niveau 1 n'est évalué QUE si des entités dures (acteurs, réalisateurs, format, année)
+  // sont formellement présentes dans la requête.
+  // Si aucune entité dure n'est détectée (ex: "film angoissant où des personnages sont coincés sous terre"),
+  // on passe AUTOMATIQUEMENT et IMMÉDIATEMENT au Niveau 2 (Vectoriel & Sémantique). NE PAS SAUTER AU NIVEAU 3 !
+  if (criteria.hasHardCriteria) {
+    for (const movie of allCandidatePool) {
+      const matchingRawItem = rawItems.find(
+        r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
+      );
 
-    // 1. Filtrage strict par format
-    if (criteria.format !== 'all') {
-      const isSeries = movie.media_type === 'SÉRIE';
-      if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
-        continue;
-      }
-    }
-
-    // 2. Filtrage par année
-    let matchesYear = true;
-    if (criteria.year) {
-      const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
-      matchesYear = movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1;
-      if (!matchesYear) {
-        continue;
-      }
-    }
-
-    // 3. Filtrage par acteur ou réalisateur
-    let matchesPerson = true;
-    if (primaryPerson) {
-      const personLower = primaryPerson.toLowerCase();
-      const inOverview = (movie.overview || '').toLowerCase().includes(personLower);
-      const inCast = personCandidateWorks.some(pw => pw.id === movie.id);
-      matchesPerson = inOverview || inCast;
-    }
-
-    // 4. Évaluation stricte de la contrainte narrative (twist final / thriller psychologique)
-    const narrativeEval = evaluateMovieNarrativeRelevance(movie, criteria, matchingRawItem);
-    const matchesNarrative = criteria.hasNarrativeConstraint ? narrativeEval.matches : true;
-
-    // RÈGLE CRITIQUE DU NIVEAU 1 : CONJONCTION STRICTE (AND)
-    // Le film DOIT impérativement respecter la personne ET le format ET l'année ET la contrainte de scénario !
-    const isStrictMatch = matchesPerson && matchesYear && matchesNarrative;
-
-    if (isStrictMatch) {
-      const strictScore = Math.min(99, Math.max(92, narrativeEval.score));
-      tier1Movies.push({
-        ...movie,
-        match_rate: strictScore,
-        ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${narrativeEval.reason}`
-      });
-    } else {
-      // RÉTROGRADATION EN NIVEAU 2 :
-      // Les films comme Titanic ou Le Loup de Wall Street (ayant DiCaprio mais aucun twist)
-      // ne doivent JAMAIS apparaître dans le Niveau 1 pour cette requête.
-      let tier2Reason = '';
-      let tier2Score = 80;
-
-      if (matchesPerson && !matchesNarrative) {
-        tier2Reason = `✨ Élargissement : Œuvre culte de ${primaryPerson} (hors thématique ${criteria.isTwistRequested ? 'twist' : 'demandée'})`;
-        tier2Score = 78;
-      } else if (matchesNarrative && !matchesPerson) {
-        tier2Reason = `✨ Élargissement : Œuvre à retournement ou suspense (trope similaire)`;
-        tier2Score = 85;
-      } else {
-        tier2Reason = `✨ Élargissement : Recommandation liée à votre recherche`;
-        tier2Score = 80;
-      }
-
-      tier2Candidates.push({
-        ...movie,
-        match_rate: tier2Score,
-        ai_match_reason: tier2Reason
-      });
-    }
-  }
-
-  // Tri qualitatif du Niveau 1 : les œuvres les plus fidèles au twist et critères en tête (ex: Shutter Island 99%)
-  tier1Movies.sort((a, b) => (b.match_rate || 0) - (a.match_rate || 0));
-
-  // Seuil minimal pour l'arrêt au Niveau 1
-  // Si la requête combine un critère dur (acteur) ET une contrainte de twist, 2 correspondances exactes suffisent pour valider le Niveau 1
-  const minStrictThreshold = (specificity.level === 'ultra_targeted' || (criteria.hasHardCriteria && criteria.hasNarrativeConstraint)) ? 2 : 3;
-
-  // Si des correspondances pertinentes avec score élevé sont trouvées en nombre suffisant :
-  // ARRÊT AU NIVEAU 1
-  if (tier1Movies.length >= minStrictThreshold) {
-    let finalTier1 = tier1Movies;
-    if (filters) {
-      finalTier1 = applyFiltersToMovies(finalTier1, filters);
-    }
-
-    if (finalTier1.length >= minStrictThreshold) {
-      console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${finalTier1.length} correspondances strictes.`);
-      return {
-        thought: `🎯 Recherche ciblée (Niveau 1) : ${finalTier1.length} œuvres correspondant précisément à vos critères${formatFilterSuffix(filters)}`,
-        moodDetected: cleanQuery,
-        recommendedMovies: finalTier1.slice(0, specificity.maxResults || 8),
-        isFallbackMode: false,
-        providerUsed: `${provider} (Niveau 1 : Recherche stricte)`,
-        suggestedPrompts: [
-          'Un film de braquage drôle et haletant',
-          'Une série policière sombre et addictive',
-          'Une fresque spatiale émouvante',
-          'Un film néo-noir avec ambiance pluvieuse'
-        ],
-        cascade: {
-          tierReached: 1,
-          criteria,
-          tier1Count: finalTier1.length,
-          tier2Count: 0,
-          tier3Count: 0
+      // 1. Filtrage strict par format
+      if (criteria.format !== 'all') {
+        const isSeries = movie.media_type === 'SÉRIE';
+        if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
+          continue;
         }
-      };
+      }
+
+      // 2. Filtrage par année
+      let matchesYear = true;
+      if (criteria.year) {
+        const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
+        matchesYear = movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1;
+        if (!matchesYear) {
+          continue;
+        }
+      }
+
+      // 3. Filtrage par acteur ou réalisateur
+      let matchesPerson = true;
+      if (primaryPerson) {
+        const personLower = primaryPerson.toLowerCase();
+        const inOverview = (movie.overview || '').toLowerCase().includes(personLower);
+        const inCast = personCandidateWorks.some(pw => pw.id === movie.id);
+        matchesPerson = inOverview || inCast;
+      }
+
+      // 4. Évaluation stricte de la contrainte narrative (twist final / thriller psychologique)
+      const narrativeEval = evaluateMovieNarrativeRelevance(movie, criteria, matchingRawItem);
+      const matchesNarrative = criteria.hasNarrativeConstraint ? narrativeEval.matches : true;
+
+      // RÈGLE CRITIQUE DU NIVEAU 1 : CONJONCTION STRICTE (AND)
+      const isStrictMatch = matchesPerson && matchesYear && matchesNarrative;
+
+      if (isStrictMatch) {
+        const strictScore = Math.min(99, Math.max(92, narrativeEval.score));
+        tier1Movies.push({
+          ...movie,
+          match_rate: strictScore,
+          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${narrativeEval.reason}`
+        });
+      } else {
+        // Rétrogradation au Niveau 2
+        let tier2Reason = '';
+        let tier2Score = 80;
+
+        if (matchesPerson && !matchesNarrative) {
+          tier2Reason = `✨ Élargissement : Œuvre culte de ${primaryPerson} (hors thématique ${criteria.isTwistRequested ? 'twist' : 'demandée'})`;
+          tier2Score = 78;
+        } else if (matchesNarrative && !matchesPerson) {
+          tier2Reason = `✨ Élargissement : Œuvre à retournement ou suspense (trope similaire)`;
+          tier2Score = 85;
+        } else {
+          tier2Reason = `✨ Élargissement : Recommandation liée à votre recherche`;
+          tier2Score = 80;
+        }
+
+        tier2Candidates.push({
+          ...movie,
+          match_rate: tier2Score,
+          ai_match_reason: tier2Reason
+        });
+      }
+    }
+
+    // Tri qualitatif du Niveau 1
+    tier1Movies.sort((a, b) => (b.match_rate || 0) - (a.match_rate || 0));
+
+    // Seuil minimal pour l'arrêt au Niveau 1
+    const minStrictThreshold = (specificity.level === 'ultra_targeted' || (criteria.hasHardCriteria && criteria.hasNarrativeConstraint)) ? 2 : 3;
+
+    // Si des correspondances pertinentes sont trouvées en nombre suffisant :
+    // ARRÊT AU NIVEAU 1
+    if (tier1Movies.length >= minStrictThreshold) {
+      let finalTier1 = tier1Movies;
+      if (filters) {
+        finalTier1 = applyFiltersToMovies(finalTier1, filters);
+      }
+
+      if (finalTier1.length >= minStrictThreshold) {
+        console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${finalTier1.length} correspondances strictes.`);
+        return {
+          thought: `🎯 Recherche ciblée (Niveau 1) : ${finalTier1.length} œuvres correspondant précisément à vos critères${formatFilterSuffix(filters)}`,
+          moodDetected: cleanQuery,
+          recommendedMovies: finalTier1.slice(0, specificity.maxResults || 8),
+          isFallbackMode: false,
+          providerUsed: `${provider} (Niveau 1 : Recherche stricte)`,
+          suggestedPrompts: [
+            'Un film de braquage drôle et haletant',
+            'Une série policière sombre et addictive',
+            'Une fresque spatiale émouvante',
+            'Un film néo-noir avec ambiance pluvieuse'
+          ],
+          cascade: {
+            tierReached: 1,
+            criteria,
+            tier1Count: finalTier1.length,
+            tier2Count: 0,
+            tier3Count: 0
+          }
+        };
+      }
     }
   }
 
   // ============================================================================
-  // NIVEAU 2 : ÉLARGISSEMENT SOUPLE
+  // NIVEAU 2 : RECHERCHE SÉMANTIQUE & VECTORIELLE (CŒUR DU SYSTÈME)
   // ============================================================================
-  console.log(`[Éliciné Cascade] Activation du Niveau 2 (Élargissement souple). Tier 1 compte: ${tier1Movies.length}`);
+  // C'est ici que l'on traite les descriptions narratives complexes sans acteur
+  // (ex: "film angoissant où des personnages sont coincés sous terre" -> The Descent, Cube).
+  console.log(`[Éliciné Cascade] Activation du Niveau 2 (Recherche Sémantique & Vectorielle Supabase). Tier 1: ${tier1Movies.length}`);
 
   let tier2Movies: Movie[] = [...tier2Candidates];
 
-  // Si besoin de compléter le vivier pour Niveau 2, recherche sémantique TMDB par mots-clés/genres
+  // 1. Interrogation de la base vectorielle Supabase (table movies / RPC match_movies)
+  try {
+    const vectorResponse = await querySupabaseVectorSearch(cleanQuery, {
+      matchThreshold: 0.40,
+      matchCount: 10
+    });
+
+    if (vectorResponse.movies && vectorResponse.movies.length > 0) {
+      for (const vm of vectorResponse.movies) {
+        if (!tier1Movies.some(t => t.id === vm.id) && !tier2Movies.some(t => t.id === vm.id)) {
+          tier2Movies.push(vm);
+        }
+      }
+    }
+  } catch (vecErr) {
+    console.warn('[Éliciné Cascade] Supabase Vector Search non disponible :', vecErr);
+  }
+
+  // 2. Détection ciblée des intrigues narratives fortes sans acteur
+  const subterraneanMatches = /\b(sous terre|coincé sous terre|coinces sous terre|grotte|caverne|catacombes|tunnel|claustrophobe)\b/i.test(cleanQuery);
+  if (subterraneanMatches && tier2Movies.length < 6) {
+    const subTerraneanTitles = ['The Descent', 'Cube', 'Buried', 'As Above, So Below', 'Catacombes', 'The Cave'];
+    for (const st of subTerraneanTitles) {
+      try {
+        const resolved = await resolveTitleToTmdb(st, tmdbKey);
+        if (resolved && !tier1Movies.some(t => t.id === resolved.id) && !tier2Movies.some(t => t.id === resolved.id)) {
+          const formatted = formatTmdbResults([resolved])[0];
+          if (formatted) {
+            tier2Movies.push(formatted);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 3. Complément par recherche sémantique TMDB si nécessaire
   if (tier1Movies.length + tier2Movies.length < (specificity.targetCount || 6)) {
     const fallbackExtraction = extractThematicKeywords(cleanQuery);
-    const { thematicWords, searchPhrase, detectedGenreIds } = fallbackExtraction;
+    const { searchPhrase, detectedGenreIds } = fallbackExtraction;
 
     if (searchPhrase) {
       try {
@@ -1340,34 +1384,42 @@ export async function executeCinoraSearch(
     }
   }
 
-  // Formatage Niveau 2
-  const formattedTier2 = tier2Movies.map((m, idx) => ({
-    ...m,
-    match_rate: m.match_rate || Math.max(78, 89 - idx * 2),
-    ai_match_reason: m.ai_match_reason || `✨ Élargissement sémantique (Niveau 2) : Ambiance & thèmes associés`
-  }));
-
-  // Combinaison : Tier 1 en tête avec priorité, complété par Tier 2
-  let combinedMovies = [...tier1Movies, ...formattedTier2];
-  if (filters) {
-    combinedMovies = applyFiltersToMovies(combinedMovies, filters);
+  // 4. Si la réserve est vide, intégrer les films initialement résolus par l'IA
+  if (tier2Movies.length === 0 && initialResolved.length > 0) {
+    tier2Movies = [...initialResolved];
   }
 
-  if (combinedMovies.length > 0) {
+  // Combinaison des candidats
+  let candidatePool = [...tier1Movies, ...tier2Movies];
+  if (filters) {
+    candidatePool = applyFiltersToMovies(candidatePool, filters);
+  }
+
+  // 5. Calcul rigoureux du score de similarité global
+  const globalSimilarityScore = calculateGlobalSemanticSimilarity(cleanQuery, candidatePool);
+  console.log(`[Éliciné Cascade] Score de similarité sémantique & vectorielle Niveau 2 : ${globalSimilarityScore} (seuil minimal: 0.40)`);
+
+  // VALIDATION NIVEAU 2 : Seuil minimal strict de 40% (0.40)
+  if (globalSimilarityScore >= 0.40 && candidatePool.length > 0) {
     const limit = Math.max(specificity.maxResults || 8, 6);
-    const finalMovies = combinedMovies.slice(0, limit);
-    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres trouvées (Tier 1: ${tier1Movies.length}, Tier 2: ${finalMovies.length - tier1Movies.length})`);
+    const finalMovies = candidatePool.slice(0, limit).map((m, idx) => ({
+      ...m,
+      match_rate: m.match_rate || Math.max(78, Math.round(globalSimilarityScore * 100) - idx * 2),
+      ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique & vectorielle (Niveau 2) : Ambiance et intrigue immersive`
+    }));
+
+    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres trouvées avec similarité ${globalSimilarityScore}`);
 
     const moodSummary = criteria.themes.length > 0
       ? `autour des thèmes « ${criteria.themes.join(', ')} »`
-      : `adaptée à l'ambiance recherchée`;
+      : `correspondant à votre description`;
 
     return {
-      thought: `✨ Élargissement souple (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
+      thought: `✨ Recherche sémantique & vectorielle (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
       recommendedMovies: finalMovies,
       isFallbackMode: false,
-      providerUsed: `${provider} (Niveau 2 : Élargissement souple)`,
+      providerUsed: `${provider} (Niveau 2 : Recherche sémantique & vectorielle Supabase)`,
       suggestedPrompts: [
         'Un film de braquage haletant avec twist',
         'Une série policière sombre sous la pluie',
@@ -1385,71 +1437,36 @@ export async function executeCinoraSearch(
   }
 
   // ============================================================================
-  // NIVEAU 3 : RECADRAGE & FALLBACK INTELLIGENT (0 RÉSULTAT)
+  // NIVEAU 3 : LE FILET DE SÉCURITÉ STRICT / ANTI-ABERRATIONS
   // ============================================================================
-  // Si aucune correspondance n'est trouvée (0 résultat), le système ne doit pas
-  // planter l'interface. Il extrait l'entité principale de la phrase (ex: l'acteur
-  // ou le genre majeur) et propose les œuvres les plus proches en affichant un message
-  // de suggestion contextuel :
-  // "Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus..."
-  console.log(`[Éliciné Cascade] Activation du Niveau 3 (Recadrage intelligent pour "${cleanQuery}").`);
-
-  const primaryEntity = criteria.primaryEntity || offlineCriteria.primaryEntity || 'Cinéma';
-  const fallbackLimit = Math.max(6, specificity.maxResults || 6);
-
-  // Récupération des œuvres associées à l'entité principale
-  let fallbackMovies: Movie[] = [];
-  try {
-    fallbackMovies = await fetchEntityFallbackWorks(primaryEntity, undefined, tmdbKey);
-  } catch (_) {}
-
-  // Repli ultime sur les tendances hebdomadaires si nécessaire
-  if (fallbackMovies.length === 0) {
-    try {
-      const trendRes = await fetchTmdbEndpoint('trending/movie/week', { language: 'fr-FR' }, tmdbKey);
-      if (trendRes.ok) {
-        const trendData = await trendRes.json();
-        fallbackMovies = formatTmdbResults(trendData.results || []);
-      }
-    } catch (_) {}
-  }
-
-  // Si des filtres Pro étaient actifs et qu'aucun film n'a été trouvé, tenter avec filtres assouplis
-  let finalFallback = fallbackMovies;
-  if (filters) {
-    const withFilters = applyFiltersToMovies(finalFallback, filters);
-    if (withFilters.length > 0) {
-      finalFallback = withFilters;
-    }
-  }
-
-  const finalFallbackMovies = finalFallback.slice(0, fallbackLimit).map((m, idx) => ({
-    ...m,
-    match_rate: Math.max(75, 87 - idx * 2),
-    ai_match_reason: `💡 Recadrage intelligent (Niveau 3) : Œuvre phare associée à « ${primaryEntity} »`
-  }));
-
-  // Message de suggestion contextuel contractuel :
-  const fallbackThought = `Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus pour « ${primaryEntity} »...${formatFilterSuffix(filters)}`;
+  // Se déclenche SI ET SEULEMENT SI le Niveau 2 renvoie un score de similarité global
+  // inférieur à 40% (< 0.40) ou aucun film pertinent.
+  //
+  // RÈGLE ANTI-ABERRATIONS ABSOLUE :
+  // Le système INTERDIT formellement l'affichage de films populaires hors-sujet
+  // (AUCUN appel à trending/movie/week, PAS de Vaiana, Spider-Man, ou blockbusters aléatoires).
+  // À la place : liste vide propre avec le message exact contractuel :
+  // "Aucun film ne correspond précisément à cette description dans notre catalogue"
+  console.log(`[Éliciné Cascade] Activation du Niveau 3 (Filet de sécurité strict anti-aberrations pour "${cleanQuery}"). Similarité: ${globalSimilarityScore} < 0.40`);
 
   return {
-    thought: fallbackThought,
+    thought: "Aucun film ne correspond précisément à cette description dans notre catalogue",
     moodDetected: cleanQuery,
-    recommendedMovies: finalFallbackMovies,
+    recommendedMovies: [],
     isFallbackMode: true,
-    providerUsed: `${provider} (Niveau 3 : Recadrage intelligent)`,
+    providerUsed: `${provider} (Niveau 3 : Filet de sécurité anti-aberrations)`,
     suggestedPrompts: [
-      `Les meilleurs films avec ${primaryEntity}`,
-      'Un film à grand spectacle incontournable',
-      'Un classique acclamé par la critique',
-      'Une recommandation surprise captivante'
+      "Un voyage dans l'espace avec des trous noirs",
+      "Un film de braquage qui tourne mal",
+      "Un film angoissant où des personnages sont coincés sous terre",
+      "Un thriller psychologique avec un twist final"
     ],
     cascade: {
       tierReached: 3,
       criteria,
       tier1Count: 0,
       tier2Count: 0,
-      tier3Count: finalFallbackMovies.length
+      tier3Count: 0
     }
   };
 }

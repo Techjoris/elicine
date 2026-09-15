@@ -99,5 +99,40 @@ export default async function handler(req, res) {
     });
   }
 
+  // Action : Recherche vectorielle directe Supabase (Niveau 2)
+  if (req.method === 'POST' && (action === 'vector' || req.body?.action === 'vector')) {
+    const { queryEmbedding, queryText, matchThreshold = 0.40, matchCount = 10 } = req.body || {};
+    
+    if (supabaseServer && Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
+      try {
+        const { data, error } = await supabaseServer.rpc('match_movies', {
+          query_embedding: queryEmbedding,
+          match_threshold: Number(matchThreshold) || 0.40,
+          match_count: Number(matchCount) || 10
+        });
+
+        if (!error && Array.isArray(data)) {
+          const topScore = data[0]?.similarity || 0;
+          return res.status(200).json({
+            success: true,
+            movies: data,
+            similarityScore: topScore,
+            isLowSimilarity: topScore < (Number(matchThreshold) || 0.40)
+          });
+        }
+      } catch (rpcErr) {
+        console.warn('[API /api/search] RPC match_movies non disponible :', rpcErr?.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      movies: [],
+      similarityScore: 0,
+      isLowSimilarity: true,
+      message: "Recherche vectorielle native non disponible ou aucun résultat au-dessus du seuil"
+    });
+  }
+
   return res.status(200).json({ success: true, message: "Service de recherche actif" });
 }
