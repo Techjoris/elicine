@@ -1,25 +1,29 @@
 /**
- * Service d'envoi d'e-mails transactionnels via l'API Resend pour Éliciné
+ * Service d'envoi d'e-mails transactionnels via le SDK Resend officiel pour Éliciné
  * https://resend.com/docs/api-reference/emails/send-email
  */
+import { Resend } from 'resend';
+
+// Initialisation du client SDK Resend
+const resendApiKey = (
+  process.env.RESEND_API_KEY || 
+  process.env.VITE_RESEND_API_KEY || 
+  ''
+).trim();
+
+export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 /**
- * Envoie un email via l'API REST officielle de Resend
+ * Envoie un email via le SDK officiel Resend (avec fallback fetch si besoin)
  */
 export async function sendEmailWithResend({ to, subject, html, text }) {
-  const apiKey = (
-    process.env.RESEND_API_KEY || 
-    process.env.VITE_RESEND_API_KEY || 
-    ''
-  ).trim();
-
   const fromEmail = (
     process.env.RESEND_FROM_EMAIL || 
     process.env.RESEND_EMAIL || 
-    'Éliciné <support@elicine.app>'
+    'Éliciné <onboarding@elicine.app>'
   ).trim();
 
-  if (!apiKey) {
+  if (!resendApiKey) {
     console.warn('[Resend] RESEND_API_KEY absente. Simulation envoi à :', to, `(${subject})`);
     return { success: false, simulated: true, message: 'RESEND_API_KEY non configurée' };
   }
@@ -27,32 +31,50 @@ export async function sendEmailWithResend({ to, subject, html, text }) {
   const cleanTo = Array.isArray(to) ? to : [to];
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    let resultId = null;
+
+    if (resend) {
+      const response = await resend.emails.send({
         from: fromEmail,
         to: cleanTo,
         subject,
         html,
         text: text || undefined
-      })
-    });
+      });
 
-    const data = await res.json().catch(() => ({}));
+      if (response.error) {
+        console.error('[Resend SDK Error]:', response.error);
+        return { success: false, error: response.error };
+      }
+      resultId = response.data?.id;
+    } else {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: cleanTo,
+          subject,
+          html,
+          text: text || undefined
+        })
+      });
 
-    if (!res.ok) {
-      console.error(`[Resend Error ${res.status}]:`, data);
-      return { success: false, status: res.status, error: data };
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error(`[Resend Error ${res.status}]:`, data);
+        return { success: false, status: res.status, error: data };
+      }
+      resultId = data?.id;
     }
 
-    console.log(`[Resend Success] Email envoyé avec succès à ${cleanTo.join(', ')} (ID: ${data?.id})`);
-    return { success: true, id: data?.id };
+    console.log(`[Resend Success] Email envoyé avec succès à ${cleanTo.join(', ')} (ID: ${resultId})`);
+    return { success: true, id: resultId };
   } catch (err) {
-    console.error('[Resend Network Exception]:', err?.message || err);
+    console.error('[Resend Exception]:', err?.message || err);
     return { success: false, error: err?.message || err };
   }
 }

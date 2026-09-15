@@ -71,8 +71,8 @@ export async function fetchMovieDetails(
       title: data.title || data.name || '',
       original_title: data.original_title || data.original_name,
       overview: data.overview || '',
-      genres: data.genres || [],
-      runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : undefined),
+      genres: Array.isArray(data.genres) ? data.genres : [],
+      runtime: data.runtime || (Array.isArray(data.episode_run_time) ? data.episode_run_time[0] : undefined),
       release_date: data.release_date || data.first_air_date,
       vote_average: data.vote_average,
       vote_count: data.vote_count
@@ -411,54 +411,55 @@ export async function fetchMoviesByPlatform({
 /**
  * Sélectionne le meilleur trailer YouTube selon la priorité linguistique et qualitative
  */
-export function extractBestTrailer(videos: any[], userLang: string = 'fr'): string | null {
-  if (!Array.isArray(videos) || videos.length === 0) return null;
+export function extractBestTrailer(videos: any, userLang: string = 'fr'): string | null {
+  const rawList = Array.isArray(videos) ? videos : (Array.isArray(videos?.results) ? videos.results : []);
+  if (!Array.isArray(rawList) || rawList.length === 0) return null;
 
   // Filtrer uniquement les vidéos hébergées sur YouTube avec une clé valide
-  const youtubeVideos = videos.filter((v: any) => v && (v.site === 'YouTube' || !v.site) && Boolean(v.key));
-  if (youtubeVideos.length === 0) return null;
+  const youtubeVideos = rawList.filter((v: any) => v && (v.site === 'YouTube' || !v.site) && Boolean(v.key));
+  if (!Array.isArray(youtubeVideos) || youtubeVideos.length === 0) return null;
 
   const targetLang = (userLang || 'fr').toLowerCase().slice(0, 2);
 
   // 1. Chercher un élément de type "Trailer" avec iso_639_1 === userLang (ex: 'fr')
   const localizedTrailers = youtubeVideos.filter(
-    (v: any) => v.type === 'Trailer' && v.iso_639_1?.toLowerCase() === targetLang
+    (v: any) => v && v.type === 'Trailer' && v.iso_639_1?.toLowerCase() === targetLang
   );
-  if (localizedTrailers.length > 0) {
-    const bestOfficial = localizedTrailers.find((v: any) => v.official === true) || localizedTrailers[0];
+  if (Array.isArray(localizedTrailers) && localizedTrailers.length > 0) {
+    const bestOfficial = localizedTrailers.find((v: any) => v && v.official === true) || localizedTrailers[0];
     if (bestOfficial?.key) return bestOfficial.key;
   }
 
   // 2. Si non trouvé, chercher un élément de type "Teaser" ou "Clip" avec iso_639_1 === userLang
   const localizedTeasersOrClips = youtubeVideos.filter(
-    (v: any) => (v.type === 'Teaser' || v.type === 'Clip') && v.iso_639_1?.toLowerCase() === targetLang
+    (v: any) => v && (v.type === 'Teaser' || v.type === 'Clip') && v.iso_639_1?.toLowerCase() === targetLang
   );
-  if (localizedTeasersOrClips.length > 0) {
-    const bestTeaser = localizedTeasersOrClips.find((v: any) => v.official === true) || localizedTeasersOrClips[0];
+  if (Array.isArray(localizedTeasersOrClips) && localizedTeasersOrClips.length > 0) {
+    const bestTeaser = localizedTeasersOrClips.find((v: any) => v && v.official === true) || localizedTeasersOrClips[0];
     if (bestTeaser?.key) return bestTeaser.key;
   }
 
   // 3. Si non trouvé, chercher un élément officiel de type "Trailer" avec iso_639_1 === 'en' (ou official === true)
   const englishOfficialTrailer = youtubeVideos.find(
-    (v: any) => v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || !v.iso_639_1) && v.official === true
+    (v: any) => v && v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || !v.iso_639_1) && v.official === true
   );
   if (englishOfficialTrailer?.key) return englishOfficialTrailer.key;
 
   const englishTrailer = youtubeVideos.find(
-    (v: any) => v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
+    (v: any) => v && v.type === 'Trailer' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
   );
   if (englishTrailer?.key) return englishTrailer.key;
 
-  const anyTrailer = youtubeVideos.find((v: any) => v.type === 'Trailer');
+  const anyTrailer = youtubeVideos.find((v: any) => v && v.type === 'Trailer');
   if (anyTrailer?.key) return anyTrailer.key;
 
   // 4. Si non trouvé, chercher un élément de type "Teaser" avec iso_639_1 === 'en'
   const englishTeaser = youtubeVideos.find(
-    (v: any) => v.type === 'Teaser' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
+    (v: any) => v && v.type === 'Teaser' && (v.iso_639_1?.toLowerCase() === 'en' || v.official === true)
   );
   if (englishTeaser?.key) return englishTeaser.key;
 
-  const anyTeaser = youtubeVideos.find((v: any) => v.type === 'Teaser');
+  const anyTeaser = youtubeVideos.find((v: any) => v && v.type === 'Teaser');
   if (anyTeaser?.key) return anyTeaser.key;
 
   // 5. En dernier recours, prendre la première vidéo YouTube disponible dans le tableau
@@ -778,22 +779,22 @@ export async function searchPersonAndGetWorks(
         const creditsData = await creditsRes.json();
         let pool: any[] = [];
         if (role === 'crew') {
-          pool = creditsData.crew || [];
+          pool = Array.isArray(creditsData.crew) ? creditsData.crew : [];
         } else if (role === 'cast') {
-          pool = creditsData.cast || [];
+          pool = Array.isArray(creditsData.cast) ? creditsData.cast : [];
         } else {
-          pool = [...(creditsData.cast || []), ...(creditsData.crew || [])];
+          pool = [...(Array.isArray(creditsData.cast) ? creditsData.cast : []), ...(Array.isArray(creditsData.crew) ? creditsData.crew : [])];
         }
 
         // Re-ranking thématique / sémantique des crédits
-        const evaluated = pool
+        const evaluated = (Array.isArray(pool) ? pool : [])
           .filter((m: any) => m && (m.vote_count || 0) >= 15)
           .map((m: any) => {
             let score = m.popularity || 0;
             const tLower = (m.title || m.name || '').toLowerCase().trim();
             const oLower = (m.original_title || m.original_name || '').toLowerCase().trim();
             const ovLower = (m.overview || '').toLowerCase();
-            const genreIds = (m.genre_ids || []) as number[];
+            const genreIds = (Array.isArray(m.genre_ids) ? m.genre_ids : []) as number[];
 
             if (thematicFilter?.isTwistRequested) {
               if (KNOWN_TWIST_MOVIES.has(tLower) || KNOWN_TWIST_MOVIES.has(oLower)) {
@@ -813,7 +814,7 @@ export async function searchPersonAndGetWorks(
                   score -= 500;
                 }
               }
-            } else if (thematicFilter?.narrativeCues && thematicFilter.narrativeCues.length > 0) {
+            } else if (thematicFilter?.narrativeCues && Array.isArray(thematicFilter.narrativeCues) && thematicFilter.narrativeCues.length > 0) {
               for (const cue of thematicFilter.narrativeCues) {
                 if (ovLower.includes(cue.toLowerCase()) || tLower.includes(cue.toLowerCase())) {
                   score += 400;
@@ -824,7 +825,7 @@ export async function searchPersonAndGetWorks(
             return { item: m, score };
           });
 
-        const sorted = evaluated
+        const sorted = (Array.isArray(evaluated) ? evaluated : [])
           .sort((a: any, b: any) => b.score - a.score)
           .map((e: any) => e.item)
           .slice(0, 12);
@@ -836,7 +837,7 @@ export async function searchPersonAndGetWorks(
     } catch (_) {}
 
     // 3. Repli sur known_for si combined_credits n'a rien renvoyé
-    const knownForList = (person.known_for || []).filter(
+    const knownForList = (Array.isArray(person?.known_for) ? person.known_for : []).filter(
       (m: any) => m && (m.media_type === 'movie' || m.media_type === 'tv' || !m.media_type)
     );
     if (knownForList.length > 0) {
@@ -993,13 +994,13 @@ export function formatTmdbResults(results: any[]): Movie[] {
 
   // Dédupliquer par ID TMDB tout en préservant l'ordre
   const seenIds = new Set<number>();
-  const uniqueItems = expandedItems.filter(item => {
+  const uniqueItems = (Array.isArray(expandedItems) ? expandedItems : []).filter(item => {
     if (!item?.id || seenIds.has(item.id)) return false;
     seenIds.add(item.id);
     return true;
   });
 
-  return uniqueItems.map((item) => ({
+  return (Array.isArray(uniqueItems) ? uniqueItems : []).map((item) => ({
     id: item.id,
     title: item.title || item.name,
     original_title: item.original_title || item.original_name,
@@ -1012,7 +1013,7 @@ export function formatTmdbResults(results: any[]): Movie[] {
     runtime: 120,
     media_type: item.media_type === 'tv' ? 'SÉRIE' : 'FILM',
     primary_platform: item.id % 3 === 0 ? 'Prime Video' : item.id % 2 === 0 ? 'Canal+' : 'Netflix',
-    genres: (item.genre_ids || [18, 878]).map((gid: number) => ({
+    genres: (Array.isArray(item.genre_ids) ? item.genre_ids : [18, 878]).map((gid: number) => ({
       id: gid,
       name: GENRE_MAP[gid] || 'Cinéma'
     })),

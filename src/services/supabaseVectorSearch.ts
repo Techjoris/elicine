@@ -107,7 +107,7 @@ export function calculateGlobalSemanticSimilarity(
     const titleLower = (movie.title || movie.name || '').toLowerCase();
     const origLower = (movie.original_title || movie.original_name || '').toLowerCase();
     const overviewLower = (movie.overview || '').toLowerCase();
-    const genreIds = (movie.genre_ids || movie.genres?.map((g: any) => typeof g === 'number' ? g : g.id) || []) as number[];
+    const genreIds = (Array.isArray(movie.genre_ids) ? movie.genre_ids : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : [])) as number[];
 
     // A. Présence dans les films archétypaux du trope
     if (targetConceptFilms.some(tf => titleLower.includes(tf) || origLower.includes(tf))) {

@@ -171,15 +171,27 @@ export const MovieDetailModal: React.FC = () => {
 
   const displayTitle = localizedDetails?.title || selectedMovie.title;
   const displayOriginalTitle = localizedDetails?.original_title || selectedMovie.original_title;
-  const currentGenres = (localizedDetails?.genres && localizedDetails.genres.length > 0)
+  
+  // Sécurisation stricte des genres TMDB (tableaux d'objets, tableaux de chaînes ou formats hétérogènes)
+  const rawGenres = (localizedDetails?.genres && Array.isArray(localizedDetails.genres) && localizedDetails.genres.length > 0)
     ? localizedDetails.genres
-    : (selectedMovie.genres || []);
+    : (Array.isArray(selectedMovie?.genres) ? selectedMovie.genres : []);
 
-  // 3. Correction du double badge "Série" : dédupliquer et exclure la redondance
+  const normalizedGenres = (Array.isArray(rawGenres) ? rawGenres : [])
+    .map((g: any, index: number) => {
+      if (!g) return null;
+      if (typeof g === 'string') return { id: index, name: g };
+      if (typeof g === 'object' && g.name) return { id: g.id || index, name: String(g.name) };
+      return null;
+    })
+    .filter((g): g is { id: number | string; name: string } => g !== null && Boolean(g.name));
+
+  // Correction du double badge "Série" : dédupliquer et exclure la redondance
   const uniqueGenres = Array.from(
     new Map(
-      currentGenres
+      (Array.isArray(normalizedGenres) ? normalizedGenres : [])
         .filter(g => {
+          if (!g || !g.name || typeof g.name !== 'string') return false;
           const n = g.name.toLowerCase().trim();
           return n !== 'série' && n !== 'serie' && n !== 'film';
         })
@@ -485,7 +497,7 @@ export const MovieDetailModal: React.FC = () => {
             ) : (
               <>
                 {/* Cas local : lecture directe */}
-                {providerData.svod.status === 'local' && (
+                {providerData.svod.status === 'local' && Array.isArray(providerData.svod.providers) && (
                   <div className="flex flex-wrap gap-2">
                     {providerData.svod.providers.map((p, i) => (
                       <button
@@ -515,7 +527,7 @@ export const MovieDetailModal: React.FC = () => {
                         {t.vpnNeededDesc} <strong>{providerData.svod.flag} {providerData.svod.targetCountry}</strong> :
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                        {providerData.svod.providers.map((p, i) => (
+                        {Array.isArray(providerData.svod.providers) && providerData.svod.providers.map((p, i) => (
                           <button
                             key={i}
                             type="button"
@@ -554,7 +566,7 @@ export const MovieDetailModal: React.FC = () => {
           </div>
 
           {/* 2. SECTION ACHAT & LOCATION NUMÉRIQUE (VOD) */}
-          {!isLoadingProviders && providerData.vod && providerData.vod.length > 0 && (
+          {!isLoadingProviders && Array.isArray(providerData.vod) && providerData.vod.length > 0 && (
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-white/10 flex flex-col gap-2.5">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                 💳 {t.vodSection}
@@ -580,7 +592,7 @@ export const MovieDetailModal: React.FC = () => {
           )}
 
           {/* Cast */}
-          {selectedMovie.cast && selectedMovie.cast.length > 0 && (
+          {selectedMovie.cast && Array.isArray(selectedMovie.cast) && selectedMovie.cast.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                 <Users className="w-4 h-4" />

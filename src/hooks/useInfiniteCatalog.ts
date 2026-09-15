@@ -53,14 +53,15 @@ export function useInfiniteCatalog<T extends { id: number }>(
         fetchFnRef.current(2).catch(() => ({ results: [], total_pages: 1 }))
       ]);
 
-      const list1 = res1?.results ?? [];
-      const list2 = res2?.results ?? [];
+      const list1 = Array.isArray(res1?.results) ? res1.results : [];
+      const list2 = Array.isArray(res2?.results) ? res2.results : [];
 
       const combined = [...list1, ...list2];
       const existingKeys = new Set<string>();
       const deduplicated: T[] = [];
       for (const item of combined) {
-        const key = `${(item as any).media_type || ''}_${item.id}`;
+        if (!item) continue;
+        const key = `${(item as any).media_type || ''}_${(item as any).id}`;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
           deduplicated.push(item);
@@ -101,14 +102,15 @@ export function useInfiniteCatalog<T extends { id: number }>(
 
     try {
       const data = await fetchFnRef.current(nextPageNumber);
-      const results: T[] = data?.results ?? [];
+      const results: T[] = Array.isArray(data?.results) ? data.results : [];
       const serverTotal: number = Math.min(data?.total_pages ?? 10, 500);
 
       if (results.length > 0) {
         setItems(prev => {
-          const keys = new Set(prev.map(i => `${(i as any).media_type || ''}_${i.id}`));
-          const fresh = results.filter(i => !keys.has(`${(i as any).media_type || ''}_${i.id}`));
-          return [...prev, ...fresh];
+          const prevList = Array.isArray(prev) ? prev : [];
+          const keys = new Set(prevList.map(i => `${(i as any).media_type || ''}_${(i as any).id}`));
+          const fresh = results.filter(i => i && !keys.has(`${(i as any).media_type || ''}_${(i as any).id}`));
+          return [...prevList, ...fresh];
         });
         setTotal(serverTotal);
         if (nextPageNumber >= serverTotal) {

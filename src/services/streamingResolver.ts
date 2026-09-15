@@ -243,19 +243,20 @@ export const resolveStreamingAction = async (
   movie?: any
 ) => {
   const res = await getMediaProviders(movieId, mediaType, userCountryCode, movieTitle, apiKey, movie);
-  if (res.svod.status === 'local') {
+  if (res?.svod?.status === 'local') {
+    const rawProviders = Array.isArray(res?.svod?.providers) ? res.svod.providers : [];
     return {
       type: 'DIRECT' as const,
-      providers: res.svod.providers.map((p, idx) => {
-        const pKey = detectProviderKey(p.name);
-        const candidateUrl = p.url || p.deepLink;
+      providers: rawProviders.map((p, idx) => {
+        const pKey = detectProviderKey(p?.name || '');
+        const candidateUrl = p?.url || p?.deepLink;
         const actionUrl = (!candidateUrl || isIntermediaryWatchLink(candidateUrl))
           ? getPlatformDirectUrl({
               providerKey: pKey,
-              providerName: p.name,
+              providerName: p?.name || '',
               movieTitle,
               movie,
-              watchProviderLink: res.svod.justWatchLink,
+              watchProviderLink: res.svod?.justWatchLink,
               netflixId: movie?.netflix_id || movie?.netflixId,
               primeId: movie?.prime_id || movie?.primeId,
               disneyId: movie?.disney_id || movie?.disneyId
@@ -264,8 +265,8 @@ export const resolveStreamingAction = async (
 
         return {
           id: idx + 1,
-          name: p.name,
-          logo: p.logo,
+          name: p?.name || 'Streaming',
+          logo: p?.logo || null,
           providerKey: pKey,
           actionUrl,
           deepLink: actionUrl
@@ -273,19 +274,20 @@ export const resolveStreamingAction = async (
       })
     };
   }
-  if (res.svod.status === 'vpn_needed') {
+  if (res?.svod?.status === 'vpn_needed') {
     const affiliateVpnUrl = getVpnAffiliateUrl('nordvpn');
+    const rawProviders = Array.isArray(res?.svod?.providers) ? res.svod.providers : [];
     return {
       type: 'VPN_REQUIRED' as const,
-      marketLabel: res.svod.targetCountry || 'USA',
-      marketFlag: res.svod.flag || '🇺🇸',
+      marketLabel: res.svod?.targetCountry || 'USA',
+      marketFlag: res.svod?.flag || '🇺🇸',
       marketCode: 'US',
       vpnUrl: affiliateVpnUrl,
-      providers: res.svod.providers.map((p, idx) => ({
+      providers: rawProviders.map((p, idx) => ({
         id: idx + 1,
-        name: p.name,
-        logo: p.logo,
-        providerKey: detectProviderKey(p.name),
+        name: p?.name || 'Streaming',
+        logo: p?.logo || null,
+        providerKey: detectProviderKey(p?.name || ''),
         vpnUrl: affiliateVpnUrl
       }))
     };

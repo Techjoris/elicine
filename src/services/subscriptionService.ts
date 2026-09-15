@@ -193,8 +193,14 @@ export const subscriptionService = {
       localStorage.setItem(PENDING_SUB_STORAGE_KEY, JSON.stringify(finalSub));
 
       const existingRaw = localStorage.getItem(ALL_SUBS_STORAGE_KEY);
-      const existing: ProSubscription[] = existingRaw ? JSON.parse(existingRaw) : [];
-      const updatedList = [finalSub, ...existing.filter(s => s.id !== finalSub.id)];
+      let existing: ProSubscription[] = [];
+      try {
+        const parsed = existingRaw ? JSON.parse(existingRaw) : [];
+        existing = Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        existing = [];
+      }
+      const updatedList = [finalSub, ...existing.filter(s => s && s.id !== finalSub.id)];
       localStorage.setItem(ALL_SUBS_STORAGE_KEY, JSON.stringify(updatedList));
     } catch (e) {
       console.error('[subscriptionService] Erreur persistance locale:', e);

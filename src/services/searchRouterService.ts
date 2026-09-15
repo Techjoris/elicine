@@ -792,7 +792,7 @@ export function evaluateMovieNarrativeRelevance(
   const titleLower = (movie.title || '').toLowerCase().trim();
   const origLower = (movie.original_title || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
-  const genreIds = (movie.genre_ids || movie.genres?.map((g: any) => typeof g === 'number' ? g : g.id) || []) as number[];
+  const genreIds = (Array.isArray(movie.genre_ids) ? movie.genre_ids : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : [])) as number[];
 
   // 1. Si un twist / dénouement surprenant est requis
   if (criteria.isTwistRequested) {
@@ -908,7 +908,7 @@ export function evaluateStructuredMovieMatch(
   const titleLower = (movie.title || '').toLowerCase().trim();
   const origLower = (movie.original_title || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
-  const genreIds = (movie.genre_ids || movie.genres?.map((g: any) => typeof g === 'number' ? g : g.id) || []) as number[];
+  const genreIds = (Array.isArray(movie.genre_ids) ? movie.genre_ids : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : [])) as number[];
 
   // 2. Évaluation des cadres spatiaux et décors (ex: sous terre, espace, huis clos)
   if (criteria.spatialSettings && criteria.spatialSettings.length > 0) {

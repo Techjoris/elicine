@@ -53,9 +53,10 @@ export const CatalogView: React.FC = () => {
   );
 
   // Client-side rating filter (applied on top of server results)
+  const safeItems = Array.isArray(items) ? items : [];
   const filtered = minRating > 0
-    ? items.filter(m => m.vote_average >= minRating)
-    : items;
+    ? safeItems.filter(m => m && (m.vote_average || 0) >= minRating)
+    : safeItems;
 
   const handleSearch = () => {
     setActiveTab('search');
