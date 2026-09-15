@@ -353,36 +353,46 @@ async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
     }
   }
 
-  // ── Phase B.2 : Fallback TMDB (si Supabase indispo ou 0 résultat) ─────────
+  // ── Phase B.2 : Fallback TMDB par titre LLM (bien plus précis que la requête brute) ─
   const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
   if (!tmdbKey) {
-    console.warn('[API /api/search] [Phase B.2] Clé TMDB absente, impossible d\'interroger TMDB.');
+    console.warn('[API /api/search] [Phase B.2] Clé TMDB absente.');
     return [];
   }
 
-  // Recherche TMDB multi (films + séries) avec la requête brute
-  const searchTerms = [
-    rawQuery.slice(0, 100), // Requête complète
-    extractKeywords(rawQuery).slice(0, 4).join(' ') // Mots-clés principaux
-  ].filter(Boolean);
+  // Priorité : chercher chaque titre extrait par le LLM sur TMDB (très précis)
+  // Fallback : chercher la requête brute si aucun titre disponible
+  const tmdbSearchTerms = extractedTitles && extractedTitles.length > 0
+    ? extractedTitles.slice(0, 5).map(t => {
+        // Si le titre est de la forme "FR / EN", on prend les deux parties
+        const parts = t.split(/[/|]/).map(p => p.trim()).filter(p => p.length > 1);
+        return parts; // tableau de variantes à essayer
+      }).flat()
+    : [rawQuery.slice(0, 100)];
 
-  for (const term of searchTerms) {
-    if (!term || term.length < 3) continue;
+  const allTmdbResults = [];
+  const seenTmdbIds = new Set();
+
+  for (const term of tmdbSearchTerms) {
+    if (!term || term.length < 2 || allTmdbResults.length >= 10) break;
     try {
-      console.log(`[API /api/search] [Phase B.2] TMDB search : "${term.slice(0, 60)}"`);
+      console.log(`[API /api/search] [Phase B.2] TMDB titre : "${term.slice(0, 60)}"`);
       const tmdbRes = await fetchWithTimeout(
         `https://api.themoviedb.org/3/search/multi?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(term)}&language=fr-FR&page=1&include_adult=false`,
         { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-        6000
+        5000
       );
 
       if (!tmdbRes.ok) continue;
 
       const tmdbData = await tmdbRes.json();
-      const tmdbMovies = (tmdbData.results || [])
-        .filter(m => m.media_type === 'movie' || m.media_type === 'tv')
-        .slice(0, 10)
-        .map(m => ({
+      const hits = (tmdbData.results || [])
+        .filter(m => (m.media_type === 'movie' || m.media_type === 'tv') && !seenTmdbIds.has(m.id))
+        .slice(0, 3); // Max 3 résultats par titre pour éviter le bruit
+
+      for (const m of hits) {
+        seenTmdbIds.add(m.id);
+        allTmdbResults.push({
           id: m.id,
           tmdb_id: m.id,
           title: m.title || m.name || '',
@@ -395,19 +405,20 @@ async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
           vote_count: m.vote_count || 0,
           genres: Array.isArray(m.genre_ids) ? m.genre_ids.join(',') : '',
           media_type: m.media_type,
-          ai_badge: 'Recherche TMDB',
-          badge: 'Recherche TMDB',
-          ai_match_reason: 'Résultat TMDB correspondant à votre description',
-          match_rate: 75
-        }));
-
-      if (tmdbMovies.length > 0) {
-        console.log(`[API /api/search] [Phase B.2] ${tmdbMovies.length} résultat(s) TMDB.`);
-        return tmdbMovies;
+          ai_badge: 'Recommandation IA (TMDB)',
+          badge: 'Recommandation IA (TMDB)',
+          ai_match_reason: `Identifié par notre IA pour "${term}"`,
+          match_rate: 88
+        });
       }
     } catch (tmdbErr) {
-      console.warn('[API /api/search] [Phase B.2] TMDB échoué :', tmdbErr?.message);
+      console.warn('[API /api/search] [Phase B.2] TMDB échoué pour', term, ':', tmdbErr?.message);
     }
+  }
+
+  if (allTmdbResults.length > 0) {
+    console.log(`[API /api/search] [Phase B.2] ${allTmdbResults.length} résultat(s) TMDB.`);
+    return allTmdbResults;
   }
 
   return [];
