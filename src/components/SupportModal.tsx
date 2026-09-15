@@ -130,15 +130,33 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         currency
       });
 
+      const donorEmail = user?.email || 'support@elicine.app';
+      const donorName = user?.name || 'Cinéphile Bienfaiteur';
+
+      if (typeof sessionStorage !== 'undefined') {
+        try {
+          sessionStorage.setItem('elicine_last_donation', JSON.stringify({
+            email: donorEmail,
+            name: donorName,
+            amount,
+            currency
+          }));
+        } catch (_) {}
+      }
+
+      const returnUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/?payment=saspay_success&type=don&amount=${amount}&currency=${currency}&email=${encodeURIComponent(donorEmail)}`
+        : undefined;
+
       const data = await processSaspayCheckout({
         amount,
         currency,
         paymentType: 'tip',
         paymentMethod: 'mobile',
-        email: user?.email || 'support@elicine.app',
-        name: user?.name || 'Cinéphile Bienfaiteur',
+        email: donorEmail,
+        name: donorName,
         description: `Soutien Éliciné (${amount} ${currency})`,
-        returnUrl: typeof window !== 'undefined' ? `${window.location.origin}/?payment=saspay_success&type=don` : undefined,
+        returnUrl,
         skipRedirect: true
       });
 

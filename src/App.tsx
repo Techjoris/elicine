@@ -36,7 +36,8 @@ import {
   extractSaspayRedirectUrl, 
   getSaspayDefaultCurrency, 
   convertToSaspayCurrency,
-  formatPaymentErrorMessage 
+  formatPaymentErrorMessage,
+  triggerThankYouEmail
 } from './services/payment';
 
 import { useApp } from './context/AppContext';
@@ -123,13 +124,51 @@ export const AppContent: React.FC = () => {
       // Redirection vers la vue de vérification cryptographique et interrogation de la base de données.
       setActiveView('payment-callback');
     } else if (isTipSuccess) {
-      // Show the donation thank-you modal
+      // 1. Récupération des données du donateur depuis l'URL ou la session
+      let donorEmail = params.get('email') || params.get('customer_email') || user?.email || '';
+      let donorName = params.get('name') || params.get('customer_name') || user?.name || '';
+      let donorAmount = params.get('amount') || '200';
+      let donorCurrency = params.get('currency') || 'FCFA';
+      const donorRef = params.get('reference') || params.get('id') || `tip_${Date.now()}`;
+
+      if (typeof sessionStorage !== 'undefined') {
+        try {
+          const raw = sessionStorage.getItem('elicine_last_donation');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.email && !donorEmail) donorEmail = parsed.email;
+            if (parsed.name && !donorName) donorName = parsed.name;
+            if (parsed.amount) donorAmount = String(parsed.amount);
+            if (parsed.currency) donorCurrency = parsed.currency;
+            sessionStorage.removeItem('elicine_last_donation');
+          }
+        } catch (_) {}
+      }
+
+      // 2. Déclenchement direct du mail de remerciement via l'API interne
+      if (donorEmail) {
+        console.log('[App] ✉️ Déclenchement direct du mail de remerciement don pour :', donorEmail);
+        triggerThankYouEmail({
+          email: donorEmail,
+          customerName: donorName || 'Cinéphile',
+          amount: donorAmount,
+          currency: donorCurrency,
+          reference: donorRef,
+          isDonation: true
+        }).then(res => {
+          console.log('[App] Résultat envoi e-mail don direct :', res);
+        }).catch(err => {
+          console.warn('[App] Erreur envoi e-mail don direct :', err);
+        });
+      }
+
+      // 3. Affichage de la modale de remerciement
       setShowThankYouModal(true);
       setSuccessModal({ isOpen: true, type: 'tip' });
-      // Clean URL
+      // Nettoyage de l'URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [setActiveView]);
+  }, [setActiveView, user]);
 
   // 2 & 3. Restauration et réouverture automatique de la modale de paiement après authentification
   useEffect(() => {

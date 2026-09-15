@@ -629,4 +629,33 @@ export const handleSaspayPayment = async (
   });
 };
 
+/**
+ * Déclenche directement l'envoi de l'e-mail de remerciement via l'API interne /api/send-thank-you-email
+ */
+export async function triggerThankYouEmail(payload: {
+  email: string;
+  customerName?: string;
+  amount?: string | number;
+  currency?: string;
+  reference?: string;
+  isDonation?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  if (!payload.email || !payload.email.includes('@')) {
+    return { success: false, error: 'Email invalide' };
+  }
+
+  try {
+    const res = await fetch('/api/send-thank-you-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    return { success: res.ok && data.success, error: data.error };
+  } catch (err: any) {
+    console.warn('[triggerThankYouEmail] Exception:', err?.message || err);
+    return { success: false, error: err?.message || 'Erreur réseau' };
+  }
+}
+
 export const handleMonerooPayment = handleSaspayPayment;
