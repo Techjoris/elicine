@@ -6,7 +6,10 @@ import {
   SpecificityAnalysis, 
   extractHardCriteriaAndEntities, 
   ExtractedCriteria,
-  evaluateMovieNarrativeRelevance
+  evaluateMovieNarrativeRelevance,
+  evaluateStructuredMovieMatch,
+  SPATIAL_SETTINGS_MAP,
+  TONE_PATTERNS
 } from './searchRouterService';
 import { 
   calculateGlobalSemanticSimilarity, 
@@ -1108,6 +1111,9 @@ export async function executeCinoraSearch(
   const criteria: ExtractedCriteria = {
     actors: Array.from(new Set([...(offlineCriteria.actors || []), ...(aiCriteria?.actors || [])])),
     directors: Array.from(new Set([...(offlineCriteria.directors || []), ...(aiCriteria?.directors || [])])),
+    spatialSettings: Array.from(new Set([...(offlineCriteria.spatialSettings || []), ...((aiCriteria as any)?.spatial_settings || [])])),
+    situations: Array.from(new Set([...(offlineCriteria.situations || []), ...((aiCriteria as any)?.situations || [])])),
+    tones: Array.from(new Set([...(offlineCriteria.tones || []), ...((aiCriteria as any)?.tones || [])])),
     genres: Array.from(new Set([...(offlineCriteria.genres || []), ...(aiCriteria?.genres || [])])),
     era: offlineCriteria.era || aiCriteria?.era,
     year: offlineCriteria.year || aiCriteria?.year,
@@ -1117,9 +1123,10 @@ export async function executeCinoraSearch(
     themes: Array.from(new Set([...(offlineCriteria.themes || []), ...(aiCriteria?.themes || [])])),
     narrativeCues: Array.from(new Set(rawNarrativeCues)),
     isTwistRequested: isTwistReq,
-    hasNarrativeConstraint: offlineCriteria.hasNarrativeConstraint || isTwistReq || rawNarrativeCues.length > 0,
+    hasNarrativeConstraint: offlineCriteria.hasNarrativeConstraint || isTwistReq || rawNarrativeCues.length > 0 || (offlineCriteria.spatialSettings?.length || 0) > 0,
+    hasStructuredIntent: offlineCriteria.hasStructuredIntent || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length || (aiCriteria as any)?.spatial_settings?.length),
     primaryEntity: offlineCriteria.primaryEntity || aiCriteria?.primaryEntity,
-    hasHardCriteria: offlineCriteria.hasHardCriteria || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length)
+    hasHardCriteria: offlineCriteria.hasHardCriteria || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length || (aiCriteria as any)?.spatial_settings?.length)
   };
 
   // Résolution TMDB initiale des titres proposés par l'IA
@@ -1156,19 +1163,45 @@ export async function executeCinoraSearch(
     );
   }
 
+  // Récupération proactive des œuvres de référence pour le cadre spatial ou décor
+  let spatialCandidateWorks: Movie[] = [];
+  if (criteria.spatialSettings && criteria.spatialSettings.length > 0) {
+    for (const sKey of criteria.spatialSettings) {
+      const settingDef = SPATIAL_SETTINGS_MAP[sKey];
+      if (settingDef && settingDef.archetypeFilms) {
+        for (const archTitle of settingDef.archetypeFilms.slice(0, 6)) {
+          try {
+            const rawArch = await resolveTitleToTmdb(archTitle, tmdbKey);
+            if (rawArch) {
+              const formatted = formatTmdbResults([rawArch])[0];
+              if (formatted && !spatialCandidateWorks.some(sw => sw.id === formatted.id)) {
+                spatialCandidateWorks.push(formatted);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
   // ============================================================================
-  // NIVEAU 1 : RECHERCHE STRICTE / ENTITÉS
+  // NIVEAU 1 : ANALYSE D'INTENTION & FILTRAGE STRUCTURÉ INTELLIGENT
   // ============================================================================
+  // Évalue la conjonction stricte de la phrase :
+  // - Acteur / Réalisateur ET Contrainte narrative / Twist / Décor
+  // - OU Décor / Cadre spatial (souterrain, espace, huis clos) ET Ton (angoissant, suspense)
   const tier1Movies: Movie[] = [];
   const tier2Candidates: Movie[] = [];
 
   const allCandidatePool: Movie[] = [];
   const seenIds = new Set<number>();
 
-  // Si une contrainte narrative avec une personne est demandée, on injecte en priorité ses œuvres filtrées sémantiquement
-  const sourcePool = (criteria.hasNarrativeConstraint && personCandidateWorks.length > 0)
-    ? [...personCandidateWorks, ...initialResolved]
-    : [...initialResolved, ...personCandidateWorks];
+  // Priorité d'injection selon l'intention dominante
+  const sourcePool = (criteria.spatialSettings.length > 0 && spatialCandidateWorks.length > 0)
+    ? [...spatialCandidateWorks, ...initialResolved, ...personCandidateWorks]
+    : (criteria.hasNarrativeConstraint && personCandidateWorks.length > 0)
+      ? [...personCandidateWorks, ...initialResolved]
+      : [...initialResolved, ...personCandidateWorks];
 
   for (const m of sourcePool) {
     if (m?.id && !seenIds.has(m.id)) {
@@ -1177,12 +1210,8 @@ export async function executeCinoraSearch(
     }
   }
 
-  // RÈGLE SÉQUENTIELLE DU NIVEAU 1 :
-  // Le Niveau 1 n'est évalué QUE si des entités dures (acteurs, réalisateurs, format, année)
-  // sont formellement présentes dans la requête.
-  // Si aucune entité dure n'est détectée (ex: "film angoissant où des personnages sont coincés sous terre"),
-  // on passe AUTOMATIQUEMENT et IMMÉDIATEMENT au Niveau 2 (Vectoriel & Sémantique). NE PAS SAUTER AU NIVEAU 3 !
-  if (criteria.hasHardCriteria) {
+  // Si une intention structurée est présente (acteur, décor/cadre spatial, ton, format, année)
+  if (criteria.hasStructuredIntent || criteria.hasHardCriteria) {
     for (const movie of allCandidatePool) {
       const matchingRawItem = rawItems.find(
         r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
@@ -1206,7 +1235,7 @@ export async function executeCinoraSearch(
         }
       }
 
-      // 3. Filtrage par acteur ou réalisateur
+      // 3. Filtrage par personne (si spécifiée)
       let matchesPerson = true;
       if (primaryPerson) {
         const personLower = primaryPerson.toLowerCase();
@@ -1215,52 +1244,34 @@ export async function executeCinoraSearch(
         matchesPerson = inOverview || inCast;
       }
 
-      // 4. Évaluation stricte de la contrainte narrative (twist final / thriller psychologique)
-      const narrativeEval = evaluateMovieNarrativeRelevance(movie, criteria, matchingRawItem);
-      const matchesNarrative = criteria.hasNarrativeConstraint ? narrativeEval.matches : true;
-
-      // RÈGLE CRITIQUE DU NIVEAU 1 : CONJONCTION STRICTE (AND)
-      const isStrictMatch = matchesPerson && matchesYear && matchesNarrative;
+      // 4. Évaluation de l'intention globale structurée (Acteur + Twist, OU Décor + Ton)
+      const structuredEval = evaluateStructuredMovieMatch(movie, criteria, matchingRawItem);
+      const isStrictMatch = matchesPerson && matchesYear && structuredEval.matches;
 
       if (isStrictMatch) {
-        const strictScore = Math.min(99, Math.max(92, narrativeEval.score));
+        const strictScore = Math.min(99, Math.max(90, structuredEval.score));
         tier1Movies.push({
           ...movie,
           match_rate: strictScore,
-          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${narrativeEval.reason}`
+          ai_match_reason: `🎯 Intention ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${structuredEval.reason}`
         });
       } else {
-        // Rétrogradation au Niveau 2
-        let tier2Reason = '';
-        let tier2Score = 80;
-
-        if (matchesPerson && !matchesNarrative) {
-          tier2Reason = `✨ Élargissement : Œuvre culte de ${primaryPerson} (hors thématique ${criteria.isTwistRequested ? 'twist' : 'demandée'})`;
-          tier2Score = 78;
-        } else if (matchesNarrative && !matchesPerson) {
-          tier2Reason = `✨ Élargissement : Œuvre à retournement ou suspense (trope similaire)`;
-          tier2Score = 85;
-        } else {
-          tier2Reason = `✨ Élargissement : Recommandation liée à votre recherche`;
-          tier2Score = 80;
-        }
-
+        // Envoi en réserve pour Niveau 2
         tier2Candidates.push({
           ...movie,
-          match_rate: tier2Score,
-          ai_match_reason: tier2Reason
+          match_rate: Math.min(85, structuredEval.score || 78),
+          ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : Ambiance et intrigue immersive`
         });
       }
     }
 
-    // Tri qualitatif du Niveau 1
+    // Tri qualitatif du Niveau 1 par match_rate décroissant
     tier1Movies.sort((a, b) => (b.match_rate || 0) - (a.match_rate || 0));
 
-    // Seuil minimal pour l'arrêt au Niveau 1
-    const minStrictThreshold = (specificity.level === 'ultra_targeted' || (criteria.hasHardCriteria && criteria.hasNarrativeConstraint)) ? 2 : 3;
+    // Seuil minimal pour l'arrêt au Niveau 1 :
+    // 2 œuvres fortes pour les requêtes ciblées (Acteur + Twist, ou Décor + Ton), 3 pour les catalogues larges
+    const minStrictThreshold = (criteria.spatialSettings.length > 0 || criteria.isTwistRequested || specificity.level === 'ultra_targeted') ? 2 : 3;
 
-    // Si des correspondances pertinentes sont trouvées en nombre suffisant :
-    // ARRÊT AU NIVEAU 1
     if (tier1Movies.length >= minStrictThreshold) {
       let finalTier1 = tier1Movies;
       if (filters) {
@@ -1268,23 +1279,32 @@ export async function executeCinoraSearch(
       }
 
       if (finalTier1.length >= minStrictThreshold) {
-        console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${finalTier1.length} correspondances strictes.`);
+        const limit = specificity.maxResults || 8;
+        const selectedTier1 = finalTier1.slice(0, limit);
+        console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${selectedTier1.length} correspondances ciblées validées.`);
+
+        const intentSummary = primaryPerson
+          ? `avec ${primaryPerson}${criteria.isTwistRequested ? ' et twist' : ''}`
+          : criteria.spatialSettings.length > 0
+            ? `en décor ${criteria.spatialSettings[0]} (${criteria.tones.join(', ') || 'ambiance immersive'})`
+            : `correspondant précisément à vos critères`;
+
         return {
-          thought: `🎯 Recherche ciblée (Niveau 1) : ${finalTier1.length} œuvres correspondant précisément à vos critères${formatFilterSuffix(filters)}`,
+          thought: `🎯 Analyse d'intention (Niveau 1) : ${selectedTier1.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
           moodDetected: cleanQuery,
-          recommendedMovies: finalTier1.slice(0, specificity.maxResults || 8),
+          recommendedMovies: selectedTier1,
           isFallbackMode: false,
-          providerUsed: `${provider} (Niveau 1 : Recherche stricte)`,
+          providerUsed: `${provider} (Niveau 1 : Filtrage structuré intelligent)`,
           suggestedPrompts: [
-            'Un film de braquage drôle et haletant',
-            'Une série policière sombre et addictive',
-            'Une fresque spatiale émouvante',
-            'Un film néo-noir avec ambiance pluvieuse'
+            'Un film de braquage haletant avec twist',
+            'Une série policière sombre sous la pluie',
+            'Un chef-d\'œuvre de science-fiction dystopique',
+            'Une comédie feel-good et touchante'
           ],
           cascade: {
             tierReached: 1,
             criteria,
-            tier1Count: finalTier1.length,
+            tier1Count: selectedTier1.length,
             tier2Count: 0,
             tier3Count: 0
           }
@@ -1294,15 +1314,14 @@ export async function executeCinoraSearch(
   }
 
   // ============================================================================
-  // NIVEAU 2 : RECHERCHE SÉMANTIQUE & VECTORIELLE (CŒUR DU SYSTÈME)
+  // NIVEAU 2 : RECHERCHE SÉMANTIQUE VECTORIELLE & SECOURS ANTI-ABERRATIONS
   // ============================================================================
-  // C'est ici que l'on traite les descriptions narratives complexes sans acteur
-  // (ex: "film angoissant où des personnages sont coincés sous terre" -> The Descent, Cube).
-  console.log(`[Éliciné Cascade] Activation du Niveau 2 (Recherche Sémantique & Vectorielle Supabase). Tier 1: ${tier1Movies.length}`);
+  // S'active si le Niveau 1 (filtrage structuré) ne renvoie rien ou est insuffisant.
+  console.log(`[Éliciné Cascade] Activation du Niveau 2 (Recherche Sémantique Vectorielle Supabase). Tier 1: ${tier1Movies.length}`);
 
   let tier2Movies: Movie[] = [...tier2Candidates];
 
-  // 1. Interrogation de la base vectorielle Supabase (table movies / RPC match_movies)
+  // 1. Interrogation de la base vectorielle Supabase (RPC match_movies / pgvector)
   try {
     const vectorResponse = await querySupabaseVectorSearch(cleanQuery, {
       matchThreshold: 0.40,
@@ -1320,71 +1339,7 @@ export async function executeCinoraSearch(
     console.warn('[Éliciné Cascade] Supabase Vector Search non disponible :', vecErr);
   }
 
-  // 2. Détection ciblée des intrigues narratives fortes sans acteur
-  const subterraneanMatches = /\b(sous terre|coincé sous terre|coinces sous terre|grotte|caverne|catacombes|tunnel|claustrophobe)\b/i.test(cleanQuery);
-  if (subterraneanMatches && tier2Movies.length < 6) {
-    const subTerraneanTitles = ['The Descent', 'Cube', 'Buried', 'As Above, So Below', 'Catacombes', 'The Cave'];
-    for (const st of subTerraneanTitles) {
-      try {
-        const resolved = await resolveTitleToTmdb(st, tmdbKey);
-        if (resolved && !tier1Movies.some(t => t.id === resolved.id) && !tier2Movies.some(t => t.id === resolved.id)) {
-          const formatted = formatTmdbResults([resolved])[0];
-          if (formatted) {
-            tier2Movies.push(formatted);
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  // 3. Complément par recherche sémantique TMDB si nécessaire
-  if (tier1Movies.length + tier2Movies.length < (specificity.targetCount || 6)) {
-    const fallbackExtraction = extractThematicKeywords(cleanQuery);
-    const { searchPhrase, detectedGenreIds } = fallbackExtraction;
-
-    if (searchPhrase) {
-      try {
-        const searchRes = await fetchTmdbEndpoint('search/multi', {
-          query: searchPhrase,
-          language: 'fr-FR',
-          include_adult: false
-        }, tmdbKey);
-        if (searchRes.ok) {
-          const sData = await searchRes.json();
-          const formatted = formatTmdbResults(sData.results || []);
-          for (const m of formatted) {
-            if (!tier1Movies.some(t => t.id === m.id) && !tier2Movies.some(t => t.id === m.id)) {
-              tier2Movies.push(m);
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (tier1Movies.length + tier2Movies.length < 4 && detectedGenreIds.length > 0) {
-      try {
-        const genreQuery = detectedGenreIds.slice(0, 2).join(',');
-        const discRes = await fetchTmdbEndpoint('discover/movie', {
-          with_genres: genreQuery,
-          sort_by: 'vote_average.desc',
-          'vote_count.gte': 150,
-          language: 'fr-FR',
-          include_adult: false
-        }, tmdbKey);
-        if (discRes.ok) {
-          const dData = await discRes.json();
-          const formatted = formatTmdbResults(dData.results || []);
-          for (const m of formatted) {
-            if (!tier1Movies.some(t => t.id === m.id) && !tier2Movies.some(t => t.id === m.id)) {
-              tier2Movies.push(m);
-            }
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  // 4. Si la réserve est vide, intégrer les films initialement résolus par l'IA
+  // 2. Si la réserve est vide, intégrer les films initialement résolus par l'IA
   if (tier2Movies.length === 0 && initialResolved.length > 0) {
     tier2Movies = [...initialResolved];
   }
@@ -1395,9 +1350,9 @@ export async function executeCinoraSearch(
     candidatePool = applyFiltersToMovies(candidatePool, filters);
   }
 
-  // 5. Calcul rigoureux du score de similarité global
+  // 3. Calcul rigoureux du score de similarité vectorielle globale
   const globalSimilarityScore = calculateGlobalSemanticSimilarity(cleanQuery, candidatePool);
-  console.log(`[Éliciné Cascade] Score de similarité sémantique & vectorielle Niveau 2 : ${globalSimilarityScore} (seuil minimal: 0.40)`);
+  console.log(`[Éliciné Cascade] Score de similarité globale Niveau 2 : ${globalSimilarityScore} (seuil minimal: 0.40)`);
 
   // VALIDATION NIVEAU 2 : Seuil minimal strict de 40% (0.40)
   if (globalSimilarityScore >= 0.40 && candidatePool.length > 0) {
@@ -1405,25 +1360,25 @@ export async function executeCinoraSearch(
     const finalMovies = candidatePool.slice(0, limit).map((m, idx) => ({
       ...m,
       match_rate: m.match_rate || Math.max(78, Math.round(globalSimilarityScore * 100) - idx * 2),
-      ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique & vectorielle (Niveau 2) : Ambiance et intrigue immersive`
+      ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique vectorielle (Niveau 2) : Ambiance et immersion thématique`
     }));
 
-    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres trouvées avec similarité ${globalSimilarityScore}`);
+    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
 
     const moodSummary = criteria.themes.length > 0
       ? `autour des thèmes « ${criteria.themes.join(', ')} »`
       : `correspondant à votre description`;
 
     return {
-      thought: `✨ Recherche sémantique & vectorielle (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
+      thought: `✨ Recherche sémantique vectorielle (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
       recommendedMovies: finalMovies,
       isFallbackMode: false,
-      providerUsed: `${provider} (Niveau 2 : Recherche sémantique & vectorielle Supabase)`,
+      providerUsed: `${provider} (Niveau 2 : Recherche sémantique vectorielle Supabase)`,
       suggestedPrompts: [
         'Un film de braquage haletant avec twist',
         'Une série policière sombre sous la pluie',
-        "Un chef-d'œuvre de science-fiction dystopique",
+        'Un chef-d\'œuvre de science-fiction dystopique',
         'Une comédie feel-good et touchante'
       ],
       cascade: {
@@ -1437,24 +1392,19 @@ export async function executeCinoraSearch(
   }
 
   // ============================================================================
-  // NIVEAU 3 : LE FILET DE SÉCURITÉ STRICT / ANTI-ABERRATIONS
+  // FILET DE SÉCURITÉ DU NIVEAU 2 : ANTI-ABERRATIONS STRICT
   // ============================================================================
-  // Se déclenche SI ET SEULEMENT SI le Niveau 2 renvoie un score de similarité global
-  // inférieur à 40% (< 0.40) ou aucun film pertinent.
-  //
-  // RÈGLE ANTI-ABERRATIONS ABSOLUE :
-  // Le système INTERDIT formellement l'affichage de films populaires hors-sujet
-  // (AUCUN appel à trending/movie/week, PAS de Vaiana, Spider-Man, ou blockbusters aléatoires).
-  // À la place : liste vide propre avec le message exact contractuel :
-  // "Aucun film ne correspond précisément à cette description dans notre catalogue"
-  console.log(`[Éliciné Cascade] Activation du Niveau 3 (Filet de sécurité strict anti-aberrations pour "${cleanQuery}"). Similarité: ${globalSimilarityScore} < 0.40`);
+  // Se déclenche si similarité globale < 0.40 ou 0 film pertinent.
+  // INTERDICTION FORMELLE DE SORTIR DES BLOCKBUSTERS (Vaiana, Spider-Man, etc.).
+  // Retourne une liste vide propre et le message explicatif exact.
+  console.log(`[Éliciné Cascade] Filet de sécurité Niveau 2 anti-aberrations activé pour "${cleanQuery}" (similarité: ${globalSimilarityScore} < 0.40).`);
 
   return {
     thought: "Aucun film ne correspond précisément à cette description dans notre catalogue",
     moodDetected: cleanQuery,
     recommendedMovies: [],
     isFallbackMode: true,
-    providerUsed: `${provider} (Niveau 3 : Filet de sécurité anti-aberrations)`,
+    providerUsed: `${provider} (Niveau 2 : Filet de sécurité anti-aberrations)`,
     suggestedPrompts: [
       "Un voyage dans l'espace avec des trous noirs",
       "Un film de braquage qui tourne mal",
@@ -1462,7 +1412,7 @@ export async function executeCinoraSearch(
       "Un thriller psychologique avec un twist final"
     ],
     cascade: {
-      tierReached: 3,
+      tierReached: 2,
       criteria,
       tier1Count: 0,
       tier2Count: 0,

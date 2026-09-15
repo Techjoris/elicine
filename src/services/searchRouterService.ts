@@ -310,6 +310,9 @@ export function analyzeSearchIntent(queryText: string): SearchIntentResult {
 export interface ExtractedCriteria {
   actors: string[];
   directors: string[];
+  spatialSettings: string[];   // ex: ['souterrain', 'espace', 'huis_clos_confine', etc.]
+  situations: string[];        // ex: ['coincés sous terre', 'trou noir', 'cercueil', etc.]
+  tones: string[];             // ex: ['angoissant', 'twist', 'sombre', 'survie', etc.]
   genres: string[];
   era?: string;
   year?: number;
@@ -318,9 +321,154 @@ export interface ExtractedCriteria {
   narrativeCues: string[];
   isTwistRequested: boolean;
   hasNarrativeConstraint: boolean;
+  hasStructuredIntent: boolean;
   primaryEntity?: string;
   hasHardCriteria: boolean;
 }
+
+export interface SpatialSettingDefinition {
+  id: string;
+  triggers: string[];
+  situations: string[];
+  expectedGenres: number[]; // TMDB genre IDs (27: Horreur, 53: Thriller, 9648: Mystère, 878: SF, etc.)
+  archetypeFilms: string[];
+  keywords: string[];
+}
+
+export const SPATIAL_SETTINGS_MAP: Record<string, SpatialSettingDefinition> = {
+  souterrain: {
+    id: 'souterrain',
+    triggers: [
+      'sous terre', 'coincé sous terre', 'coincés sous terre', 'coinces sous terre', 'bloqué sous terre',
+      'bloqués sous terre', 'grotte', 'grottes', 'caverne', 'cavernes', 'spéléologie', 'speleologie',
+      'spéléo', 'speleo', 'catacombes', 'tunnel', 'tunnels', 'sous-sol', 'sous sol', 'mine', 'mines',
+      'crevasse', 'gouffre', 'enfermé sous terre', 'enfermés sous terre'
+    ],
+    situations: ['coincés sous terre', 'expédition spéléologique', 'exploration de catacombes', 'piégés sous terre', 'claustrophobie souterraine'],
+    expectedGenres: [27, 53, 9648, 12], // Horreur, Thriller, Mystère, Aventure
+    archetypeFilms: [
+      'The Descent', 'Cube', 'Buried', 'Catacombes', 'As Above, So Below', 'The Cave', 'Sanctum',
+      'The Descent: Part 2', 'Creep', 'La Colline a des yeux', 'Meurtres à la Saint-Valentin'
+    ],
+    keywords: ['grotte', 'grottes', 'caverne', 'spéléologie', 'catacombes', 'sous terre', 'souterrain', 'tunnel', 'piégé', 'coincé', 'créature', 'obscurité', 'profondeur']
+  },
+  espace: {
+    id: 'espace',
+    triggers: [
+      'dans l\'espace', 'espace', 'trou noir', 'station spatiale', 'vaisseau spatial', 'vaisseau',
+      'astronaute', 'cosmonaute', 'orbite', 'mars', 'lune', 'relativité', 'planète inconnue', 'tesseract'
+    ],
+    situations: ['voyage spatial', 'trou noir et dilatation temporelle', 'dérive spatiale', 'station orbitale'],
+    expectedGenres: [878, 12, 18], // SF, Aventure, Drame
+    archetypeFilms: [
+      'Interstellar', '2001 : L\'Odyssée de l\'espace', 'Gravity', 'Ad Astra', 'The Martian', 'Seul sur Mars',
+      'Moon', 'Apollo 13', 'First Man', 'Sunshine', 'Solaris', 'Event Horizon'
+    ],
+    keywords: ['espace', 'astronaute', 'station spatiale', 'trou noir', 'vaisseau', 'galaxie', 'orbite', 'gravité', 'terre']
+  },
+  huis_clos_confine: {
+    id: 'huis_clos_confine',
+    triggers: [
+      'huis clos', 'huis-clos', 'cercueil', 'enterré vivant', 'enterre vivant', 'bunker',
+      'pièce fermée', 'piece fermee', 'chambre forte', 'coffre-fort', 'cabine téléphonique',
+      'cabine telephonique', 'chambre d\'hôtel', 'cellule', 'dans une boîte', 'dans une boite'
+    ],
+    situations: ['enfermé dans un cercueil', 'bloqué dans une pièce', 'huis clos angoissant', 'bunker sous-terrain'],
+    expectedGenres: [53, 9648, 27, 80],
+    archetypeFilms: [
+      'Buried', '10 Cloverfield Lane', 'Panic Room', 'Saw', 'Phone Game', 'Phone Booth',
+      'Oxygen', 'Exam', 'The Platform', 'La Plateforme', 'Devil', 'Misery', 'Fenêtre sur cour', '12 Hommes en colère'
+    ],
+    keywords: ['enfermé', 'piégé', 'pièce', 'cercueil', 'bunker', 'huis clos', 'cellule', 'prisonnier', 'survie']
+  },
+  abysses_aquatique: {
+    id: 'abysses_aquatique',
+    triggers: [
+      'abysses', 'sous l\'eau', 'sous marin', 'sous-marin', 'fond des mers', 'fond de l\'océan',
+      'profondeurs marines', 'station sous-marine', 'plongée extrême'
+    ],
+    situations: ['équipage de sous-marin en péril', 'station sous-marine piégée', 'profondeurs océaniques'],
+    expectedGenres: [53, 878, 27, 28],
+    archetypeFilms: [
+      'Abyss', 'The Abyss', 'Sphere', 'Underwater', 'Das Boot', 'Le Bateau', 'K-19', 'Le Chant du loup',
+      'DeepStar Six', 'Leviathan'
+    ],
+    keywords: ['sous-marin', 'abysses', 'océan', 'profondeur', 'eau', 'torpille', 'immersion', 'pression']
+  },
+  asile_psychiatrique: {
+    id: 'asile_psychiatrique',
+    triggers: [
+      'île psychiatrique', 'ile psychiatrique', 'hôpital psychiatrique', 'hopital psychiatrique',
+      'asile', 'asile d\'aliénés', 'institution psychiatrique', 'manoir hanté', 'manoir isole'
+    ],
+    situations: ['enquête en hôpital psychiatrique', 'internement forcé', 'île prison psychiatrique'],
+    expectedGenres: [9648, 53, 18, 27],
+    archetypeFilms: [
+      'Shutter Island', 'Vol au-dessus d\'un nid de coucou', 'Gothika', 'Stonehearst Asylum', 'Session 9', 'The Ward'
+    ],
+    keywords: ['asile', 'psychiatrique', 'île', 'médecin', 'patient', 'hallucination', 'enquête', 'interné']
+  },
+  boucle_temporelle: {
+    id: 'boucle_temporelle',
+    triggers: [
+      'boucle temporelle', 'revit la même journée', 'revit la meme journee', 'recommence sans cesse',
+      'bloqué dans le temps', 'répète la journée', 'voyage dans le temps'
+    ],
+    situations: ['journée qui se répète à l\'infini', 'boucle temporelle de survie'],
+    expectedGenres: [878, 35, 53, 12],
+    archetypeFilms: [
+      'Un jour sans fin', 'Groundhog Day', 'Edge of Tomorrow', 'Source Code', 'Palm Springs', 'Happy Birthdead',
+      'Looper', 'ARQ', 'Triangle', 'Coherence'
+    ],
+    keywords: ['boucle', 'temps', 'répète', 'journée', 'matin', 'mort', 'recommence', 'mémoire']
+  }
+};
+
+export interface ToneDefinition {
+  id: string;
+  triggers: string[];
+  genres: number[];
+  intensity: 'distressing' | 'tense' | 'mindbending' | 'action' | 'light' | 'dark';
+}
+
+export const TONE_PATTERNS: Record<string, ToneDefinition> = {
+  distressing: {
+    id: 'distressing',
+    triggers: [
+      'angoissant', 'angoisse', 'oppressant', 'oppressante', 'terrifiant', 'flippant',
+      'peur', 'claustrophobe', 'claustrophobique', 'cauchemar', 'horreur', 'angoissante'
+    ],
+    genres: [27, 53], // Horreur, Thriller
+    intensity: 'distressing'
+  },
+  twist_mindbending: {
+    id: 'twist_mindbending',
+    triggers: [
+      'twist', 'twist final', 'retournement', 'chute finale', 'dénouement',
+      'révélation', 'fin choc', 'fin surprenante', 'psychologique'
+    ],
+    genres: [9648, 53, 878], // Mystère, Thriller, SF
+    intensity: 'mindbending'
+  },
+  survival_tense: {
+    id: 'survival_tense',
+    triggers: [
+      'survie', 'survival', 'piégé', 'bloqué', 'coincé', 'traqué',
+      'tendu', 'suspense', 'haletant'
+    ],
+    genres: [53, 28, 12],
+    intensity: 'tense'
+  },
+  dark_melancholic: {
+    id: 'dark_melancholic',
+    triggers: [
+      'sombre', 'noir', 'pluvieux', 'néo-noir', 'mélancolique',
+      'désespéré', 'glauque', 'poisseux'
+    ],
+    genres: [80, 18, 53],
+    intensity: 'dark'
+  }
+};
 
 const KNOWN_DIRECTORS_MAP: Record<string, string[]> = {
   'Christopher Nolan': ['christopher nolan', 'nolan'],
@@ -480,7 +628,28 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  // 7. Détection approfondie des contraintes narratives & twists
+  // 7. Détection approfondie des cadres spatiaux et décors (Niveau 1)
+  const spatialSettings: string[] = [];
+  const situations: string[] = [];
+  for (const [key, setting] of Object.entries(SPATIAL_SETTINGS_MAP)) {
+    if (setting.triggers.some(tr => lower.includes(tr))) {
+      spatialSettings.push(key);
+      for (const sit of setting.situations) {
+        if (!situations.includes(sit)) situations.push(sit);
+      }
+      if (!themes.includes(key)) themes.push(key);
+    }
+  }
+
+  // 8. Détection des tons et ambiances émotionnelles (Niveau 1)
+  const tones: string[] = [];
+  for (const [toneKey, toneDef] of Object.entries(TONE_PATTERNS)) {
+    if (toneDef.triggers.some(tr => lower.includes(tr))) {
+      tones.push(toneKey);
+    }
+  }
+
+  // 9. Détection approfondie des contraintes narratives & twists
   const narrativeCues: string[] = [];
   let isTwistRequested = false;
 
@@ -488,6 +657,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     isTwistRequested = true;
     if (!narrativeCues.includes('twist')) narrativeCues.push('twist');
     if (!themes.includes('twist')) themes.push('twist');
+    if (!tones.includes('twist_mindbending')) tones.push('twist_mindbending');
   }
 
   for (const p of SPECIFIC_PLOT_PATTERNS) {
@@ -510,15 +680,33 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  const hasNarrativeConstraint = isTwistRequested || narrativeCues.length > 0;
+  const hasNarrativeConstraint = isTwistRequested || narrativeCues.length > 0 || spatialSettings.length > 0;
 
-  // 8. Entité Principale (pour le Recadrage Niveau 3)
-  // Priorité : Acteur majeur > Réalisateur majeur > Genre majeur > Thème dominant > Mots clés
+  // 10. Calcul de l'intention globale structurée (Niveau 1)
+  // Vrai dès qu'une entité humaine, un cadre spatial, une situation ou un ton/twist est identifié
+  const hasStructuredIntent =
+    actors.length > 0 ||
+    directors.length > 0 ||
+    spatialSettings.length > 0 ||
+    situations.length > 0 ||
+    tones.length > 0 ||
+    isTwistRequested ||
+    year !== undefined ||
+    era !== undefined ||
+    format !== 'all';
+
+  // Le critère dur pour le Niveau 1 inclut désormais l'ensemble de l'intention structurée (acteur ET cadre spatial/situation)
+  const hasHardCriteria = hasStructuredIntent;
+
+  // 11. Entité Principale (pour le Recadrage et l'orientation)
+  // Priorité : Acteur majeur > Réalisateur majeur > Cadre spatial > Genre majeur > Thème dominant > Mots clés
   let primaryEntity: string | undefined;
   if (actors.length > 0) {
     primaryEntity = actors[0];
   } else if (directors.length > 0) {
     primaryEntity = directors[0];
+  } else if (spatialSettings.length > 0) {
+    primaryEntity = spatialSettings[0] === 'souterrain' ? 'Souterrain / Huis clos' : spatialSettings[0].replace(/_/g, ' ');
   } else if (genres.length > 0) {
     primaryEntity = genres[0];
   } else if (themes.length > 0) {
@@ -537,11 +725,12 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  const hasHardCriteria = actors.length > 0 || directors.length > 0 || year !== undefined || era !== undefined || format !== 'all';
-
   return {
     actors,
     directors,
+    spatialSettings,
+    situations,
+    tones,
     genres,
     era,
     year,
@@ -550,6 +739,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     narrativeCues,
     isTwistRequested,
     hasNarrativeConstraint,
+    hasStructuredIntent,
     primaryEntity,
     hasHardCriteria
   };
@@ -691,5 +881,92 @@ export function evaluateMovieNarrativeRelevance(
   };
 }
 
+/**
+ * Évalue si une œuvre cinématographique correspond à l'intention globale structurée (Niveau 1) :
+ * - Conjonction stricte Acteur + Twist/Décor
+ * - OU Cadre spatial / Décor (souterrain, espace, huis clos) + Ton (angoissant, suspense)
+ */
+export function evaluateStructuredMovieMatch(
+  movie: { title?: string; original_title?: string; overview?: string; genre_ids?: number[]; genres?: any[] },
+  criteria: ExtractedCriteria,
+  rawItem?: { tier?: number; match_rate?: number; reason?: string }
+): { matches: boolean; score: number; reason: string } {
+  // 0. Si aucun critère d'intention structuré n'a été extrait (ex: requête vague ou hors-sujet)
+  if (!criteria.hasStructuredIntent && !criteria.hasHardCriteria) {
+    return {
+      matches: false,
+      score: 50,
+      reason: 'Aucun critère structuré exploitable pour le Niveau 1'
+    };
+  }
+
+  // 1. Si une contrainte de twist est demandée, appliquer le filtre twist strict
+  if (criteria.isTwistRequested) {
+    return evaluateMovieNarrativeRelevance(movie, criteria, rawItem);
+  }
+
+  const titleLower = (movie.title || '').toLowerCase().trim();
+  const origLower = (movie.original_title || '').toLowerCase().trim();
+  const overviewLower = (movie.overview || '').toLowerCase();
+  const genreIds = (movie.genre_ids || movie.genres?.map((g: any) => typeof g === 'number' ? g : g.id) || []) as number[];
+
+  // 2. Évaluation des cadres spatiaux et décors (ex: sous terre, espace, huis clos)
+  if (criteria.spatialSettings && criteria.spatialSettings.length > 0) {
+    let bestSettingScore = 0;
+    let matchReason = '';
+
+    for (const settingKey of criteria.spatialSettings) {
+      const settingDef = SPATIAL_SETTINGS_MAP[settingKey];
+      if (!settingDef) continue;
+
+      // A. Titre archétypal majeur du cadre spatial
+      const isArchetype = settingDef.archetypeFilms.some(
+        f => titleLower === f.toLowerCase() || origLower === f.toLowerCase() || titleLower.includes(f.toLowerCase())
+      );
+      if (isArchetype) {
+        bestSettingScore = Math.max(bestSettingScore, 98);
+        matchReason = `Chef-d'œuvre de référence en décor ${settingDef.id} (${movie.title})`;
+        break;
+      }
+
+      // B. Genres attendus et mots-clés du synopsis
+      const matchesGenre = settingDef.expectedGenres.some(gid => genreIds.includes(gid));
+      const matchingKws = settingDef.keywords.filter(kw => overviewLower.includes(kw));
+
+      // C. Validation conjointe Décor + Ton (ex: souterrain + angoissant)
+      const isDistressingTone = criteria.tones.some(t => ['distressing', 'angoissant', 'claustrophobe'].includes(t));
+      const hasHorrorThriller = genreIds.some(gid => [27, 53].includes(gid));
+
+      if (matchingKws.length >= 1 && (matchesGenre || matchingKws.length >= 2)) {
+        let calculatedScore = 90 + Math.min(7, matchingKws.length * 2);
+        if (isDistressingTone && hasHorrorThriller) calculatedScore += 2;
+        if (calculatedScore > bestSettingScore) {
+          bestSettingScore = calculatedScore;
+          matchReason = `Atmosphère ${settingDef.id} validée avec composante ${criteria.tones.join(', ') || 'immersive'} (${matchingKws.slice(0, 2).join(', ')})`;
+        }
+      }
+    }
+
+    if (bestSettingScore >= 90) {
+      return {
+        matches: true,
+        score: Math.min(99, bestSettingScore),
+        reason: matchReason
+      };
+    }
+
+    // Si le cadre spatial était formellement requis mais est absent du film
+    return {
+      matches: false,
+      score: 60,
+      reason: `Cadre spatial spécifique (${criteria.spatialSettings.join(', ')}) non présent dans ce film`
+    };
+  }
+
+  // 3. Repli sur l'évaluation narrative classique
+  return evaluateMovieNarrativeRelevance(movie, criteria, rawItem);
+}
+
 export default analyzeSearchIntent;
+
 
