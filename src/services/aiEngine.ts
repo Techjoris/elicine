@@ -35,14 +35,16 @@ export {
   GROQ_MODELS,
   ACTIVE_GROQ_MODELS,
   getApiKey,
-  analyzeQuerySpecificity
+  analyzeQuerySpecificity,
+  extractThematicKeywords,
+  THEMATIC_GENRE_TAXONOMY
 } from './unifiedAiSearch';
 
 function getUnifiedSystemPrompt(specificity: SpecificityAnalysis): string {
   if (specificity.level === 'ultra_targeted') {
-    return `Tu es l'algorithme cinématographique de haute précision d'Éliciné.
-L'utilisateur effectue une recherche ULTRA-CIBLÉE avec des détails narratifs précis (intrigue, acteur, lieu, twist).
-Identifie STRICTEMENT la ou les 1 à 2 œuvres exactes qui correspondent à tous ces critères. N'inclus aucun film approximatif ni suggestion superflue.
+    return `Tu es l'algorithme cinématographique expert d'Éliciné.
+L'utilisateur effectue une recherche par SOUVENIR ou DÉTAILS NARRATIFS (intrigue, acteur, lieu, scène, twist).
+Analyse les éléments décrits en tolérant les synonymes et approximations. Identifie en tête de liste l'œuvre exacte ou la plus probable, puis complète avec 3 à 5 œuvres très proches (même univers, ambiance ou trope similaire).
 Réponds STRICTEMENT sous la forme d'un objet JSON pur :
 {
   "provider_used": "Nom du modèle",
@@ -51,11 +53,11 @@ Réponds STRICTEMENT sous la forme d'un objet JSON pur :
       "title": "Titre exact du film",
       "year": 2024,
       "match_rate": 99,
-      "reason": "Correspondance exacte avec les critères"
+      "reason": "Correspondance directe avec l'intrigue"
     }
   ]
 }
-Note : 1 ou 2 films maximum.`;
+Note : Fournis entre 4 et 6 films au total.`;
   }
 
   if (specificity.level === 'broad') {

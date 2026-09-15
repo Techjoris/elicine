@@ -200,16 +200,17 @@ export function analyzeQuerySpecificity(queryText: string): SpecificityAnalysis 
   // ─── CLASSIFICATION ──────────────────────────────────────────────────────────
 
   // CAS ULTRA-CIBLÉ : cumul de détails précis (acteur + lieu + twist + intrigue)
-  // L'utilisateur cherche UN film précis dont il décrit des scènes ou particularités
+  // L'utilisateur cherche un film précis dont il décrit des souvenirs ou particularités.
+  // On identifie l'œuvre exacte en tête, complétée par les alternatives sémantiquement proches (4 à 6 films).
   if (specificScore >= 3 || (isMemoryQuery && specificScore >= 2)) {
     return {
       level: 'ultra_targeted',
-      targetCount: 2,
-      minResults: 1,
-      maxResults: 2,
-      strictFiltering: true,
+      targetCount: 5,
+      minResults: 4,
+      maxResults: 6,
+      strictFiltering: false,
       score: specificScore,
-      reason: 'Cumul de détails narratifs précis (intrigue, décor, acteur ou twist final)'
+      reason: 'Recherche par souvenir / intrigue précise (correspondance sémantique souple)'
     };
   }
 
@@ -218,9 +219,9 @@ export function analyzeQuerySpecificity(queryText: string): SpecificityAnalysis 
   if (hasBroadCues && specificScore === 0) {
     return {
       level: 'broad',
-      targetCount: 8,
+      targetCount: 10,
       minResults: 6,
-      maxResults: 10,
+      maxResults: 12,
       strictFiltering: false,
       score: 0,
       reason: 'Recherche globale de genre, acteur, époque ou nationalité'
@@ -232,7 +233,7 @@ export function analyzeQuerySpecificity(queryText: string): SpecificityAnalysis 
   return {
     level: 'moderate',
     targetCount: 6,
-    minResults: 5,
+    minResults: 4,
     maxResults: 8,
     strictFiltering: false,
     score: specificScore,

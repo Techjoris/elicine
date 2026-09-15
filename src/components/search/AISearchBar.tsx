@@ -84,7 +84,11 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         mood: result.moodDetected,
         suggestedPrompts: result.suggestedPrompts
       });
-      if (result.recommendedMovies.length <= 2) {
+      if (result.recommendedMovies.length === 0) {
+        showToast("Aucun film trouvé avec cette description.");
+      } else if (result.isFallbackMode) {
+        showToast(`🔍 ${result.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+      } else if (result.recommendedMovies.length <= 2) {
         showToast(`🎯 ${result.recommendedMovies.length} correspondance${result.recommendedMovies.length > 1 ? 's' : ''} exacte${result.recommendedMovies.length > 1 ? 's' : ''} identifiée${result.recommendedMovies.length > 1 ? 's' : ''} !`);
       } else if (result.recommendedMovies.length >= 10) {
         showToast(`🎬 Sélection élargie de ${result.recommendedMovies.length} œuvres trouvées !`);

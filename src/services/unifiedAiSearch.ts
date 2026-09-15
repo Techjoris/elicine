@@ -127,25 +127,27 @@ export async function queryAiTitles(
   const spec = specificity || analyzeQuerySpecificity(query);
 
   let prompt = '';
-  let maxTokens = 200;
-  let temperature = 0.3;
+  let maxTokens = 280;
+  let temperature = 0.35;
 
   if (spec.level === 'ultra_targeted') {
-    prompt = `IDENTIFICATION ULTRA-CIBLÉE : L'utilisateur recherche une œuvre précise d'après des détails narratifs stricts : "${query}".
-Identifie avec exactitude UNIQUEMENT la ou les 1 à 2 œuvres réelles correspondantes.
-Réponds EXCLUSIVEMENT avec le ou les titres exacts séparés par des virgules (1 ou 2 titres maximum).`;
-    maxTokens = 100;
-    temperature = 0.2;
+    prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
+Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
+Propose en premier le titre le plus probable, complété par 3 à 5 films ou séries très proches (même univers, trope ou ambiance).
+Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
+    maxTokens = 260;
+    temperature = 0.35;
   } else if (spec.level === 'broad') {
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
-Propose une sélection percutante de 8 à 10 films ou séries emblématiques et incontournables.
+Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
-    maxTokens = 220;
+    maxTokens = 350;
     temperature = 0.3;
   } else {
     prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants pour : "${query}".
+Tolère les synonymes et variantes sémantiques.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
-    maxTokens = 180;
+    maxTokens = 300;
     temperature = 0.3;
   }
 
@@ -436,6 +438,242 @@ export function extractTitlesFromText(rawText: string): string[] {
   return Array.from(new Set(candidateTitles));
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// TAXONOMIE THÉMATIQUE ET EXTRACTION SÉMANTIQUE DE SECOURS
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ThematicGenreItem {
+  genreId: number;
+  label: string;
+  triggers: string[];
+}
+
+export const THEMATIC_GENRE_TAXONOMY: ThematicGenreItem[] = [
+  {
+    genreId: 27, // Horreur
+    label: 'Horreur & Frissons',
+    triggers: [
+      'horreur', 'peur', 'effrayant', 'angoisse', 'terreur', 'epouvante', 'épouvante',
+      'claustrophobe', 'cercueil', 'enterre', 'enterré', 'zombie', 'zombies', 'mort-vivant',
+      'fantome', 'fantôme', 'demon', 'démon', 'possession', 'slasher', 'gore', 'monstre',
+      'paranormal', 'exorcisme', 'sorciere', 'sorcière', 'malediction', 'malédiction', 'crypte'
+    ]
+  },
+  {
+    genreId: 53, // Thriller
+    label: 'Thriller & Suspense',
+    triggers: [
+      'thriller', 'suspense', 'tension', 'haletant', 'paranoia', 'paranoïa', 'psychologique',
+      'disparition', 'otage', 'tueur', 'traque', 'secret', 'complot', 'espion', 'espionnage',
+      'agent secret', 'enquete', 'enquête', 'polar', 'sous-marin', 'bunker', 'huis clos',
+      'piege', 'piégé', 'enferme', 'enfermé', 'cabine', 'twist', 'ambigu'
+    ]
+  },
+  {
+    genreId: 878, // Science-Fiction
+    label: 'Science-Fiction & Anticipation',
+    triggers: [
+      'sf', 'science-fiction', 'science fiction', 'espace', 'spatial', 'spatiale', 'astronaute',
+      'fusee', 'fusée', 'vaisseau', 'planete', 'planète', 'galaxie', 'alien', 'aliens',
+      'extraterrestre', 'futur', 'futuriste', 'dystopie', 'dystopique', 'cyberpunk', 'robot',
+      'robots', 'ia', 'intelligence artificielle', 'cyborg', 'voyage dans le temps', 'temporel',
+      'temporelle', 'boucle temporelle', 'trou noir', 'tesseract', 'cryogenie', 'cryogénie',
+      'clonage', 'clone', 'matrix', 'virtuel'
+    ]
+  },
+  {
+    genreId: 28, // Action
+    label: 'Action & Adrénaline',
+    triggers: [
+      'action', 'combat', 'combats', 'arts martiaux', 'kung fu', 'fusillade', 'explosion',
+      'course-poursuite', 'poursuite', 'braquage', 'braqueurs', 'casse', 'hold-up', 'cambriolage',
+      'mercenaire', 'commando', 'super-héros', 'super-heros', 'super héros', 'vengeance',
+      'survie', 'survivre', 'sniper', 'tireur', 'bataille'
+    ]
+  },
+  {
+    genreId: 12, // Aventure
+    label: 'Aventure & Exploration',
+    triggers: [
+      'aventure', 'aventures', 'tresor', 'trésor', 'expedition', 'expédition', 'jungle',
+      'exploration', 'voyage', 'ile', 'île', 'naufrage', 'naufrages', 'odyssee', 'odyssée',
+      'quete', 'quête', 'archeologie', 'archéologie', 'perdu'
+    ]
+  },
+  {
+    genreId: 35, // Comédie
+    label: 'Comédie & Humour',
+    triggers: [
+      'comedie', 'comédie', 'comedies', 'comédies', 'drole', 'drôle', 'marrant', 'comique',
+      'humour', 'hilarant', 'parodie', 'satire', 'burlesque', 'feel good', 'feel-good', 'rire'
+    ]
+  },
+  {
+    genreId: 18, // Drame
+    label: 'Drame & Émotion',
+    triggers: [
+      'drame', 'drames', 'dramatique', 'emouvant', 'émouvant', 'larmes', 'deuil', 'separation',
+      'séparation', 'maladie', 'handicap', 'famille', 'social', 'pauvrete', 'pauvreté',
+      'injustice', 'tribunal', 'avocat', 'proces', 'procès', 'orphelin'
+    ]
+  },
+  {
+    genreId: 10749, // Romance
+    label: 'Romance & Amour',
+    triggers: [
+      'romance', 'romantique', 'amour', 'passion', 'coup de foudre', 'tomber amoureux',
+      'mariage', 'amants', 'amoureuse', 'amoureux', 'passionnel'
+    ]
+  },
+  {
+    genreId: 14, // Fantastique
+    label: 'Fantastique & Merveilleux',
+    triggers: [
+      'fantastique', 'fantasy', 'magie', 'magicien', 'magiciens', 'sorcellerie', 'sorcier',
+      'dragon', 'dragons', 'creature', 'créature', 'conte', 'legende', 'légende', 'sortilege'
+    ]
+  },
+  {
+    genreId: 80, // Crime
+    label: 'Crime & Pègre',
+    triggers: [
+      'crime', 'crimes', 'criminel', 'mafia', 'mafieux', 'gangster', 'gangsters', 'cartel',
+      'drogue', 'trafic', 'flic', 'police', 'taupe', 'sous couverture', 'detective', 'détective',
+      'meurtre', 'assassinat', 'assassin'
+    ]
+  },
+  {
+    genreId: 9648, // Mystère
+    label: 'Mystère & Énigmes',
+    triggers: [
+      'mystere', 'mystère', 'enigme', 'énigme', 'amnesie', 'amnésie', 'puzzle', 'labyrinthe',
+      'revelation', 'révélation', 'indice', 'indices', 'alibi', 'secret'
+    ]
+  },
+  {
+    genreId: 10752, // Guerre
+    label: 'Guerre & Histoire Militaire',
+    triggers: [
+      'guerre', 'soldat', 'soldats', 'militaire', 'armee', 'armée', 'tranchees', 'tranchées',
+      'seconde guerre mondiale', 'debarquement', 'débarquement', 'vietnam', 'veteran', 'vétéran',
+      'ghetto', 'nazi', 'resistance', 'résistance'
+    ]
+  },
+  {
+    genreId: 37, // Western
+    label: 'Western & Far West',
+    triggers: [
+      'western', 'cowboy', 'cow-boy', 'sheriff', 'shérif', 'saloon', 'duel', 'far west',
+      'hors-la-loi', 'bounty hunter'
+    ]
+  },
+  {
+    genreId: 16, // Animation
+    label: 'Animation',
+    triggers: [
+      'animation', 'anime', 'animé', 'dessin anime', 'dessin animé', 'ghibli', 'pixar',
+      'disney', 'manga', 'japanimation'
+    ]
+  }
+];
+
+/**
+ * Mots vides (stopwords) français et anglais à ignorer lors de l'extraction thématique
+ */
+const STOPWORDS_SET = new Set([
+  // Articles et prépositions françaises
+  'le', 'la', 'les', 'l', 'un', 'une', 'des', 'du', 'de', 'd', 'au', 'aux',
+  'ce', 'cet', 'cette', 'ces', 'mon', 'ton', 'son', 'notre', 'votre', 'leur',
+  'a', 'à', 'et', 'ou', 'où', 'mais', 'donc', 'or', 'ni', 'car',
+  'avec', 'sans', 'sous', 'sur', 'dans', 'par', 'pour', 'vers', 'chez', 'entre',
+  'qui', 'que', 'quoi', 'dont', 'comment', 'pourquoi', 'quand', 'quel', 'quelle', 'quels', 'quelles',
+  // Verbes et auxiliaires fréquents
+  'est', 'sont', 'etait', 'étaient', 'etre', 'être', 'avoir', 'ont', 'fait', 'faire',
+  'va', 'vont', 'aller', 'cherche', 'trouve', 'regarde', 'voir', 'montre', 'donne', 'recommande',
+  'parle', 'parlant', 'raconte', 'racontant', 'conseille',
+  // Mots méta-cinéma génériques
+  'film', 'films', 'serie', 'series', 'série', 'séries', 'cinema', 'cinéma', 'oeuvre', 'œuvres',
+  'histoire', 'histoires', 'scenario', 'scénario', 'personnage', 'personnages', 'acteur', 'acteurs',
+  'actrice', 'actrices', 'realisateur', 'réalisateur', 'scene', 'scène', 'scenes', 'scènes',
+  'moment', 'moments', 'fin', 'debut', 'début', 'truc', 'machin', 'chose', 'gars', 'homme', 'femme',
+  'personne', 'gens', 'monde', 'genre', 'style', 'type', 'titre', 'nom', 'nommé', 'appelle',
+  // Stopwords anglais
+  'the', 'an', 'and', 'but', 'for', 'with', 'without',
+  'about', 'like', 'through', 'over', 'before', 'after', 'between', 'under',
+  'was', 'were', 'been', 'being', 'have', 'has', 'had',
+  'movie', 'movies', 'show', 'shows', 'story', 'which', 'who', 'whom', 'whose',
+  'where', 'when', 'why', 'how', 'good', 'best', 'top', 'new', 'old'
+]);
+
+export interface ThematicExtraction {
+  thematicWords: string[];
+  searchPhrase: string;
+  detectedGenreIds: number[];
+  primaryGenreLabel?: string;
+}
+
+/**
+ * Extrait les mots-clés thématiques forts d'une requête en ignorant les mots de liaison et préfixes conversationnels.
+ */
+export function extractThematicKeywords(queryText: string): ThematicExtraction {
+  if (!queryText) {
+    return { thematicWords: [], searchPhrase: '', detectedGenreIds: [] };
+  }
+
+  // 1. Suppression des amorces conversationnelles
+  const stripped = queryText
+    .toLowerCase()
+    .replace(/^(recommande(?:-moi)?|donne(?:-moi)?|trouve(?:-moi)?|cherche|montre(?:-moi)?|conseille(?:-moi)?)\s+/gi, '')
+    .replace(/^(je\s+cherche|je\s+veux|je\s+voudrais|comment\s+s'appelle|c'est\s+quoi)\s+(le|un|la|les|ce)?\s*/gi, '')
+    .replace(/\b(un\s+film|des\s+films|le\s+film|les\s+films|film|films|série|séries|serie|series)\s+(de|du|d'|des|avec|sur|dans|qui|où|ou)\s+/gi, '')
+    .trim();
+
+  // 2. Découpage en mots propres (suppression de la ponctuation parasite)
+  const rawTokens = stripped
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 3);
+
+  // 3. Filtrage par stopwords
+  const meaningfulTokens = rawTokens.filter(token => !STOPWORDS_SET.has(token));
+
+  // 4. Déduplication tout en conservant l'ordre d'apparition
+  const uniqueTokens: string[] = [];
+  meaningfulTokens.forEach(token => {
+    if (!uniqueTokens.includes(token)) {
+      uniqueTokens.push(token);
+    }
+  });
+
+  // 5. Détection des genres et catégories associés via la taxonomie
+  const detectedGenreIds: number[] = [];
+  let primaryGenreLabel: string | undefined;
+
+  for (const item of THEMATIC_GENRE_TAXONOMY) {
+    const matched = item.triggers.some(trigger => {
+      return stripped.includes(trigger) || uniqueTokens.some(t => t === trigger || t.startsWith(trigger));
+    });
+
+    if (matched && !detectedGenreIds.includes(item.genreId)) {
+      detectedGenreIds.push(item.genreId);
+      if (!primaryGenreLabel) {
+        primaryGenreLabel = item.label;
+      }
+    }
+  }
+
+  // 6. Construction de la phrase de recherche TMDB optimale (les 2 ou 3 premiers mots thématiques)
+  const searchPhrase = uniqueTokens.slice(0, 3).join(' ');
+
+  return {
+    thematicWords: uniqueTokens,
+    searchPhrase,
+    detectedGenreIds,
+    primaryGenreLabel
+  };
+}
+
 // Cache mémoire des correspondances TMDB pour accélérer les requêtes récurrentes
 const tmdbTitleCache = new Map<string, any>();
 
@@ -445,12 +683,14 @@ const tmdbTitleCache = new Map<string, any>();
  * - Recherche Multi (Films & Séries) en français avec timeout strict de 2.8s
  * - Si aucun résultat, recherche Multi en version originale (anglais)
  * - Dépliage automatique de known_for si un profil d'acteur/réalisateur est renvoyé
+ * - Repli avec nettoyage des sous-titres / séparateurs (ex: "Kill Bill: Vol. 1" -> "Kill Bill")
+ * - Repli recherche directe de film sans ponctuation
  */
 export async function resolveTitleToTmdb(rawTitle: string, tmdbKey?: string): Promise<any | null> {
   const title = cleanMovieTitle(rawTitle);
   if (!title || title.length < 2) return null;
 
-  const cacheKey = title.toLowerCase();
+  const cacheKey = title.toLowerCase().trim();
   if (tmdbTitleCache.has(cacheKey)) {
     return tmdbTitleCache.get(cacheKey);
   }
@@ -510,6 +750,46 @@ export async function resolveTitleToTmdb(rawTitle: string, tmdbKey?: string): Pr
       }
     }
   } catch (_) {}
+
+  // 3. Repli souple : si le titre comporte un séparateur de sous-titre (ex: "Kill Bill : Volume 1" -> "Kill Bill")
+  if (/[:\-–—/]/.test(title)) {
+    const primaryPart = title.split(/[:\-–—/]/)[0].trim();
+    if (primaryPart.length >= 3 && primaryPart !== title) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        const url = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(primaryPart)}&language=fr-FR&include_adult=false${keyParam}`;
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            tmdbTitleCache.set(cacheKey, data.results[0]);
+            return data.results[0];
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 4. Repli direct search/movie sans caractères spéciaux
+  const simplified = title.replace(/[^\w\s\u00C0-\u017F]/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (simplified && simplified.length >= 3 && simplified !== title) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const url = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(simplified)}&language=fr-FR&include_adult=false${keyParam}`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          tmdbTitleCache.set(cacheKey, data.results[0]);
+          return data.results[0];
+        }
+      }
+    } catch (_) {}
+  }
 
   return null;
 }
@@ -654,8 +934,9 @@ export async function executeCinoraSearch(
   // 3. Hydratation depuis TMDB selon le volume adéquat
   let resolvedMovies: Movie[] = [];
   if (titles.length > 0) {
-    // Restreindre strictement pour les requêtes ultra-ciblées (max 2 ou 3) ou élargir pour les requêtes larges (max 16)
-    const titlesToFetch = titles.slice(0, specificity.maxResults);
+    // Récupération souple : on prend jusqu'à 8-10 titres en parallèle pour garantir une liste riche
+    const maxFetchCount = Math.max(titles.length, specificity.maxResults || 6);
+    const titlesToFetch = titles.slice(0, Math.min(maxFetchCount, 10));
 
     const moviePromises = titlesToFetch.map(async (title) => {
       try {
@@ -673,8 +954,10 @@ export async function executeCinoraSearch(
         let matchReason = `Sélection cinématographique pour "${cleanQuery}"`;
 
         if (specificity.level === 'ultra_targeted') {
-          matchRate = idx === 0 ? 99 : (idx === 1 ? 96 : 92);
-          matchReason = `Correspondance exacte avec vos critères narratifs précis`;
+          matchRate = idx === 0 ? 99 : (idx === 1 ? 95 : Math.max(78, 92 - idx * 2));
+          matchReason = idx === 0 
+            ? `Correspondance principale avec votre description`
+            : `Œuvre très proche partageant la même ambiance ou trope`;
         } else if (specificity.level === 'broad') {
           matchRate = Math.max(80, 99 - idx * 2);
           matchReason = `Sélection incontournable pour la catégorie "${cleanQuery}"`;
@@ -689,113 +972,128 @@ export async function executeCinoraSearch(
     }
   }
 
+  let isFallbackTriggered = false;
+  let fallbackExtraction: ThematicExtraction | null = null;
+
   // Si l'IA a échoué ou aucun titre n'a été trouvé dans TMDB :
-  // Recherche directe de la requête utilisateur sur TMDB comme fallback ultime
+  // DÉCLENCHEMENT DU SYSTÈME DE REPLI (FALLBACK) AUTOMATIQUE MULTI-NIVEAUX
   if (resolvedMovies.length === 0) {
-    console.log(`[Éliciné AI] Fallback direct TMDB avec "${cleanQuery}"`);
+    isFallbackTriggered = true;
+    console.log(`[Éliciné AI] Aucun résultat direct pour "${cleanQuery}". Lancement du système de repli sémantique...`);
+    const fallbackLimit = Math.max(6, specificity.maxResults || 6);
+    const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
+
+    // Extraction des mots-clés thématiques (en ignorant les mots de liaison)
+    fallbackExtraction = extractThematicKeywords(cleanQuery);
+    const { thematicWords, searchPhrase, detectedGenreIds, primaryGenreLabel } = fallbackExtraction;
+    console.log('[Éliciné AI] Mots thématiques extraits :', thematicWords, 'Phrase cible :', searchPhrase, 'Genres détectés :', detectedGenreIds);
+
     try {
-      const fallbackLimit = specificity.maxResults;
-      const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
-
-      // Nettoyage de la requête : retirer les préfixes conversationnels
-      // ex: "film de leonardo dicaprio" -> "leonardo dicaprio"
-      // ex: "films d'horreur claustrophobe" -> "horreur claustrophobe"
-      const strippedQuery = cleanQuery
-        .replace(/^(recommande(?:-moi)?|donne(?:-moi)?|trouve(?:-moi)?|cherche|montre(?:-moi)?)\s+/i, '')
-        .replace(/^(un\s+film|des\s+films|le\s+film|les\s+films|film|films|série|séries|serie|series)\s+(de|du|d'|des|avec|sur|dans)\s+/i, '')
-        .replace(/^(un\s+film|des\s+films|le\s+film|les\s+films|film|films|série|séries)\s+/i, '')
-        .trim();
-
-      const searchTarget = strippedQuery || cleanQuery;
-      console.log(`[Éliciné AI] Requête nettoyée pour fallback TMDB : "${searchTarget}" (original: "${cleanQuery}")`);
-
-      // 1. Recherche Multi (Films, Séries, Personnes) avec la requête nettoyée
-      const multiUrl = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(searchTarget)}&language=fr-FR&include_adult=false${keyParam}`;
-      const multiRes = await fetch(multiUrl);
-
-      if (multiRes.ok) {
-        const multiData = await multiRes.json();
-        const results = multiData.results || [];
-        if (results.length > 0) {
-          // formatTmdbResults déplie automatiquement les oeuvres de known_for si un profil d'acteur/réalisateur est renvoyé
-          const formatted = formatTmdbResults(results.slice(0, fallbackLimit));
-          if (formatted.length > 0) {
-            resolvedMovies = formatted.map((m, idx) => ({
-              ...m,
-              match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
-              ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
-            }));
-          }
-        }
-      }
-
-      // 2. Si search/multi n'a rien donné, essayer search/movie direct
-      if (resolvedMovies.length === 0) {
-        const movieUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(searchTarget)}&language=fr-FR&include_adult=false${keyParam}`;
+      // ─── NIVEAU 1 : RECHERCHE TMDB PAR MOTS-CLÉS THÉMATIQUES ÉPURÉS ───────────
+      if (searchPhrase) {
+        // 1.1 Recherche movie avec la phrase thématique (sans mots de liaison)
+        const movieUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(searchPhrase)}&language=fr-FR&include_adult=false${keyParam}`;
         const movieRes = await fetch(movieUrl);
         if (movieRes.ok) {
           const movieData = await movieRes.json();
           if (movieData.results && movieData.results.length > 0) {
             resolvedMovies = formatTmdbResults(movieData.results.slice(0, fallbackLimit)).map((m, idx) => ({
               ...m,
-              match_rate: specificity.level === 'ultra_targeted' ? (idx === 0 ? 99 : 95) : Math.max(75, 95 - idx * 3),
-              ai_match_reason: `Sélection TMDB pour "${cleanQuery}"`
+              match_rate: Math.max(76, 95 - idx * 3),
+              ai_match_reason: `Repli sémantique : Thèmes « ${thematicWords.slice(0, 2).join(', ')} »`
             }));
           }
         }
-      }
 
-      // 3. Si toujours 0 résultat, essayer par mot-clé de genre incontournable
-      if (resolvedMovies.length === 0) {
-        const lower = cleanQuery.toLowerCase();
-        const GENRE_KEYWORD_MAP: Record<string, number> = {
-          'horreur': 27,
-          'peur': 27,
-          'angoisse': 27,
-          'claustrophobe': 27,
-          'action': 28,
-          'aventure': 12,
-          'animation': 16,
-          'animé': 16,
-          'comédie': 35,
-          'comedie': 35,
-          'drame': 18,
-          'thriller': 53,
-          'suspense': 53,
-          'sf': 878,
-          'science-fiction': 878,
-          'science fiction': 878,
-          'western': 37,
-          'romance': 10749,
-          'guerre': 10752
-        };
-
-        let matchedGenreId: number | null = null;
-        for (const [kw, gid] of Object.entries(GENRE_KEYWORD_MAP)) {
-          if (lower.includes(kw)) {
-            matchedGenreId = gid;
-            break;
+        // 1.2 Si movie n'a rien donné, essayer search/multi
+        if (resolvedMovies.length === 0) {
+          const multiUrl = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(searchPhrase)}&language=fr-FR&include_adult=false${keyParam}`;
+          const multiRes = await fetch(multiUrl);
+          if (multiRes.ok) {
+            const multiData = await multiRes.json();
+            if (multiData.results && multiData.results.length > 0) {
+              resolvedMovies = formatTmdbResults(multiData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+                ...m,
+                match_rate: Math.max(76, 95 - idx * 3),
+                ai_match_reason: `Repli sémantique : Thèmes « ${thematicWords.slice(0, 2).join(', ')} »`
+              }));
+            }
           }
         }
 
-        if (matchedGenreId) {
-          console.log(`[Éliciné AI] Secours Discover par genre TMDB (${matchedGenreId}) pour "${cleanQuery}"`);
-          const discUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${matchedGenreId}&sort_by=vote_average.desc&vote_count.gte=100&language=fr-FR${keyParam}`;
-          const discRes = await fetch(discUrl);
-          if (discRes.ok) {
-            const discData = await discRes.json();
-            if (discData.results && discData.results.length > 0) {
-              resolvedMovies = formatTmdbResults(discData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+        // 1.3 Si la phrase composée échoue mais qu'on a des mots clés individuels, essayer le mot-clé le plus spécifique
+        if (resolvedMovies.length === 0 && thematicWords.length > 1) {
+          const topWord = thematicWords[0];
+          const singleUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(topWord)}&language=fr-FR&include_adult=false${keyParam}`;
+          const singleRes = await fetch(singleUrl);
+          if (singleRes.ok) {
+            const singleData = await singleRes.json();
+            if (singleData.results && singleData.results.length > 0) {
+              resolvedMovies = formatTmdbResults(singleData.results.slice(0, fallbackLimit)).map((m, idx) => ({
                 ...m,
-                match_rate: Math.max(75, 92 - idx * 3),
-                ai_match_reason: `Les incontournables du genre pour "${cleanQuery}"`
+                match_rate: Math.max(75, 93 - idx * 3),
+                ai_match_reason: `Repli par mot-clé principal : « ${topWord} »`
               }));
             }
           }
         }
       }
-    } catch (e) {
-      console.error('[Éliciné AI] Échec du fallback direct TMDB :', e);
+
+      // ─── NIVEAU 2 : DÉCOUVERTE PAR GENRE / TROPE ÉLARGIE (TMDB DISCOVER) ────
+      if (resolvedMovies.length === 0 && detectedGenreIds.length > 0) {
+        const genreQuery = detectedGenreIds.slice(0, 2).join(',');
+        console.log(`[Éliciné AI] Secours Discover par genres (${genreQuery}) pour "${cleanQuery}"`);
+
+        const discUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${genreQuery}&sort_by=vote_average.desc&vote_count.gte=150&language=fr-FR${keyParam}`;
+        const discRes = await fetch(discUrl);
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          if (discData.results && discData.results.length > 0) {
+            resolvedMovies = formatTmdbResults(discData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+              ...m,
+              match_rate: Math.max(75, 92 - idx * 3),
+              ai_match_reason: primaryGenreLabel
+                ? `Recherche élargie : Les références du genre ${primaryGenreLabel}`
+                : `Les incontournables du genre pour votre recherche`
+            }));
+          }
+        }
+
+        // Secours par popularité si vote_count.gte=150 n'a rien renvoyé
+        if (resolvedMovies.length === 0) {
+          const popUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${genreQuery}&sort_by=popularity.desc&language=fr-FR${keyParam}`;
+          const popRes = await fetch(popUrl);
+          if (popRes.ok) {
+            const popData = await popRes.json();
+            if (popData.results && popData.results.length > 0) {
+              resolvedMovies = formatTmdbResults(popData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+                ...m,
+                match_rate: Math.max(75, 90 - idx * 3),
+                ai_match_reason: `Sélection populaire du genre pour votre recherche`
+              }));
+            }
+          }
+        }
+      }
+
+      // ─── NIVEAU 3 : REPLI DE SÛRETÉ ULTIME (TENDANCES & CLASSIQUES) ───────────
+      if (resolvedMovies.length === 0) {
+        console.log(`[Éliciné AI] Secours ultime Trending pour "${cleanQuery}"`);
+        const trendUrl = `/api/tmdb?endpoint=trending/movie/week&language=fr-FR${keyParam}`;
+        const trendRes = await fetch(trendUrl);
+        if (trendRes.ok) {
+          const trendData = await trendRes.json();
+          if (trendData.results && trendData.results.length > 0) {
+            resolvedMovies = formatTmdbResults(trendData.results.slice(0, fallbackLimit)).map((m, idx) => ({
+              ...m,
+              match_rate: Math.max(70, 88 - idx * 3),
+              ai_match_reason: `Recommandation élargie : Œuvres phares du moment`
+            }));
+          }
+        }
+      }
+    } catch (fallbackErr) {
+      console.error('[Éliciné AI] Erreur du fallback direct TMDB :', fallbackErr);
     }
   }
 
@@ -830,10 +1128,14 @@ export async function executeCinoraSearch(
 
   // 4. Formulation du message d'explication selon la spécificité
   let thoughtMessage = `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`;
-  if (specificity.level === 'ultra_targeted') {
-    thoughtMessage = resolvedMovies.length === 1
-      ? `🎯 Œuvre exacte identifiée selon vos critères stricts pour "${cleanQuery}"`
-      : `🎯 Correspondance ultra-ciblée (${resolvedMovies.length} œuvres exactes trouvées) pour "${cleanQuery}"`;
+  if (resolvedMovies.length === 0) {
+    thoughtMessage = `Aucune œuvre trouvée pour "${cleanQuery}". Essayez d'autres mots-clés.`;
+  } else if (isFallbackTriggered) {
+    const keyTokens = fallbackExtraction?.thematicWords || [];
+    const keySummary = keyTokens.length > 0 ? `aux thèmes « ${keyTokens.slice(0, 3).join(', ')} »` : 'à votre demande';
+    thoughtMessage = `🔍 Recherche élargie (${resolvedMovies.length} œuvres suggérées) : adaptée ${keySummary}`;
+  } else if (specificity.level === 'ultra_targeted') {
+    thoughtMessage = `🎯 Œuvre principale identifiée, complétée par les alternatives les plus proches (${resolvedMovies.length} œuvres)`;
   } else if (specificity.level === 'broad') {
     thoughtMessage = `🎬 Sélection élargie (${resolvedMovies.length} œuvres trouvées) pour explorer "${cleanQuery}"`;
   }
@@ -849,8 +1151,8 @@ export async function executeCinoraSearch(
     thought: thoughtMessage,
     moodDetected: cleanQuery,
     recommendedMovies: resolvedMovies,
-    isFallbackMode: titles.length === 0 || resolvedMovies.length === 0,
-    providerUsed: provider,
+    isFallbackMode: titles.length === 0 || isFallbackTriggered,
+    providerUsed: isFallbackTriggered ? `${provider} (Repli sémantique)` : provider,
     suggestedPrompts: [
       'Un film de braquage haletant avec twist',
       'Une série policière sombre sous la pluie',

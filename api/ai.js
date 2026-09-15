@@ -252,7 +252,7 @@ export default async function handler(req, res) {
         model: selectedModel,
         messages: finalMessages,
         temperature: 0.3,
-        max_tokens: Math.min(Number(max_tokens) || 220, 250),
+        max_tokens: Math.min(Number(max_tokens) || 380, 480),
         stream: false,
         response_format: { type: 'json_object' }
       }),
@@ -297,7 +297,7 @@ export default async function handler(req, res) {
             model: selectedModel,
             messages: finalMessages,
             temperature: 0.3,
-            max_tokens: Math.min(Number(max_tokens) || 220, 250),
+            max_tokens: Math.min(Number(max_tokens) || 380, 480),
             stream: false,
           }),
         }, 6000);
@@ -342,7 +342,7 @@ export default async function handler(req, res) {
           model: customModel,
           messages: finalMessages,
           temperature: 0.3,
-          max_tokens: Math.min(Number(max_tokens) || 220, 250),
+          max_tokens: Math.min(Number(max_tokens) || 380, 480),
         }),
       }, 7000);
 
@@ -402,6 +402,7 @@ export default async function handler(req, res) {
         model: customModel,
         messages: finalMessages,
         temperature: 0.2,
+        max_tokens: Math.min(Number(max_tokens) || 380, 480),
         stream: false,
       }),
     }, 8000);

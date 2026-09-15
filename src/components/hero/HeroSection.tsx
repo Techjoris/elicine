@@ -299,7 +299,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         });
       }
 
-      if (res.recommendedMovies.length <= 2) {
+      if (res.recommendedMovies.length === 0) {
+        showToast("Aucun film trouvé avec cette description.");
+      } else if (res.isFallbackMode) {
+        showToast(`🔍 ${res.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+      } else if (res.recommendedMovies.length <= 2) {
         showToast(`🎯 ${res.recommendedMovies.length} correspondance${res.recommendedMovies.length > 1 ? 's' : ''} exacte${res.recommendedMovies.length > 1 ? 's' : ''} identifiée${res.recommendedMovies.length > 1 ? 's' : ''} !`);
       } else if (res.recommendedMovies.length >= 10) {
         showToast(`🎬 Sélection élargie de ${res.recommendedMovies.length} œuvres trouvées !`);
