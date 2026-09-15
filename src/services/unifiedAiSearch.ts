@@ -1,6 +1,12 @@
 import { Movie, ApiSettings } from '../types';
-import { searchMoviesTmdb, formatTmdbResults } from './tmdb';
-import { analyzeSearchIntent, analyzeQuerySpecificity, SpecificityAnalysis } from './searchRouterService';
+import { searchMoviesTmdb, formatTmdbResults, searchPersonAndGetWorks, fetchEntityFallbackWorks, fetchTmdbEndpoint } from './tmdb';
+import { 
+  analyzeSearchIntent, 
+  analyzeQuerySpecificity, 
+  SpecificityAnalysis,
+  extractHardCriteriaAndEntities,
+  ExtractedCriteria
+} from './searchRouterService';
 
 export interface RawAiMovieItem {
   title: string;
@@ -8,6 +14,7 @@ export interface RawAiMovieItem {
   year?: number;
   type?: 'film' | 'serie' | string;
   match_rate?: number;
+  tier?: 1 | 2 | 3;
   synopsis?: string;
   reason?: string;
 }
@@ -18,6 +25,14 @@ export interface AdvancedSearchFiltersOptions {
   mediaType?: 'Tous' | 'Films' | 'Séries TV';
 }
 
+export interface SearchCascadeInfo {
+  tierReached: 1 | 2 | 3;
+  criteria: ExtractedCriteria;
+  tier1Count: number;
+  tier2Count: number;
+  tier3Count: number;
+}
+
 export interface AIRecommendationResult {
   thought: string;
   moodDetected: string;
@@ -25,6 +40,7 @@ export interface AIRecommendationResult {
   isFallbackMode: boolean;
   providerUsed?: string;
   suggestedPrompts: string[];
+  cascade?: SearchCascadeInfo;
 }
 
 /**
@@ -117,13 +133,20 @@ export const getApiKey = (provider: 'qwen' | 'deepseek' | 'groq' | 'tmdb', apiSe
  * - Requête Ultra-Ciblée : exige strictement 1 à 2 titres exacts sans aucun remplissage.
  * - Requête Thématique : demande 6 à 8 titres pertinents.
  */
+export interface AiQueryTitlesResult {
+  titles: string[];
+  provider: string;
+  criteria?: Partial<ExtractedCriteria>;
+  rawItems?: RawAiMovieItem[];
+}
+
 export async function queryAiTitles(
   query: string,
   apiKey?: string,
   specificity?: SpecificityAnalysis,
   filters?: AdvancedSearchFiltersOptions,
   apiSettings?: ApiSettings
-): Promise<{ titles: string[]; provider: string }> {
+): Promise<AiQueryTitlesResult> {
   const spec = specificity || analyzeQuerySpecificity(query);
 
   let prompt = '';
@@ -133,7 +156,7 @@ export async function queryAiTitles(
   if (spec.level === 'ultra_targeted') {
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
-Propose en premier le titre le plus probable, complété par 3 à 5 films ou séries très proches (même univers, trope ou ambiance).
+Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films ou séries très proches (Niveau 2 : élargissement souple).
 Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 260;
     temperature = 0.35;
@@ -228,9 +251,14 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     if (response.ok) {
       const data = await response.json();
       const rawText = data.choices?.[0]?.message?.content || '';
-      const titles = extractTitlesFromText(rawText);
-      if (titles.length > 0) {
-        return { titles, provider: data.provider_used || 'DeepSeek (deepseek-chat)' };
+      const parsed = extractTitlesAndCriteriaFromText(rawText);
+      if (parsed.titles.length > 0) {
+        return { 
+          titles: parsed.titles, 
+          provider: data.provider_used || 'DeepSeek (deepseek-chat)',
+          criteria: parsed.criteria,
+          rawItems: parsed.items
+        };
       }
     }
   } catch (err: any) {
@@ -263,9 +291,14 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     if (response.ok) {
       const data = await response.json();
       const rawText = data.choices?.[0]?.message?.content || '';
-      const titles = extractTitlesFromText(rawText);
-      if (titles.length > 0) {
-        return { titles, provider: data.provider_used || 'Qwen (qwen-plus)' };
+      const parsed = extractTitlesAndCriteriaFromText(rawText);
+      if (parsed.titles.length > 0) {
+        return { 
+          titles: parsed.titles, 
+          provider: data.provider_used || 'Qwen (qwen-plus)',
+          criteria: parsed.criteria,
+          rawItems: parsed.items
+        };
       }
     }
   } catch (err: any) {
@@ -299,9 +332,14 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       if (response.ok) {
         const data = await response.json();
         const rawText = data.choices?.[0]?.message?.content || '';
-        const titles = extractTitlesFromText(rawText);
-        if (titles.length > 0) {
-          return { titles, provider: `Groq (${model})` };
+        const parsed = extractTitlesAndCriteriaFromText(rawText);
+        if (parsed.titles.length > 0) {
+          return { 
+            titles: parsed.titles, 
+            provider: `Groq (${model})`,
+            criteria: parsed.criteria,
+            rawItems: parsed.items
+          };
         }
       }
     } catch (err: any) {
@@ -356,17 +394,21 @@ export function cleanMovieTitle(raw: string): string {
   return cleaned;
 }
 
+export interface AiParsedResponse {
+  titles: string[];
+  items: RawAiMovieItem[];
+  criteria?: Partial<ExtractedCriteria>;
+}
+
 /**
- * 2. EXTRACT TITLES SAFELY
- * Analyse intelligemment la réponse brute de l'IA (DeepSeek / Qwen / Gemini / Groq) :
- * - Élimine les balises de raisonnement (<think>...</think>) propres à DeepSeek
- * - Détecte et parse les blocs JSON ({ "movies": [...] } ou [...])
+ * Analyse la réponse brute de l'IA (DeepSeek / Qwen / Gemini / Groq) :
+ * - Élimine les balises de raisonnement (<think>...</think>)
+ * - Détecte et parse les blocs JSON ({ "criteria": {...}, "movies": [...] })
+ * - Isole les critères durs et le niveau de tier (1: strict, 2: souple)
  * - Nettoie chaque titre avec cleanMovieTitle
- * - Gère le découpage par ligne ou par virgule en repli
- * - Déduplique les titres obtenus
  */
-export function extractTitlesFromText(rawText: string): string[] {
-  if (!rawText) return [];
+export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedResponse {
+  if (!rawText) return { titles: [], items: [] };
 
   // 1. Éliminer les balises de raisonnement de DeepSeek (<think>...</think>)
   let text = String(rawText).replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
@@ -381,24 +423,59 @@ export function extractTitlesFromText(rawText: string): string[] {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
       let list: any[] = [];
+      let criteria: Partial<ExtractedCriteria> | undefined = undefined;
+
       if (Array.isArray(parsed)) {
         list = parsed;
       } else if (parsed && typeof parsed === 'object') {
         list = parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
+        if (parsed.criteria && typeof parsed.criteria === 'object') {
+          criteria = {
+            actors: Array.isArray(parsed.criteria.actors) ? parsed.criteria.actors : [],
+            directors: Array.isArray(parsed.criteria.directors) ? parsed.criteria.directors : [],
+            genres: Array.isArray(parsed.criteria.genres) ? parsed.criteria.genres : [],
+            format: parsed.criteria.format,
+            primaryEntity: parsed.criteria.primary_entity || parsed.criteria.primaryEntity
+          };
+        }
       }
-      if (Array.isArray(list) && list.length > 0) {
-        const titles = list
-          .map(item => {
-            if (typeof item === 'string') return cleanMovieTitle(item);
-            if (item && typeof item === 'object') {
-              return cleanMovieTitle(item.title || item.titre || item.name || item.nom || '');
-            }
-            return '';
-          })
-          .filter(t => t.length > 1);
 
-        if (titles.length > 0) {
-          return Array.from(new Set(titles));
+      if (Array.isArray(list) && list.length > 0) {
+        const rawItems: RawAiMovieItem[] = [];
+        const seenTitles = new Set<string>();
+
+        for (const item of list) {
+          let title = '';
+          let matchRate = 95;
+          let tier: 1 | 2 | 3 = 1;
+          let reason = '';
+
+          if (typeof item === 'string') {
+            title = cleanMovieTitle(item);
+          } else if (item && typeof item === 'object') {
+            title = cleanMovieTitle(item.title || item.titre || item.name || item.nom || '');
+            if (typeof item.match_rate === 'number') matchRate = item.match_rate;
+            if (item.tier === 1 || item.tier === 2 || item.tier === 3) tier = item.tier;
+            if (typeof item.reason === 'string') reason = item.reason;
+          }
+
+          if (title.length > 1 && !seenTitles.has(title.toLowerCase())) {
+            seenTitles.add(title.toLowerCase());
+            rawItems.push({
+              title,
+              match_rate: matchRate,
+              tier,
+              reason: reason || 'Sélectionné par Éliciné AI'
+            });
+          }
+        }
+
+        if (rawItems.length > 0) {
+          return {
+            titles: rawItems.map(i => i.title),
+            items: rawItems,
+            criteria
+          };
         }
       }
     } catch (_) {
@@ -411,16 +488,13 @@ export function extractTitlesFromText(rawText: string): string[] {
   const candidateTitles: string[] = [];
 
   for (const line of lines) {
-    // Ignorer les lignes de politesse, d'introduction ou de métadonnées
     if (/^(voici|voilà|je vous|recommandations|sélection|titres|bonjour|bien sûr|d'après votre)/i.test(line)) {
       continue;
     }
-    // Ignorer les lignes qui ressemblent à des fragments JSON résiduels
     if (/^[\[\]{}\s":,]+$/.test(line) || /^"movies"\s*:/.test(line)) {
       continue;
     }
 
-    // Si la ligne contient des séparateurs par virgule, tester si c'est une liste à plat
     if (line.includes(',') && !line.startsWith('-') && !line.startsWith('*') && !/^\d+\./.test(line)) {
       const parts = line.split(',').map(p => cleanMovieTitle(p)).filter(p => p.length > 1);
       if (parts.length > 1) {
@@ -435,7 +509,23 @@ export function extractTitlesFromText(rawText: string): string[] {
     }
   }
 
-  return Array.from(new Set(candidateTitles));
+  const uniqueTitles = Array.from(new Set(candidateTitles));
+  return {
+    titles: uniqueTitles,
+    items: uniqueTitles.map((t, idx) => ({
+      title: t,
+      match_rate: Math.max(78, 98 - idx * 3),
+      tier: idx < 3 ? 1 : 2,
+      reason: 'Recommandé par Éliciné'
+    }))
+  };
+}
+
+/**
+ * 2. EXTRACT TITLES SAFELY (Rétrocompatibilité)
+ */
+export function extractTitlesFromText(rawText: string): string[] {
+  return extractTitlesAndCriteriaFromText(rawText).titles;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -873,6 +963,64 @@ export async function fetchTmdbDetails(
  * - Fetch TMDB en parallèle pour le volume exact attendu
  * - Restriction stricte des résultats si ultra-ciblée (1-2 titres) ou expansion riche si large (14-16 titres)
  */
+/**
+ * Applique les filtres Pro (Plateforme, Note minimale, Format) à une liste d'œuvres
+ */
+function applyFiltersToMovies(movies: Movie[], filters?: AdvancedSearchFiltersOptions): Movie[] {
+  if (!filters || movies.length === 0) return movies;
+  let list = [...movies];
+
+  if (filters.minRating && filters.minRating > 0) {
+    const filtered = list.filter(m => (m.vote_average || 0) >= filters.minRating!);
+    if (filtered.length > 0) list = filtered;
+  }
+
+  if (filters.mediaType && filters.mediaType !== 'Tous') {
+    const target = filters.mediaType === 'Films' ? 'FILM' : 'SÉRIE';
+    const filtered = list.filter(m => m.media_type === target);
+    if (filtered.length > 0) list = filtered;
+  }
+
+  if (filters.platform && filters.platform !== 'all') {
+    const platUpper = filters.platform.toUpperCase();
+    list = list.map(m => ({
+      ...m,
+      primary_platform: platUpper
+    }));
+  }
+
+  return list;
+}
+
+function formatFilterSuffix(filters?: AdvancedSearchFiltersOptions): string {
+  if (!filters) return '';
+  const badges: string[] = [];
+  if (filters.platform && filters.platform !== 'all') badges.push(filters.platform.toUpperCase());
+  if (filters.minRating && filters.minRating > 0) badges.push(`⭐ ${filters.minRating}+`);
+  if (badges.length === 0) return '';
+  return ` • Filtres (${badges.join(', ')})`;
+}
+
+/**
+ * 3. & 4. PIPELINE DE RECHERCHE EN CASCADE À 3 NIVEAUX :
+ * ─────────────────────────────────────────────────────────────────────────────
+ * NIVEAU 1 (Recherche Stricte & Ciblée) :
+ *   Isole les critères durs (acteur, réalisateur, format, année) et les associe
+ *   aux métadonnées. Si les correspondances sont fortes et suffisantes (>= seuil),
+ *   arrêt immédiat et priorité absolue.
+ * 
+ * NIVEAU 2 (Élargissement Souple) :
+ *   Si la recherche stricte ne retourne pas assez de résultats (< seuil), activation
+ *   automatique de la recherche vectorielle sémantique sur le reste du contexte
+ *   (ambiance, thèmes, scénario, tropes).
+ * 
+ * NIVEAU 3 (Recadrage & Fallback Intelligent) :
+ *   Si 0 résultat, le système ne plante jamais l'interface ("0 résultat").
+ *   Il isole l'entité principale (acteur ou genre majeur) et propose les œuvres
+ *   les plus proches avec le message contextuel contractuel :
+ *   "Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus..."
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 export async function executeCinoraSearch(
   query: string,
   apiSettings?: ApiSettings,
@@ -887,10 +1035,45 @@ export async function executeCinoraSearch(
   const groqKey = getGroqKey(apiSettings);
   const aiKey = qwenKey || deepseekKey || groqKey;
   const specificity = analyzeQuerySpecificity(cleanQuery);
+  const offlineCriteria = extractHardCriteriaAndEntities(cleanQuery);
 
-  console.log(`[Éliciné AI] Spécificité détectée pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, score: ${specificity.score})`);
+  console.log(`[Éliciné AI] Spécificité pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, critères durs: ${offlineCriteria.hasHardCriteria})`);
 
-  // Enrichissement de la requête pour l'IA si des filtres Pro sont actifs
+  // Bypass direct TMDB si titre évident sans filtres complexes
+  const route = analyzeSearchIntent(cleanQuery);
+  if (route.intent === 'direct_tmdb' && (!filters || (filters.platform === 'all' && (!filters.minRating || filters.minRating === 0)))) {
+    const results = await searchMoviesTmdb(cleanQuery, tmdbKey, 'fr-FR');
+    if (results && results.length > 0) {
+      const directMovies = results.slice(0, 6).map((m, idx) => ({
+        ...m,
+        match_rate: Math.max(82, 99 - idx * 4),
+        ai_match_reason: idx === 0 ? `🎯 Titre exact : "${m.title}"` : `Œuvre associée : "${m.title}"`
+      }));
+
+      return {
+        thought: `🎬 Titre direct identifié : "${directMovies[0]?.title || cleanQuery}"`,
+        moodDetected: cleanQuery,
+        recommendedMovies: directMovies,
+        isFallbackMode: false,
+        providerUsed: 'TMDB Direct',
+        suggestedPrompts: [
+          'Un film de braquage drôle et haletant',
+          'Une série policière sombre et addictive',
+          'Une fresque spatiale émouvante',
+          'Un film néo-noir avec ambiance pluvieuse'
+        ],
+        cascade: {
+          tierReached: 1,
+          criteria: offlineCriteria,
+          tier1Count: directMovies.length,
+          tier2Count: 0,
+          tier3Count: 0
+        }
+      };
+    }
+  }
+
+  // Enrichissement du prompt avec filtres Pro si présents
   let promptWithFilters = cleanQuery;
   if (filters?.platform && filters.platform !== 'all') {
     promptWithFilters += ` (disponible sur ${filters.platform.toUpperCase()})`;
@@ -902,263 +1085,351 @@ export async function executeCinoraSearch(
     promptWithFilters += ` (format: ${filters.mediaType})`;
   }
 
-  // Recherche directe TMDB si titre direct évident sans filtres complexes
-  const route = analyzeSearchIntent(cleanQuery);
-  if (route.intent === 'direct_tmdb' && (!filters || (filters.platform === 'all' && (!filters.minRating || filters.minRating === 0)))) {
-    const results = await searchMoviesTmdb(cleanQuery, tmdbKey, 'fr-FR');
-    const movies = (results || []).slice(0, 6).map((m, idx) => ({
-      ...m,
-      match_rate: Math.max(82, 99 - idx * 4),
-      ai_match_reason: idx === 0 ? `Titre exact : "${m.title}"` : `Œuvre associée : "${m.title}"`
-    }));
+  // Interrogation de l'IA (DeepSeek -> Qwen -> Groq) avec gestion de la cascade
+  const aiResult = await queryAiTitles(promptWithFilters, aiKey, specificity, filters, apiSettings);
+  const { titles, provider, criteria: aiCriteria, rawItems = [] } = aiResult;
+  console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
+
+  // Consolidation des critères extraits
+  const criteria: ExtractedCriteria = {
+    actors: Array.from(new Set([...(offlineCriteria.actors || []), ...(aiCriteria?.actors || [])])),
+    directors: Array.from(new Set([...(offlineCriteria.directors || []), ...(aiCriteria?.directors || [])])),
+    genres: Array.from(new Set([...(offlineCriteria.genres || []), ...(aiCriteria?.genres || [])])),
+    era: offlineCriteria.era || aiCriteria?.era,
+    year: offlineCriteria.year || aiCriteria?.year,
+    format: (filters?.mediaType && filters.mediaType !== 'Tous')
+      ? (filters.mediaType === 'Films' ? 'film' : 'serie')
+      : (offlineCriteria.format !== 'all' ? offlineCriteria.format : (aiCriteria?.format || 'all')),
+    themes: Array.from(new Set([...(offlineCriteria.themes || []), ...(aiCriteria?.themes || [])])),
+    primaryEntity: offlineCriteria.primaryEntity || aiCriteria?.primaryEntity,
+    hasHardCriteria: offlineCriteria.hasHardCriteria || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length)
+  };
+
+  // Résolution TMDB initiale des titres proposés par l'IA
+  const maxFetchCount = Math.max(titles.length, specificity.maxResults || 6);
+  const titlesToFetch = titles.slice(0, Math.min(maxFetchCount, 12));
+
+  const moviePromises = titlesToFetch.map(async (title) => {
+    try {
+      const rawMedia = await resolveTitleToTmdb(title, tmdbKey);
+      return rawMedia || null;
+    } catch (_) {
+      return null;
+    }
+  });
+
+  const rawTmdbList = (await Promise.all(moviePromises)).filter(Boolean);
+  const initialResolved = formatTmdbResults(rawTmdbList);
+
+  // Recherche des crédits de la personne si un acteur ou réalisateur est explicite
+  let personCandidateWorks: Movie[] = [];
+  const primaryPerson = criteria.actors[0] || criteria.directors[0];
+  if (primaryPerson && initialResolved.length < 4) {
+    const isCrew = Boolean(criteria.directors[0] && !criteria.actors[0]);
+    personCandidateWorks = await searchPersonAndGetWorks(primaryPerson, isCrew ? 'crew' : 'cast', tmdbKey);
+  }
+
+  // ============================================================================
+  // NIVEAU 1 : RECHERCHE STRICTE & CIBLÉE
+  // ============================================================================
+  const tier1Movies: Movie[] = [];
+  const tier2Candidates: Movie[] = [];
+
+  const allCandidatePool = [...initialResolved];
+  for (const pw of personCandidateWorks) {
+    if (!allCandidatePool.some(m => m.id === pw.id)) {
+      allCandidatePool.push(pw);
+    }
+  }
+
+  for (const movie of allCandidatePool) {
+    let isStrictMatch = false;
+    let strictScore = 95;
+    let matchDetail = '';
+
+    const matchingRawItem = rawItems.find(
+      r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
+    );
+
+    // 1. Filtrage strict par format
+    if (criteria.format !== 'all') {
+      const isSeries = movie.media_type === 'SÉRIE';
+      if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
+        continue;
+      }
+    }
+
+    // 2. Filtrage par année
+    if (criteria.year) {
+      const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
+      if (movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1) {
+        isStrictMatch = true;
+        strictScore = Math.max(strictScore, 97);
+        matchDetail = `Sorti en ${criteria.year}`;
+      }
+    }
+
+    // 3. Filtrage par acteur ou réalisateur
+    if (primaryPerson) {
+      const personLower = primaryPerson.toLowerCase();
+      const inOverview = (movie.overview || '').toLowerCase().includes(personLower);
+      const inCast = personCandidateWorks.some(pw => pw.id === movie.id);
+      if (inOverview || inCast) {
+        isStrictMatch = true;
+        strictScore = Math.max(strictScore, 98);
+        matchDetail = `${primaryPerson}`;
+      }
+    }
+
+    // 4. Tag explicite de l'IA (tier: 1 ou match_rate >= 90)
+    if (matchingRawItem) {
+      if (matchingRawItem.tier === 1 || (matchingRawItem.match_rate && matchingRawItem.match_rate >= 90)) {
+        isStrictMatch = true;
+        strictScore = Math.max(strictScore, matchingRawItem.match_rate || 96);
+        if (matchingRawItem.reason) {
+          matchDetail = matchingRawItem.reason;
+        }
+      }
+    }
+
+    // 5. Requête de souvenir ultra-ciblée
+    if (specificity.level === 'ultra_targeted') {
+      const poolIdx = allCandidatePool.indexOf(movie);
+      if (poolIdx === 0) {
+        isStrictMatch = true;
+        strictScore = 99;
+        matchDetail = "Correspondance exacte avec votre description";
+      } else if (poolIdx === 1) {
+        isStrictMatch = true;
+        strictScore = 95;
+        matchDetail = "Alternative très proche partageant le même trope";
+      }
+    }
+
+    if (criteria.hasHardCriteria) {
+      if (isStrictMatch) {
+        tier1Movies.push({
+          ...movie,
+          match_rate: strictScore,
+          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${matchDetail || 'Critères stricts satisfaits'}`
+        });
+      } else {
+        tier2Candidates.push(movie);
+      }
+    } else {
+      if (strictScore >= 90) {
+        tier1Movies.push({
+          ...movie,
+          match_rate: strictScore,
+          ai_match_reason: `🎯 Recherche ciblée (Niveau 1) : ${matchDetail || `Sélection pour "${cleanQuery}"`}`
+        });
+      } else {
+        tier2Candidates.push(movie);
+      }
+    }
+  }
+
+  // Seuil minimal pour l'arrêt au Niveau 1
+  const minStrictThreshold = specificity.level === 'ultra_targeted' ? 2 : 3;
+
+  // Si des correspondances pertinentes avec score élevé sont trouvées en nombre suffisant :
+  // ARRÊT AU NIVEAU 1
+  if (tier1Movies.length >= minStrictThreshold) {
+    let finalTier1 = tier1Movies;
+    if (filters) {
+      finalTier1 = applyFiltersToMovies(finalTier1, filters);
+    }
+
+    if (finalTier1.length >= minStrictThreshold) {
+      console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${finalTier1.length} correspondances strictes.`);
+      return {
+        thought: `🎯 Recherche ciblée (Niveau 1) : ${finalTier1.length} œuvres correspondant précisément à vos critères${formatFilterSuffix(filters)}`,
+        moodDetected: cleanQuery,
+        recommendedMovies: finalTier1.slice(0, specificity.maxResults || 8),
+        isFallbackMode: false,
+        providerUsed: `${provider} (Niveau 1 : Recherche stricte)`,
+        suggestedPrompts: [
+          'Un film de braquage drôle et haletant',
+          'Une série policière sombre et addictive',
+          'Une fresque spatiale émouvante',
+          'Un film néo-noir avec ambiance pluvieuse'
+        ],
+        cascade: {
+          tierReached: 1,
+          criteria,
+          tier1Count: finalTier1.length,
+          tier2Count: 0,
+          tier3Count: 0
+        }
+      };
+    }
+  }
+
+  // ============================================================================
+  // NIVEAU 2 : ÉLARGISSEMENT SOUPLE
+  // ============================================================================
+  console.log(`[Éliciné Cascade] Activation du Niveau 2 (Élargissement souple). Tier 1 compte: ${tier1Movies.length}`);
+
+  let tier2Movies: Movie[] = [...tier2Candidates];
+
+  // Si besoin de compléter le vivier pour Niveau 2, recherche sémantique TMDB par mots-clés/genres
+  if (tier1Movies.length + tier2Movies.length < (specificity.targetCount || 6)) {
+    const fallbackExtraction = extractThematicKeywords(cleanQuery);
+    const { thematicWords, searchPhrase, detectedGenreIds } = fallbackExtraction;
+
+    if (searchPhrase) {
+      try {
+        const searchRes = await fetchTmdbEndpoint('search/multi', {
+          query: searchPhrase,
+          language: 'fr-FR',
+          include_adult: false
+        }, tmdbKey);
+        if (searchRes.ok) {
+          const sData = await searchRes.json();
+          const formatted = formatTmdbResults(sData.results || []);
+          for (const m of formatted) {
+            if (!tier1Movies.some(t => t.id === m.id) && !tier2Movies.some(t => t.id === m.id)) {
+              tier2Movies.push(m);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (tier1Movies.length + tier2Movies.length < 4 && detectedGenreIds.length > 0) {
+      try {
+        const genreQuery = detectedGenreIds.slice(0, 2).join(',');
+        const discRes = await fetchTmdbEndpoint('discover/movie', {
+          with_genres: genreQuery,
+          sort_by: 'vote_average.desc',
+          'vote_count.gte': 150,
+          language: 'fr-FR',
+          include_adult: false
+        }, tmdbKey);
+        if (discRes.ok) {
+          const dData = await discRes.json();
+          const formatted = formatTmdbResults(dData.results || []);
+          for (const m of formatted) {
+            if (!tier1Movies.some(t => t.id === m.id) && !tier2Movies.some(t => t.id === m.id)) {
+              tier2Movies.push(m);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Formatage Niveau 2
+  const formattedTier2 = tier2Movies.map((m, idx) => ({
+    ...m,
+    match_rate: Math.max(78, 89 - idx * 2),
+    ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : Ambiance & thèmes associés`
+  }));
+
+  // Combinaison : Tier 1 en tête avec priorité, complété par Tier 2
+  let combinedMovies = [...tier1Movies, ...formattedTier2];
+  if (filters) {
+    combinedMovies = applyFiltersToMovies(combinedMovies, filters);
+  }
+
+  if (combinedMovies.length > 0) {
+    const limit = Math.max(specificity.maxResults || 8, 6);
+    const finalMovies = combinedMovies.slice(0, limit);
+    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres trouvées (Tier 1: ${tier1Movies.length}, Tier 2: ${finalMovies.length - tier1Movies.length})`);
+
+    const moodSummary = criteria.themes.length > 0
+      ? `autour des thèmes « ${criteria.themes.join(', ')} »`
+      : `adaptée à l'ambiance recherchée`;
 
     return {
-      thought: `🎬 Titre direct identifié : "${movies[0]?.title || cleanQuery}"`,
+      thought: `✨ Élargissement souple (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
-      recommendedMovies: movies,
+      recommendedMovies: finalMovies,
       isFallbackMode: false,
-      providerUsed: 'TMDB Direct',
+      providerUsed: `${provider} (Niveau 2 : Élargissement souple)`,
       suggestedPrompts: [
-        'Un film de braquage drôle et haletant',
-        'Une série policière sombre et addictive',
-        'Une fresque spatiale émouvante',
-        'Un film néo-noir avec ambiance pluvieuse'
-      ]
+        'Un film de braquage haletant avec twist',
+        'Une série policière sombre sous la pluie',
+        "Un chef-d'œuvre de science-fiction dystopique",
+        'Une comédie feel-good et touchante'
+      ],
+      cascade: {
+        tierReached: 2,
+        criteria,
+        tier1Count: tier1Movies.length,
+        tier2Count: finalMovies.length - tier1Movies.length,
+        tier3Count: 0
+      }
     };
   }
 
-  // 1 & 2. Interrogation de l'IA avec prompt adapté à la spécificité et aux filtres (DeepSeek -> Qwen -> Gemini)
-  let { titles, provider } = await queryAiTitles(promptWithFilters, aiKey, specificity, filters, apiSettings);
-  console.log(`[Éliciné AI] Titres extraits (${provider}, ${specificity.level}) :`, titles);
+  // ============================================================================
+  // NIVEAU 3 : RECADRAGE & FALLBACK INTELLIGENT (0 RÉSULTAT)
+  // ============================================================================
+  // Si aucune correspondance n'est trouvée (0 résultat), le système ne doit pas
+  // planter l'interface. Il extrait l'entité principale de la phrase (ex: l'acteur
+  // ou le genre majeur) et propose les œuvres les plus proches en affichant un message
+  // de suggestion contextuel :
+  // "Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus..."
+  console.log(`[Éliciné Cascade] Activation du Niveau 3 (Recadrage intelligent pour "${cleanQuery}").`);
 
-  // 3. Hydratation depuis TMDB selon le volume adéquat
-  let resolvedMovies: Movie[] = [];
-  if (titles.length > 0) {
-    // Récupération souple : on prend jusqu'à 8-10 titres en parallèle pour garantir une liste riche
-    const maxFetchCount = Math.max(titles.length, specificity.maxResults || 6);
-    const titlesToFetch = titles.slice(0, Math.min(maxFetchCount, 10));
+  const primaryEntity = criteria.primaryEntity || offlineCriteria.primaryEntity || 'Cinéma';
+  const fallbackLimit = Math.max(6, specificity.maxResults || 6);
 
-    const moviePromises = titlesToFetch.map(async (title) => {
-      try {
-        const rawMedia = await resolveTitleToTmdb(title, tmdbKey);
-        return rawMedia || null;
-      } catch (err) {
-        return null;
-      }
-    });
+  // Récupération des œuvres associées à l'entité principale
+  let fallbackMovies: Movie[] = [];
+  try {
+    fallbackMovies = await fetchEntityFallbackWorks(primaryEntity, undefined, tmdbKey);
+  } catch (_) {}
 
-    const rawTmdbList = (await Promise.all(moviePromises)).filter(Boolean);
-    if (rawTmdbList.length > 0) {
-      resolvedMovies = formatTmdbResults(rawTmdbList).map((m, idx) => {
-        let matchRate = Math.max(78, 98 - idx * 3);
-        let matchReason = `Sélection cinématographique pour "${cleanQuery}"`;
-
-        if (specificity.level === 'ultra_targeted') {
-          matchRate = idx === 0 ? 99 : (idx === 1 ? 95 : Math.max(78, 92 - idx * 2));
-          matchReason = idx === 0 
-            ? `Correspondance principale avec votre description`
-            : `Œuvre très proche partageant la même ambiance ou trope`;
-        } else if (specificity.level === 'broad') {
-          matchRate = Math.max(80, 99 - idx * 2);
-          matchReason = `Sélection incontournable pour la catégorie "${cleanQuery}"`;
-        }
-
-        return {
-          ...m,
-          match_rate: matchRate,
-          ai_match_reason: matchReason
-        };
-      });
-    }
-  }
-
-  let isFallbackTriggered = false;
-  let fallbackExtraction: ThematicExtraction | null = null;
-
-  // Si l'IA a échoué ou aucun titre n'a été trouvé dans TMDB :
-  // DÉCLENCHEMENT DU SYSTÈME DE REPLI (FALLBACK) AUTOMATIQUE MULTI-NIVEAUX
-  if (resolvedMovies.length === 0) {
-    isFallbackTriggered = true;
-    console.log(`[Éliciné AI] Aucun résultat direct pour "${cleanQuery}". Lancement du système de repli sémantique...`);
-    const fallbackLimit = Math.max(6, specificity.maxResults || 6);
-    const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
-
-    // Extraction des mots-clés thématiques (en ignorant les mots de liaison)
-    fallbackExtraction = extractThematicKeywords(cleanQuery);
-    const { thematicWords, searchPhrase, detectedGenreIds, primaryGenreLabel } = fallbackExtraction;
-    console.log('[Éliciné AI] Mots thématiques extraits :', thematicWords, 'Phrase cible :', searchPhrase, 'Genres détectés :', detectedGenreIds);
-
+  // Repli ultime sur les tendances hebdomadaires si nécessaire
+  if (fallbackMovies.length === 0) {
     try {
-      // ─── NIVEAU 1 : RECHERCHE TMDB PAR MOTS-CLÉS THÉMATIQUES ÉPURÉS ───────────
-      if (searchPhrase) {
-        // 1.1 Recherche movie avec la phrase thématique (sans mots de liaison)
-        const movieUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(searchPhrase)}&language=fr-FR&include_adult=false${keyParam}`;
-        const movieRes = await fetch(movieUrl);
-        if (movieRes.ok) {
-          const movieData = await movieRes.json();
-          if (movieData.results && movieData.results.length > 0) {
-            resolvedMovies = formatTmdbResults(movieData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-              ...m,
-              match_rate: Math.max(76, 95 - idx * 3),
-              ai_match_reason: `Repli sémantique : Thèmes « ${thematicWords.slice(0, 2).join(', ')} »`
-            }));
-          }
-        }
-
-        // 1.2 Si movie n'a rien donné, essayer search/multi
-        if (resolvedMovies.length === 0) {
-          const multiUrl = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(searchPhrase)}&language=fr-FR&include_adult=false${keyParam}`;
-          const multiRes = await fetch(multiUrl);
-          if (multiRes.ok) {
-            const multiData = await multiRes.json();
-            if (multiData.results && multiData.results.length > 0) {
-              resolvedMovies = formatTmdbResults(multiData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-                ...m,
-                match_rate: Math.max(76, 95 - idx * 3),
-                ai_match_reason: `Repli sémantique : Thèmes « ${thematicWords.slice(0, 2).join(', ')} »`
-              }));
-            }
-          }
-        }
-
-        // 1.3 Si la phrase composée échoue mais qu'on a des mots clés individuels, essayer le mot-clé le plus spécifique
-        if (resolvedMovies.length === 0 && thematicWords.length > 1) {
-          const topWord = thematicWords[0];
-          const singleUrl = `/api/tmdb?endpoint=search/movie&query=${encodeURIComponent(topWord)}&language=fr-FR&include_adult=false${keyParam}`;
-          const singleRes = await fetch(singleUrl);
-          if (singleRes.ok) {
-            const singleData = await singleRes.json();
-            if (singleData.results && singleData.results.length > 0) {
-              resolvedMovies = formatTmdbResults(singleData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-                ...m,
-                match_rate: Math.max(75, 93 - idx * 3),
-                ai_match_reason: `Repli par mot-clé principal : « ${topWord} »`
-              }));
-            }
-          }
-        }
+      const trendRes = await fetchTmdbEndpoint('trending/movie/week', { language: 'fr-FR' }, tmdbKey);
+      if (trendRes.ok) {
+        const trendData = await trendRes.json();
+        fallbackMovies = formatTmdbResults(trendData.results || []);
       }
+    } catch (_) {}
+  }
 
-      // ─── NIVEAU 2 : DÉCOUVERTE PAR GENRE / TROPE ÉLARGIE (TMDB DISCOVER) ────
-      if (resolvedMovies.length === 0 && detectedGenreIds.length > 0) {
-        const genreQuery = detectedGenreIds.slice(0, 2).join(',');
-        console.log(`[Éliciné AI] Secours Discover par genres (${genreQuery}) pour "${cleanQuery}"`);
-
-        const discUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${genreQuery}&sort_by=vote_average.desc&vote_count.gte=150&language=fr-FR${keyParam}`;
-        const discRes = await fetch(discUrl);
-        if (discRes.ok) {
-          const discData = await discRes.json();
-          if (discData.results && discData.results.length > 0) {
-            resolvedMovies = formatTmdbResults(discData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-              ...m,
-              match_rate: Math.max(75, 92 - idx * 3),
-              ai_match_reason: primaryGenreLabel
-                ? `Recherche élargie : Les références du genre ${primaryGenreLabel}`
-                : `Les incontournables du genre pour votre recherche`
-            }));
-          }
-        }
-
-        // Secours par popularité si vote_count.gte=150 n'a rien renvoyé
-        if (resolvedMovies.length === 0) {
-          const popUrl = `/api/tmdb?endpoint=discover/movie&with_genres=${genreQuery}&sort_by=popularity.desc&language=fr-FR${keyParam}`;
-          const popRes = await fetch(popUrl);
-          if (popRes.ok) {
-            const popData = await popRes.json();
-            if (popData.results && popData.results.length > 0) {
-              resolvedMovies = formatTmdbResults(popData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-                ...m,
-                match_rate: Math.max(75, 90 - idx * 3),
-                ai_match_reason: `Sélection populaire du genre pour votre recherche`
-              }));
-            }
-          }
-        }
-      }
-
-      // ─── NIVEAU 3 : REPLI DE SÛRETÉ ULTIME (TENDANCES & CLASSIQUES) ───────────
-      if (resolvedMovies.length === 0) {
-        console.log(`[Éliciné AI] Secours ultime Trending pour "${cleanQuery}"`);
-        const trendUrl = `/api/tmdb?endpoint=trending/movie/week&language=fr-FR${keyParam}`;
-        const trendRes = await fetch(trendUrl);
-        if (trendRes.ok) {
-          const trendData = await trendRes.json();
-          if (trendData.results && trendData.results.length > 0) {
-            resolvedMovies = formatTmdbResults(trendData.results.slice(0, fallbackLimit)).map((m, idx) => ({
-              ...m,
-              match_rate: Math.max(70, 88 - idx * 3),
-              ai_match_reason: `Recommandation élargie : Œuvres phares du moment`
-            }));
-          }
-        }
-      }
-    } catch (fallbackErr) {
-      console.error('[Éliciné AI] Erreur du fallback direct TMDB :', fallbackErr);
+  // Si des filtres Pro étaient actifs et qu'aucun film n'a été trouvé, tenter avec filtres assouplis
+  let finalFallback = fallbackMovies;
+  if (filters) {
+    const withFilters = applyFiltersToMovies(finalFallback, filters);
+    if (withFilters.length > 0) {
+      finalFallback = withFilters;
     }
   }
 
-  // 3. bis : Application des filtres Pro post-résolution (Note minimale, Plateforme, Format)
-  if (resolvedMovies.length > 0 && filters) {
-    // a) Filtre de note minimale
-    if (filters.minRating && filters.minRating > 0) {
-      const filteredByRating = resolvedMovies.filter(m => (m.vote_average || 0) >= filters.minRating!);
-      if (filteredByRating.length > 0) {
-        resolvedMovies = filteredByRating;
-      }
-    }
+  const finalFallbackMovies = finalFallback.slice(0, fallbackLimit).map((m, idx) => ({
+    ...m,
+    match_rate: Math.max(75, 87 - idx * 2),
+    ai_match_reason: `💡 Recadrage intelligent (Niveau 3) : Œuvre phare associée à « ${primaryEntity} »`
+  }));
 
-    // b) Filtre de type de média (Films vs Séries)
-    if (filters.mediaType && filters.mediaType !== 'Tous') {
-      const targetType = filters.mediaType === 'Films' ? 'FILM' : 'SÉRIE';
-      const filteredByType = resolvedMovies.filter(m => m.media_type === targetType);
-      if (filteredByType.length > 0) {
-        resolvedMovies = filteredByType;
-      }
-    }
-
-    // c) Marquage de la plateforme sélectionnée
-    if (filters.platform && filters.platform !== 'all') {
-      const platUpper = filters.platform.toUpperCase();
-      resolvedMovies = resolvedMovies.map(m => ({
-        ...m,
-        primary_platform: platUpper
-      }));
-    }
-  }
-
-  // 4. Formulation du message d'explication selon la spécificité
-  let thoughtMessage = `✨ ${resolvedMovies.length} œuvres trouvées pour "${cleanQuery}"`;
-  if (resolvedMovies.length === 0) {
-    thoughtMessage = `Aucune œuvre trouvée pour "${cleanQuery}". Essayez d'autres mots-clés.`;
-  } else if (isFallbackTriggered) {
-    const keyTokens = fallbackExtraction?.thematicWords || [];
-    const keySummary = keyTokens.length > 0 ? `aux thèmes « ${keyTokens.slice(0, 3).join(', ')} »` : 'à votre demande';
-    thoughtMessage = `🔍 Recherche élargie (${resolvedMovies.length} œuvres suggérées) : adaptée ${keySummary}`;
-  } else if (specificity.level === 'ultra_targeted') {
-    thoughtMessage = `🎯 Œuvre principale identifiée, complétée par les alternatives les plus proches (${resolvedMovies.length} œuvres)`;
-  } else if (specificity.level === 'broad') {
-    thoughtMessage = `🎬 Sélection élargie (${resolvedMovies.length} œuvres trouvées) pour explorer "${cleanQuery}"`;
-  }
-
-  if (filters && ((filters.platform && filters.platform !== 'all') || (filters.minRating && filters.minRating > 0))) {
-    const badgeList = [];
-    if (filters.platform && filters.platform !== 'all') badgeList.push(filters.platform.toUpperCase());
-    if (filters.minRating && filters.minRating > 0) badgeList.push(`⭐ ${filters.minRating}+`);
-    thoughtMessage += ` • Filtres Pro (${badgeList.join(', ')})`;
-  }
+  // Message de suggestion contextuel contractuel :
+  const fallbackThought = `Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus pour « ${primaryEntity} »...${formatFilterSuffix(filters)}`;
 
   return {
-    thought: thoughtMessage,
+    thought: fallbackThought,
     moodDetected: cleanQuery,
-    recommendedMovies: resolvedMovies,
-    isFallbackMode: titles.length === 0 || isFallbackTriggered,
-    providerUsed: isFallbackTriggered ? `${provider} (Repli sémantique)` : provider,
+    recommendedMovies: finalFallbackMovies,
+    isFallbackMode: true,
+    providerUsed: `${provider} (Niveau 3 : Recadrage intelligent)`,
     suggestedPrompts: [
-      'Un film de braquage haletant avec twist',
-      'Une série policière sombre sous la pluie',
-      "Un chef-d'œuvre de science-fiction dystopique",
-      'Une comédie feel-good et touchante'
-    ]
+      `Les meilleurs films avec ${primaryEntity}`,
+      'Un film à grand spectacle incontournable',
+      'Un classique acclamé par la critique',
+      'Une recommandation surprise captivante'
+    ],
+    cascade: {
+      tierReached: 3,
+      criteria,
+      tier1Count: 0,
+      tier2Count: 0,
+      tier3Count: finalFallbackMovies.length
+    }
   };
 }
 

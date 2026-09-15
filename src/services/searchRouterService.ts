@@ -303,4 +303,214 @@ export function analyzeSearchIntent(queryText: string): SearchIntentResult {
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// EXTRACTION DES CRITÈRES DURS & ENTITÉS CLÉS (NIVEAU 1 & NIVEAU 3)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ExtractedCriteria {
+  actors: string[];
+  directors: string[];
+  genres: string[];
+  era?: string;
+  year?: number;
+  format?: 'film' | 'serie' | 'all';
+  themes: string[];
+  primaryEntity?: string;
+  hasHardCriteria: boolean;
+}
+
+const KNOWN_DIRECTORS_MAP: Record<string, string[]> = {
+  'Christopher Nolan': ['christopher nolan', 'nolan'],
+  'Quentin Tarantino': ['quentin tarantino', 'tarantino'],
+  'Steven Spielberg': ['steven spielberg', 'spielberg'],
+  'Martin Scorsese': ['martin scorsese', 'scorsese'],
+  'Denis Villeneuve': ['denis villeneuve', 'villeneuve'],
+  'David Fincher': ['david fincher', 'fincher'],
+  'Stanley Kubrick': ['stanley kubrick', 'kubrick'],
+  'Alfred Hitchcock': ['alfred hitchcock', 'hitchcock'],
+  'James Cameron': ['james cameron'],
+  'Ridley Scott': ['ridley scott'],
+  'Wes Anderson': ['wes anderson'],
+  'Hayao Miyazaki': ['hayao miyazaki', 'miyazaki'],
+  'Bong Joon-ho': ['bong joon-ho', 'bong joon ho'],
+  'Park Chan-wook': ['park chan-wook', 'park chan wook'],
+  'Pedro Almodóvar': ['almodovar', 'almodóvar', 'pedro almodovar'],
+  'François Truffaut': ['truffaut'],
+  'Jean-Luc Godard': ['godard'],
+  'Luc Besson': ['luc besson']
+};
+
+const KNOWN_ACTORS_MAP: Record<string, string[]> = {
+  'Leonardo DiCaprio': ['leonardo dicaprio', 'dicaprio'],
+  'Brad Pitt': ['brad pitt'],
+  'Tom Cruise': ['tom cruise'],
+  'Keanu Reeves': ['keanu reeves'],
+  'Christian Bale': ['christian bale'],
+  'Hugh Jackman': ['hugh jackman'],
+  'Ryan Reynolds': ['ryan reynolds'],
+  'Bruce Willis': ['bruce willis'],
+  'Denzel Washington': ['denzel washington'],
+  'Al Pacino': ['al pacino'],
+  'Robert De Niro': ['robert de niro', 'de niro'],
+  'Morgan Freeman': ['morgan freeman'],
+  'Johnny Depp': ['johnny depp'],
+  'Tom Hanks': ['tom hanks'],
+  'Matt Damon': ['matt damon'],
+  'Joaquin Phoenix': ['joaquin phoenix'],
+  'Cillian Murphy': ['cillian murphy'],
+  'Emma Stone': ['emma stone'],
+  'Meryl Streep': ['meryl streep'],
+  'Scarlett Johansson': ['scarlett johansson'],
+  'Natalie Portman': ['natalie portman'],
+  'Harrison Ford': ['harrison ford'],
+  'Clint Eastwood': ['clint eastwood'],
+  'Matthew McConaughey': ['matthew mcconaughey', 'mcconaughey'],
+  'Timothée Chalamet': ['timothée chalamet', 'timothee chalamet', 'chalamet']
+};
+
+/**
+ * Isole les critères durs (acteur, réalisateur, format, année) et dégage l'entité principale
+ * pour alimenter la recherche stricte (Niveau 1) et le recadrage intelligent (Niveau 3).
+ */
+export function extractHardCriteriaAndEntities(queryText: string): ExtractedCriteria {
+  const clean = (queryText || '').trim();
+  const lower = clean.toLowerCase();
+
+  const actors: string[] = [];
+  const directors: string[] = [];
+  const genres: string[] = [];
+  const themes: string[] = [];
+  let era: string | undefined;
+  let year: number | undefined;
+  let format: 'film' | 'serie' | 'all' = 'all';
+
+  // 1. Format (Film vs Série)
+  if (/\b(série|séries|serie|series|mini-série|mini-serie|série tv|serie tv)\b/i.test(lower)) {
+    format = 'serie';
+  } else if (/\b(film|films|long-métrage|long metrage|court-métrage|court metrage)\b/i.test(lower)) {
+    format = 'film';
+  }
+
+  // 2. Année précise ou décennie
+  const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/);
+  if (yearMatch) {
+    const y = parseInt(yearMatch[1], 10);
+    if (y >= 1900 && y <= 2035) {
+      year = y;
+    }
+  }
+
+  const eraMatch = BROAD_ERAS.find(e => lower.includes(e));
+  if (eraMatch) {
+    era = eraMatch;
+  }
+
+  // 3. Détection des Réalisateurs (Mappage connu + motifs 'réalisé par', 'de [Nom]')
+  for (const [canonicalName, aliases] of Object.entries(KNOWN_DIRECTORS_MAP)) {
+    if (aliases.some(a => lower.includes(a))) {
+      // Si la phrase contient 'de X' ou 'par X' ou simplement le nom
+      if (!directors.includes(canonicalName)) {
+        directors.push(canonicalName);
+      }
+    }
+  }
+
+  // Détection contextuelle 'réalisé par ...' ou 'un film de ...'
+  const dirPattern = /\b(?:réalisé par|realise par|un film de|du réalisateur|de la réalisatrice)\s+([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
+  const dirMatch = clean.match(dirPattern);
+  if (dirMatch && dirMatch[1]) {
+    const candidate = dirMatch[1].trim();
+    if (candidate.length > 2 && !directors.some(d => d.toLowerCase() === candidate.toLowerCase())) {
+      directors.push(candidate);
+    }
+  }
+
+  // 4. Détection des Acteurs (Mappage connu + motifs 'avec [Nom]', 'joué par [Nom]')
+  for (const [canonicalName, aliases] of Object.entries(KNOWN_ACTORS_MAP)) {
+    if (aliases.some(a => lower.includes(a))) {
+      // Vérifier que ce n'est pas déjà rangé comme réalisateur exclusif
+      if (!directors.includes(canonicalName) || lower.includes('avec ' + aliases[0])) {
+        if (!actors.includes(canonicalName)) {
+          actors.push(canonicalName);
+        }
+      }
+    }
+  }
+
+  // Détection contextuelle 'avec ...' ou 'joué par ...'
+  const actorPattern = /\b(?:avec|joué par|joue par|mettant en vedette)\s+(?:l'acteur\s+|l'actrice\s+)?([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
+  const actorMatch = clean.match(actorPattern);
+  if (actorMatch && actorMatch[1]) {
+    const candidate = actorMatch[1].trim();
+    const candidateLower = candidate.toLowerCase();
+    const isStopWord = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette'].includes(candidateLower);
+    if (!isStopWord && candidate.length > 2 && !actors.some(a => a.toLowerCase() === candidateLower)) {
+      actors.push(candidate);
+    }
+  }
+
+  // 5. Genres
+  for (const g of BROAD_GENRES) {
+    if (lower.includes(g)) {
+      const capitalized = g.charAt(0).toUpperCase() + g.slice(1);
+      if (!genres.includes(capitalized)) {
+        genres.push(capitalized);
+      }
+    }
+  }
+
+  // 6. Thèmes & Tropes d'ambiance
+  const themeKeywords = [
+    'huis clos', 'twist', 'espace', 'trou noir', 'boucle temporelle',
+    'braquage', 'paranoïa', 'amnésie', 'sniper', 'intelligence artificielle',
+    'sous-marin', 'cercueil', 'zombie', 'vampire', 'cyberpunk', 'dystopie',
+    'enquête', 'infiltration', 'voyage dans le temps'
+  ];
+  for (const t of themeKeywords) {
+    if (lower.includes(t) && !themes.includes(t)) {
+      themes.push(t);
+    }
+  }
+
+  // 7. Entité Principale (pour le Recadrage Niveau 3)
+  // Priorité : Acteur majeur > Réalisateur majeur > Genre majeur > Thème dominant > Mots clés
+  let primaryEntity: string | undefined;
+  if (actors.length > 0) {
+    primaryEntity = actors[0];
+  } else if (directors.length > 0) {
+    primaryEntity = directors[0];
+  } else if (genres.length > 0) {
+    primaryEntity = genres[0];
+  } else if (themes.length > 0) {
+    primaryEntity = themes[0];
+  } else if (era) {
+    primaryEntity = era;
+  } else {
+    // 2-3 premiers mots signifiants
+    const meaningful = clean
+      .replace(/^(un|une|le|la|les|cherche|trouve|film|série)\s+/gi, '')
+      .split(/\s+/)
+      .slice(0, 3)
+      .join(' ');
+    if (meaningful.length > 2) {
+      primaryEntity = meaningful;
+    }
+  }
+
+  const hasHardCriteria = actors.length > 0 || directors.length > 0 || year !== undefined || era !== undefined || format !== 'all';
+
+  return {
+    actors,
+    directors,
+    genres,
+    era,
+    year,
+    format,
+    themes,
+    primaryEntity,
+    hasHardCriteria
+  };
+}
+
 export default analyzeSearchIntent;
+

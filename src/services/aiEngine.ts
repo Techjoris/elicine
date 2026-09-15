@@ -7,6 +7,8 @@ import {
 import { analyzeSearchIntent, analyzeQuerySpecificity, SpecificityAnalysis } from './searchRouterService';
 import { unifiedAiSearch, analyzeQuerySpecificity as analyzeQuerySpecificityExport } from './unifiedAiSearch';
 
+import { SearchCascadeInfo } from './unifiedAiSearch';
+
 export interface AIRecommendationResult {
   thought: string;
   moodDetected: string;
@@ -14,6 +16,7 @@ export interface AIRecommendationResult {
   suggestedPrompts: string[];
   isFallbackMode?: boolean;
   providerUsed?: string;
+  cascade?: SearchCascadeInfo;
 }
 
 export interface RawAiMovieItem {
@@ -37,8 +40,11 @@ export {
   getApiKey,
   analyzeQuerySpecificity,
   extractThematicKeywords,
-  THEMATIC_GENRE_TAXONOMY
+  THEMATIC_GENRE_TAXONOMY,
+  type SearchCascadeInfo
 } from './unifiedAiSearch';
+export { extractHardCriteriaAndEntities, type ExtractedCriteria } from './searchRouterService';
+
 
 function getUnifiedSystemPrompt(specificity: SpecificityAnalysis): string {
   if (specificity.level === 'ultra_targeted') {

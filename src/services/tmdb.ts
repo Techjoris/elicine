@@ -738,6 +738,141 @@ export async function searchMoviesTmdb(query: string, apiKey?: string, language?
   }
 }
 
+/**
+ * Recherche une personnalité (acteur ou réalisateur) et extrait ses œuvres les plus notables.
+ * Utilisé pour la vérification stricte (Niveau 1) et le recadrage intelligent (Niveau 3).
+ */
+export async function searchPersonAndGetWorks(
+  personName: string,
+  role?: 'cast' | 'crew',
+  apiKey?: string,
+  language?: string
+): Promise<Movie[]> {
+  const cleanName = (personName || '').trim();
+  if (!cleanName || cleanName.length < 2) return [];
+
+  const lang = getActiveTmdbLanguage(language);
+
+  try {
+    // 1. Recherche de la personne via /search/person
+    const res = await fetchTmdbEndpoint('search/person', {
+      query: cleanName,
+      language: lang,
+      include_adult: false
+    }, apiKey);
+
+    if (!res.ok) return [];
+    const data = await res.json();
+    const person = data.results?.[0];
+    if (!person || !person.id) return [];
+
+    // 2. Récupération des crédits complets pour avoir une liste riche triée par popularité
+    try {
+      const creditsRes = await fetchTmdbEndpoint(`person/${person.id}/combined_credits`, {
+        language: lang
+      }, apiKey);
+
+      if (creditsRes.ok) {
+        const creditsData = await creditsRes.json();
+        let pool: any[] = [];
+        if (role === 'crew') {
+          pool = creditsData.crew || [];
+        } else if (role === 'cast') {
+          pool = creditsData.cast || [];
+        } else {
+          pool = [...(creditsData.cast || []), ...(creditsData.crew || [])];
+        }
+
+        const sorted = pool
+          .filter((m: any) => m && (m.vote_count || 0) >= 15)
+          .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
+          .slice(0, 10);
+
+        if (sorted.length > 0) {
+          return formatTmdbResults(sorted);
+        }
+      }
+    } catch (_) {}
+
+    // 3. Repli sur known_for si combined_credits n'a rien renvoyé
+    const knownForList = (person.known_for || []).filter(
+      (m: any) => m && (m.media_type === 'movie' || m.media_type === 'tv' || !m.media_type)
+    );
+    if (knownForList.length > 0) {
+      return formatTmdbResults(knownForList);
+    }
+
+    return [];
+  } catch (err) {
+    console.warn('[TMDB] Erreur searchPersonAndGetWorks:', err);
+    return [];
+  }
+}
+
+/**
+ * Récupère les œuvres phares pour une entité principale (Niveau 3 : Recadrage)
+ */
+export async function fetchEntityFallbackWorks(
+  entity: string,
+  genreId?: number,
+  apiKey?: string,
+  language?: string
+): Promise<Movie[]> {
+  const cleanEntity = (entity || '').trim();
+  if (!cleanEntity && !genreId) return [];
+
+  const lang = getActiveTmdbLanguage(language);
+
+  // 1. Si l'entité est une personne connue ou contient un nom composé
+  if (cleanEntity.includes(' ') || cleanEntity.length >= 4) {
+    const personWorks = await searchPersonAndGetWorks(cleanEntity, undefined, apiKey, language);
+    if (personWorks.length > 0) {
+      return personWorks;
+    }
+  }
+
+  // 2. Si un genreId est présent
+  if (genreId) {
+    try {
+      const discRes = await fetchTmdbEndpoint('discover/movie', {
+        with_genres: genreId,
+        sort_by: 'vote_average.desc',
+        'vote_count.gte': 150,
+        language: lang,
+        include_adult: false
+      }, apiKey);
+
+      if (discRes.ok) {
+        const discData = await discRes.json();
+        if (discData.results && discData.results.length > 0) {
+          return formatTmdbResults(discData.results.slice(0, 8));
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Recherche multi par nom d'entité
+  if (cleanEntity) {
+    try {
+      const searchRes = await fetchTmdbEndpoint('search/multi', {
+        query: cleanEntity,
+        language: lang,
+        include_adult: false
+      }, apiKey);
+
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.results && searchData.results.length > 0) {
+          return formatTmdbResults(searchData.results.slice(0, 8));
+        }
+      }
+    } catch (_) {}
+  }
+
+  return [];
+}
+
+
 export async function testTmdbApiKey(key?: string): Promise<{ valid: boolean; message: string }> {
   try {
     const res = await fetchTmdbEndpoint('authentication', {}, key);
