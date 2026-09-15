@@ -1,13 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from '../../../api/_email.js';
-
-// Initialisation du client Supabase administrateur (contourne les RLS)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabaseAdmin = (supabaseUrl && supabaseKey)
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+import { activateUserPassPro } from '../../../api/_pro-activation.js';
 
 function jsonResponse(data, status = 200) {
   if (typeof Response !== 'undefined' && Response.json) {
@@ -28,7 +19,7 @@ export async function POST(req) {
       body = {};
     }
 
-    console.log('[Webhook Payment] Payload reçu :', JSON.stringify(body));
+    console.log('[Webhook Payment Route] Payload reçu :', JSON.stringify(body));
 
     // 1. Extraction et nettoyage de l'adresse email
     const rawEmail = 
@@ -112,116 +103,29 @@ export async function POST(req) {
       metadata?.is_donation === true
     );
 
-    const now = new Date().toISOString();
-
-    // ==========================================
-    // CAS 1 : DON / SOUTIEN (Pas de mode Pro)
-    // ==========================================
-    if (isDonation) {
-      console.log(`[Webhook] Traitement Don/Soutien pour ${cleanEmail} (${numericAmount} ${currency})`);
-
-      if (supabaseAdmin) {
-        // Enregistrement dans la table donations si elle existe, sinon dans subscriptions (type donation)
-        try {
-          await supabaseAdmin.from('donations').insert({
-            email: cleanEmail,
-            amount: numericAmount,
-            currency,
-            payment_reference: paymentReference,
-            created_at: now
-          });
-        } catch (_) {
-          await supabaseAdmin.from('subscriptions').upsert({
-            id: `don_${paymentReference}`,
-            email: cleanEmail,
-            customer_name: customerName,
-            plan: 'donation',
-            amount: numericAmount,
-            currency,
-            status: 'completed',
-            payment_reference: paymentReference,
-            created_at: now,
-            updated_at: now
-          }).catch(subErr => console.warn('[Webhook Don Warning]:', subErr?.message));
-        }
-      }
-
-      // Envoi immédiat de l'email de remerciement don via Resend
-      const emailRes = await sendDonationThankYouEmail(cleanEmail, {
-        customerName,
-        amount: String(numericAmount)
-      });
-
-      return jsonResponse({
-        success: true,
-        type: 'donation',
-        emailSent: emailRes.success,
-        message: 'Don enregistré avec succès et email de remerciement envoyé.'
-      }, 200);
-    }
-
-    // ==========================================
-    // CAS 2 : ABONNEMENT PRO (Activation is_pro)
-    // ==========================================
-    console.log(`[Webhook] Activation Abonnement Pro pour ${cleanEmail} (Plan: ${plan})`);
-
-    const expiresDate = new Date();
-    if (plan === 'yearly') {
-      expiresDate.setFullYear(expiresDate.getFullYear() + 1);
-    } else {
-      expiresDate.setDate(expiresDate.getDate() + 30);
-    }
-    const expiresAt = expiresDate.toISOString();
-
-    if (supabaseAdmin) {
-      // 1. Activation is_pro dans la table profiles
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .update({
-          is_pro: true,
-          updated_at: now
-        })
-        .eq('email', cleanEmail);
-
-      if (profileError) {
-        console.error('[Webhook Supabase Profile Error]:', profileError);
-      } else {
-        console.log(`[Webhook Supabase] Profil ${cleanEmail} mis à jour : is_pro = true`);
-      }
-
-      // 2. Enregistrement ou mise à jour dans la table subscriptions
-      await supabaseAdmin.from('subscriptions').upsert({
-        id: `sub_${paymentReference}`,
-        email: cleanEmail,
-        customer_name: customerName,
-        plan,
-        amount: numericAmount,
-        currency,
-        status: 'active',
-        payment_reference: paymentReference,
-        terms_accepted: true,
-        created_at: now,
-        updated_at: now,
-        expires_at: expiresAt
-      }).catch(subErr => console.warn('[Webhook Subscriptions Upsert Warning]:', subErr?.message));
-    }
-
-    // 3. Envoi immédiat de l'email de bienvenue Pro via Resend
-    const emailRes = await sendProWelcomeEmail(cleanEmail, {
+    // 5. Activation centralisée
+    const activationResult = await activateUserPassPro(cleanEmail, {
+      plan,
       customerName,
-      plan
+      amount: numericAmount,
+      currency,
+      gateway: body?.gateway || 'webhook',
+      paymentReference,
+      isDonation
     });
 
     return jsonResponse({
       success: true,
-      type: 'subscription',
-      isPro: true,
-      emailSent: emailRes.success,
-      message: 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
+      type: isDonation ? 'donation' : 'subscription',
+      isPro: !isDonation,
+      activation: activationResult,
+      message: isDonation
+        ? 'Don enregistré avec succès et email de remerciement envoyé.'
+        : 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
     }, 200);
 
   } catch (err) {
-    console.error('[Webhook Internal Error]:', err);
+    console.error('[Webhook Route Internal Error]:', err);
     return jsonResponse(
       { error: 'Erreur interne du serveur lors du traitement du webhook.' },
       500

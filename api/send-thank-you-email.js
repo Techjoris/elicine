@@ -1,20 +1,4 @@
-import { sendDonationThankYouEmail, sendProWelcomeEmail } from './_email.js';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
-
-const supabaseAnonKey = 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import { activateUserPassPro } from './_pro-activation.js';
 
 /**
  * Route API Serverless Vercel: /api/send-thank-you-email
@@ -98,11 +82,11 @@ export default async function handler(req, res) {
       'Cinéphile'
     ).trim();
 
-    const amount = String(
+    const amount = Number(
       body.amount ||
       body.value ||
       body.numericAmount ||
-      '2'
+      2
     );
 
     const currency = String(
@@ -114,60 +98,34 @@ export default async function handler(req, res) {
     const reference = body.reference || body.paymentReference || body.orderId || `dir_${Date.now()}`;
     const isPro = body.isPro === true || body.type === 'pro' || body.plan === 'yearly' || body.plan === 'monthly';
 
-    // 1. Enregistrement optionnel dans Supabase
-    if (supabase) {
-      const now = new Date().toISOString();
-      try {
-        if (isPro) {
-          await supabase.from('profiles').update({ is_pro: true, updated_at: now }).eq('email', email);
-        } else {
-          await supabase.from('donations').insert({
-            email,
-            amount: Number(amount) || 2,
-            currency,
-            payment_reference: reference,
-            created_at: now
-          }).catch(() => {});
-        }
-      } catch (sbErr) {
-        console.warn('[Direct Thank You API] Notice Supabase:', sbErr?.message);
-      }
-    }
-
-    // 2. Déclenchement de l'envoi de l'e-mail via Resend
-    let emailResult;
-    if (isPro) {
-      console.log(`[Direct Thank You API] Envoi e-mail de bienvenue Pro à ${email}...`);
-      emailResult = await sendProWelcomeEmail(email, {
-        customerName,
-        plan: body.plan || 'monthly'
-      });
-    } else {
-      console.log(`[Direct Thank You API] Envoi e-mail de remerciement don à ${email} (Montant: ${amount} ${currency})...`);
-      emailResult = await sendDonationThankYouEmail(email, {
-        customerName,
-        amount: `${amount} ${currency !== 'USD' ? currency : '$'}`
-      });
-    }
-
-    console.log('[Direct Thank You API] Résultat Resend :', emailResult);
+    // Activation unifiée et envoi Resend
+    const activationResult = await activateUserPassPro(email, {
+      plan: isPro ? (body.plan === 'yearly' ? 'yearly' : 'monthly') : 'donation',
+      customerName,
+      amount,
+      currency,
+      gateway: body.gateway || 'direct',
+      paymentReference: reference,
+      isDonation: !isPro
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'E-mail de remerciement envoyé avec succès via Resend.',
+      message: isPro 
+        ? 'Pass Pro activé avec succès et e-mail de bienvenue envoyé.' 
+        : 'E-mail de remerciement envoyé avec succès via Resend.',
       email,
       customerName,
       amount,
       currency,
-      emailResult
+      activation: activationResult
     });
 
   } catch (error) {
-    console.error('Erreur critique Resend lors du don (Direct API):', error);
+    console.error('[Direct Thank You API Exception] Erreur :', error);
     return res.status(500).json({
       success: false,
-      error: "Erreur interne lors de l'envoi du mail de remerciement.",
-      details: error?.message || error
+      error: error?.message || 'Erreur interne lors de l\'envoi de l\'e-mail.'
     });
   }
 }

@@ -88,78 +88,72 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
       padding: 40px 16px;
     }
     .container {
-      max-width: 580px;
+      max-width: 560px;
       margin: 0 auto;
       background-color: #121214;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
     }
     .header {
-      padding: 36px 32px 24px 32px;
-      text-align: center;
-      background: linear-gradient(180deg, rgba(229, 9, 20, 0.15) 0%, rgba(18, 18, 20, 0) 100%);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 36px 32px 16px 32px;
+      text-align: left;
     }
-    .logo-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 56px;
-      height: 56px;
-      background: rgba(229, 9, 20, 0.2);
-      border: 1px solid rgba(229, 9, 20, 0.4);
-      border-radius: 16px;
-      font-size: 26px;
-      margin-bottom: 16px;
+    .brand {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #e50914;
+      margin-bottom: 8px;
     }
     .title {
-      font-size: 26px;
-      font-weight: 900;
+      font-size: 22px;
+      font-weight: 800;
       color: #ffffff;
-      margin: 0 0 8px 0;
-      letter-spacing: -0.5px;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
     }
     .subtitle {
-      font-size: 14px;
+      font-size: 13px;
       color: #a1a1aa;
       margin: 0;
     }
     .content {
-      padding: 32px;
+      padding: 16px 32px 32px 32px;
     }
     .greeting {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       color: #ffffff;
-      margin: 0 0 16px 0;
+      margin: 0 0 14px 0;
     }
     .paragraph {
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 14.5px;
+      line-height: 1.65;
       color: #d4d4d8;
-      margin: 0 0 24px 0;
+      margin: 0 0 20px 0;
     }
     .features-card {
       background-color: #18181b;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
       padding: 20px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
     .features-header {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       color: #f59e0b;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .feature-item {
       display: flex;
       align-items: flex-start;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       font-size: 13.5px;
       color: #e4e4e7;
       line-height: 1.5;
@@ -167,30 +161,30 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
     .feature-item:last-child {
       margin-bottom: 0;
     }
-    .feature-icon {
+    .feature-dot {
+      color: #e50914;
       margin-right: 10px;
-      flex-shrink: 0;
+      font-weight: bold;
     }
     .cta-wrapper {
-      text-align: center;
+      text-align: left;
       padding: 8px 0 16px 0;
     }
     .cta-btn {
       display: inline-block;
       background-color: #e50914;
       color: #ffffff !important;
-      font-size: 15px;
-      font-weight: 800;
+      font-size: 14px;
+      font-weight: 700;
       text-decoration: none;
-      padding: 16px 36px;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(229, 9, 20, 0.4);
+      padding: 12px 28px;
+      border-radius: 10px;
     }
     .footer {
-      padding: 24px 32px;
+      padding: 20px 32px;
       background-color: #0c0c0e;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
-      text-align: center;
+      text-align: left;
       font-size: 12px;
       color: #71717a;
       line-height: 1.5;
@@ -205,49 +199,45 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <div class="logo-badge">👑</div>
-        <h1 class="title">Bienvenue dans Éliciné Pro !</h1>
+        <div class="brand">Éliciné Pro</div>
+        <h1 class="title">Bienvenue dans Éliciné Pro</h1>
         <p class="subtitle">Votre compte est activé avec succès (${planLabel})</p>
       </div>
 
       <div class="content">
         <p class="greeting">Bonjour ${customerName},</p>
         <p class="paragraph">
-          Félicitations ! Votre abonnement <strong>Éliciné Pro</strong> est officiellement actif. Vous bénéficiez dès maintenant d'un accès sans aucune restriction à l'algorithme d'intelligence artificielle cinématographique le plus performant.
+          Votre abonnement <strong>Éliciné Pro</strong> est désormais actif. Vous bénéficiez d'un accès sans restriction à l'ensemble des fonctionnalités et de l'intelligence artificielle d'Éliciné.
         </p>
 
         <div class="features-card">
-          <div class="features-header">Vos privilèges cinéphiles exclusifs :</div>
+          <div class="features-header">Vos privilèges Pro inclus :</div>
           <div class="feature-item">
-            <span class="feature-icon">⚡</span>
-            <span><strong>Recherches IA illimitées :</strong> Décrivez n'importe quelle ambiance, émotion ou souvenir de film sans jamais être limité.</span>
+            <span class="feature-dot">•</span>
+            <span><strong>Recherches IA illimitées :</strong> Décrivez toute ambiance, émotion ou souvenir de film sans restriction.</span>
           </div>
           <div class="feature-item">
-            <span class="feature-icon">🎬</span>
-            <span><strong>Filtres streaming avancés :</strong> Ciblez directement vos plateformes favorites (Netflix, Prime, Canal+, Disney+, Apple TV...).</span>
+            <span class="feature-dot">•</span>
+            <span><strong>Filtres streaming complets :</strong> Ciblez directement vos plateformes favorites (Netflix, Prime Video, Disney+, Canal+, Apple TV+).</span>
           </div>
           <div class="feature-item">
-            <span class="feature-icon">⭐</span>
-            <span><strong>Notes critiques sur-mesure :</strong> Filtrez par notes minimales pour dénicher uniquement des chefs-d'œuvre.</span>
+            <span class="feature-dot">•</span>
+            <span><strong>Notes critiques sur-mesure :</strong> Filtrez les pépites selon vos exigences de notation.</span>
           </div>
           <div class="feature-item">
-            <span class="feature-icon">📱</span>
-            <span><strong>Mode autonome plein écran (PWA) :</strong> Installez Éliciné sur votre écran d'accueil sans barres de navigateur pour une immersion totale.</span>
+            <span class="feature-dot">•</span>
+            <span><strong>Mode autonome plein écran :</strong> Installation sur écran d'accueil sans interface de navigateur.</span>
           </div>
         </div>
 
         <div class="cta-wrapper">
-          <a href="https://elicine.app" class="cta-btn">Accéder à mon compte sur elicine.app</a>
+          <a href="https://elicine.app" class="cta-btn">Accéder à Éliciné Pro</a>
         </div>
-
-        <p class="paragraph" style="font-size: 12.5px; color: #71717a; text-align: center; margin-top: 16px;">
-          Si vous n'êtes pas encore connecté sur votre appareil, connectez-vous avec cette même adresse email pour profiter instantanément de vos privilèges Pro.
-        </p>
       </div>
 
       <div class="footer">
-        <p style="margin: 0 0 8px 0;"><strong>Éliciné</strong> — Le cinéma d'exception, élu pour vous.</p>
-        <p style="margin: 0;">Besoin d'aide ? Contactez notre support à <a href="mailto:contact@elicine.app">contact@elicine.app</a></p>
+        <p style="margin: 0 0 6px 0;"><strong>Éliciné</strong> — Le cinéma d'exception, élu pour vous.</p>
+        <p style="margin: 0;">Besoin d'aide ? Contactez notre équipe à <a href="mailto:support@elicine.app">support@elicine.app</a></p>
       </div>
     </div>
   </div>

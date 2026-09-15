@@ -1,12 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabaseAdmin = (supabaseUrl && supabaseKey)
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+import { activateUserPassPro } from './_pro-activation.js';
 
 /**
  * Handler Serverless Vercel pour /api/webhook
@@ -106,224 +98,159 @@ export default async function handler(req, res) {
       body?.custom_fields?.email,
       body?.user_email,
       body?.donorEmail,
-      body?.donor_email
+      body?.donor_email,
+      body?.user?.email,
+      body?.client?.email,
+      body?.subscriber?.email
     ];
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    let foundEmail = null;
-
+    let extractedEmail = '';
     for (const candidate of emailCandidatePaths) {
-      if (typeof candidate === 'string') {
-        const clean = candidate.trim().toLowerCase();
-        if (emailRegex.test(clean)) {
-          foundEmail = clean;
-          break;
-        }
+      if (typeof candidate === 'string' && candidate.trim().length > 3 && candidate.includes('@')) {
+        extractedEmail = candidate.trim().toLowerCase();
+        break;
       }
     }
 
-    // Recherche récursive profonde dans tout le payload si non trouvé par chemin direct
-    if (!foundEmail) {
-      try {
-        const bodyStr = JSON.stringify(body);
-        const allMatches = bodyStr.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-        if (allMatches && allMatches.length > 0) {
-          const valid = allMatches.find(e => {
-            const lower = e.toLowerCase();
-            return !lower.includes('sentry') && !lower.includes('github') && !lower.includes('vercel');
-          });
-          if (valid) foundEmail = valid.toLowerCase().trim();
-        }
-      } catch (_) {}
+    if (!extractedEmail) {
+      console.warn('[Webhook Vercel] ⚠️ Email non trouvé dans le payload. Fallback sur support@elicine.app');
+      extractedEmail = 'support@elicine.app';
     }
 
-    // Fallback de sécurité : support@elicine.app
-    const cleanEmail = foundEmail || 'support@elicine.app';
+    const cleanEmail = extractedEmail;
 
-    if (!foundEmail) {
-      console.warn('[Webhook Vercel] ⚠️ Aucun e-mail trouvé dans le payload. Utilisation du fallback de sécurité :', cleanEmail);
-      console.log('[Webhook Vercel] Inspection complète du payload sans email extrait :', JSON.stringify(body, null, 2));
-    } else {
-      console.log('[Webhook Vercel] ✓ E-mail donateur extrait avec succès :', cleanEmail);
+    // 3. Extraction du nom du donateur ou client
+    const customerNameCandidatePaths = [
+      body?.customer_name,
+      body?.name,
+      body?.customer?.name,
+      body?.customer?.full_name,
+      body?.data?.customer_name,
+      body?.data?.name,
+      body?.data?.customer?.name,
+      body?.data?.customer?.full_name,
+      body?.data?.payer?.name?.given_name,
+      body?.payer?.name?.given_name,
+      body?.resource?.payer?.name?.given_name,
+      body?.metadata?.customer_name,
+      body?.metadata?.name
+    ];
+
+    let customerName = 'Cinéphile';
+    for (const candidate of customerNameCandidatePaths) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        customerName = candidate.trim();
+        break;
+      }
     }
 
-    // 3. Extraction du nom du client
-    const customerName = 
-      body?.customer_name || 
-      body?.name || 
-      body?.data?.customer_name || 
-      body?.customer?.name ||
-      body?.payer?.name?.given_name || 
-      cleanEmail.split('@')[0] || 
-      'Cinéphile';
+    // 4. Extraction du montant et de la devise
+    const amountCandidatePaths = [
+      body?.amount,
+      body?.data?.amount,
+      body?.data?.object?.amount,
+      body?.data?.object?.amount_total,
+      body?.data?.attributes?.amount,
+      body?.resource?.amount?.value,
+      body?.value,
+      body?.total,
+      body?.metadata?.amount
+    ];
 
-    // 4. Extraction du montant, devise et référence
-    const numericAmount = Number(
-      body?.amount || 
-      body?.data?.amount || 
-      body?.value || 
-      body?.resource?.amount?.value || 
-      1.99
-    );
-    const currency = (
-      body?.currency || 
-      body?.data?.currency || 
-      body?.resource?.amount?.currency_code || 
-      'USD'
-    ).toUpperCase();
-    const paymentReference = 
-      body?.reference || 
-      body?.payment_reference || 
-      body?.order_id || 
-      body?.data?.reference || 
-      body?.id || 
-      body?.resource?.id || 
-      `ref_${Date.now()}`;
-    const plan = (
-      body?.plan || 
-      body?.data?.plan || 
-      body?.metadata?.plan || 
-      (numericAmount > 10 ? 'yearly' : 'monthly')
+    let numericAmount = 2;
+    for (const candidate of amountCandidatePaths) {
+      if (candidate !== undefined && candidate !== null && !isNaN(Number(candidate))) {
+        const parsed = Number(candidate);
+        numericAmount = parsed > 100 && (body?.currency === 'EUR' || body?.currency === 'USD')
+          ? parsed / 100 
+          : parsed;
+        break;
+      }
+    }
+
+    const currencyCandidatePaths = [
+      body?.currency,
+      body?.data?.currency,
+      body?.data?.object?.currency,
+      body?.data?.attributes?.currency,
+      body?.resource?.amount?.currency_code,
+      body?.metadata?.currency
+    ];
+
+    let currency = 'USD';
+    for (const candidate of currencyCandidatePaths) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        currency = candidate.trim().toUpperCase();
+        break;
+      }
+    }
+
+    // 5. Extraction de la référence de paiement
+    const paymentReference = (
+      body?.reference ||
+      body?.payment_reference ||
+      body?.order_id ||
+      body?.data?.reference ||
+      body?.data?.id ||
+      body?.data?.object?.id ||
+      body?.resource?.id ||
+      body?.id ||
+      `wh_${Date.now()}`
+    ).toString();
+
+    // 6. Détection de la passerelle de paiement
+    const detectedGateway = (
+      body?.gateway ||
+      body?.provider ||
+      body?.payment_provider ||
+      (body?.event_type?.includes('PAYMENT.') || body?.resource ? 'paypal' : 'saspay')
     );
 
-    // 5. Distinction formelle : Abonnement Pro vs Don / Soutien
-    const metadata = body?.metadata || body?.data?.metadata || body?.custom_fields || {};
+    // 7. Détection du type de paiement : Don vs Abonnement Pro
     const rawType = String(
-      metadata?.type || 
       body?.type || 
-      body?.item_type || 
       body?.data?.type || 
-      body?.data?.item_type || 
-      metadata?.item_type || 
-      body?.product_type || 
+      body?.item_type || 
+      body?.metadata?.type || 
+      body?.plan || 
+      body?.data?.plan ||
+      body?.description ||
+      body?.data?.description ||
+      body?.resource?.purchase_units?.[0]?.description ||
       ''
-    ).toLowerCase().trim();
+    ).toLowerCase();
 
     const isDonation = (
-      rawType === 'don' ||
-      rawType === 'donation' ||
-      rawType === 'tip' ||
-      rawType === 'support' ||
-      rawType === 'soutien' ||
-      body?.is_donation === true ||
-      metadata?.is_donation === true
+      rawType.includes('don') ||
+      rawType.includes('soutien') ||
+      rawType.includes('tip') ||
+      rawType.includes('gift') ||
+      (numericAmount > 0 && numericAmount <= 5 && !rawType.includes('pro') && !rawType.includes('month') && !rawType.includes('year'))
     );
 
-    const now = new Date().toISOString();
+    const plan = isDonation 
+      ? 'donation' 
+      : (rawType.includes('year') || numericAmount >= 10 ? 'yearly' : 'monthly');
 
-    // ==========================================
-    // CAS 1 : DON / SOUTIEN (Pas de mode Pro)
-    // ==========================================
-    if (isDonation) {
-      console.log(`[Webhook] Traitement Don/Soutien validé pour ${cleanEmail} (${numericAmount} ${currency})`);
-
-      if (supabaseAdmin) {
-        try {
-          await supabaseAdmin.from('donations').insert({
-            email: cleanEmail,
-            amount: numericAmount,
-            currency,
-            payment_reference: paymentReference,
-            created_at: now
-          });
-        } catch (_) {
-          await supabaseAdmin.from('subscriptions').upsert({
-            id: `don_${paymentReference}`,
-            email: cleanEmail,
-            customer_name: customerName,
-            plan: 'donation',
-            amount: numericAmount,
-            currency,
-            status: 'completed',
-            payment_reference: paymentReference,
-            created_at: now,
-            updated_at: now
-          }).catch(subErr => console.warn('[Webhook Don Warning]:', subErr?.message));
-        }
-      }
-
-      // Envoi sécurisé et attendu de l'e-mail de remerciement via Resend
-      try {
-        console.log(`[Webhook Don] Envoi de l'e-mail de remerciement à ${cleanEmail}...`);
-        const emailResult = await sendDonationThankYouEmail(cleanEmail, {
-          customerName,
-          amount: String(numericAmount)
-        });
-        console.log('E-mail de remerciement envoyé avec succès:', emailResult);
-      } catch (error) {
-        console.error('Erreur critique Resend lors du don:', error);
-      }
-
-      return res.status(200).json({
-        success: true,
-        type: 'donation',
-        message: 'Don enregistré avec succès et email de remerciement envoyé.'
-      });
-    }
-
-    // ==========================================
-    // CAS 2 : ABONNEMENT PRO (Activation is_pro)
-    // ==========================================
-    console.log(`[Webhook] Activation Abonnement Pro pour ${cleanEmail} (Plan: ${plan})`);
-
-    const expiresDate = new Date();
-    if (plan === 'yearly') {
-      expiresDate.setFullYear(expiresDate.getFullYear() + 1);
-    } else {
-      expiresDate.setDate(expiresDate.getDate() + 30);
-    }
-    const expiresAt = expiresDate.toISOString();
-
-    if (supabaseAdmin) {
-      // 1. Activation is_pro dans la table profiles
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .update({
-          is_pro: true,
-          updated_at: now
-        })
-        .eq('email', cleanEmail);
-
-      if (profileError) {
-        console.error('[Webhook Supabase Profile Error]:', profileError);
-      } else {
-        console.log(`[Webhook Supabase] Profil ${cleanEmail} mis à jour : is_pro = true`);
-      }
-
-      // 2. Enregistrement ou mise à jour dans la table subscriptions
-      await supabaseAdmin.from('subscriptions').upsert({
-        id: `sub_${paymentReference}`,
-        email: cleanEmail,
-        customer_name: customerName,
-        plan,
-        amount: numericAmount,
-        currency,
-        status: 'active',
-        payment_reference: paymentReference,
-        terms_accepted: true,
-        created_at: now,
-        updated_at: now,
-        expires_at: expiresAt
-      }).catch(subErr => console.warn('[Webhook Subscriptions Upsert Warning]:', subErr?.message));
-    }
-
-    // 3. Envoi sécurisé et attendu de l'email de bienvenue Pro via Resend
-    try {
-      console.log(`[Webhook Pro] Envoi de l'email de bienvenue Pro à ${cleanEmail}...`);
-      const emailResult = await sendProWelcomeEmail(cleanEmail, {
-        customerName,
-        plan
-      });
-      console.log('E-mail de bienvenue Pro envoyé avec succès:', emailResult);
-    } catch (error) {
-      console.error('Erreur critique Resend lors de l\'activation Pro:', error);
-    }
+    // 8. Activation unifiée Supabase + Envoi Resend
+    const activationResult = await activateUserPassPro(cleanEmail, {
+      plan,
+      customerName,
+      amount: numericAmount,
+      currency,
+      gateway: detectedGateway,
+      paymentReference,
+      isDonation
+    });
 
     return res.status(200).json({
       success: true,
-      type: 'subscription',
-      isPro: true,
-      message: 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
+      type: isDonation ? 'donation' : 'subscription',
+      isPro: !isDonation,
+      message: isDonation 
+        ? 'Don enregistré avec succès et email de remerciement envoyé.' 
+        : 'Abonnement Pro activé avec succès et email de bienvenue envoyé.',
+      activation: activationResult
     });
 
   } catch (err) {

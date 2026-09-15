@@ -1,21 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { paypalRecordPaymentSchema } from './_security.js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
-
-const supabaseUrl = 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
-
-const supabaseAnonKey = 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import { activateUserPassPro } from './_pro-activation.js';
 
 export default async function handler(req, res) {
   // Entêtes CORS
@@ -81,49 +65,10 @@ export default async function handler(req, res) {
         details
       } = validation.data;
 
-      const now = new Date().toISOString();
       const targetSubId = subscriptionId || `sub_paypal_${orderId}`;
       const cleanEmail = (email || details?.payer?.email_address || '').trim().toLowerCase();
       const cleanName = customerName || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro');
       const numericAmount = Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
-
-      const expiresDate = new Date();
-      if (plan === 'yearly') {
-        expiresDate.setFullYear(expiresDate.getFullYear() + 1);
-      } else {
-        expiresDate.setDate(expiresDate.getDate() + 30);
-      }
-      const expiresAt = expiresDate.toISOString();
-
-      if (supabase) {
-        try {
-          await supabase.from('subscriptions').upsert({
-            id: targetSubId,
-            user_id: userId || `usr_${Date.now()}`,
-            email: cleanEmail,
-            customer_name: cleanName,
-            plan: plan || 'monthly',
-            currency: currency || 'USD',
-            amount: numericAmount,
-            status: 'active',
-            payment_reference: orderId,
-            terms_accepted: true,
-            created_at: now,
-            updated_at: now,
-            expires_at: expiresAt
-          });
-
-          // Activation is_pro dans profiles
-          if (cleanEmail) {
-            await supabase.from('profiles').update({
-              is_pro: true,
-              updated_at: now
-            }).eq('email', cleanEmail);
-          }
-        } catch (sbErr) {
-          console.warn('[PayPal Server] Erreur upsert Supabase:', sbErr);
-        }
-      }
 
       // Détection don vs abonnement Pro
       const isDonation = (
@@ -133,35 +78,25 @@ export default async function handler(req, res) {
         (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(validation.data.plan))
       );
 
-      // Envoi sécurisé et attendu de l'e-mail de bienvenue Pro ou remerciement don
-      if (cleanEmail) {
-        if (isDonation) {
-          try {
-            console.log(`[PayPal] Envoi e-mail de remerciement don à ${cleanEmail}...`);
-            const emailRes = await sendDonationThankYouEmail(cleanEmail, {
-              customerName: cleanName,
-              amount: String(numericAmount)
-            });
-            console.log('E-mail de remerciement envoyé avec succès:', emailRes);
-          } catch (error) {
-            console.error('Erreur critique Resend lors du don:', error);
-          }
-        } else {
-          try {
-            console.log(`[PayPal] Envoi e-mail de bienvenue Pro à ${cleanEmail}...`);
-            const emailRes = await sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan });
-            console.log('E-mail de bienvenue Pro envoyé avec succès:', emailRes);
-          } catch (error) {
-            console.error('Erreur critique Resend lors de l\'activation Pro:', error);
-          }
-        }
-      }
+      // Activation centralisée Supabase + E-mail Resend
+      const activationResult = await activateUserPassPro(cleanEmail, {
+        plan: isDonation ? 'donation' : (plan || 'monthly'),
+        customerName: cleanName,
+        amount: numericAmount,
+        currency: currency || 'USD',
+        gateway: 'paypal',
+        paymentReference: orderId,
+        subscriptionId: targetSubId,
+        isDonation,
+        userId
+      });
 
       return res.status(200).json({
         success: true,
         message: "Paiement PayPal enregistré avec succès et souscription activée.",
         subscriptionId: targetSubId,
-        orderId
+        orderId,
+        activation: activationResult
       });
     } catch (err) {
       console.error('[PayPal Server Exception]:', err);
@@ -182,67 +117,43 @@ export default async function handler(req, res) {
 
       if (eventType === 'PAYMENT.CAPTURE.COMPLETED' || eventType === 'CHECKOUT.ORDER.APPROVED') {
         const resource = event.resource || {};
-        const orderId = resource.id || resource.supplementary_data?.related_ids?.order_id;
-        const payerEmail = (resource.payer?.email_address || '').trim().toLowerCase();
+        const orderId = resource.id || resource.supplementary_data?.related_ids?.order_id || `pp_${Date.now()}`;
+        
+        // Extraction robuste de l'email PayPal
+        const payerEmail = (
+          resource.payer?.email_address ||
+          resource.customer_email ||
+          resource.custom_fields?.email ||
+          resource.email ||
+          event.payer_email ||
+          ''
+        ).trim().toLowerCase();
+
         const amountValue = resource.amount?.value ? Number(resource.amount.value) : 1.99;
         const currencyCode = resource.amount?.currency_code || 'USD';
+        const payerName = resource.payer?.name?.given_name ? `${resource.payer.name.given_name} ${resource.payer.name.surname || ''}`.trim() : 'Cinéphile Pro';
+        const detectedPlan = amountValue > 10 ? 'yearly' : 'monthly';
 
-        if (orderId && supabase) {
-          const now = new Date().toISOString();
-          const targetSubId = `sub_paypal_${orderId}`;
+        // Détection don vs abonnement (description de la commande ou custom field)
+        const purchaseDesc = String(
+          resource.purchase_units?.[0]?.description ||
+          resource.purchase_units?.[0]?.items?.[0]?.name ||
+          resource.custom_id ||
+          ''
+        ).toLowerCase();
+        const isDonation = purchaseDesc.includes('don') || purchaseDesc.includes('soutien') || purchaseDesc.includes('tip');
 
-          await supabase.from('subscriptions').upsert({
-            id: targetSubId,
-            email: payerEmail || null,
+        if (payerEmail) {
+          await activateUserPassPro(payerEmail, {
+            plan: isDonation ? 'donation' : detectedPlan,
+            customerName: payerName,
             amount: amountValue,
             currency: currencyCode,
-            status: 'active',
-            payment_reference: orderId,
-            terms_accepted: true,
-            updated_at: now
+            gateway: 'paypal',
+            paymentReference: orderId,
+            subscriptionId: `sub_paypal_${orderId}`,
+            isDonation
           });
-
-          if (payerEmail) {
-            const payerName = resource.payer?.name?.given_name || 'Cinéphile';
-            const detectedPlan = amountValue > 10 ? 'yearly' : 'monthly';
-
-            // Détection don vs abonnement (items custom_fields ou montant non standard)
-            const purchaseDesc = String(
-              resource.purchase_units?.[0]?.description ||
-              resource.purchase_units?.[0]?.items?.[0]?.name ||
-              ''
-            ).toLowerCase();
-            const isDonation = purchaseDesc.includes('don') || purchaseDesc.includes('soutien') || purchaseDesc.includes('tip');
-
-            await supabase.from('profiles').update({
-              is_pro: !isDonation,
-              updated_at: now
-            }).eq('email', payerEmail);
-
-            if (isDonation) {
-              try {
-                console.log(`[PayPal Webhook] Envoi e-mail de remerciement don à ${payerEmail}...`);
-                const emailRes = await sendDonationThankYouEmail(payerEmail, {
-                  customerName: payerName,
-                  amount: String(amountValue)
-                });
-                console.log('E-mail de remerciement envoyé avec succès:', emailRes);
-              } catch (error) {
-                console.error('Erreur critique Resend lors du don:', error);
-              }
-            } else {
-              try {
-                console.log(`[PayPal Webhook] Envoi e-mail de bienvenue Pro à ${payerEmail}...`);
-                const emailRes = await sendProWelcomeEmail(payerEmail, {
-                  customerName: payerName,
-                  plan: detectedPlan
-                });
-                console.log('E-mail de bienvenue Pro envoyé avec succès:', emailRes);
-              } catch (error) {
-                console.error('Erreur critique Resend lors de l\'activation Pro:', error);
-              }
-            }
-          }
         }
       }
 
