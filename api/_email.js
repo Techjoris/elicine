@@ -259,7 +259,11 @@ export function getProWelcomeEmailHtml({ customerName = 'Cinéphile', plan = 'mo
 /**
  * Template HTML Dark Theme Responsive pour le remerciement suite à un Don / Soutien
  */
-export function getDonationThankYouEmailHtml({ customerName = 'Généreux Ami', amount = '2' }) {
+export function getDonationThankYouEmailHtml({ customerName = 'Généreux Donateur', amount = '2' }) {
+  const formattedAmount = typeof amount === 'string' && (amount.includes('$') || amount.includes('FCFA') || amount.includes('€'))
+    ? amount
+    : `${amount} $`;
+
   return `
 <!DOCTYPE html>
 <html lang="fr">
@@ -274,6 +278,7 @@ export function getDonationThankYouEmailHtml({ customerName = 'Généreux Ami', 
       background-color: #070709;
       color: #e4e4e7;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     .wrapper {
       width: 100%;
@@ -281,67 +286,64 @@ export function getDonationThankYouEmailHtml({ customerName = 'Généreux Ami', 
       padding: 40px 16px;
     }
     .container {
-      max-width: 580px;
+      max-width: 560px;
       margin: 0 auto;
       background-color: #121214;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
+      border-radius: 16px;
       overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
     }
     .header {
-      padding: 36px 32px 24px 32px;
-      text-align: center;
-      background: linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, rgba(18, 18, 20, 0) 100%);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 36px 32px 16px 32px;
+      text-align: left;
     }
-    .logo-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 56px;
-      height: 56px;
-      background: rgba(245, 158, 11, 0.2);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      border-radius: 16px;
-      font-size: 26px;
-      margin-bottom: 16px;
+    .brand {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #e50914;
+      margin-bottom: 8px;
     }
     .title {
-      font-size: 24px;
-      font-weight: 900;
+      font-size: 22px;
+      font-weight: 800;
       color: #ffffff;
-      margin: 0 0 8px 0;
+      margin: 0;
+      letter-spacing: -0.3px;
     }
     .content {
-      padding: 32px;
+      padding: 16px 32px 32px 32px;
     }
     .paragraph {
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 14.5px;
+      line-height: 1.65;
       color: #d4d4d8;
-      margin: 0 0 20px 0;
+      margin: 0 0 18px 0;
     }
     .cta-wrapper {
-      text-align: center;
-      padding: 12px 0;
+      text-align: left;
+      padding: 12px 0 8px 0;
     }
     .cta-btn {
       display: inline-block;
       background-color: #e50914;
       color: #ffffff !important;
       font-size: 14px;
-      font-weight: 800;
+      font-weight: 700;
       text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 12px;
+      padding: 12px 28px;
+      border-radius: 10px;
     }
     .footer {
-      padding: 24px 32px;
+      padding: 20px 32px;
       background-color: #0c0c0e;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
-      text-align: center;
+      text-align: left;
       font-size: 12px;
       color: #71717a;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -349,19 +351,19 @@ export function getDonationThankYouEmailHtml({ customerName = 'Généreux Ami', 
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <div class="logo-badge">❤️</div>
-        <h1 class="title">Merci infiniment pour votre soutien !</h1>
+        <div class="brand">Éliciné</div>
+        <h1 class="title">Merci pour votre soutien</h1>
       </div>
       <div class="content">
         <p class="paragraph">Bonjour ${customerName},</p>
         <p class="paragraph">
-          Toute l'équipe d'<strong>Éliciné</strong> vous adresse ses plus chaleureux remerciements pour votre don de <strong>${amount} $</strong>.
+          Toute l'équipe d'<strong>Éliciné</strong> vous adresse ses sincères remerciements pour votre don de <strong>${formattedAmount}</strong>.
         </p>
         <p class="paragraph">
-          Votre générosité contribue directement à financer nos serveurs d'intelligence artificielle, à enrichir le catalogue de films indépendants et à maintenir la plateforme accessible à tous les passionnés du 7ème art.
+          Votre contribution aide directement à financer nos serveurs d'intelligence artificielle, à enrichir le catalogue de films et à maintenir la plateforme libre d'accès pour toute la communauté de passionnés.
         </p>
         <div class="cta-wrapper">
-          <a href="https://elicine.app" class="cta-btn">Continuer à explorer sur Éliciné</a>
+          <a href="https://elicine.app" class="cta-btn">Continuer sur Éliciné</a>
         </div>
       </div>
       <div class="footer">
