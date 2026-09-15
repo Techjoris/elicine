@@ -255,6 +255,8 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
 
 /**
  * ÉTAPE 2 : Résolution et filtrage des titres extraits dans le catalogue Supabase
+ * Utilise des requêtes dynamiques insensibles à la casse (.ilike) avec jokers (%titre%)
+ * sur 'title' et 'original_title' pour tolérer les écarts de traduction et ponctuations.
  */
 async function resolveTitlesInSupabase(extractedTitles, matches) {
   if (!supabaseServer || !Array.isArray(extractedTitles) || extractedTitles.length === 0) {
@@ -262,73 +264,83 @@ async function resolveTitlesInSupabase(extractedTitles, matches) {
   }
 
   let catalogResults = [];
-  const titlesList = extractedTitles.map(t => t.trim()).filter(Boolean);
-
-  try {
-    // 1. Interrogation de la table 'movies' par title
-    const { data: moviesByTitle, error: errTitle } = await supabaseServer
-      .from('movies')
-      .select('*')
-      .in('title', titlesList);
-
-    if (!errTitle && Array.isArray(moviesByTitle)) {
-      catalogResults.push(...moviesByTitle);
+  
+  // 1. Construction des clauses dynamiques .ilike (%terme%) pour chaque titre
+  const orClauses = [];
+  for (const rawTitle of extractedTitles) {
+    const clean = String(rawTitle).trim().replace(/[(),%]/g, '');
+    if (clean.length > 0) {
+      orClauses.push(`title.ilike.%${clean}%`);
+      orClauses.push(`original_title.ilike.%${clean}%`);
     }
-
-    // 2. Interrogation par original_title pour les films étrangers
-    const { data: moviesByOriginal, error: errOrig } = await supabaseServer
-      .from('movies')
-      .select('*')
-      .in('original_title', titlesList);
-
-    if (!errOrig && Array.isArray(moviesByOriginal)) {
-      const existingIds = new Set(catalogResults.map(m => m.id || m.tmdb_id || m.title));
-      for (const m of moviesByOriginal) {
-        const key = m.id || m.tmdb_id || m.title;
-        if (!existingIds.has(key)) {
-          catalogResults.push(m);
-          existingIds.add(key);
-        }
-      }
-    }
-  } catch (moviesErr) {
-    console.warn('[API /api/search] Table movies non disponible ou erreur :', moviesErr?.message);
   }
 
-  // 3. Repli résilient : table 'movies_embeddings' si la table 'movies' est vide ou inexistante
-  if (catalogResults.length === 0) {
-    try {
-      const { data: embTitle } = await supabaseServer
-        .from('movies_embeddings')
-        .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
-        .in('title', titlesList);
+  if (orClauses.length > 0) {
+    const orFilter = orClauses.join(',');
 
-      if (Array.isArray(embTitle) && embTitle.length > 0) {
-        catalogResults.push(...embTitle);
-      } else {
-        const { data: embOrig } = await supabaseServer
+    try {
+      // Interrogation souple et insensible à la casse sur la table 'movies'
+      const { data: moviesByIlike, error: errIlike } = await supabaseServer
+        .from('movies')
+        .select('*')
+        .or(orFilter);
+
+      if (!errIlike && Array.isArray(moviesByIlike)) {
+        catalogResults.push(...moviesByIlike);
+      }
+    } catch (moviesErr) {
+      console.warn('[API /api/search] Requête ilike table movies non disponible ou erreur :', moviesErr?.message);
+    }
+
+    // Repli résilient : table 'movies_embeddings' si la table 'movies' est vide ou inexistante
+    if (catalogResults.length === 0) {
+      try {
+        const { data: embByIlike, error: embErr } = await supabaseServer
           .from('movies_embeddings')
           .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
-          .in('original_title', titlesList);
+          .or(orFilter);
 
-        if (Array.isArray(embOrig) && embOrig.length > 0) {
-          catalogResults.push(...embOrig);
+        if (!embErr && Array.isArray(embByIlike) && embByIlike.length > 0) {
+          catalogResults.push(...embByIlike);
         }
+      } catch (embErr) {
+        console.warn('[API /api/search] Table movies_embeddings non disponible :', embErr?.message);
       }
-    } catch (embErr) {
-      console.warn('[API /api/search] Table movies_embeddings non disponible :', embErr?.message);
     }
   }
 
-  // 4. Enrichissement avec la raison fournie par le LLM et le badge "Recherche Intelligente LLM"
-  const resolved = catalogResults.map(movie => {
+  // 2. Élimination stricte des doublons via un Set sur les identifiants
+  const seenIds = new Set();
+  const uniqueMovies = [];
+
+  for (const movie of catalogResults) {
+    const uniqueKey = movie.id || movie.tmdb_id || movie.title;
+    if (!seenIds.has(uniqueKey)) {
+      seenIds.add(uniqueKey);
+      uniqueMovies.push(movie);
+    }
+  }
+
+  // 3. Filtrage post-requête intelligent pour associer chaque film au bon reason du LLM
+  const resolved = uniqueMovies.map(movie => {
     const movieTitleLower = (movie.title || '').toLowerCase().trim();
     const movieOrigLower = (movie.original_title || '').toLowerCase().trim();
 
-    const matchingLLM = matches.find(m => {
+    // A) Correspondance exacte
+    let matchingLLM = matches.find(m => {
       const matchLower = (m.title || '').toLowerCase().trim();
       return matchLower === movieTitleLower || (movieOrigLower && matchLower === movieOrigLower);
     });
+
+    // B) Correspondance partielle / sous-chaîne (tolérance traductions et sous-titres)
+    if (!matchingLLM) {
+      matchingLLM = matches.find(m => {
+        const matchLower = (m.title || '').toLowerCase().trim();
+        return movieTitleLower.includes(matchLower) || 
+               matchLower.includes(movieTitleLower) ||
+               (movieOrigLower && (movieOrigLower.includes(matchLower) || matchLower.includes(movieOrigLower)));
+      });
+    }
 
     return {
       ...movie,
