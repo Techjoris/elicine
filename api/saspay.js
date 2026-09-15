@@ -721,6 +721,46 @@ export default async function handler(req, res) {
       const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID';
       const isFailed = rawStatus === 'FAILED' || rawStatus === 'CANCELLED' || rawStatus === 'REJECTED';
 
+      // Déclenchement automatique de l'activation Supabase & Resend dès la confirmation de succès
+      if (isSuccess) {
+        try {
+          const userEmail = (
+            req.query?.email || 
+            data?.customer?.email || 
+            data?.data?.customer?.email || 
+            data?.customer_email || 
+            data?.data?.customer_email || 
+            ''
+          ).trim().toLowerCase();
+
+          let sub = globalSubscriptions.get(sessionId) || (userEmail ? globalSubscriptions.get(`email:${userEmail}`) : null);
+          if (!sub && supabase) {
+            const { data: dbSub } = await supabase
+              .from('subscriptions')
+              .select('*')
+              .or(`id.eq.${sessionId},payment_reference.eq.${sessionId}`)
+              .maybeSingle();
+            if (dbSub) sub = dbSub;
+          }
+
+          const targetEmail = userEmail || sub?.email;
+          if (targetEmail) {
+            await activateUserPassPro(targetEmail, {
+              plan: sub?.plan || 'monthly',
+              customerName: sub?.customer_name || sub?.customerName,
+              amount: sub?.amount || data?.amount || data?.data?.amount || 1.99,
+              currency: sub?.currency || data?.currency || data?.data?.currency || 'USD',
+              gateway: 'saspay',
+              paymentReference: sessionId,
+              subscriptionId: sub?.id || sessionId,
+              isDonation: sub?.plan === 'donation' || sub?.plan === 'don'
+            });
+          }
+        } catch (actErr) {
+          console.error('[SasPay GET Verify Activation Warning]:', actErr);
+        }
+      }
+
       return res.status(response.status).json({
         status: isSuccess ? 'complete' : (isFailed ? 'failed' : 'pending'),
         rawStatus,

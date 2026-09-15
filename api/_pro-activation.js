@@ -108,18 +108,42 @@ export async function activateUserPassPro(email, planDetails = {}) {
     try {
       // 1.A. Mise à jour du profil utilisateur
       if (!isDonation) {
-        const { error: profileError } = await supabaseAdmin
+        const profileUpdatePayload = {
+          is_pro: true,
+          pass_status: 'pro',
+          pro_expires_at: expiresAt,
+          updated_at: now
+        };
+
+        let profileQuery = supabaseAdmin
           .from('profiles')
-          .update({
-            is_pro: true,
-            updated_at: now
-          })
-          .eq('email', rawEmail);
+          .update(profileUpdatePayload);
+
+        if (userId) {
+          profileQuery = profileQuery.eq('id', userId);
+        } else {
+          profileQuery = profileQuery.eq('email', rawEmail);
+        }
+
+        const { error: profileError } = await profileQuery;
 
         if (profileError) {
-          console.warn('[Activation Pro Supabase] Note mise à jour profile:', profileError.message);
+          // Fallback avec mise à jour minimale si certaines colonnes (pass_status/pro_expires_at) n'existent pas encore
+          const { error: fallbackErr } = await supabaseAdmin
+            .from('profiles')
+            .update({
+              is_pro: true,
+              updated_at: now
+            })
+            .eq('email', rawEmail);
+
+          if (fallbackErr) {
+            console.warn('[Activation Pro Supabase] Note mise à jour profile:', fallbackErr.message);
+          } else {
+            console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true (fallback)`);
+          }
         } else {
-          console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true`);
+          console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true & pass_status = 'pro'`);
         }
       }
 

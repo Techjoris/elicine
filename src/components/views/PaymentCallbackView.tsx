@@ -267,7 +267,7 @@ function detectGatewayType(raw: string | null | undefined): PaymentGatewayType {
 }
 
 export const PaymentCallbackView: React.FC = () => {
-  const { setActiveView, refreshUserProStatus, setIsProModalOpen } = useApp();
+  const { user, setActiveView, refreshUserProStatus, setIsProModalOpen } = useApp();
 
   const [state, setState] = useState<VerificationState>('verifying');
   const [subId, setSubId] = useState<string>('');
@@ -313,6 +313,7 @@ export const PaymentCallbackView: React.FC = () => {
     ).trim();
 
     const extractedPlan = params.get('plan') || params.get('cycle') || 'yearly';
+    const isDonation = params.get('type') === 'donation' || params.get('donation') === 'true';
 
     // 1. Détection initiale à partir de l'URL
     let detected = detectGatewayType(rawGatewayParam);
@@ -328,10 +329,11 @@ export const PaymentCallbackView: React.FC = () => {
     }
 
     // 3. Repli sur le localStorage (souscription en attente)
-    if (detected === 'generic' && typeof localStorage !== 'undefined') {
+    let pendingSub: any = null;
+    if (typeof localStorage !== 'undefined') {
       try {
-        const pendingSub = subscriptionService.getPendingSubscription();
-        if (pendingSub?.gateway || pendingSub?.paymentMethod) {
+        pendingSub = subscriptionService.getPendingSubscription();
+        if (detected === 'generic' && (pendingSub?.gateway || pendingSub?.paymentMethod)) {
           detected = detectGatewayType(pendingSub.gateway || pendingSub.paymentMethod);
         }
       } catch (_) {}
@@ -369,21 +371,70 @@ export const PaymentCallbackView: React.FC = () => {
       return;
     }
 
-    // Démarrage de la vérification
-    verifyTransaction(extractedSubId, extractedRef, 0, detected);
+    // 5. Déclenchement synchrone immédiat si le statut URL indique un succès
+    const isExplicitSuccess = ['success', 'completed', 'paid', 'complete', 'active'].includes(urlStatus);
+    const targetEmail = (user?.email || params.get('email') || pendingSub?.email || '').trim().toLowerCase();
+
+    const triggerDirectActivation = async () => {
+      if (isExplicitSuccess && targetEmail) {
+        try {
+          const actRes = await subscriptionService.activateProImmediately({
+            email: targetEmail,
+            userId: user?.id || pendingSub?.userId,
+            customerName: user?.name || pendingSub?.customerName,
+            plan: extractedPlan,
+            amount: Number(params.get('amount') || pendingSub?.amount || (extractedPlan === 'yearly' ? 15.99 : 1.99)),
+            currency: params.get('currency') || pendingSub?.currency || 'USD',
+            gateway: detected,
+            paymentReference: extractedRef,
+            subscriptionId: extractedSubId || pendingSub?.id,
+            isDonation
+          });
+
+          if (actRes.success && actRes.isPro) {
+            setState('active_confirmed');
+            if (actRes.plan) setPlan(actRes.plan);
+            if (actRes.expiresAt) setExpiresAt(actRes.expiresAt);
+
+            confetti({
+              particleCount: 160,
+              spread: 90,
+              origin: { y: 0.55 },
+              colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff']
+            });
+
+            await refreshUserProStatus();
+            return true;
+          }
+        } catch (e) {
+          console.warn('[PaymentCallbackView] Erreur activation directe synchrone:', e);
+        }
+      }
+      return false;
+    };
+
+    triggerDirectActivation().then((activated) => {
+      if (!activated) {
+        // Démarrage de la boucle de vérification
+        verifyTransaction(extractedSubId, extractedRef, 0, detected, targetEmail, extractedPlan, isDonation);
+      }
+    });
 
     return () => {
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
       }
     };
-  }, []);
+  }, [user]);
 
   const verifyTransaction = async (
     targetSubId: string, 
     targetRef: string, 
     currentCount: number,
-    currentGateway: PaymentGatewayType
+    currentGateway: PaymentGatewayType,
+    clientEmail?: string,
+    targetPlan: string = 'yearly',
+    isDonation: boolean = false
   ) => {
     if (isPollingRef.current && currentCount > 0) return;
     isPollingRef.current = true;
@@ -402,6 +453,21 @@ export const PaymentCallbackView: React.FC = () => {
       }
 
       if (result.isPro && result.status === 'active') {
+        const effectiveEmail = clientEmail || user?.email || (result.subscription as any)?.email;
+        if (effectiveEmail) {
+          // Double garantie : appel de l'activation pour assurer Supabase pass_status et Resend
+          await subscriptionService.activateProImmediately({
+            email: effectiveEmail,
+            userId: user?.id,
+            customerName: user?.name,
+            plan: result.plan || targetPlan,
+            gateway: currentGateway,
+            paymentReference: targetRef,
+            subscriptionId: targetSubId,
+            isDonation
+          });
+        }
+
         setState('active_confirmed');
         if (result.plan) setPlan(result.plan);
         if (result.expiresAt) setExpiresAt(result.expiresAt);

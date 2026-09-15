@@ -463,6 +463,96 @@ export const subscriptionService = {
   },
 
   /**
+   * Déclenche l'activation immédiate du Pass Pro côté backend (/api/activate-pro)
+   * et met à jour Supabase ainsi que le cache local sans attendre un webhook distant.
+   */
+  async activateProImmediately(params: {
+    email: string;
+    userId?: string;
+    customerName?: string;
+    phone?: string;
+    plan?: string;
+    amount?: number;
+    currency?: string;
+    gateway?: string;
+    paymentReference?: string;
+    subscriptionId?: string;
+    isDonation?: boolean;
+  }): Promise<{
+    success: boolean;
+    isPro: boolean;
+    plan?: string;
+    expiresAt?: string | null;
+    subscriptionId?: string;
+    dbUpdated?: boolean;
+    emailSent?: boolean;
+    error?: string;
+  }> {
+    const cleanEmail = (params.email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, isPro: false, error: "Adresse email invalide." };
+    }
+
+    try {
+      const res = await fetch('/api/activate-pro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          ...params,
+          email: cleanEmail
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success) {
+          const activeSub: ProSubscription = {
+            id: data.subscriptionId || params.subscriptionId || `sub_${Date.now()}`,
+            userId: params.userId || 'current',
+            email: cleanEmail,
+            customerName: params.customerName || cleanEmail.split('@')[0] || 'Cinéphile Pro',
+            plan: (data.plan || params.plan || 'monthly') as any,
+            currency: (params.currency || 'USD').toUpperCase() as any,
+            amount: Number(params.amount || (params.plan === 'yearly' ? 15.99 : 1.99)),
+            status: 'active',
+            gateway: (params.gateway || 'saspay') as any,
+            paymentMethod: (params.gateway || 'saspay') as any,
+            termsAccepted: true,
+            createdAt: new Date().toISOString(),
+            expiresAt: data.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString()
+          };
+
+          try {
+            localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
+            localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
+          } catch (_) {}
+
+          return {
+            success: true,
+            isPro: data.isPro ?? true,
+            plan: data.plan,
+            expiresAt: data.expiresAt,
+            subscriptionId: data.subscriptionId,
+            dbUpdated: data.dbUpdated,
+            emailSent: data.emailSent
+          };
+        }
+      }
+    } catch (err: any) {
+      console.warn('[subscriptionService.activateProImmediately] Erreur fetch /api/activate-pro:', err);
+    }
+
+    return {
+      success: false,
+      isPro: false,
+      error: "Impossible de joindre le service d'activation."
+    };
+  },
+
+  /**
    * Vérifie le statut Pro réel de l'utilisateur connecté auprès de la base de données.
    * Si aucune souscription active valide n'est trouvée, retourne isPro: false.
    */
@@ -488,6 +578,30 @@ export const subscriptionService = {
     // 1. Consultation Supabase en direct si configuré
     if (isSupabaseConfigured()) {
       try {
+        // 1.A. Vérification de la table profiles (is_pro = true ou pass_status = 'pro')
+        let profileQuery = supabase.from('profiles').select('is_pro, pass_status, pro_expires_at, role');
+        if (user.id) {
+          profileQuery = profileQuery.eq('id', user.id);
+        } else if (email) {
+          profileQuery = profileQuery.eq('email', email);
+        }
+
+        const { data: profileData, error: profileErr } = await profileQuery.maybeSingle();
+        if (!profileErr && profileData) {
+          const isProProfile = profileData.is_pro === true || profileData.pass_status === 'pro' || profileData.role === 'admin';
+          if (isProProfile) {
+            const isExpired = profileData.pro_expires_at ? new Date(profileData.pro_expires_at).getTime() <= Date.now() : false;
+            if (!isExpired) {
+              return {
+                isPro: true,
+                plan: 'monthly',
+                expiresAt: profileData.pro_expires_at || null
+              };
+            }
+          }
+        }
+
+        // 1.B. Vérification de la table subscriptions
         let query = supabase.from('subscriptions').select('*').eq('status', 'active');
         if (user.id) {
           query = query.eq('user_id', user.id);
@@ -522,6 +636,21 @@ export const subscriptionService = {
             isPro: true,
             plan: data.plan,
             expiresAt: data.expiresAt
+          };
+        }
+      }
+    } catch (_) {}
+
+    // 3. Cache local de secours
+    try {
+      const localActive = this.getActiveSubscription();
+      if (localActive && localActive.status === 'active' && (localActive.email?.toLowerCase() === email || localActive.userId === user.id)) {
+        const isExpired = localActive.expiresAt ? new Date(localActive.expiresAt).getTime() <= Date.now() : false;
+        if (!isExpired) {
+          return {
+            isPro: true,
+            plan: localActive.plan,
+            expiresAt: localActive.expiresAt
           };
         }
       }

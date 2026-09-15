@@ -103,13 +103,16 @@ export const AppContent: React.FC = () => {
 
     // --- PRO SUBSCRIPTION RETURN ---
     const isProReturn =
+      path.startsWith('/payment-callback') ||
       path.startsWith('/payment/callback') ||
       path.startsWith('/success') ||
       params.get('subscription') === 'pro_success' ||
       params.get('payment') === 'pro_success' ||
       params.get('payment') === 'saspay_pro_success' ||
+      (params.get('status') === 'success' && params.get('type') !== 'don' && params.get('type') !== 'donation') ||
       (params.get('payment_status') === 'success' && params.get('type') === 'pro') ||
-      Boolean(params.get('subscription_id') && (params.get('type') === 'pro' || params.get('payment_status') === 'success'));
+      Boolean(params.get('gateway') && (params.get('status') === 'success' || params.get('subscription_id') || params.get('reference') || params.get('id'))) ||
+      Boolean(params.get('subscription_id') && (params.get('type') === 'pro' || params.get('payment_status') === 'success' || params.get('status') === 'success'));
 
     // --- TIP / DONATION SUCCESS ---
     const isTipSuccess =

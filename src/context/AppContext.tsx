@@ -562,6 +562,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [authUser, authSession]);
 
+  // 13. Synchronisation Realtime Supabase pour actualisation instantanée sans rechargement
+  useEffect(() => {
+    if (!user?.email && !user?.id) return;
+    if (!supabase) return;
+
+    const email = (user.email || '').toLowerCase();
+    const userId = user.id;
+
+    try {
+      const channel = supabase
+        .channel(`realtime_pro_sync_${userId || email}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          (payload: any) => {
+            const row = payload?.new || {};
+            if (row.id === userId || (row.email && row.email.toLowerCase() === email)) {
+              if (row.is_pro || row.pass_status === 'pro') {
+                console.log('[AppContext Realtime] 👑 Mise à jour Pro détectée via Supabase Realtime (profiles)');
+                refreshUserProStatus();
+              }
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'subscriptions' },
+          (payload: any) => {
+            const row = payload?.new || {};
+            if (row.user_id === userId || (row.email && row.email.toLowerCase() === email)) {
+              if (row.status === 'active') {
+                console.log('[AppContext Realtime] 👑 Mise à jour Pro détectée via Supabase Realtime (subscriptions)');
+                refreshUserProStatus();
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch (rtErr) {
+      console.warn('[AppContext Realtime Sync Warning]:', rtErr);
+    }
+  }, [user?.id, user?.email]);
+
   // Quota Management (3 recherches gratuites / jour, illimité pour les membres Pro et Admin)
   const refreshQuota = async () => {
     try {
@@ -709,26 +756,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /**
-   * Rafraîchit formellement le statut Pro en interrogeant la vérité en base de données.
-   * Empêche toute élévation de privilège locale sans preuve bancaire.
+   * Rafraîchit formellement et instantanément le statut Pro en interrogeant Supabase.
+   * Actualise la session Supabase, l'état global React et déverrouille les quotas IA.
    */
   const refreshUserProStatus = async (): Promise<boolean> => {
-    if (!user) return false;
-    const proCheck = await subscriptionService.checkUserProStatus(user);
+    // 1. Revalidation de la session Supabase Auth
+    try {
+      if (supabase?.auth) {
+        await supabase.auth.refreshSession();
+      }
+    } catch (_) {}
 
-    setUser(prev => {
-      if (!prev) return null;
-      const updated: UserProfile = {
-        ...prev,
-        isPro: proCheck.isPro,
-        proPlanType: proCheck.plan || prev.proPlanType,
-        proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? prev.proPlanExpiresAt : null)
-      };
-      try {
-        localStorage.setItem('cineia_user', JSON.stringify(updated));
-      } catch (_) {}
-      return updated;
-    });
+    const currentUser = user || authService.getStoredUser();
+    if (!currentUser) return false;
+
+    const proCheck = await subscriptionService.checkUserProStatus(currentUser);
+
+    const updated: UserProfile = {
+      ...currentUser,
+      isPro: proCheck.isPro,
+      proPlanType: proCheck.plan || currentUser.proPlanType || 'monthly',
+      proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? currentUser.proPlanExpiresAt : null)
+    };
+
+    setUser(updated);
+    setAuthUser(updated);
+
+    try {
+      localStorage.setItem('cineia_user', JSON.stringify(updated));
+    } catch (_) {}
+    authService.saveLocalAccount(updated);
+
+    // 2. Déblocage instantané des quotas IA illimités pour le compte Pro
+    try {
+      const updatedQuota = await searchQuotaService.getQuota(updated);
+      setQuota(updatedQuota);
+    } catch (_) {}
 
     return proCheck.isPro;
   };
