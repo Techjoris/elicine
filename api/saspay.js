@@ -530,6 +530,8 @@ export default async function handler(req, res) {
 
   // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle
   if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
+    console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
+
     let webhookBody = req.body;
     let rawBodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
     if (typeof webhookBody === 'string') {
@@ -599,6 +601,7 @@ export default async function handler(req, res) {
 
       const plan = targetSub?.plan || 'monthly';
       const expiresAt = computeSubscriptionExpiry(plan);
+      const isDonation = plan === 'donation' || plan === 'don' || String(targetSub?.description || '').toLowerCase().includes('don');
 
       // Mise à jour de la mémoire globale
       for (const [key, sub] of globalSubscriptions.entries()) {
@@ -613,7 +616,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // ÉCRITURE EXCLUSIVE DU STATUT PRO EN BASE DE DONNÉES
+      // ÉCRITURE EXCLUSIVE DU STATUT EN BASE DE DONNÉES
       if (supabase) {
         try {
           const updatePayload = {
@@ -636,22 +639,43 @@ export default async function handler(req, res) {
           if (updErr) {
             console.error('[SasPay Webhook] Erreur mise à jour Supabase:', updErr);
           } else {
-            console.log('[SasPay Webhook] 👑 Statut Pro activé en base de données suite au Webhook validé:', {
+            console.log('[SasPay Webhook] 👑 Statut validé en base de données suite au Webhook:', {
               subId: subId || targetSub?.id,
               txId,
               expiresAt
             });
 
             if (targetSub?.email) {
-              await supabase.from('profiles').update({
-                is_pro: true,
-                updated_at: now
-              }).eq('email', targetSub.email.toLowerCase().trim());
+              if (!isDonation) {
+                await supabase.from('profiles').update({
+                  is_pro: true,
+                  updated_at: now
+                }).eq('email', targetSub.email.toLowerCase().trim());
+              }
 
-              sendProWelcomeEmail(targetSub.email, {
-                customerName: targetSub.customer_name || targetSub.customerName,
-                plan
-              }).catch(e => console.warn('[SasPay Webhook] Erreur envoi email bienvenue:', e?.message));
+              if (isDonation) {
+                try {
+                  console.log(`[SasPay Webhook] Envoi e-mail remerciement don à ${targetSub.email}...`);
+                  const emailRes = await sendDonationThankYouEmail(targetSub.email, {
+                    customerName: targetSub.customer_name || targetSub.customerName || 'Cinéphile',
+                    amount: String(targetSub.amount || 2)
+                  });
+                  console.log('E-mail de remerciement envoyé avec succès:', emailRes);
+                } catch (error) {
+                  console.error('Erreur critique Resend lors du don:', error);
+                }
+              } else {
+                try {
+                  console.log(`[SasPay Webhook] Envoi e-mail bienvenue Pro à ${targetSub.email}...`);
+                  const emailRes = await sendProWelcomeEmail(targetSub.email, {
+                    customerName: targetSub.customer_name || targetSub.customerName,
+                    plan
+                  });
+                  console.log('E-mail de bienvenue Pro envoyé avec succès:', emailRes);
+                } catch (error) {
+                  console.error('Erreur critique Resend lors de l\'activation Pro:', error);
+                }
+              }
             }
           }
         } catch (sbErr) {

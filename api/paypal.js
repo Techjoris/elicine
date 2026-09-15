@@ -133,17 +133,27 @@ export default async function handler(req, res) {
         (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(validation.data.plan))
       );
 
-      // Envoi email de bienvenue Pro ou remerciement don (silencieux en cas d'échec réseau)
+      // Envoi sécurisé et attendu de l'e-mail de bienvenue Pro ou remerciement don
       if (cleanEmail) {
         if (isDonation) {
-          sendDonationThankYouEmail(cleanEmail, {
-            customerName: cleanName,
-            amount: String(numericAmount)
-          }).catch(e => console.warn('[PayPal Server] Erreur email remerciement don:', e?.message || e));
+          try {
+            console.log(`[PayPal] Envoi e-mail de remerciement don à ${cleanEmail}...`);
+            const emailRes = await sendDonationThankYouEmail(cleanEmail, {
+              customerName: cleanName,
+              amount: String(numericAmount)
+            });
+            console.log('E-mail de remerciement envoyé avec succès:', emailRes);
+          } catch (error) {
+            console.error('Erreur critique Resend lors du don:', error);
+          }
         } else {
-          sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan }).catch(e => {
-            console.warn('[PayPal Server] Erreur envoi email bienvenue:', e?.message || e);
-          });
+          try {
+            console.log(`[PayPal] Envoi e-mail de bienvenue Pro à ${cleanEmail}...`);
+            const emailRes = await sendProWelcomeEmail(cleanEmail, { customerName: cleanName, plan });
+            console.log('E-mail de bienvenue Pro envoyé avec succès:', emailRes);
+          } catch (error) {
+            console.error('Erreur critique Resend lors de l\'activation Pro:', error);
+          }
         }
       }
 
@@ -165,6 +175,7 @@ export default async function handler(req, res) {
   // 3. Webhook PayPal (PAYMENT.CAPTURE.COMPLETED, CHECKOUT.ORDER.APPROVED)
   if (req.method === 'POST' && action === 'webhook') {
     try {
+      console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
       const event = req.body || {};
       const eventType = event.event_type || '';
       console.log(`[PayPal Webhook] Événement reçu : ${eventType}`);
@@ -209,15 +220,27 @@ export default async function handler(req, res) {
             }).eq('email', payerEmail);
 
             if (isDonation) {
-              sendDonationThankYouEmail(payerEmail, {
-                customerName: payerName,
-                amount: String(amountValue)
-              }).catch(() => console.warn('[PayPal Webhook] Erreur email remerciement don.'));
+              try {
+                console.log(`[PayPal Webhook] Envoi e-mail de remerciement don à ${payerEmail}...`);
+                const emailRes = await sendDonationThankYouEmail(payerEmail, {
+                  customerName: payerName,
+                  amount: String(amountValue)
+                });
+                console.log('E-mail de remerciement envoyé avec succès:', emailRes);
+              } catch (error) {
+                console.error('Erreur critique Resend lors du don:', error);
+              }
             } else {
-              sendProWelcomeEmail(payerEmail, {
-                customerName: payerName,
-                plan: detectedPlan
-              }).catch(() => console.warn('[PayPal Webhook] Erreur email bienvenue Pro.'));
+              try {
+                console.log(`[PayPal Webhook] Envoi e-mail de bienvenue Pro à ${payerEmail}...`);
+                const emailRes = await sendProWelcomeEmail(payerEmail, {
+                  customerName: payerName,
+                  plan: detectedPlan
+                });
+                console.log('E-mail de bienvenue Pro envoyé avec succès:', emailRes);
+              } catch (error) {
+                console.error('Erreur critique Resend lors de l\'activation Pro:', error);
+              }
             }
           }
         }

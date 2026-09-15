@@ -38,36 +38,75 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    console.log('[Webhook Vercel] Payload reçu :', JSON.stringify(body));
+    console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
 
-    // 1. Extraction et nettoyage de l'adresse email
+    // 1. Vérification de l'événement et du statut de succès
+    const rawStatus = String(
+      body?.status || 
+      body?.data?.status || 
+      body?.event || 
+      body?.event_type || 
+      body?.type || 
+      body?.data?.type ||
+      body?.resource?.status || 
+      body?.state ||
+      'completed'
+    ).toLowerCase().trim();
+
+    const isSuccessEvent = (
+      rawStatus === 'completed' ||
+      rawStatus === 'success' ||
+      rawStatus === 'successful' ||
+      rawStatus === 'paid' ||
+      rawStatus === 'succeeded' ||
+      rawStatus === 'approved' ||
+      rawStatus === 'active' ||
+      rawStatus === 'payment.completed' ||
+      rawStatus === 'payment.success' ||
+      rawStatus === 'payment.succeeded' ||
+      rawStatus === 'transaction.success' ||
+      rawStatus === 'transaction.completed' ||
+      rawStatus === 'charge.complete' ||
+      rawStatus === 'payment_intent.succeeded' ||
+      rawStatus === 'checkout.order.approved' ||
+      rawStatus === 'payment.capture.completed'
+    );
+
+    // 2. Extraction et nettoyage de l'adresse email
     const rawEmail = 
       body?.email || 
       body?.data?.email || 
       body?.customer_email || 
+      body?.customer?.email ||
+      body?.data?.customer?.email ||
+      body?.data?.customer_email ||
       body?.payer_email || 
       body?.payer?.email_address ||
+      body?.resource?.payer?.email_address ||
       body?.metadata?.email ||
       body?.data?.metadata?.email ||
-      body?.customer?.email ||
+      body?.custom_fields?.email ||
+      body?.user_email ||
       '';
 
     if (!rawEmail || typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
+      console.warn('[Webhook Vercel] ⚠️ Email non trouvé dans le payload:', body);
       return res.status(400).json({ error: "Email de l'acheteur manquant ou invalide." });
     }
 
     const cleanEmail = rawEmail.trim().toLowerCase();
 
-    // 2. Extraction du nom du client
+    // 3. Extraction du nom du client
     const customerName = 
       body?.customer_name || 
       body?.name || 
       body?.data?.customer_name || 
+      body?.customer?.name ||
       body?.payer?.name?.given_name || 
       cleanEmail.split('@')[0] || 
       'Cinéphile';
 
-    // 3. Extraction du montant, devise et référence
+    // 4. Extraction du montant, devise et référence
     const numericAmount = Number(
       body?.amount || 
       body?.data?.amount || 
@@ -96,7 +135,7 @@ export default async function handler(req, res) {
       (numericAmount > 10 ? 'yearly' : 'monthly')
     );
 
-    // 4. Distinction formelle : Abonnement Pro vs Don / Soutien
+    // 5. Distinction formelle : Abonnement Pro vs Don / Soutien
     const metadata = body?.metadata || body?.data?.metadata || body?.custom_fields || {};
     const rawType = String(
       metadata?.type || 
@@ -125,7 +164,7 @@ export default async function handler(req, res) {
     // CAS 1 : DON / SOUTIEN (Pas de mode Pro)
     // ==========================================
     if (isDonation) {
-      console.log(`[Webhook] Traitement Don/Soutien pour ${cleanEmail} (${numericAmount} ${currency})`);
+      console.log(`[Webhook] Traitement Don/Soutien validé pour ${cleanEmail} (${numericAmount} ${currency})`);
 
       if (supabaseAdmin) {
         try {
@@ -152,18 +191,22 @@ export default async function handler(req, res) {
         }
       }
 
-      // Envoi non-bloquant de l'email de remerciement don via Resend
-      sendDonationThankYouEmail(cleanEmail, {
-        customerName,
-        amount: String(numericAmount)
-      }).catch(emailErr => {
-        console.warn('[Webhook Don] Erreur envoi email remerciement (non-bloquant) :', emailErr?.message || emailErr);
-      });
+      // Envoi sécurisé et attendu de l'e-mail de remerciement via Resend
+      try {
+        console.log(`[Webhook Don] Envoi de l'e-mail de remerciement à ${cleanEmail}...`);
+        const emailResult = await sendDonationThankYouEmail(cleanEmail, {
+          customerName,
+          amount: String(numericAmount)
+        });
+        console.log('E-mail de remerciement envoyé avec succès:', emailResult);
+      } catch (error) {
+        console.error('Erreur critique Resend lors du don:', error);
+      }
 
       return res.status(200).json({
         success: true,
         type: 'donation',
-        message: 'Don enregistré avec succès et email de remerciement en cours d\'envoi.'
+        message: 'Don enregistré avec succès et email de remerciement envoyé.'
       });
     }
 
@@ -213,19 +256,23 @@ export default async function handler(req, res) {
       }).catch(subErr => console.warn('[Webhook Subscriptions Upsert Warning]:', subErr?.message));
     }
 
-    // 3. Envoi non-bloquant de l'email de bienvenue Pro via Resend
-    sendProWelcomeEmail(cleanEmail, {
-      customerName,
-      plan
-    }).catch(emailErr => {
-      console.warn('[Webhook Pro] Erreur envoi email bienvenue (non-bloquant) :', emailErr?.message || emailErr);
-    });
+    // 3. Envoi sécurisé et attendu de l'email de bienvenue Pro via Resend
+    try {
+      console.log(`[Webhook Pro] Envoi de l'email de bienvenue Pro à ${cleanEmail}...`);
+      const emailResult = await sendProWelcomeEmail(cleanEmail, {
+        customerName,
+        plan
+      });
+      console.log('E-mail de bienvenue Pro envoyé avec succès:', emailResult);
+    } catch (error) {
+      console.error('Erreur critique Resend lors de l\'activation Pro:', error);
+    }
 
     return res.status(200).json({
       success: true,
       type: 'subscription',
       isPro: true,
-      message: 'Abonnement Pro activé avec succès et email de bienvenue en cours d\'envoi.'
+      message: 'Abonnement Pro activé avec succès et email de bienvenue envoyé.'
     });
 
   } catch (err) {

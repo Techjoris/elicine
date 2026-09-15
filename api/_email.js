@@ -14,68 +14,49 @@ const resendApiKey = (
 export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 /**
- * Envoie un email via le SDK officiel Resend (avec fallback fetch si besoin)
+ * Envoie un email via le SDK officiel Resend (avec bloc try/catch explicite et logs détaillés)
  */
 export async function sendEmailWithResend({ to, subject, html, text }) {
   const fromEmail = (
     process.env.RESEND_FROM_EMAIL || 
     process.env.RESEND_EMAIL || 
-    'Éliciné <onboarding@elicine.app>'
+    'Éliciné <support@elicine.app>'
   ).trim();
 
-  if (!resendApiKey) {
+  const apiKey = (
+    process.env.RESEND_API_KEY || 
+    process.env.VITE_RESEND_API_KEY || 
+    resendApiKey ||
+    ''
+  ).trim();
+
+  if (!apiKey) {
     console.warn('[Resend] RESEND_API_KEY absente. Simulation envoi à :', to, `(${subject})`);
     return { success: false, simulated: true, message: 'RESEND_API_KEY non configurée' };
   }
 
   const cleanTo = Array.isArray(to) ? to : [to];
+  const client = new Resend(apiKey);
 
   try {
-    let resultId = null;
+    const data = await client.emails.send({
+      from: fromEmail,
+      to: cleanTo,
+      subject,
+      html,
+      text: text || undefined
+    });
 
-    if (resend) {
-      const response = await resend.emails.send({
-        from: fromEmail,
-        to: cleanTo,
-        subject,
-        html,
-        text: text || undefined
-      });
-
-      if (response.error) {
-        console.error('[Resend SDK Error]:', response.error);
-        return { success: false, error: response.error };
-      }
-      resultId = response.data?.id;
-    } else {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: fromEmail,
-          to: cleanTo,
-          subject,
-          html,
-          text: text || undefined
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        console.error(`[Resend Error ${res.status}]:`, data);
-        return { success: false, status: res.status, error: data };
-      }
-      resultId = data?.id;
+    if (data.error) {
+      console.error('Erreur critique Resend lors du don:', data.error);
+      return { success: false, error: data.error };
     }
 
-    console.log(`[Resend Success] Email envoyé avec succès à ${cleanTo.join(', ')} (ID: ${resultId})`);
-    return { success: true, id: resultId };
-  } catch (err) {
-    console.error('[Resend Exception]:', err?.message || err);
-    return { success: false, error: err?.message || err };
+    console.log('E-mail de remerciement envoyé avec succès:', data);
+    return { success: true, data: data.data || data };
+  } catch (error) {
+    console.error('Erreur critique Resend lors du don:', error);
+    return { success: false, error: error?.message || error };
   }
 }
 

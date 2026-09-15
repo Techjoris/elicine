@@ -170,7 +170,7 @@ export const paypalRecordPaymentSchema = z.object({
   userId: z.string().max(128).optional(),
   email: z.string().email().max(150).optional(),
   customerName: z.string().max(100).optional(),
-  plan: z.enum(['monthly', 'yearly']).optional().default('monthly'),
+  plan: z.enum(['monthly', 'yearly', 'donation', 'don', 'support', 'tip', 'free']).optional().default('monthly'),
   currency: z.string().max(10).optional().default('USD'),
   amount: z.union([z.number().positive(), z.string()]).optional(),
   details: z.any().optional()

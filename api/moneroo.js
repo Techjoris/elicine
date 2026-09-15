@@ -5,6 +5,9 @@
 import saspayHandler from './saspay.js';
 
 export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
+  }
   console.log('[Payment Gateway] Requête mobile money reçue sur endpoint legacy. Routage automatique et exclusif vers SasPay.');
   return saspayHandler(req, res);
 }
