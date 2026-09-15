@@ -16,7 +16,7 @@ export async function sendEmailWithResend({ to, subject, html, text }) {
   const fromEmail = (
     process.env.RESEND_FROM_EMAIL || 
     process.env.RESEND_EMAIL || 
-    'Éliciné <contact@elicine.app>'
+    'Éliciné <support@elicine.app>'
   ).trim();
 
   if (!apiKey) {
