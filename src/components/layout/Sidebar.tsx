@@ -79,10 +79,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return isMaster || Boolean(
       appUser?.isPro ||
       (appUser as any)?.is_pro ||
+      (appUser as any)?.pass_status === 'pro' ||
       (user as any)?.isPro ||
-      (user as any)?.is_pro
+      (user as any)?.is_pro ||
+      (user as any)?.pass_status === 'pro'
     );
   });
+
+  useEffect(() => {
+    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
+    const currentPro = isMaster || Boolean(
+      appUser?.isPro ||
+      (appUser as any)?.is_pro ||
+      (appUser as any)?.pass_status === 'pro' ||
+      (user as any)?.isPro ||
+      (user as any)?.is_pro ||
+      (user as any)?.pass_status === 'pro'
+    );
+    if (currentPro) setIsPro(true);
+  }, [user, appUser]);
 
   useEffect(() => {
     const checkDbPro = async () => {
@@ -92,7 +107,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return;
       }
       const userId = user?.id || appUser?.id;
-      if (!userId && !email) return;
+      if (!userId && !email) {
+        setIsPro(false);
+        return;
+      }
 
       try {
         if (userId) {
@@ -375,20 +393,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Section: Quota & User Profile */}
       <div className="space-y-2.5 pt-3 border-t border-slate-200/80 dark:border-white/[0.08]">
         
-        {/* Quota Badge */}
-        <div 
-          onClick={() => setIsProModalOpen(true)}
-          title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
-          className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between cursor-pointer hover:border-slate-300 dark:hover:border-white/20 transition-all"
-        >
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">Crédits IA</span>
+        {/* Quota / Statut Pro Badge */}
+        {isPro ? (
+          <div 
+            title="Pass Pro actif : Recherches IA illimitées & filtres avancés"
+            className="p-2.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/30 flex items-center justify-between select-none"
+          >
+            <div className="flex items-center gap-2">
+              <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Éliciné Pro Actif</span>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-200 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
+              Illimité
+            </span>
           </div>
-          <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 bg-slate-200 dark:bg-white/[0.08] border border-slate-300 dark:border-white/10 px-2 py-0.5 rounded-full">
-            Illimité
-          </span>
-        </div>
+        ) : (
+          <div 
+            onClick={() => setIsProModalOpen(true)}
+            title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
+            className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500 transition-colors" />
+              <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-colors">Pass Pro</span>
+            </div>
+            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+              1.99$
+            </span>
+          </div>
+        )}
 
         {/* Bouton Soutenir le projet (Don unifié) */}
         <button
@@ -493,12 +526,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Badge */}
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 flex-shrink-0 ${
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 flex-shrink-0 ${
                   isPro
-                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shadow-sm'
                     : 'bg-slate-200 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-400 border border-slate-300 dark:border-white/10'
                 }`}>
-                  {isPro && <Crown className="w-2.5 h-2.5" />}
+                  {isPro && <Crown className="w-2.5 h-2.5 text-amber-500" />}
                   {isPro ? 'Pro' : 'Gratuit'}
                 </span>
               </div>

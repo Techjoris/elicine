@@ -361,20 +361,37 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 )}
               </button>
 
-              {/* 👑 Passer à Éliciné Pro */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpen(false);
-                  onOpenPro();
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
-              >
-                <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                <span className="font-bold text-xs">{isPro ? 'Gérer mon Pass Pro' : 'Passer à Éliciné Pro'}</span>
-              </button>
+              {/* 👑 Statut Pass Pro Actif ou Bouton d'achat */}
+              {isPro ? (
+                <div className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-300 select-none">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                    <span className="font-bold text-xs truncate">Éliciné Pro Actif</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider flex-shrink-0">
+                    Illimité
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen(false);
+                    onOpenPro();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                    <span className="font-bold text-xs">Obtenir un Pass Pro</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
+                    1.99$
+                  </span>
+                </button>
+              )}
 
               {/* ☕ Soutenir le projet */}
               <button

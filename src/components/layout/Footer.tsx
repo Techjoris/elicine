@@ -1,14 +1,22 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ElicineLogo } from '../ElicineLogo';
-import { ShieldCheck, Heart, Mail, Clapperboard } from 'lucide-react';
+import { ShieldCheck, Heart, Mail, Clapperboard, Crown } from 'lucide-react';
 
 interface FooterProps {
   onNavigateTerms?: (section?: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
-  const { setActiveView, setIsTipModalOpen, setIsProModalOpen, openFeedbackModal } = useApp();
+  const { user: appUser, setActiveView, setIsTipModalOpen, setIsProModalOpen, openFeedbackModal } = useApp();
+  const { user: authUser } = useAuth();
+
+  const isPro = Boolean(
+    (appUser?.email || authUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com' ||
+    appUser?.isPro || (appUser as any)?.is_pro || (appUser as any)?.pass_status === 'pro' ||
+    (authUser as any)?.isPro || (authUser as any)?.is_pro || (authUser as any)?.pass_status === 'pro'
+  );
 
   const handleGoToTerms = (section?: string) => {
     if (onNavigateTerms) {
@@ -85,13 +93,21 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
 
           <span className="text-slate-300 dark:text-zinc-700">•</span>
 
-          <button
-            type="button"
-            onClick={() => setIsProModalOpen(true)}
-            className="text-slate-600 hover:text-amber-500 dark:text-zinc-400 dark:hover:text-amber-400 transition-colors cursor-pointer select-none"
-          >
-            Pass Pro
-          </button>
+          {/* Statut Pass Pro Actif ou Bouton Pass Pro */}
+          {isPro ? (
+            <span className="text-amber-600 dark:text-amber-400 font-semibold inline-flex items-center gap-1 select-none">
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>Éliciné Pro Actif</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsProModalOpen(true)}
+              className="text-slate-600 hover:text-amber-500 dark:text-zinc-400 dark:hover:text-amber-400 transition-colors cursor-pointer select-none"
+            >
+              Pass Pro
+            </button>
+          )}
 
           <span className="text-slate-300 dark:text-zinc-700">•</span>
 
