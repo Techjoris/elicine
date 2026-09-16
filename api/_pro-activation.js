@@ -28,16 +28,16 @@ export const supabaseAdmin = (supabaseUrl && supabaseKey && supabaseKey.length >
   : null;
 
 /**
- * Calcule la date d'expiration exacte (30 jours pour mensuel, 365 jours pour annuel)
+ * Calcule la date d'expiration exacte (+30 jours pour mensuel, +365 jours pour annuel)
+ * basée sur now() + interval '30 days' (new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
  */
-export function computePlanExpiry(plan = 'monthly') {
-  const expiresDate = new Date();
-  if (plan === 'yearly') {
-    expiresDate.setDate(expiresDate.getDate() + 365);
-  } else {
-    expiresDate.setDate(expiresDate.getDate() + 30);
-  }
-  return expiresDate.toISOString();
+export function computePlanExpiry(plan = 'monthly', baseDate = null) {
+  const startTime = (baseDate && !isNaN(new Date(baseDate).getTime()))
+    ? new Date(baseDate).getTime()
+    : Date.now();
+  const durationDays = (plan === 'yearly') ? 365 : 30;
+  const expiresTimestamp = startTime + (durationDays * 24 * 60 * 60 * 1000);
+  return new Date(expiresTimestamp).toISOString();
 }
 
 /**
@@ -101,7 +101,27 @@ export async function activateUserPassPro(email, planDetails = {}) {
   );
 
   const normalizedPlan = isDonation ? 'donation' : (plan === 'yearly' ? 'yearly' : 'monthly');
-  const expiresAt = isDonation ? null : computePlanExpiry(normalizedPlan);
+
+  // Vérification si l'utilisateur possède déjà une période Pro active pour prolonger
+  let baseExpiry = null;
+  if (supabaseAdmin && !isDonation) {
+    try {
+      const { data: existingProf } = await supabaseAdmin
+        .from('profiles')
+        .select('id, expires_at, pro_expires_at, is_pro')
+        .eq('email', rawEmail)
+        .maybeSingle();
+
+      const currentExpiry = existingProf?.expires_at || existingProf?.pro_expires_at;
+      if (existingProf?.is_pro && currentExpiry && new Date(currentExpiry).getTime() > Date.now()) {
+        baseExpiry = currentExpiry;
+        console.log(`[Activation Pro Supabase] 🔄 Prolongation de l'abonnement existant pour ${rawEmail} depuis le ${currentExpiry}`);
+      }
+    } catch (_) {}
+  }
+
+  // Calcul exact : now + 30 jours (ou 365 jours)
+  const expiresAt = isDonation ? null : computePlanExpiry(normalizedPlan, baseExpiry);
   const targetSubId = subscriptionId || `sub_${gateway}_${paymentReference || Date.now()}`;
 
   console.log(`[Activation Centralisée] 🚀 Traitement pour ${rawEmail} | Type: ${isDonation ? 'Don' : 'Pro (30 jours)'} | Gateway: ${gateway} | Montant: ${numericAmount} ${currency} | Expiration: ${expiresAt || 'N/A'}`);
