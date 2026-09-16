@@ -87,7 +87,7 @@ const KNOWN_CREATORS = [
   'harrison ford', 'clint eastwood', 'stanley kubrick', 'hitchcock',
   'alfred hitchcock', 'james cameron', 'ridley scott', 'wes anderson',
   'hayao miyazaki', 'miyazaki', 'bong joon-ho', 'park chan-wook',
-  'almodovar', 'truffaut', 'godard', 'luc besson'
+  'almodovar', 'truffaut', 'godard', 'luc besson', 'angelina jolie', 'jolie'
 ];
 
 // Expressions types d'une demande de catalogue ou liste
@@ -516,7 +516,8 @@ const KNOWN_ACTORS_MAP: Record<string, string[]> = {
   'Harrison Ford': ['harrison ford'],
   'Clint Eastwood': ['clint eastwood'],
   'Matthew McConaughey': ['matthew mcconaughey', 'mcconaughey'],
-  'Timothée Chalamet': ['timothée chalamet', 'timothee chalamet', 'chalamet']
+  'Timothée Chalamet': ['timothée chalamet', 'timothee chalamet', 'chalamet'],
+  'Angelina Jolie': ['angelina jolie', 'jolie']
 };
 
 export const GENRE_AND_THEME_WORDS = new Set([
@@ -938,6 +939,49 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
     conflictingGenres: [10749, 10751],
     archetypeTitles: ['john wick', 'kill bill', 'gladiator', 'django unchained', 'oldboy', 'memento', 'taken', 'the revenant', 'leon', 'the equalizer'],
     disqualifiedTitles: ['titanic', 'la la land', 'notting hill']
+  },
+  {
+    id: 'espionnage',
+    triggers: [
+      'espion', 'espions', 'espionne', 'espionnes', 'espionnage', 'agent secret', 'agents secrets',
+      'agent double', 'agents doubles', 'cia', 'mi6', 'kgb', 'fsb', 'mossad', 'dgse',
+      'infiltration', 'infiltré', 'infiltree', 'infiltrer', 'infiltrés', 'mission secrète', 'mission secrete',
+      'missions secrètes', 'recrutement', 'recrutée', 'recrutee', 'recruté', 'recrute',
+      'formée comme espionne', 'formee comme espionne', 'formation d\'agent', 'formation d agent',
+      'formé comme espion', 'forme comme espion', 'agent de la cia', 'agente de la cia',
+      'agent du mi6', 'agent du kgb', 'taupe', 'double jeu', 'spy', 'spies', 'espionage',
+      'secret agent', 'covert ops', 'intelligence agency', 'black ops'
+    ],
+    primaryKeywords: [
+      'espion', 'espionne', 'espions', 'espionnes', 'espionnage', 'agent secret', 'agents secrets',
+      'cia', 'mi6', 'kgb', 'fsb', 'mossad', 'dgse', 'taupe', 'infiltration', 'infiltré', 'infiltree',
+      'infiltrer', 'mission secrète', 'secret agent', 'spy', 'spies', 'espionage', 'recrutement',
+      'recrutée', 'recrutee', 'recruté', 'recrute', 'formation', 'agent'
+    ],
+    secondaryKeywords: [
+      'complot', 'conspiration', 'trahison', 'double jeu', 'tueur à gages', 'assassin', 'assassins',
+      'renseignement', 'contre-espionnage', 'filature', 'surveillance', 'identité secrète',
+      'identite secrete', 'opération secrète', 'operation secrete', 'black ops', 'agent dormant',
+      'gouvernement', 'fbi', 'interrogatoire', 'gadget', 'mission', 'arme', 'armes', 'nucléaire', 'nucleaire'
+    ],
+    expectedGenres: [28, 53, 9648, 80, 12],
+    conflictingGenres: [16, 10751, 10402, 10749],
+    archetypeTitles: [
+      'salt', 'mr. & mrs. smith', 'mr. and mrs. smith', 'mr and mrs smith', 'mr & mrs smith',
+      'red sparrow', 'atomic blonde', 'la mémoire dans la peau', 'the bourne identity',
+      'la mort dans la peau', 'the bourne supremacy', 'la vengeance dans la peau', 'the bourne ultimatum',
+      'jason bourne', 'mission: impossible', 'mission impossible', 'skyfall', 'casino royale',
+      'spectre', 'mourir peut attendre', 'no time to die', 'goldeneye', 'james bond',
+      'la taupe', 'tinker tailor soldier spy', 'le pont des espions', 'bridge of spies',
+      'spy game', 'munich', 'kingsman', 'anna', 'raison d\'état', 'the good shepherd',
+      'mensonges d\'état', 'body of lies', 'zero dark thirty', 'argo', 'alias'
+    ],
+    disqualifiedTitles: [
+      'kung fu panda', 'kung fu panda 2', 'kung fu panda 3', 'kung fu panda 4',
+      'gang de requins', 'shark tale', 'maléfique', 'maleficent', 'maléfique : le pouvoir du mal',
+      'maleficent: mistress of evil', 'titanic', 'la la land', 'notting hill',
+      'coup de foudre à notting hill', 'pretty woman', 'mamma mia'
+    ]
   }
 ];
 
@@ -1009,6 +1053,15 @@ export function evaluateMovieNarrativeRelevance(
       if (overviewLower.includes(kw)) clusterHits += 1.5;
     }
 
+    const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+    if (!isArchetype && isAnimationOrFamily && clusterHits === 0 && ['espionnage', 'guerre', 'braquage', 'twist', 'survie', 'vengeance', 'huis_clos'].includes(activeCluster.id)) {
+      return {
+        matches: false,
+        score: 20,
+        reason: `Exclu : "${movie.title}" est une animation/film familial sans aucun rapport avec le thème « ${activeCluster.id} »`
+      };
+    }
+
     const hasExpectedGenre = activeCluster.expectedGenres.some(id => genreIds.includes(id));
     const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
 
@@ -1064,9 +1117,15 @@ export function evaluateMovieNarrativeRelevance(
         thematicReason = `Correspondance scénaristique forte (${matchedTokens.join(', ')})`;
       } else {
         // Aucun mot clé du cluster présent
-        const hasExpected = activeCluster.expectedGenres.some(id => genreIds.includes(id));
-        thematicScore = hasExpected ? 58 : 35;
-        thematicReason = `Thème « ${activeCluster.id} » peu présent dans le synopsis`;
+        const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+        if (isAnimationOrFamily) {
+          thematicScore = 10;
+          thematicReason = `Thème « ${activeCluster.id} » totalement absent (animation/famille)`;
+        } else {
+          const hasExpected = activeCluster.expectedGenres.some(id => genreIds.includes(id));
+          thematicScore = hasExpected ? 30 : 15;
+          thematicReason = `Thème « ${activeCluster.id} » non trouvé dans le synopsis`;
+        }
       }
     }
   } else if (criteria.narrativeCues.length > 0) {
@@ -1074,13 +1133,25 @@ export function evaluateMovieNarrativeRelevance(
     for (const cue of criteria.narrativeCues) {
       if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) cuesHit++;
     }
-    thematicScore = cuesHit > 0 ? 92 : 62;
+    if (cuesHit > 0) {
+      thematicScore = 92;
+      thematicReason = 'Correspondance avec les éléments narratifs demandés';
+    } else {
+      thematicScore = 20;
+      thematicReason = 'Intrigue demandée non retrouvée dans le synopsis';
+    }
+  } else if (criteria.hasNarrativeConstraint) {
+    thematicScore = 25;
+    thematicReason = 'Contrainte narrative demandée non vérifiée';
   }
 
   // C. Sous-score Genre (poids 0.20)
   let genreScore = 75;
   if (activeCluster) {
-    if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
+    const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+    if (isAnimationOrFamily && ['espionnage', 'guerre', 'braquage', 'twist', 'survie', 'vengeance', 'huis_clos'].includes(activeCluster.id)) {
+      genreScore = 20;
+    } else if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
       genreScore = 95;
     } else if (genreIds.includes(18)) { // Drame
       genreScore = 70;
@@ -1101,10 +1172,25 @@ export function evaluateMovieNarrativeRelevance(
     ? (personScore * 0.35) + (thematicScore * 0.45) + (genreScore * 0.20) + qualityDelta
     : (thematicScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
-  const finalScore = Math.min(99, Math.max(25, Math.round(composite)));
-  const matches = hasPerson
-    ? (finalScore >= 75 && thematicScore >= 60)
-    : (finalScore >= 58 && thematicScore >= 45);
+  let finalScore = Math.min(99, Math.max(20, Math.round(composite)));
+
+  const hasExplicitNarrative = criteria.hasNarrativeConstraint || Boolean(activeCluster) || criteria.narrativeCues.length > 0;
+
+  // RÈGLE CARDINALE : Le score personne seul (S_person) ne suffit JAMAIS à faire remonter un film
+  // si la requête comporte une description narrative explicite et que le score thématique est nul ou insuffisant.
+  let matches = false;
+  if (hasExplicitNarrative) {
+    if (thematicScore < 50) {
+      matches = false;
+      finalScore = Math.min(finalScore, 38); // Plafond strict : élimination garantie sous le seuil d'affichage
+    } else {
+      matches = hasPerson ? (finalScore >= 75 && thematicScore >= 65) : (finalScore >= 58 && thematicScore >= 50);
+    }
+  } else if (hasPerson) {
+    matches = (finalScore >= 70);
+  } else {
+    matches = (finalScore >= 58 && thematicScore >= 45);
+  }
 
   return {
     matches,

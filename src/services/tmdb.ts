@@ -830,10 +830,19 @@ export async function searchPersonAndGetWorks(
 
                 if (clusterHits > 0) {
                   score += 2000 + clusterHits * 800;
+                } else {
+                  // AUCUN MOT-CLÉ DU THÈME PRÉSENT
+                  const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+                  if (isAnimationOrFamily) {
+                    score -= 40000; // Élimination radicale des films d'animation ou pour enfants sans aucun lien thématique
+                  } else {
+                    score -= 15000; // Pénalisation sévère si aucun mot-clé du thème
+                  }
                 }
 
                 // Cohérence de genre
-                if (matchedCluster.expectedGenres.some(id => genreIds.includes(id))) {
+                const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+                if (matchedCluster.expectedGenres.some(id => genreIds.includes(id)) && !isAnimationOrFamily) {
                   score += 1200;
                 } else if (genreIds.length > 0 && genreIds.every(id => matchedCluster.conflictingGenres.includes(id)) && clusterHits === 0) {
                   score -= 20000; // Pénalisation sévère si genre conflictuel sans aucun mot-clé

@@ -651,6 +651,40 @@ const THEMATIC_CLUSTERS_RAW = [
     conflictingGenres: [10749, 35, 10751],
     archetypes: ['shutter island', 'inception', 'fight club', 'sixième sens', 'les autres', 'usual suspects', 'memento', 'le prestige', 'seven', 'gone girl', 'oldboy', 'prisoners'],
     disqualified: ['titanic', 'le loup de wall street', 'django unchained', 'the revenant', 'gatsby le magnifique']
+  },
+  {
+    id: 'espionnage',
+    triggers: [
+      'espion', 'espions', 'espionne', 'espionnes', 'espionnage', 'agent secret', 'agents secrets',
+      'cia', 'mi6', 'kgb', 'fsb', 'mossad', 'dgse', 'infiltration', 'infiltré', 'infiltree', 'infiltrer',
+      'mission secrète', 'mission secrete', 'recrutement', 'recrutée', 'recrutee', 'recruté',
+      'formée comme espionne', 'formee comme espionne', 'formation d\'agent', 'formation d agent',
+      'formé comme espion', 'forme comme espion', 'agent de la cia', 'agente de la cia', 'taupe',
+      'double jeu', 'spy', 'spies', 'secret agent', 'espionage'
+    ],
+    primaryKeywords: [
+      'espion', 'espionne', 'espions', 'espionnes', 'espionnage', 'agent secret', 'cia', 'mi6', 'kgb',
+      'taupe', 'infiltration', 'infiltré', 'infiltree', 'mission secrète', 'secret agent', 'spy', 'spies',
+      'recrutement', 'recrutée', 'recrutee', 'recruté', 'formation', 'agent'
+    ],
+    secondaryKeywords: [
+      'complot', 'conspiration', 'trahison', 'double jeu', 'tueur à gages', 'assassin',
+      'renseignement', 'contre-espionnage', 'filature', 'surveillance', 'identité secrète',
+      'opération secrète', 'black ops', 'gouvernement', 'fbi', 'mission', 'arme', 'armes'
+    ],
+    expectedGenres: [28, 53, 9648, 80, 12],
+    conflictingGenres: [16, 10751, 10402, 10749],
+    archetypes: [
+      'salt', 'mr. & mrs. smith', 'mr. and mrs. smith', 'mr and mrs smith', 'mr & mrs smith',
+      'red sparrow', 'atomic blonde', 'la mémoire dans la peau', 'the bourne identity',
+      'jason bourne', 'mission: impossible', 'mission impossible', 'skyfall', 'casino royale',
+      'la taupe', 'tinker tailor soldier spy', 'le pont des espions', 'bridge of spies',
+      'spy game', 'munich', 'kingsman', 'anna', 'raison d\'état', 'the good shepherd', 'alias'
+    ],
+    disqualified: [
+      'kung fu panda', 'kung fu panda 2', 'kung fu panda 3', 'kung fu panda 4',
+      'gang de requins', 'shark tale', 'maléfique', 'maleficent', 'titanic', 'la la land', 'notting hill'
+    ]
   }
 ];
 
@@ -681,9 +715,6 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
       return 25; // Rejet formel immédiat
     }
 
-    const hasExpectedGenre = activeCluster.expectedGenres.some(id => genreIds.includes(id));
-    const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
-
     let lexicalHits = 0;
     for (const kw of activeCluster.primaryKeywords) {
       if (overviewLower.includes(kw) || titleLower.includes(kw)) lexicalHits += 3;
@@ -693,6 +724,15 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     }
 
     const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+    const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+
+    // Rejet catégorique si film d'animation / famille sans aucun mot-clé du thème
+    if (!isArchetype && isAnimationOrFamily && lexicalHits === 0) {
+      return 20;
+    }
+
+    const hasExpectedGenre = activeCluster.expectedGenres.some(id => genreIds.includes(id));
+    const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
 
     if (!isArchetype && lexicalHits === 0 && (isPureConflicting || !hasExpectedGenre)) {
       return 35; // Rejet catégorique : ni mot clé, ni genre compatible
@@ -703,7 +743,7 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   // A. Sous-score Personne / Acteur (si mentionné dans la requête)
   let hasPersonInQuery = false;
   let personScore = 100;
-  const personKeywords = ['dicaprio', 'leonardo', 'nolan', 'tarantino', 'pitt', 'cruise', 'scorsese', 'denzel'];
+  const personKeywords = ['dicaprio', 'leonardo', 'nolan', 'tarantino', 'pitt', 'cruise', 'scorsese', 'denzel', 'jolie', 'angelina', 'damon', 'hanks', 'depp', 'bale'];
   for (const pk of personKeywords) {
     if (queryLower.includes(pk)) {
       hasPersonInQuery = true;
@@ -716,6 +756,11 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   }
 
   // B. Sous-score Thématique / Narratif
+  const queryWords = queryLower.split(/[\s,.'’"-]+/).filter(w => w.length > 2);
+  const stopWords = ['film', 'films', 'serie', 'series', 'avec', 'dans', 'pour', 'les', 'des', 'une', 'qui', 'par', 'sur', 'lequel', 'laquelle', 'elle', 'lui', 'est', 'sont', 'ete', 'été'];
+  const nonPersonWords = queryWords.filter(w => !personKeywords.some(pk => pk.includes(w) || w.includes(pk)) && !stopWords.includes(w));
+  const hasNarrativeIntent = Boolean(activeCluster) || nonPersonWords.length >= 2;
+
   let narrativeScore = llmMatch ? 88 : 70;
   if (activeCluster) {
     const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
@@ -729,14 +774,28 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
       for (const kw of activeCluster.secondaryKeywords) {
         if (overviewLower.includes(kw)) hits += 1.5;
       }
-      narrativeScore = Math.min(100, Math.max(50, 60 + hits * 8));
+      if (hits > 0) {
+        narrativeScore = Math.min(100, Math.max(50, 60 + hits * 8));
+      } else {
+        const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+        narrativeScore = isAnimationOrFamily ? 10 : 25;
+      }
     }
+  } else if (hasPersonInQuery && nonPersonWords.length >= 2) {
+    let hits = 0;
+    for (const w of nonPersonWords) {
+      if (overviewLower.includes(w) || titleLower.includes(w)) hits++;
+    }
+    narrativeScore = hits > 0 ? 75 : 20;
   }
 
   // C. Sous-score Genre
   let genreScore = 75;
   if (activeCluster) {
-    if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
+    const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
+    if (isAnimationOrFamily) {
+      genreScore = 20;
+    } else if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
       genreScore = 95;
     } else if (genreIds.includes(18)) { // Drame
       genreScore = 70;
@@ -756,7 +815,13 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     ? (personScore * 0.35) + (narrativeScore * 0.45) + (genreScore * 0.20) + qualityDelta
     : (narrativeScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
-  return Math.min(99, Math.max(50, Math.round(composite)));
+  // RÈGLE CARDINALE : Le score personne seul ne suffit JAMAIS si la requête contient une description narrative explicite
+  // et que le score narratif/thématique est nul ou insuffisant (< 50).
+  if (hasPersonInQuery && hasNarrativeIntent && narrativeScore < 50) {
+    return Math.min(38, Math.round(narrativeScore));
+  }
+
+  return Math.min(99, Math.max(25, Math.round(composite)));
 }
 
 // ============================================================================
