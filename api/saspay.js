@@ -939,8 +939,7 @@ export default async function handler(req, res) {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Idempotency-Key': idempotencyKey
+          'Accept': 'application/json'
         },
         body: JSON.stringify(saspayPayload)
       });
