@@ -177,7 +177,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         console.error('[SupportModal] Échec SasaPay :', exactError, data);
         setErrorMessage(exactError);
         showToast(exactError);
-        alert(`Erreur SasaPay : ${exactError}`);
         setIsProcessing(false);
         return;
       }
@@ -203,7 +202,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
         console.error('[SupportModal]', missingLinkError);
         setErrorMessage(missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection SasaPay :\n${missingLinkError}`);
         setIsProcessing(false);
         return;
       }
@@ -220,7 +218,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       const exactError = formatPaymentErrorMessage(err, "Échec inconnu de l'initialisation du paiement SasaPay.");
       setErrorMessage(exactError);
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur SasaPay : ${exactError}`);
       setIsProcessing(false);
     }
   };

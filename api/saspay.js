@@ -208,7 +208,13 @@ export function extractErrorMessage(data, fallback = 'Erreur SasPay') {
       if (str && str !== '{}') return str;
     } catch (_) {}
   }
-  return String(data) || fallback;
+
+  const rawStr = String(data || '').trim();
+  if (rawStr.includes('A server error has occurred') || rawStr.includes('Bad Gateway') || rawStr.includes('502')) {
+    return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire / PayPal.";
+  }
+
+  return rawStr || fallback;
 }
 
 /**

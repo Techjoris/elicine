@@ -284,7 +284,6 @@ export const AppContent: React.FC = () => {
         const exactError = formatPaymentErrorMessage(data?.message || data?.error || data, "Échec de l'initialisation du paiement SasaPay.");
         console.error('[App] Échec SasaPay :', exactError, data);
         showToast(exactError);
-        alert(`Erreur SasaPay : ${exactError}`);
         return;
       }
 
@@ -310,13 +309,11 @@ export const AppContent: React.FC = () => {
         const missingLinkError = `Lien de redirection SasaPay introuvable (checkout_url ou link manquant). ${propsDetail}. Réponse reçue : ${typeof data === 'object' ? JSON.stringify(data) : data}`;
         console.error('[App]', missingLinkError);
         showToast(`Lien manquant. Propriétés : [${receivedProps}]`);
-        alert(`Erreur de redirection SasaPay :\n${missingLinkError}`);
       }
     } catch (e: any) {
       console.error('[App] Exception initialisation SasaPay :', e);
       const exactError = formatPaymentErrorMessage(e, "Échec de l'initialisation du paiement SasaPay.");
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur SasaPay : ${exactError}`);
     }
   };
 

@@ -196,7 +196,6 @@ export const TipModal: React.FC = () => {
         console.error('[TipModal] Échec SasaPay :', exactError, data);
         setErrorMessage(exactError);
         showToast(exactError);
-        alert(`Erreur SasaPay : ${exactError}`);
         setIsProcessing(false);
         return;
       }
@@ -223,7 +222,6 @@ export const TipModal: React.FC = () => {
         console.error('[TipModal]', missingLinkError);
         setErrorMessage(missingLinkError);
         showToast(`Lien manquant. Propriétés reçues : [${receivedProps}]`);
-        alert(`Erreur de redirection SasaPay :\n${missingLinkError}`);
         setIsProcessing(false);
         return;
       }
@@ -239,7 +237,6 @@ export const TipModal: React.FC = () => {
       const exactError = formatPaymentErrorMessage(err, "Échec inconnu de l'initialisation du paiement SasaPay.");
       setErrorMessage(exactError);
       showToast(`Erreur : ${exactError}`);
-      alert(`Erreur SasaPay : ${exactError}`);
       setIsProcessing(false);
     }
   };
