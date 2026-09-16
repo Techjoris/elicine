@@ -593,6 +593,46 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
 // ============================================================================
 const THEMATIC_CLUSTERS_RAW = [
   {
+    id: 'guerre',
+    triggers: [
+      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'front', 'tranchée', 'tranchées',
+      'tranchee', 'tranchees', 'survie au combat', 'bataille', 'batailles', 'militaire', 'militaires',
+      'armée', 'armee', 'débarquement', 'debarquement', 'seconde guerre', 'première guerre',
+      'guerre mondiale', 'vietnam', 'sniper', 'tireur d\'élite', 'tireur d elite', 'peloton',
+      'régiment', 'regiment', 'bataillon', 'escadron'
+    ],
+    primaryKeywords: [
+      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'bataille', 'batailles',
+      'front', 'tranchée', 'tranchées', 'tranchee', 'tranchees', 'militaire', 'militaires',
+      'armée', 'armee', 'débarquement', 'debarquement', 'ennemi', 'ennemis', 'régiment',
+      'bataillon', 'peloton', 'officier', 'capitaine', 'sergent', 'lieutenant', 'colonel',
+      'général', 'veteran', 'vétéran', 'tir', 'tireur', 'tireurs'
+    ],
+    secondaryKeywords: [
+      'survie au combat', 'survie', 'survivre', 'mission', 'tireur d\'élite', 'sniper', 'fusil',
+      'obus', 'bombardement', 'char', 'chars', 'tank', 'tanks', 'bunker', 'héroïque', 'heroique',
+      'sacrifice', 'prisonnier de guerre', 'sauvetage', 'sauver', 'frères d\'armes', 'freres d armes',
+      'assaut', 'offensive', 'conflit', 'artillerie', 'normandie', 'irak', 'afghanistan', 'pacifique',
+      'aviation', 'pilote de chasse', 'patrie'
+    ],
+    expectedGenres: [10752, 36, 28],
+    conflictingGenres: [10749, 35, 10751, 10402],
+    archetypes: [
+      '1917', 'il faut sauver le soldat ryan', 'saving private ryan', 'american sniper',
+      'dunkerque', 'dunkirk', 'tu ne tueras point', 'hacksaw ridge', 'fury',
+      'platoon', 'full metal jacket', 'apocalypse now', 'la ligne rouge', 'the thin red line',
+      'les sentiers de la gloire', 'paths of glory', 'lettres d\'iwo jima', 'letters from iwo jima',
+      'enemy at the gates', 'stalingrad', 'black hawk down', 'la chute du faucon noir',
+      'all quiet on the western front', 'à l\'ouest rien de nouveau', 'a l\'ouest rien de nouveau',
+      'le pont de la rivière kwaï', 'inglourious basterds', 'voyage au bout de l\'enfer', 'the deer hunter'
+    ],
+    disqualified: [
+      'la la land', 'notting hill', 'coup de foudre à notting hill', 'pretty woman',
+      'clueless', 'le fabuleux destin d\'amélie poulain', 'bridget jones', 'le journal de bridget jones',
+      'mamma mia', 'love actually'
+    ]
+  },
+  {
     id: 'braquage',
     triggers: ['braquage', 'braquer', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'heist'],
     primaryKeywords: ['braquage', 'braquages', 'braquer', 'braqueurs', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'cambrioleur', 'dévaliser', 'coffre-fort', 'butin'],
@@ -661,10 +701,12 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
 
   // 3. Calcul continu multi-critères
   // A. Sous-score Personne / Acteur (si mentionné dans la requête)
+  let hasPersonInQuery = false;
   let personScore = 100;
   const personKeywords = ['dicaprio', 'leonardo', 'nolan', 'tarantino', 'pitt', 'cruise', 'scorsese', 'denzel'];
   for (const pk of personKeywords) {
     if (queryLower.includes(pk)) {
+      hasPersonInQuery = true;
       const inOverview = overviewLower.includes(pk);
       const inTitle = titleLower.includes(pk);
       // Les films proposés par le LLM pour un acteur ont déjà l'acteur validé
@@ -710,9 +752,11 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   const qualityDelta = (bayesRating - 7.0) * 2.5; // [-4, +4]
 
   // E. Synthèse pondérée continue
-  const composite = (personScore * 0.35) + (narrativeScore * 0.45) + (genreScore * 0.20) + qualityDelta;
+  const composite = hasPersonInQuery
+    ? (personScore * 0.35) + (narrativeScore * 0.45) + (genreScore * 0.20) + qualityDelta
+    : (narrativeScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
-  return Math.min(99, Math.max(60, Math.round(composite)));
+  return Math.min(99, Math.max(50, Math.round(composite)));
 }
 
 // ============================================================================

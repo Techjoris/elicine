@@ -1362,7 +1362,8 @@ export async function executeCinoraSearch(
         });
       } else {
         // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
-        if (criteria.hasNarrativeConstraint && structuredEval.score < 55) {
+        const minReserveScore = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 50;
+        if (criteria.hasNarrativeConstraint && structuredEval.score < minReserveScore) {
           console.log(`[UnifiedAI] Disqualification narrative (${structuredEval.score}%) : "${movie.title}"`);
           continue;
         }
@@ -1404,7 +1405,9 @@ export async function executeCinoraSearch(
           ? `avec ${primaryPerson}${criteria.isTwistRequested ? ' et twist' : ''}`
           : criteria.spatialSettings.length > 0
             ? `en décor ${criteria.spatialSettings[0]} (${criteria.tones.join(', ') || 'ambiance immersive'})`
-            : `correspondant précisément à vos critères`;
+            : criteria.themes.length > 0
+              ? `sur le thème « ${criteria.themes.join(', ')} »`
+              : `correspondant précisément à vos critères`;
 
         return {
           thought: `🎯 Analyse d'intention (Niveau 1) : ${selectedTier1.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
@@ -1501,7 +1504,8 @@ export async function executeCinoraSearch(
       // Rejet si incohérence narrative formelle avec la requête
       if (criteria.hasNarrativeConstraint) {
         const evalRes = evaluateStructuredMovieMatch(m, criteria);
-        if (evalRes.score < 55) {
+        const minThreshold = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 50;
+        if (evalRes.score < minThreshold) {
           return false;
         }
       }

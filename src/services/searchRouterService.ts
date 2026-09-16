@@ -519,6 +519,18 @@ const KNOWN_ACTORS_MAP: Record<string, string[]> = {
   'Timothée Chalamet': ['timothée chalamet', 'timothee chalamet', 'chalamet']
 };
 
+export const GENRE_AND_THEME_WORDS = new Set([
+  'guerre', 'guerres', 'braquage', 'braquages', 'science-fiction', 'sf', 'horreur', 'angoisse',
+  'peur', 'suspense', 'comédie', 'comedie', 'comédies', 'comedies', 'drame', 'drames',
+  'action', 'thriller', 'thrillers', 'western', 'westerns', 'animation', 'fantastique',
+  'fantasy', 'romance', 'aventure', 'aventures', 'documentaire', 'policier', 'policiers',
+  'espionnage', 'zombie', 'zombies', 'vampire', 'vampires', 'survie', 'culte', 'amour',
+  'gangster', 'gangsters', 'mafia', 'monstre', 'monstres', 'catastrophe', 'mystère', 'mystere',
+  'noël', 'noel', 'samouraï', 'samourai', 'super-héros', 'super-heros', 'voyage', 'prison',
+  'vengeance', 'course', 'poursuite', 'famille', 'soldat', 'soldats', 'combat', 'combats',
+  'tranchée', 'tranchées', 'bataille', 'batailles', 'seul', 'peintre', 'peinture', 'musique'
+]);
+
 /**
  * Isole les critères durs (acteur, réalisateur, format, année) et dégage l'entité principale
  * pour alimenter la recherche stricte (Niveau 1) et le recadrage intelligent (Niveau 3).
@@ -566,16 +578,39 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  // Détection contextuelle 'réalisé par ...' ou 'un film de ...'
-  const dirPattern = /\b(?:réalisé par|realise par|un film de|du réalisateur|de la réalisatrice)\s+([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
-  const dirMatch = clean.match(dirPattern);
-  if (dirMatch && dirMatch[1]) {
-    const candidate = dirMatch[1].trim();
+  // Détection contextuelle 'réalisé par ...' ou 'du réalisateur ...'
+  const explicitDirPattern = /\b(?:réalisé par|realise par|du réalisateur|de la réalisatrice)\s+([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
+  const explicitDirMatch = clean.match(explicitDirPattern);
+  if (explicitDirMatch && explicitDirMatch[1]) {
+    const candidate = explicitDirMatch[1].trim();
     const candidateLower = candidate.toLowerCase();
     const firstWord = candidateLower.split(/\s+/)[0];
     const isStopPrefix = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette', 'du', 'de', 'd', 'au', 'aux'].includes(firstWord);
     if (!isStopPrefix && candidate.length > 2 && !directors.some(d => d.toLowerCase() === candidateLower)) {
       directors.push(candidate);
+    }
+  }
+
+  // Détection contextuelle 'un film de [Nom]' (strictement gardé pour éviter de capturer des genres ou thèmes)
+  const filmDePattern = /\bun film de\s+([A-ZÀ-ÿa-z'-]+(?:\s+[A-ZÀ-ÿa-z'-]+)?)/i;
+  const filmDeMatch = clean.match(filmDePattern);
+  if (filmDeMatch && filmDeMatch[1]) {
+    const candidate = filmDeMatch[1].trim();
+    const candidateLower = candidate.toLowerCase();
+    const words = candidateLower.split(/\s+/);
+    const firstWord = words[0];
+
+    const isKnownDir = Object.entries(KNOWN_DIRECTORS_MAP).some(([cName, aliases]) =>
+      aliases.some(a => candidateLower.includes(a)) || cName.toLowerCase() === candidateLower
+    );
+    const isStopWord = ['un', 'une', 'des', 'le', 'la', 'les', 'ce', 'cette', 'du', 'de', 'd', 'au', 'aux', 'mon', 'son', 'notre', 'votre', 'leur'].includes(firstWord);
+    const isGenreOrTheme = GENRE_AND_THEME_WORDS.has(firstWord) || BROAD_GENRES.some(g => candidateLower.startsWith(g));
+    const hasGrammarOrParticiple = ['vu', 'qui', 'dans', 'sur', 'avec', 'par', 'sans', 'pour', 'seul'].some(w => words.includes(w));
+
+    if (isKnownDir || (!isStopWord && !isGenreOrTheme && !hasGrammarOrParticiple && candidate.length > 2)) {
+      if (!directors.some(d => d.toLowerCase() === candidateLower)) {
+        directors.push(candidate);
+      }
     }
   }
 
@@ -620,11 +655,21 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     'huis clos', 'twist', 'espace', 'trou noir', 'boucle temporelle',
     'braquage', 'paranoïa', 'amnésie', 'sniper', 'intelligence artificielle',
     'sous-marin', 'cercueil', 'zombie', 'vampire', 'cyberpunk', 'dystopie',
-    'enquête', 'infiltration', 'voyage dans le temps'
+    'enquête', 'infiltration', 'voyage dans le temps',
+    'guerre', 'soldat', 'combat', 'bataille', 'tranchée', 'tranchées', 'survie au combat'
   ];
   for (const t of themeKeywords) {
     if (lower.includes(t) && !themes.includes(t)) {
       themes.push(t);
+    }
+  }
+
+  // Scanner automatiquement tous les déclencheurs des clusters thématiques
+  for (const cluster of THEMATIC_LEXICON_CLUSTERS) {
+    if (cluster.triggers.some(tr => lower.includes(tr))) {
+      if (!themes.includes(cluster.id)) {
+        themes.push(cluster.id);
+      }
     }
   }
 
@@ -789,6 +834,46 @@ export const KNOWN_NON_TWIST_MOVIES = new Set([
 ]);
 
 export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
+  {
+    id: 'guerre',
+    triggers: [
+      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'front', 'tranchée', 'tranchées',
+      'tranchee', 'tranchees', 'survie au combat', 'bataille', 'batailles', 'militaire', 'militaires',
+      'armée', 'armee', 'débarquement', 'debarquement', 'seconde guerre', 'première guerre',
+      'guerre mondiale', 'vietnam', 'sniper', 'tireur d\'élite', 'tireur d elite', 'peloton',
+      'régiment', 'regiment', 'bataillon', 'escadron'
+    ],
+    primaryKeywords: [
+      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'bataille', 'batailles',
+      'front', 'tranchée', 'tranchées', 'tranchee', 'tranchees', 'militaire', 'militaires',
+      'armée', 'armee', 'débarquement', 'debarquement', 'ennemi', 'ennemis', 'régiment',
+      'bataillon', 'peloton', 'officier', 'capitaine', 'sergent', 'lieutenant', 'colonel',
+      'général', 'veteran', 'vétéran', 'tir', 'tireur', 'tireurs'
+    ],
+    secondaryKeywords: [
+      'survie au combat', 'survie', 'survivre', 'mission', 'tireur d\'élite', 'sniper', 'fusil',
+      'obus', 'bombardement', 'char', 'chars', 'tank', 'tanks', 'bunker', 'héroïque', 'heroique',
+      'sacrifice', 'prisonnier de guerre', 'sauvetage', 'sauver', 'frères d\'armes', 'freres d armes',
+      'assaut', 'offensive', 'conflit', 'artillerie', 'normandie', 'irak', 'afghanistan', 'pacifique',
+      'aviation', 'pilote de chasse', 'patrie'
+    ],
+    expectedGenres: [10752, 36, 28],
+    conflictingGenres: [10749, 35, 10751, 10402],
+    archetypeTitles: [
+      '1917', 'il faut sauver le soldat ryan', 'saving private ryan', 'american sniper',
+      'dunkerque', 'dunkirk', 'tu ne tueras point', 'hacksaw ridge', 'fury',
+      'platoon', 'full metal jacket', 'apocalypse now', 'la ligne rouge', 'the thin red line',
+      'les sentiers de la gloire', 'paths of glory', 'lettres d\'iwo jima', 'letters from iwo jima',
+      'enemy at the gates', 'stalingrad', 'black hawk down', 'la chute du faucon noir',
+      'all quiet on the western front', 'à l\'ouest rien de nouveau', 'a l\'ouest rien de nouveau',
+      'le pont de la rivière kwaï', 'inglourious basterds', 'voyage au bout de l\'enfer', 'the deer hunter'
+    ],
+    disqualifiedTitles: [
+      'la la land', 'notting hill', 'coup de foudre à notting hill', 'pretty woman',
+      'clueless', 'le fabuleux destin d\'amélie poulain', 'bridget jones', 'le journal de bridget jones',
+      'mamma mia', 'love actually'
+    ]
+  },
   {
     id: 'braquage',
     triggers: ['braquage', 'braquer', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'heist', 'vol de banque'],
@@ -1012,7 +1097,9 @@ export function evaluateMovieNarrativeRelevance(
     : (thematicScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
   const finalScore = Math.min(99, Math.max(25, Math.round(composite)));
-  const matches = finalScore >= 75 && thematicScore >= 60;
+  const matches = hasPerson
+    ? (finalScore >= 75 && thematicScore >= 60)
+    : (finalScore >= 65 && thematicScore >= 50);
 
   return {
     matches,
