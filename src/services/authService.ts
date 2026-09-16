@@ -22,8 +22,10 @@ interface StoredAccount {
   role?: 'admin' | 'user';
   passwordHash: string;
   isPro: boolean;
-  proPlanType?: 'monthly' | 'yearly';
+  proPlanType?: 'monthly' | 'yearly' | 'free' | string;
   proPlanExpiresAt?: string | null;
+  expires_at?: string | null;
+  daysRemaining?: number | null;
   referralCode: string;
   createdAt: string;
   myList?: Movie[];

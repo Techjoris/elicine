@@ -78,8 +78,14 @@ export interface UserProfile {
   isPro: boolean;
   is_pro?: boolean;
   pass_status?: 'pro' | 'free' | string;
-  proPlanType?: 'monthly' | 'yearly';
+  proPlanType?: 'monthly' | 'yearly' | 'free' | string;
   proPlanExpiresAt?: string | null;
+  expires_at?: string | null;
+  pro_expires_at?: string | null;
+  subscription_ends_at?: string | null;
+  expiresAt?: string | null;
+  daysRemaining?: number | null;
+  days_remaining?: number | null;
   referralCode: string;
   referredBy?: string | null;
   createdAt: string;
@@ -108,6 +114,8 @@ export interface ProSubscription {
   updatedAt?: string;
   activatedAt?: string;
   expiresAt?: string;
+  expires_at?: string;
+  daysRemaining?: number;
   signatureVerified?: boolean;
 }
 
@@ -120,8 +128,10 @@ export interface AdminUserData {
   provider?: 'google' | 'credentials';
   role?: 'admin' | 'user';
   isPro: boolean;
-  proPlanType?: 'monthly' | 'yearly';
+  proPlanType?: 'monthly' | 'yearly' | 'free' | string;
   proPlanExpiresAt?: string | null;
+  expires_at?: string | null;
+  daysRemaining?: number | null;
   referralCode: string;
   createdAt: string;
   moviesInListCount: number;

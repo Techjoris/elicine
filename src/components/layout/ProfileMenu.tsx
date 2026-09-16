@@ -369,7 +369,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                     <span className="font-bold text-xs truncate">Éliciné Pro Actif</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider flex-shrink-0">
-                    Illimité
+                    {((user as any)?.daysRemaining || (appUser as any)?.daysRemaining) && (((user as any)?.daysRemaining ?? 1000) < 999 || ((appUser as any)?.daysRemaining ?? 1000) < 999)
+                      ? `${(user as any)?.daysRemaining || (appUser as any)?.daysRemaining}j restants`
+                      : 'Illimité'}
                   </span>
                 </div>
               ) : (

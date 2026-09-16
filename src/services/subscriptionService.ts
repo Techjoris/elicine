@@ -558,8 +558,9 @@ export const subscriptionService = {
    */
   async checkUserProStatus(user: { id?: string; email?: string } | null): Promise<{
     isPro: boolean;
-    plan?: 'monthly' | 'yearly';
+    plan?: 'monthly' | 'yearly' | 'free' | string;
     expiresAt?: string | null;
+    daysRemaining?: number | null;
   }> {
     if (!user) {
       return { isPro: false };
@@ -584,19 +585,45 @@ export const subscriptionService = {
         // 1.A. Vérification prioritaire de la table profiles (is_pro = true)
         let profileData: any = null;
         if (email) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
+          const { data } = await supabase
+            .from('profiles')
+            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .eq('email', email)
+            .maybeSingle();
           if (data) profileData = data;
         }
         if (!profileData && user.id && isUuid(user.id)) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('id', user.id).maybeSingle();
+          const { data } = await supabase
+            .from('profiles')
+            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .eq('id', user.id)
+            .maybeSingle();
           if (data) profileData = data;
         }
 
         if (profileData && (profileData.is_pro === true || String(profileData.is_pro) === 'true')) {
+          const effectiveExpiry = profileData.expires_at || profileData.pro_expires_at || profileData.subscription_ends_at;
+
+          // Si une date d'expiration existe et qu'elle est dépassée, considérer comme non pro
+          if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {
+            console.log(`[subscriptionService] ⏱️ Expiration de l'abonnement constatée pour ${profileData.email} (${effectiveExpiry}).`);
+            return {
+              isPro: false,
+              plan: 'free',
+              expiresAt: effectiveExpiry,
+              daysRemaining: 0
+            };
+          }
+
+          const daysRemaining = effectiveExpiry 
+            ? Math.max(1, Math.ceil((new Date(effectiveExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : null;
+
           return {
             isPro: true,
             plan: 'monthly',
-            expiresAt: null
+            expiresAt: effectiveExpiry || null,
+            daysRemaining
           };
         }
 
@@ -614,10 +641,15 @@ export const subscriptionService = {
         if (subData) {
           const isExpired = subData.expires_at ? new Date(subData.expires_at).getTime() <= Date.now() : false;
           if (!isExpired) {
+            const daysRemaining = subData.expires_at 
+              ? Math.max(1, Math.ceil((new Date(subData.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+              : null;
+
             return {
               isPro: true,
               plan: subData.plan,
-              expiresAt: subData.expires_at
+              expiresAt: subData.expires_at,
+              daysRemaining
             };
           }
         }
@@ -636,7 +668,8 @@ export const subscriptionService = {
           return {
             isPro: true,
             plan: dataPro.plan || 'monthly',
-            expiresAt: dataPro.expiresAt || null
+            expiresAt: dataPro.expiresAt || null,
+            daysRemaining: dataPro.daysRemaining ?? null
           };
         }
       }
@@ -651,7 +684,8 @@ export const subscriptionService = {
           return {
             isPro: true,
             plan: data.plan || 'monthly',
-            expiresAt: data.expiresAt || null
+            expiresAt: data.expiresAt || null,
+            daysRemaining: data.daysRemaining ?? null
           };
         }
       }
@@ -663,10 +697,15 @@ export const subscriptionService = {
       if (localActive && localActive.status === 'active' && (localActive.email?.toLowerCase() === email || localActive.userId === user.id)) {
         const isExpired = localActive.expiresAt ? new Date(localActive.expiresAt).getTime() <= Date.now() : false;
         if (!isExpired) {
+          const daysRemaining = localActive.expiresAt 
+            ? Math.max(1, Math.ceil((new Date(localActive.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : null;
+
           return {
             isPro: true,
             plan: localActive.plan,
-            expiresAt: localActive.expiresAt
+            expiresAt: localActive.expiresAt,
+            daysRemaining
           };
         }
       }

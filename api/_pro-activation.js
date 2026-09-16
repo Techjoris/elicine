@@ -3,7 +3,7 @@
  * Connecte Supabase (profiles & subscriptions) et déclenche l'envoi des e-mails Resend
  */
 import { createClient } from '@supabase/supabase-js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
+import { sendProWelcomeEmail, sendDonationThankYouEmail, sendProRenewalReminderEmail } from './_email.js';
 
 // Configuration Supabase multi-environnements avec priorité Service Role Key
 const supabaseUrl = (
@@ -28,16 +28,28 @@ export const supabaseAdmin = (supabaseUrl && supabaseKey && supabaseKey.length >
   : null;
 
 /**
- * Calcule la date d'expiration en fonction du forfait
+ * Calcule la date d'expiration exacte (30 jours pour mensuel, 365 jours pour annuel)
  */
 export function computePlanExpiry(plan = 'monthly') {
   const expiresDate = new Date();
   if (plan === 'yearly') {
-    expiresDate.setFullYear(expiresDate.getFullYear() + 1);
+    expiresDate.setDate(expiresDate.getDate() + 365);
   } else {
     expiresDate.setDate(expiresDate.getDate() + 30);
   }
   return expiresDate.toISOString();
+}
+
+/**
+ * Calcule le nombre de jours restants jusqu'à expiration
+ */
+export function getDaysRemaining(expiresAt) {
+  if (!expiresAt) return null;
+  const expTime = new Date(expiresAt).getTime();
+  if (isNaN(expTime)) return null;
+  const diffMs = expTime - Date.now();
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -49,21 +61,6 @@ export function isUuid(val) {
 
 /**
  * Fonction centrale d'activation du Pass Pro et enregistrement Supabase + Resend
- * 
- * @param {string} email - Adresse e-mail du client
- * @param {Object} planDetails - Détails du paiement / plan
- * @param {string} [planDetails.plan='monthly'] - 'monthly' | 'yearly' | 'donation'
- * @param {string} [planDetails.customerName] - Nom du client
- * @param {number|string} [planDetails.amount] - Montant réglé
- * @param {string} [planDetails.currency='USD'] - Devise du paiement
- * @param {string} [planDetails.gateway='online'] - 'paypal' | 'saspay' | 'moneroo' | etc.
- * @param {string} [planDetails.paymentReference] - Numéro de commande / transaction
- * @param {string} [planDetails.subscriptionId] - ID de souscription unique
- * @param {boolean} [planDetails.isDonation] - True s'il s'agit d'un don libre
- * @param {string} [planDetails.userId] - ID utilisateur Supabase si disponible
- * @param {string} [planDetails.phone] - Numéro de téléphone si disponible
- * 
- * @returns {Promise<{success: boolean, isPro: boolean, email: string, plan: string, expiresAt?: string, subscriptionId: string, emailSent: boolean, error?: string}>}
  */
 export async function activateUserPassPro(email, planDetails = {}) {
   const rawEmail = (email || '').trim().toLowerCase();
@@ -107,7 +104,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
   const expiresAt = isDonation ? null : computePlanExpiry(normalizedPlan);
   const targetSubId = subscriptionId || `sub_${gateway}_${paymentReference || Date.now()}`;
 
-  console.log(`[Activation Centralisée] 🚀 Traitement pour ${rawEmail} | Type: ${isDonation ? 'Don' : 'Pro'} | Gateway: ${gateway} | Montant: ${numericAmount} ${currency}`);
+  console.log(`[Activation Centralisée] 🚀 Traitement pour ${rawEmail} | Type: ${isDonation ? 'Don' : 'Pro (30 jours)'} | Gateway: ${gateway} | Montant: ${numericAmount} ${currency} | Expiration: ${expiresAt || 'N/A'}`);
 
   // 1. Mise à jour de la base de données Supabase
   let dbSuccess = false;
@@ -120,11 +117,12 @@ export async function activateUserPassPro(email, planDetails = {}) {
         const profileUpdatePayload = {
           is_pro: true,
           pass_status: 'pro',
+          expires_at: expiresAt,
+          pro_expires_at: expiresAt,
+          subscription_ends_at: expiresAt,
+          last_reminder_sent_at: null, // Réinitialisation des alertes pour la nouvelle période
           updated_at: now
         };
-        if (expiresAt) {
-          profileUpdatePayload.pro_expires_at = expiresAt;
-        }
 
         let profileQuery = supabaseAdmin
           .from('profiles')
@@ -139,12 +137,14 @@ export async function activateUserPassPro(email, planDetails = {}) {
         const { error: profileError } = await profileQuery;
 
         if (profileError) {
-          console.warn('[Activation Pro Supabase] Note mise à jour profile étendue:', profileError.message);
-          // Fallback avec mise à jour minimale si certaines colonnes (pass_status/pro_expires_at) n'existent pas encore
+          console.warn('[Activation Pro Supabase] Note mise à jour profile complète:', profileError.message);
+          // Fallback avec mise à jour minimale si certaines colonnes n'existent pas encore
           const { error: fallbackErr } = await supabaseAdmin
             .from('profiles')
             .update({
               is_pro: true,
+              pass_status: 'pro',
+              expires_at: expiresAt,
               updated_at: now
             })
             .eq('email', rawEmail);
@@ -152,10 +152,10 @@ export async function activateUserPassPro(email, planDetails = {}) {
           if (fallbackErr) {
             console.warn('[Activation Pro Supabase] Note mise à jour profile repli:', fallbackErr.message);
           } else {
-            console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true (fallback)`);
+            console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true avec expires_at`);
           }
         } else {
-          console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true & pass_status = 'pro'`);
+          console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true & expiration définie au ${expiresAt}`);
         }
 
         // Si le profil n'existe pas encore et qu'on a un UUID d'authentification valide, création proactive
@@ -175,18 +175,20 @@ export async function activateUserPassPro(email, planDetails = {}) {
                 username: cleanName,
                 is_pro: true,
                 pass_status: 'pro',
+                expires_at: expiresAt,
                 pro_expires_at: expiresAt,
+                subscription_ends_at: expiresAt,
                 created_at: now,
                 updated_at: now
               });
-            console.log(`[Activation Pro Supabase] 🆕 Profil créé pour ${rawEmail} (ID: ${validUserUuid})`);
+            console.log(`[Activation Pro Supabase] 🆕 Profil créé pour ${rawEmail} (ID: ${validUserUuid}, Exp: ${expiresAt})`);
           }
         } catch (insertErr) {
           console.warn('[Activation Pro Supabase] Note création profil:', insertErr?.message);
         }
       }
 
-      // 1.B. Upsert dans la table subscriptions (uniquement pour les abonnements Pro mensuels ou annuels)
+      // 1.B. Upsert dans la table subscriptions (avec colonne expires_at)
       if (!isDonation) {
         const subPlan = (normalizedPlan === 'yearly') ? 'yearly' : 'monthly';
         const subPayload = {
@@ -202,6 +204,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
           payment_reference: paymentReference || null,
           payment_provider: gateway,
           terms_accepted: true,
+          expires_at: expiresAt,
           created_at: now,
           updated_at: now
         };
@@ -213,7 +216,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
         if (subError) {
           console.warn('[Activation Pro Supabase] Note upsert subscriptions:', subError.message);
         } else {
-          console.log(`[Activation Pro Supabase] ✅ Souscription ${targetSubId} enregistrée en statut active`);
+          console.log(`[Activation Pro Supabase] ✅ Souscription ${targetSubId} enregistrée en statut active jusqu'au ${expiresAt}`);
         }
       }
 
@@ -253,8 +256,183 @@ export async function activateUserPassPro(email, planDetails = {}) {
     email: rawEmail,
     plan: normalizedPlan,
     expiresAt,
+    daysRemaining: isDonation ? null : 30,
     subscriptionId: targetSubId,
     dbUpdated: dbSuccess,
     emailSent
   };
 }
+
+/**
+ * Vérifie et rétrograde automatiquement les abonnements expirés (is_pro -> false)
+ */
+export async function downgradeExpiredSubscriptions() {
+  if (!supabaseAdmin) {
+    return { success: false, error: 'Client Supabase Admin non configuré', count: 0 };
+  }
+
+  const nowIso = new Date().toISOString();
+  let downgradedProfilesCount = 0;
+  let downgradedSubsCount = 0;
+
+  try {
+    // 1. Tenter l'appel de la procédure stockée PostgreSQL
+    try {
+      const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('downgrade_expired_subscriptions');
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        return {
+          success: true,
+          method: 'rpc',
+          downgradedProfiles: rpcData[0].downgraded_profiles_count,
+          downgradedSubscriptions: rpcData[0].downgraded_subscriptions_count
+        };
+      }
+    } catch (_) {}
+
+    // 2. Repli direct via requêtes Supabase REST
+    const { data: expiredProfiles, error: fetchErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, expires_at, pro_expires_at, subscription_ends_at')
+      .eq('is_pro', true)
+      .neq('email', 'ivanjoris959@gmail.com');
+
+    if (!fetchErr && Array.isArray(expiredProfiles)) {
+      const expiredIds = [];
+      for (const p of expiredProfiles) {
+        const exp = p.expires_at || p.pro_expires_at || p.subscription_ends_at;
+        if (exp && new Date(exp).getTime() < Date.now()) {
+          expiredIds.push(p.id);
+        }
+      }
+
+      if (expiredIds.length > 0) {
+        const { error: updateErr } = await supabaseAdmin
+          .from('profiles')
+          .update({
+            is_pro: false,
+            pass_status: 'free',
+            updated_at: nowIso
+          })
+          .in('id', expiredIds);
+
+        if (!updateErr) {
+          downgradedProfilesCount = expiredIds.length;
+          console.log(`[Cron Subscriptions] 🔻 ${downgradedProfilesCount} profil(s) expiré(s) rétrogradé(s) en Free.`);
+        }
+      }
+    }
+
+    // 3. Mise à jour des souscriptions expirées
+    const { data: expiredSubs, error: subsFetchErr } = await supabaseAdmin
+      .from('subscriptions')
+      .select('id, expires_at')
+      .eq('status', 'active')
+      .neq('email', 'ivanjoris959@gmail.com');
+
+    if (!subsFetchErr && Array.isArray(expiredSubs)) {
+      const expiredSubIds = expiredSubs
+        .filter(s => s.expires_at && new Date(s.expires_at).getTime() < Date.now())
+        .map(s => s.id);
+
+      if (expiredSubIds.length > 0) {
+        await supabaseAdmin
+          .from('subscriptions')
+          .update({ status: 'expired', updated_at: nowIso })
+          .in('id', expiredSubIds);
+        downgradedSubsCount = expiredSubIds.length;
+      }
+    }
+
+    return {
+      success: true,
+      method: 'rest_fallback',
+      downgradedProfiles: downgradedProfilesCount,
+      downgradedSubscriptions: downgradedSubsCount
+    };
+  } catch (error) {
+    console.error('[Cron Subscriptions] Erreur lors de la rétrogradation:', error);
+    return { success: false, error: error?.message, count: 0 };
+  }
+}
+
+/**
+ * Détecte les abonnements Pro arrivant à expiration (J-3 ou J-1) et envoie automatiquement un e-mail de relance
+ */
+export async function processExpirationReminders({ maxReminders = 50 } = {}) {
+  if (!supabaseAdmin) {
+    return { success: false, error: 'Client Supabase Admin non configuré', remindersSent: 0 };
+  }
+
+  const now = Date.now();
+  const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+  const results = [];
+
+  try {
+    // 1. Récupération des profils Pro actifs
+    const { data: activeProfiles, error: fetchErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, username, is_pro, expires_at, pro_expires_at, subscription_ends_at, last_reminder_sent_at')
+      .eq('is_pro', true)
+      .neq('email', 'ivanjoris959@gmail.com')
+      .limit(maxReminders);
+
+    if (fetchErr || !Array.isArray(activeProfiles)) {
+      console.warn('[Cron Reminders] Erreur récupération profiles:', fetchErr?.message);
+      return { success: false, error: fetchErr?.message, remindersSent: 0 };
+    }
+
+    for (const profile of activeProfiles) {
+      const email = (profile.email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) continue;
+
+      const effectiveExpiry = profile.expires_at || profile.pro_expires_at || profile.subscription_ends_at;
+      if (!effectiveExpiry) continue;
+
+      const expTime = new Date(effectiveExpiry).getTime();
+      const timeRemainingMs = expTime - now;
+
+      // Vérifier si l'expiration est comprise entre 0 et 3 jours (72h)
+      if (timeRemainingMs > 0 && timeRemainingMs <= threeDaysMs) {
+        const daysRemaining = Math.max(1, Math.ceil(timeRemainingMs / (1000 * 60 * 60 * 24)));
+
+        // Vérifier si un rappel a déjà été envoyé dans les 24 dernières heures
+        const lastReminder = profile.last_reminder_sent_at ? new Date(profile.last_reminder_sent_at).getTime() : 0;
+        if (now - lastReminder < twentyFourHoursMs) {
+          console.log(`[Cron Reminders] ⏭️ Rappel déjà envoyé récemment pour ${email} (il y a moins de 24h).`);
+          continue;
+        }
+
+        console.log(`[Cron Reminders] ✉️ Envoi relance expiration (J-${daysRemaining}) à ${email}...`);
+        const emailRes = await sendProRenewalReminderEmail(email, {
+          customerName: profile.username || 'Cinéphile',
+          daysRemaining,
+          expiresAt: effectiveExpiry,
+          renewalUrl: 'https://elicine.app?upgrade=pro'
+        });
+
+        if (emailRes?.success) {
+          // Mise à jour de last_reminder_sent_at dans la base
+          await supabaseAdmin
+            .from('profiles')
+            .update({ last_reminder_sent_at: new Date().toISOString() })
+            .eq('id', profile.id);
+
+          results.push({ email, daysRemaining, status: 'sent' });
+        } else {
+          results.push({ email, daysRemaining, status: 'failed', error: emailRes?.error });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      remindersSent: results.filter(r => r.status === 'sent').length,
+      details: results
+    };
+  } catch (error) {
+    console.error('[Cron Reminders] Erreur processing reminders:', error);
+    return { success: false, error: error?.message, remindersSent: 0 };
+  }
+}
+

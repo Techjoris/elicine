@@ -49,26 +49,73 @@ export default async function handler(req, res) {
     }
 
     if (email === 'ivanjoris959@gmail.com') {
-      return res.status(200).json({ success: true, isPro: true, email, plan: 'yearly', role: 'admin' });
+      return res.status(200).json({ 
+        success: true, 
+        isPro: true, 
+        email, 
+        plan: 'yearly', 
+        role: 'admin',
+        expiresAt: 'Illimité (Fondateur)',
+        daysRemaining: 9999
+      });
     }
 
     if (supabaseAdmin) {
       try {
         let prof = null;
         if (userId && isUuid(userId)) {
-          const { data } = await supabaseAdmin.from('profiles').select('id, email, is_pro').eq('id', userId).maybeSingle();
+          const { data } = await supabaseAdmin
+            .from('profiles')
+            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .eq('id', userId)
+            .maybeSingle();
           if (data) prof = data;
         }
         if (!prof && email) {
-          const { data } = await supabaseAdmin.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
+          const { data } = await supabaseAdmin
+            .from('profiles')
+            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .eq('email', email)
+            .maybeSingle();
           if (data) prof = data;
         }
 
         if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
+          const effectiveExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
+
+          // 1. Vérification de dépassement de date d'expiration (Rétrogradation automatique au vol)
+          if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {
+            console.log(`[API check-status] ⏱️ Expiration détectée pour ${prof.email} (${effectiveExpiry}). Rétrogradation automatique...`);
+            await supabaseAdmin
+              .from('profiles')
+              .update({
+                is_pro: false,
+                pass_status: 'free',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', prof.id);
+
+            return res.status(200).json({
+              success: true,
+              isPro: false,
+              isExpired: true,
+              expiresAt: effectiveExpiry,
+              daysRemaining: 0,
+              email: prof.email || email,
+              source: 'profiles'
+            });
+          }
+
+          const daysRemaining = effectiveExpiry 
+            ? Math.max(1, Math.ceil((new Date(effectiveExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : null;
+
           return res.status(200).json({
             success: true,
             isPro: true,
             email: prof.email || email,
+            expiresAt: effectiveExpiry || null,
+            daysRemaining,
             source: 'profiles'
           });
         }
@@ -76,20 +123,57 @@ export default async function handler(req, res) {
         // Repli secondaire dans subscriptions
         let sub = null;
         if (email) {
-          const { data } = await supabaseAdmin.from('subscriptions').select('*').eq('email', email).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          const { data } = await supabaseAdmin
+            .from('subscriptions')
+            .select('*')
+            .eq('email', email)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
           if (data) sub = data;
         }
         if (!sub && userId) {
-          const { data } = await supabaseAdmin.from('subscriptions').select('*').eq('user_id', userId).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
+          const { data } = await supabaseAdmin
+            .from('subscriptions')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
           if (data) sub = data;
         }
 
         if (sub) {
+          if (sub.expires_at && new Date(sub.expires_at).getTime() < Date.now()) {
+            await supabaseAdmin
+              .from('subscriptions')
+              .update({ status: 'expired', updated_at: new Date().toISOString() })
+              .eq('id', sub.id);
+
+            return res.status(200).json({
+              success: true,
+              isPro: false,
+              isExpired: true,
+              expiresAt: sub.expires_at,
+              daysRemaining: 0,
+              email: sub.email || email,
+              source: 'subscriptions'
+            });
+          }
+
+          const daysRemaining = sub.expires_at 
+            ? Math.max(1, Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : null;
+
           return res.status(200).json({
             success: true,
             isPro: true,
             email: sub.email || email,
             plan: sub.plan || 'monthly',
+            expiresAt: sub.expires_at || null,
+            daysRemaining,
             source: 'subscriptions'
           });
         }

@@ -380,14 +380,253 @@ export async function sendProWelcomeEmail(email, { customerName = 'Cinéphile', 
 }
 
 /**
- * Déclenche l'envoi de l'email de remerciement pour un don
+ * Template HTML Dark Theme Responsive pour la relance avant expiration du Pass Pro (J-3 ou J-1)
  */
-export async function sendDonationThankYouEmail(email, { customerName, amount = '2' } = {}) {
-  const html = getDonationThankYouEmailHtml({ customerName, amount });
+export function getProRenewalReminderEmailHtml({ 
+  customerName = 'Cinéphile', 
+  daysRemaining = 3, 
+  expiresAt = null,
+  renewalUrl = 'https://elicine.app?upgrade=pro'
+}) {
+  const formattedDate = expiresAt 
+    ? new Date(expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'très prochainement';
+
+  const daysLabel = daysRemaining <= 1 
+    ? "demain (moins de 24h)" 
+    : `dans ${daysRemaining} jours (${formattedDate})`;
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Votre Pass Pro Éliciné arrive à expiration</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #08080a;
+      color: #e4e4e7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #08080a;
+      padding: 40px 16px;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      background-color: #121215;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    }
+    .header {
+      padding: 32px 32px 16px 32px;
+      text-align: left;
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(18, 18, 21, 0) 100%);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #f59e0b;
+      background-color: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
+    }
+    .subtitle {
+      font-size: 13.5px;
+      color: #f59e0b;
+      margin: 0;
+      font-weight: 600;
+    }
+    .content {
+      padding: 16px 32px 32px 32px;
+    }
+    .paragraph {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: #d4d4d8;
+      margin: 0 0 16px 0;
+    }
+    .countdown-box {
+      background-color: #18181c;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin: 20px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .countdown-text {
+      font-size: 13.5px;
+      color: #a1a1aa;
+    }
+    .countdown-highlight {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f59e0b;
+    }
+    .benefits-card {
+      background-color: #18181c;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 20px 0 24px 0;
+    }
+    .benefits-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #a1a1aa;
+      margin-bottom: 12px;
+    }
+    .benefit-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      font-size: 13.5px;
+      color: #e4e4e7;
+      line-height: 1.5;
+    }
+    .benefit-item:last-child {
+      margin-bottom: 0;
+    }
+    .benefit-bullet {
+      color: #f59e0b;
+      font-weight: bold;
+      margin-right: 10px;
+      line-height: 1.4;
+    }
+    .cta-wrapper {
+      text-align: left;
+      padding: 12px 0 20px 0;
+    }
+    .cta-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #000000 !important;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+      padding: 13px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+    }
+    .signature {
+      font-size: 13px;
+      color: #a1a1aa;
+      margin: 20px 0 0 0;
+      line-height: 1.6;
+    }
+    .footer {
+      padding: 18px 32px;
+      background-color: #0c0c0e;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      text-align: left;
+      font-size: 12px;
+      color: #71717a;
+      line-height: 1.5;
+    }
+    .footer a {
+      color: #a1a1aa;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="badge">Rappel d'expiration</div>
+        <h1 class="title">Votre Pass Pro arrive à terme</h1>
+        <p class="subtitle">Expiration prévue ${daysLabel}</p>
+      </div>
+
+      <div class="content">
+        <p class="paragraph">Bonjour ${customerName},</p>
+        <p class="paragraph">
+          Votre période d'abonnement de 30 jours au <strong>Pass Pro Éliciné</strong> arrive bientôt à son terme (${daysLabel}).
+        </p>
+
+        <p class="paragraph">
+          Pour continuer à profiter sans interruption de l'ensemble des fonctionnalités exclusives d'Éliciné sans limite, vous pouvez renouveler votre formule dès aujourd'hui (1.99 $ / mois).
+        </p>
+
+        <div class="benefits-card">
+          <div class="benefits-title">Ce que vous conservez en renouvelant :</div>
+          <div class="benefit-item">
+            <span class="benefit-bullet">👑</span>
+            <span><strong>Recherches IA 100% illimitées :</strong> Ne soyez jamais bloqué par le quota journalier gratuit de 3 recherches.</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-bullet">⚡</span>
+            <span><strong>Traitement prioritaire instantané :</strong> Analyses scénaristiques et recommandations immédiates.</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-bullet">🎬</span>
+            <span><strong>Filtres streaming complets :</strong> Netflix, Prime Video, Canal+, Disney+, Apple TV+, etc.</span>
+          </div>
+        </div>
+
+        <div class="cta-wrapper">
+          <a href="${renewalUrl}" class="cta-btn">Renouveler mon Pass Pro (1.99 $)</a>
+        </div>
+
+        <p class="signature">
+          À très vite pour de nouvelles découvertes cinématographiques,<br>
+          <strong>L'équipe Éliciné</strong>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">Besoin d'aide ou d'informations sur votre abonnement ? Contactez <a href="mailto:support@elicine.app">support@elicine.app</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Déclenche l'envoi de l'email de relance avant expiration Pro (J-3 ou J-1)
+ */
+export async function sendProRenewalReminderEmail(email, { 
+  customerName = 'Cinéphile', 
+  daysRemaining = 3, 
+  expiresAt = null,
+  renewalUrl = 'https://elicine.app?upgrade=pro'
+} = {}) {
+  const html = getProRenewalReminderEmailHtml({ customerName, daysRemaining, expiresAt, renewalUrl });
+  const subject = daysRemaining <= 1
+    ? '⚠️ Dernier jour : Votre Pass Pro Éliciné expire demain'
+    : `🎬 Plus que ${daysRemaining} jours pour votre Pass Pro Éliciné`;
+
   return sendEmailWithResend({
     to: email,
-    subject: 'Un immense merci pour votre soutien à Éliciné ! 🎬',
+    subject,
     html,
-    text: `Un immense merci pour votre soutien à Éliciné ! Votre don de ${amount} permet de financer les serveurs et le développement continu de la plateforme. Rendez-vous sur https://elicine.app`
+    text: `Bonjour ${customerName},\n\nVotre Pass Pro Éliciné arrive à expiration dans ${daysRemaining} jour(s).\n\nPour continuer à profiter de recherches IA illimitées et de tous les filtres sans interruption, renouvelez votre formule en cliquant ici : ${renewalUrl}\n\nL'équipe Éliciné.`
   });
 }
+

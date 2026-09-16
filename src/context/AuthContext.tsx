@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Helper pour enrichir l'utilisateur avec son profil Supabase (is_pro, role, pass_status)
+  // Helper pour enrichir l'utilisateur avec son profil Supabase (is_pro, role, pass_status, expires_at)
   const enrichUserWithProfile = async (rawUser: any) => {
     if (!rawUser) return rawUser;
     const email = (rawUser.email || '').trim().toLowerCase();
@@ -73,6 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let passStatus = isMaster ? 'pro' : (rawUser.pass_status || (isPro ? 'pro' : 'free'));
     let role = isMaster ? 'admin' : (rawUser.role || 'user');
     let fullName = rawUser.user_metadata?.full_name || rawUser.name;
+    let expiresAt: string | null = rawUser.expires_at || rawUser.pro_expires_at || rawUser.expiresAt || null;
+    let daysRemaining: number | null = null;
 
     try {
       const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
@@ -86,8 +88,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data) prof = data;
       }
       if (prof) {
-        isPro = isMaster || prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin';
-        passStatus = prof.pass_status || (isPro ? 'pro' : 'free');
+        const profExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
+        if (profExpiry) expiresAt = profExpiry;
+
+        const isExpired = !isMaster && profExpiry && new Date(profExpiry).getTime() < Date.now();
+
+        if (isExpired) {
+          isPro = false;
+          passStatus = 'free';
+          daysRemaining = 0;
+        } else {
+          isPro = isMaster || prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin';
+          passStatus = prof.pass_status || (isPro ? 'pro' : 'free');
+          if (profExpiry) {
+            daysRemaining = Math.max(1, Math.ceil((new Date(profExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+          }
+        }
         role = isMaster ? 'admin' : (prof.role || role);
         if (prof.full_name) fullName = prof.full_name;
       }
@@ -96,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Repli serveur via Service Role (bypasse les restrictions RLS Supabase client)
-    if (!isPro && (email || userId)) {
+    if (!isPro && (email || userId) && !isMaster) {
       try {
         const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
         if (checkRes.ok) {
@@ -104,27 +120,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (checkData?.isPro) {
             isPro = true;
             passStatus = 'pro';
+            if (checkData.expiresAt) expiresAt = checkData.expiresAt;
+            if (checkData.daysRemaining !== undefined) daysRemaining = checkData.daysRemaining;
           }
         }
       } catch (_) {}
     }
 
-    // Double vérification avec le cache local
-    try {
-      const rawLocal = localStorage.getItem('cineia_user');
-      if (rawLocal) {
-        const parsed = JSON.parse(rawLocal);
-        if (parsed?.isPro && (parsed?.email?.toLowerCase() === email || parsed?.id === userId)) {
-          isPro = true;
-        }
-      }
-    } catch (_) {}
+    if (isMaster) {
+      isPro = true;
+      passStatus = 'pro';
+      role = 'admin';
+      expiresAt = 'Illimité (Fondateur)';
+      daysRemaining = 9999;
+    }
 
     return {
       ...rawUser,
       isPro,
       is_pro: isPro,
       pass_status: passStatus,
+      expires_at: expiresAt,
+      pro_expires_at: expiresAt,
+      expiresAt,
+      daysRemaining,
       role,
       name: fullName || email.split('@')[0] || 'Cinéphile',
       user_metadata: {
@@ -132,6 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPro,
         is_pro: isPro,
         pass_status: passStatus,
+        expires_at: expiresAt,
+        daysRemaining,
         full_name: fullName
       }
     };

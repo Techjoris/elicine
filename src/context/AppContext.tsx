@@ -801,15 +801,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
         let prof: any = null;
         if (email) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at').eq('email', email).maybeSingle();
           if (data) prof = data;
         }
         if (!prof && currentUser.id && isUuid(currentUser.id)) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro').eq('id', currentUser.id).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at').eq('id', currentUser.id).maybeSingle();
           if (data) prof = data;
         }
-        if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
-          isProDirect = true;
+        if (prof) {
+          const profExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
+          if (profExpiry) expiresAtDirect = profExpiry;
+
+          const isExpired = !isMaster && profExpiry && new Date(profExpiry).getTime() < Date.now();
+          if (isExpired) {
+            isProDirect = false;
+          } else if (prof.is_pro === true || String(prof.is_pro) === 'true') {
+            isProDirect = true;
+          }
         }
       }
     } catch (profErr) {
@@ -817,7 +825,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Repli serveur via Service Role (bypasse d'éventuels blocages RLS client)
-    if (!isProDirect && (email || currentUser.id)) {
+    if (!isProDirect && (email || currentUser.id) && !isMaster) {
       try {
         const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(currentUser.id || '')}&email=${encodeURIComponent(email)}`);
         if (checkRes.ok) {
@@ -826,13 +834,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             isProDirect = true;
             if (checkData.plan) planDirect = checkData.plan;
             if (checkData.expiresAt) expiresAtDirect = checkData.expiresAt;
+          } else if (checkData?.isExpired) {
+            isProDirect = false;
           }
         }
       } catch (_) {}
     }
 
     const proCheck = await subscriptionService.checkUserProStatus(currentUser);
-    const finalIsPro = isProDirect || proCheck.isPro;
+    const finalIsPro = isMaster || isProDirect || proCheck.isPro;
+    const finalExpiresAt = expiresAtDirect || proCheck.expiresAt || null;
+    const daysRemaining = finalExpiresAt && finalExpiresAt !== 'Illimité (Fondateur)'
+      ? Math.max(0, Math.ceil((new Date(finalExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      : (isMaster ? 9999 : null);
 
     const updated: UserProfile = {
       ...currentUser,
@@ -840,7 +854,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       is_pro: finalIsPro,
       pass_status: finalIsPro ? 'pro' : (currentUser as any)?.pass_status || 'free',
       proPlanType: proCheck.plan || currentUser.proPlanType || planDirect,
-      proPlanExpiresAt: expiresAtDirect || (proCheck.expiresAt ?? (finalIsPro ? currentUser.proPlanExpiresAt : null))
+      proPlanExpiresAt: finalExpiresAt,
+      expires_at: finalExpiresAt,
+      pro_expires_at: finalExpiresAt,
+      expiresAt: finalExpiresAt,
+      daysRemaining,
+      days_remaining: daysRemaining
     };
 
     setUser(updated);

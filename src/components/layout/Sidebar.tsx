@@ -404,7 +404,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Éliciné Pro Actif</span>
             </div>
             <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-200 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
-              Illimité
+              {((user as any)?.daysRemaining || (appUser as any)?.daysRemaining) && (((user as any)?.daysRemaining ?? 1000) < 999 || ((appUser as any)?.daysRemaining ?? 1000) < 999)
+                ? `${(user as any)?.daysRemaining || (appUser as any)?.daysRemaining}j restants`
+                : 'Illimité'}
             </span>
           </div>
         ) : (
