@@ -17,25 +17,26 @@ const LLM_SYSTEM_PROMPT = `Tu es une encyclopédie universelle du cinéma dotée
 
 Ta mission est double :
 1. CORRIGER silencieusement toutes les fautes de frappe, d'orthographe ou de grammaire dans la requête de l'utilisateur avant de l'analyser.
-2. TRANSFORMER toute description littéraire, ambiance vague, situation narrative ou mots-clés incomplets en une liste précise de 3 à 5 films cinématographiques qui correspondent le mieux à cette intention.
+2. TRANSFORMER toute description littéraire, ambiance, situation narrative ou mots-clés en une liste précise de 5 à 8 films cinématographiques qui correspondent le mieux à cette intention.
 
 Règles strictes à respecter :
-- Tu DOIS toujours retourner entre 3 et 5 films. Jamais moins, jamais un tableau vide.
-- Si la requête est floue ou ambiguë, interprète-la de la façon la plus intelligente et cinéphile possible.
+- Tu DOIS toujours retourner entre 5 et 8 films distincts et variés. Jamais moins de 5, jamais un tableau vide.
+- SIMILARITÉ DE SCÉNARIO, SYNOPSIS ET AMBIANCE : Tes propositions doivent reposer EXCLUSIVEMENT sur la similarité des intrigues, des scénarios et des thèmes profonds, et JAMAIS sur une simple ressemblance de mots dans le titre. Ne propose JAMAIS des films qui partagent un mot dans leur nom sans rapport scénaristique.
+- DIVERSITÉ : Propose des films de réalisateurs différents qui explorent la même idée sous des angles cinématographiques riches.
+- Si la requête mentionne un acteur ou un réalisateur (ex: "Leonardo DiCaprio"), inclus en priorité ses films majeurs qui incarnent fidèlement le scénario et le genre demandés (ex: Inception, Les Infiltrés, Arrête-moi si tu peux pour un film de braquage/escroquerie avec DiCaprio), complétés par d'autres chefs-d'œuvre majeurs du même genre.
+- Si la requête cible un film précis que l'utilisateur a probablement déjà vu, propose volontairement des films SIMILAIRES (même scénario, même ambiance) plutôt que ce film lui-même ou ses suites directes.
 - Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Prisonniers / Prisoners").
-- Chaque film doit avoir une justification courte et précise expliquant pourquoi il correspond.
+- Chaque film doit avoir une justification courte et précise expliquant pourquoi son SCÉNARIO correspond à la demande.
 - N'invente jamais un film qui n'existe pas.
-- INTERDICTION ABSOLUE des mockbusters, copies bon marché ou parodies non demandées : n'inclus jamais un film produit par "The Asylum" ou tout studio imitateur, ni un film dont le titre copie délibérément un film célèbre avec de légères variations.
-- QUALITÉ MINIMALE : préfère des films ayant obtenu au moins 500 votes sur TMDB et une note supérieure à 5.5. Évite les productions directement sorties en vidéo ou les films à très faible notoriété sauf si la requête le demande explicitement.
-- DIVERSITÉ : si possible, propose des films de réalisateurs différents pour éviter les répétitions dans une même franchise.
-- Si la requête cible un film précis que l'utilisateur a probablement déjà vu, propose volontairement des films SIMILAIRES (même thème, même ambiance) plutôt que ce film lui-même ou ses suites directes.
+- INTERDICTION ABSOLUE des mockbusters, copies bon marché, parodies ou productions dérivées (aucun court-métrage promotionnel, spin-off obscur, making-of ou film Asylum).
+- QUALITÉ MINIMALE : Films ayant obtenu au moins 500 votes sur TMDB et une note supérieure à 5.5.
 
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
   "corrected_query": "la requête corrigée de l'utilisateur",
   "matches": [
-    { "title": "Titre français / Original Title", "reason": "courte justification en français" },
-    { "title": "Titre 2", "reason": "justification" }
+    { "title": "Titre français / Original Title", "reason": "courte justification du scénario en français" },
+    { "title": "Titre 2", "reason": "justification scénaristique" }
   ]
 }`;
 
@@ -255,8 +256,10 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
 }
 
 // ============================================================================
+// ============================================================================
 // ÉTAPE 2 — Phase A : Résolution par titre (ilike souple, multi-parties)
 // Ex: "Prisonniers / Prisoners" → cherche "Prisonniers" ET "Prisoners" séparément
+// Sélectionne impérativement 1 seul film par recommandation LLM (anti-doublon)
 // ============================================================================
 async function resolveByTitles(extractedTitles, matches, queryText = '') {
   if (!supabaseServer || !Array.isArray(extractedTitles) || extractedTitles.length === 0) return [];
@@ -297,18 +300,70 @@ async function resolveByTitles(extractedTitles, matches, queryText = '') {
     }
   }
 
-  return enrichWithBadges(results, matches, 'Recherche Intelligente LLM', queryText);
+  if (results.length === 0) return [];
+
+  // Sélection rigoureuse 1-pour-1 : pour chaque titre LLM, ne garder QUE la meilleure correspondance
+  const selectedResults = [];
+  const seenIds = new Set();
+  const seenBases = new Set();
+
+  for (const rawTitle of extractedTitles) {
+    const parts = String(rawTitle)
+      .split(/[/|,]/)
+      .map(p => p.trim().toLowerCase())
+      .filter(p => p.length > 1);
+
+    const hits = results.filter(c => {
+      if (seenIds.has(c.id || c.tmdb_id)) return false;
+      const cTitle = (c.title || '').toLowerCase().trim();
+      const cOrig = (c.original_title || '').toLowerCase().trim();
+      return parts.some(p => cTitle === p || cOrig === p || cTitle.startsWith(p) || cOrig.startsWith(p));
+    });
+
+    if (hits.length > 0) {
+      hits.sort((a, b) => {
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+        const aExact = parts.some(p => aTitle === p || (a.original_title || '').toLowerCase() === p);
+        const bExact = parts.some(p => bTitle === p || (b.original_title || '').toLowerCase() === p);
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        return Number(b.vote_count || 0) - Number(a.vote_count || 0);
+      });
+
+      const best = hits[0];
+      const base = (best.title || best.original_title || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
+        .trim();
+
+      if (!seenBases.has(base)) {
+        seenBases.add(base);
+        seenIds.add(best.id || best.tmdb_id);
+        selectedResults.push(best);
+      }
+    }
+  }
+
+  return enrichWithBadges(selectedResults, matches, 'Recherche Intelligente LLM', queryText);
 }
 
 // ============================================================================
-// ÉTAPE 2 — Phase B : Fallback textuel sur overview / genres / moods
-// Si Supabase ne trouve rien (ou n'est pas dispo), bascule sur TMDB directement.
+// ÉTAPE 2 — Phase B : Résolution TMDB 1-pour-1 et enrichissement scénaristique
+// - Résout STRICTEMENT 1 SEUL film TMDB par recommandation LLM (évite les doublons de nom).
+// - Enrichit si besoin par les recommandations TMDB basées sur le scénario et l'affinité.
 // ============================================================================
-async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
+async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
+  const candidatesList = Array.isArray(matches) && matches.length > 0
+    ? matches
+    : [{ title: rawQuery }];
+
+  const extractedTitles = candidatesList.map(m => typeof m === 'string' ? m : m?.title || '');
+
   // ── Phase B.1 : Recherche Supabase par mots-clés ────────────────────────
   if (supabaseServer) {
     const keywords = extractKeywords(rawQuery);
-    for (const title of (extractedTitles || [])) {
+    for (const title of extractedTitles) {
       for (const w of extractKeywords(title)) {
         if (!keywords.includes(w)) keywords.push(w);
       }
@@ -352,76 +407,172 @@ async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
       }
 
       if (results.length > 0) {
-        return enrichWithBadges(results, [], 'Recherche par contexte & mots-clés', rawQuery);
+        return enrichWithBadges(results, matches, 'Recherche par contexte & mots-clés', rawQuery);
       }
     }
   }
 
-  // ── Phase B.2 : Fallback TMDB par titre LLM (bien plus précis que la requête brute) ─
+  // ── Phase B.2 : Résolution TMDB 1-pour-1 par recommandation LLM ─────────
   const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
   if (!tmdbKey) {
     console.warn('[API /api/search] [Phase B.2] Clé TMDB absente.');
     return [];
   }
 
-  // Priorité : chercher chaque titre extrait par le LLM sur TMDB (très précis)
-  // Fallback : chercher la requête brute si aucun titre disponible
-  const tmdbSearchTerms = extractedTitles && extractedTitles.length > 0
-    ? extractedTitles.slice(0, 5).map(t => {
-        // Si le titre est de la forme "FR / EN", on prend les deux parties
-        const parts = t.split(/[/|]/).map(p => p.trim()).filter(p => p.length > 1);
-        return parts; // tableau de variantes à essayer
-      }).flat()
-    : [rawQuery.slice(0, 100)];
-
   const allTmdbResults = [];
   const seenTmdbIds = new Set();
+  const seenTitleBases = new Set();
 
-  for (const term of tmdbSearchTerms) {
-    if (!term || term.length < 2 || allTmdbResults.length >= 10) break;
-    try {
-      console.log(`[API /api/search] [Phase B.2] TMDB titre : "${term.slice(0, 60)}"`);
-      const tmdbRes = await fetchWithTimeout(
-        `https://api.themoviedb.org/3/search/multi?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(term)}&language=fr-FR&page=1&include_adult=false`,
-        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-        5000
-      );
+  for (const item of candidatesList) {
+    if (allTmdbResults.length >= 8) break;
+    const rawTitle = typeof item === 'string' ? item : item?.title || '';
+    const matchReason = typeof item === 'object' ? item?.reason : '';
+    if (!rawTitle || rawTitle.length < 2) continue;
 
-      if (!tmdbRes.ok) continue;
+    // Décomposer les variantes "Titre FR / Original Title"
+    const variants = rawTitle
+      .split(/[/|]/)
+      .map(p => p.trim())
+      .filter(p => p.length > 1);
 
-      const tmdbData = await tmdbRes.json();
-      const hits = (tmdbData.results || [])
-        .filter(m => (m.media_type === 'movie' || m.media_type === 'tv') && !seenTmdbIds.has(m.id))
-        .slice(0, 3); // Max 3 résultats par titre pour éviter le bruit
+    let bestMatch = null;
 
-      for (const m of hits) {
-        seenTmdbIds.add(m.id);
+    for (const term of variants) {
+      try {
+        console.log(`[API /api/search] [Phase B.2] Résolution TMDB 1-pour-1 : "${term.slice(0, 60)}"`);
+        const tmdbRes = await fetchWithTimeout(
+          `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(term)}&language=fr-FR&page=1&include_adult=false`,
+          { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+          5000
+        );
+
+        if (!tmdbRes.ok) continue;
+
+        const tmdbData = await tmdbRes.json();
+        const hits = (tmdbData.results || []).filter(m => !seenTmdbIds.has(m.id));
+        if (hits.length === 0) continue;
+
+        // Trier pour extraire LE film exact et de référence :
+        // 1. Priorité absolue au film dont le titre correspond exactement au terme
+        // 2. Priorité aux films avec le plus grand nombre de votes
+        hits.sort((a, b) => {
+          const aTitle = (a.title || '').toLowerCase().trim();
+          const aOrig = (a.original_title || '').toLowerCase().trim();
+          const bTitle = (b.title || '').toLowerCase().trim();
+          const bOrig = (b.original_title || '').toLowerCase().trim();
+          const termLower = term.toLowerCase().trim();
+
+          const aExact = aTitle === termLower || aOrig === termLower;
+          const bExact = bTitle === termLower || bOrig === termLower;
+
+          if (aExact && !bExact) return -1;
+          if (!aExact && bExact) return 1;
+
+          return Number(b.vote_count || 0) - Number(a.vote_count || 0);
+        });
+
+        bestMatch = hits[0];
+        break; // Trouvé avec succès pour cette recommandation LLM
+      } catch (tmdbErr) {
+        console.warn('[API /api/search] [Phase B.2] TMDB échoué pour', term, ':', tmdbErr?.message);
+      }
+    }
+
+    if (bestMatch && !seenTmdbIds.has(bestMatch.id)) {
+      const titleBase = (bestMatch.title || bestMatch.original_title || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
+        .trim();
+
+      if (!seenTitleBases.has(titleBase)) {
+        seenTitleBases.add(titleBase);
+        seenTmdbIds.add(bestMatch.id);
+
+        const dynamicScore = calculateSemanticMatchScore(bestMatch, rawQuery, item);
+
         allTmdbResults.push({
-          id: m.id,
-          tmdb_id: m.id,
-          title: m.title || m.name || '',
-          original_title: m.original_title || m.original_name || '',
-          overview: m.overview || '',
-          poster_path: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-          backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
-          release_date: m.release_date || m.first_air_date || '',
-          vote_average: m.vote_average || 0,
-          vote_count: m.vote_count || 0,
-          genres: Array.isArray(m.genre_ids) ? m.genre_ids.join(',') : '',
-          media_type: m.media_type,
+          id: bestMatch.id,
+          tmdb_id: bestMatch.id,
+          title: bestMatch.title || bestMatch.name || '',
+          original_title: bestMatch.original_title || bestMatch.original_name || '',
+          overview: bestMatch.overview || '',
+          poster_path: bestMatch.poster_path ? `https://image.tmdb.org/t/p/w500${bestMatch.poster_path}` : null,
+          backdrop_path: bestMatch.backdrop_path ? `https://image.tmdb.org/t/p/w1280${bestMatch.backdrop_path}` : null,
+          release_date: bestMatch.release_date || bestMatch.first_air_date || '',
+          vote_average: bestMatch.vote_average || 0,
+          vote_count: bestMatch.vote_count || 0,
+          genres: Array.isArray(bestMatch.genre_ids) ? bestMatch.genre_ids.join(',') : '',
+          media_type: 'movie',
           ai_badge: 'Recommandation IA (TMDB)',
           badge: 'Recommandation IA (TMDB)',
-          ai_match_reason: `Identifié par notre IA pour "${term}"`,
-          match_rate: 88
+          ai_match_reason: matchReason || `Recommandé pour sa cohérence scénaristique avec "${rawTitle}"`,
+          match_rate: dynamicScore
         });
       }
-    } catch (tmdbErr) {
-      console.warn('[API /api/search] [Phase B.2] TMDB échoué pour', term, ':', tmdbErr?.message);
+    }
+  }
+
+  // ── Complément scénaristique / thématique par recommandations TMDB ────────
+  // Si le LLM a renvoyé peu d'œuvres et qu'on a moins de 8 films, on complète
+  // UNIQUEMENT avec les recommandations basées sur l'affinité scénaristique
+  // du film phare, JAMAIS par recherche textuelle de titre !
+  if (allTmdbResults.length > 0 && allTmdbResults.length < 8 && tmdbKey) {
+    const primaryMovie = allTmdbResults[0];
+    try {
+      console.log(`[API /api/search] [Phase B.2] Enrichissement scénaristique depuis "${primaryMovie.title}" (#${primaryMovie.id})...`);
+      const recRes = await fetchWithTimeout(
+        `https://api.themoviedb.org/3/movie/${primaryMovie.id}/recommendations?api_key=${encodeURIComponent(tmdbKey)}&language=fr-FR&page=1`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+        4000
+      );
+      if (recRes.ok) {
+        const recData = await recRes.json();
+        const recHits = (recData.results || []).filter(m => {
+          if (seenTmdbIds.has(m.id)) return false;
+          const avg = Number(m.vote_average || 0);
+          const cnt = Number(m.vote_count || 0);
+          return cnt >= 500 && avg >= 5.5; // Qualité minimale
+        });
+
+        for (const m of recHits) {
+          if (allTmdbResults.length >= 8) break;
+          const titleBase = (m.title || m.original_title || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
+            .trim();
+          if (seenTitleBases.has(titleBase)) continue;
+          seenTitleBases.add(titleBase);
+          seenTmdbIds.add(m.id);
+
+          const dynamicScore = calculateSemanticMatchScore(m, rawQuery, null);
+
+          allTmdbResults.push({
+            id: m.id,
+            tmdb_id: m.id,
+            title: m.title || m.name || '',
+            original_title: m.original_title || m.original_name || '',
+            overview: m.overview || '',
+            poster_path: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
+            release_date: m.release_date || m.first_air_date || '',
+            vote_average: m.vote_average || 0,
+            vote_count: m.vote_count || 0,
+            genres: Array.isArray(m.genre_ids) ? m.genre_ids.join(',') : '',
+            media_type: 'movie',
+            ai_badge: 'Recommandation Thématique',
+            badge: 'Recommandation Thématique',
+            ai_match_reason: `Recommandation cinématographique proche de l'univers et du scénario de "${primaryMovie.title}"`,
+            match_rate: dynamicScore
+          });
+        }
+      }
+    } catch (recErr) {
+      console.warn('[API /api/search] Recommandations TMDB échouées :', recErr?.message);
     }
   }
 
   if (allTmdbResults.length > 0) {
-    console.log(`[API /api/search] [Phase B.2] ${allTmdbResults.length} résultat(s) TMDB.`);
+    console.log(`[API /api/search] [Phase B.2] ${allTmdbResults.length} résultat(s) TMDB résolu(s).`);
     return allTmdbResults;
   }
 
@@ -819,7 +970,7 @@ export default async function handler(req, res) {
         console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie...');
         resolvedMovies = await resolveByKeywords(
           effectiveQuery,
-          extractedTitles,
+          matches,
           req.body?.tmdbApiKey || ''
         );
         console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
