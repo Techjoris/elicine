@@ -25,6 +25,10 @@ Règles strictes à respecter :
 - Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Prisonniers / Prisoners").
 - Chaque film doit avoir une justification courte et précise expliquant pourquoi il correspond.
 - N'invente jamais un film qui n'existe pas.
+- INTERDICTION ABSOLUE des mockbusters, copies bon marché ou parodies non demandées : n'inclus jamais un film produit par "The Asylum" ou tout studio imitateur, ni un film dont le titre copie délibérément un film célèbre avec de légères variations.
+- QUALITÉ MINIMALE : préfère des films ayant obtenu au moins 500 votes sur TMDB et une note supérieure à 5.5. Évite les productions directement sorties en vidéo ou les films à très faible notoriété sauf si la requête le demande explicitement.
+- DIVERSITÉ : si possible, propose des films de réalisateurs différents pour éviter les répétitions dans une même franchise.
+- Si la requête cible un film précis que l'utilisateur a probablement déjà vu, propose volontairement des films SIMILAIRES (même thème, même ambiance) plutôt que ce film lui-même ou ses suites directes.
 
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
@@ -254,7 +258,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
 // ÉTAPE 2 — Phase A : Résolution par titre (ilike souple, multi-parties)
 // Ex: "Prisonniers / Prisoners" → cherche "Prisonniers" ET "Prisoners" séparément
 // ============================================================================
-async function resolveByTitles(extractedTitles, matches) {
+async function resolveByTitles(extractedTitles, matches, queryText = '') {
   if (!supabaseServer || !Array.isArray(extractedTitles) || extractedTitles.length === 0) return [];
 
   const orClauses = [];
@@ -293,7 +297,7 @@ async function resolveByTitles(extractedTitles, matches) {
     }
   }
 
-  return enrichWithBadges(results, matches, 'Recherche Intelligente LLM');
+  return enrichWithBadges(results, matches, 'Recherche Intelligente LLM', queryText);
 }
 
 // ============================================================================
@@ -348,7 +352,7 @@ async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
       }
 
       if (results.length > 0) {
-        return enrichWithBadges(results, [], 'Recherche par contexte & mots-clés');
+        return enrichWithBadges(results, [], 'Recherche par contexte & mots-clés', rawQuery);
       }
     }
   }
@@ -425,9 +429,115 @@ async function resolveByKeywords(rawQuery, extractedTitles, tmdbApiKey = '') {
 }
 
 // ============================================================================
+// Helper : Score sémantique dynamique
+// Calcule un score de pertinence basé sur :
+// - Correspondance des mots-clés de la requête dans le synopsis
+// - Qualité du film (vote_count, vote_average)
+// - Cohérence de genre
+// - Pénalité mockbuster (films de faible notoriété)
+// ============================================================================
+function calculateSemanticMatchScore(movie, queryText, llmMatch) {
+  let score = llmMatch ? 90 : 72; // Base : correspondance LLM confirmée ou non
+
+  const overviewLower = (movie.overview || '').toLowerCase();
+  const voteCount = Number(movie.vote_count || 0);
+  const voteAvg = Number(movie.vote_average || 0);
+
+  // 1. Bonus mots-clés synopsis (jusqu'à +8 points)
+  if (queryText && overviewLower) {
+    const queryTokens = (queryText || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 4 && !STOP_WORDS.has(w));
+
+    let tokenMatches = 0;
+    for (const token of queryTokens) {
+      if (overviewLower.includes(token)) tokenMatches++;
+    }
+    score += Math.min(8, tokenMatches * 2);
+  }
+
+  // 2. Bonus qualité (vote_count & vote_average) — jusqu'à +5 points
+  if (voteCount >= 5000) score += 5;
+  else if (voteCount >= 1000) score += 3;
+  else if (voteCount >= 500) score += 1;
+  else if (voteCount < 100 && voteCount > 0) score -= 8; // Film très obscur
+
+  if (voteAvg >= 7.5) score += 3;
+  else if (voteAvg >= 6.0) score += 1;
+  else if (voteAvg < 4.5 && voteAvg > 0) score -= 10; // Film mal noté
+
+  // 3. Pénalité mockbuster : titre court + note basse + très peu de votes
+  if (voteCount < 200 && voteAvg < 5.5 && voteCount > 0) {
+    score = Math.min(score, 65); // Plafond strict
+  }
+
+  // 4. Bonus raison LLM spécifique (contient des mots forts du contexte)
+  if (llmMatch?.reason) {
+    const reasonLower = llmMatch.reason.toLowerCase();
+    const queryLower = (queryText || '').toLowerCase();
+    const importantWords = queryLower.split(/\s+/).filter(w => w.length >= 5 && !STOP_WORDS.has(w));
+    for (const word of importantWords) {
+      if (reasonLower.includes(word)) {
+        score += 1;
+        break;
+      }
+    }
+  }
+
+  return Math.min(99, Math.max(60, Math.round(score)));
+}
+
+// ============================================================================
+// Helper : Filtre Anti-Mockbuster
+// Élimine les films de qualité insuffisante et les doublons par titre similaire
+// ============================================================================
+function filterMockbusters(movies, queryText) {
+  if (!Array.isArray(movies) || movies.length === 0) return movies;
+
+  const MOCKBUSTER_STUDIOS = [
+    'the asylum', 'asylum', 'global asylum', 'millennium films',
+    'alchemy', 'lionsgate premiere'
+  ];
+
+  // 1. Filtrage hard : vote_average < 4.0 avec peu de votes → bruit
+  let filtered = movies.filter(m => {
+    const avg = Number(m.vote_average || 0);
+    const cnt = Number(m.vote_count || 0);
+    // On garde si : pas de données (0/0), ou note >= 4.0, ou film très populaire
+    if (avg === 0 && cnt === 0) return true; // Données manquantes → bénéfice du doute
+    if (cnt < 50 && avg < 5.0) return false;  // Très obscur + mauvais
+    if (avg < 4.0 && cnt > 0) return false;   // Franchement mauvais
+    return true;
+  });
+
+  // 2. Déduplication par similarité de titre (évite "Inception" + "Inception 2" non officiel)
+  const seenTitleBases = new Set();
+  filtered = filtered.filter(m => {
+    const titleBase = (m.title || m.original_title || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
+      .replace(/\s*(2|3|4|5|ii|iii|iv|v|part 2|part two|suite|sequel)\s*$/i, '')
+      .trim();
+    if (titleBase.length < 2) return true;
+    if (seenTitleBases.has(titleBase)) return false;
+    seenTitleBases.add(titleBase);
+    return true;
+  });
+
+  // 3. Si le filtre a été trop agressif (0 résultats), on retourne l'original trié par qualité
+  if (filtered.length === 0) {
+    return movies.sort((a, b) => (Number(b.vote_count || 0)) - (Number(a.vote_count || 0))).slice(0, movies.length);
+  }
+
+  return filtered;
+}
+
+// ============================================================================
 // Helper : Déduplication + enrichissement badge IA
 // ============================================================================
-function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Recherche Intelligente LLM') {
+function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Recherche Intelligente LLM', queryText = '') {
   if (!Array.isArray(rawMovies) || rawMovies.length === 0) return [];
 
   const seenIds = new Set();
@@ -453,12 +563,15 @@ function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Recherche Intel
       });
     }
 
+    // Score dynamique basé sur la sémantique et la qualité du film
+    const dynamicScore = calculateSemanticMatchScore(movie, queryText, matchingLLM);
+
     return {
       ...movie,
       ai_badge: badgeLabel,
       badge: badgeLabel,
       ai_match_reason: matchingLLM?.reason || "Sélectionné par l'encyclopédie cinématographique IA",
-      match_rate: matchingLLM ? 98 : 82
+      match_rate: dynamicScore
     };
   });
 }
@@ -646,7 +759,7 @@ export default async function handler(req, res) {
       // ─── ÉTAPE 2 — Phase A : Résolution par titres (ilike souple) ─────────────
       let resolvedMovies = [];
       if (extractedTitles.length > 0) {
-        resolvedMovies = await resolveByTitles(extractedTitles, matches);
+        resolvedMovies = await resolveByTitles(extractedTitles, matches, effectiveQuery);
         console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
       }
 
@@ -659,6 +772,13 @@ export default async function handler(req, res) {
           req.body?.tmdbApiKey || ''
         );
         console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
+      }
+
+      // ─── ÉTAPE 2.5 — Filtre Anti-Mockbuster ─────────────────────────────────
+      if (resolvedMovies.length > 0) {
+        const beforeFilter = resolvedMovies.length;
+        resolvedMovies = filterMockbusters(resolvedMovies, effectiveQuery);
+        console.log(`[API /api/search] [Étape 2.5] Anti-mockbuster : ${beforeFilter} → ${resolvedMovies.length} film(s).`);
       }
 
       // Application des filtres Pro (ex: note minimale) si demandés

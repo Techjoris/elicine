@@ -165,18 +165,20 @@ export async function queryAiTitles(
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
 Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films ou séries très proches (Niveau 2 : élargissement souple).
+IMPORTANT : Exclure STRICTEMENT les parodies, mockbusters (The Asylum, copies bon marché) et films à très faible notoriété (< 500 votes TMDB). Privilégier les films reconnus et bien notés (>= 6/10).
 Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 260;
     temperature = 0.35;
   } else if (spec.level === 'broad') {
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
 Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
+IMPORTANT : Exclure les mockbusters, parodies non demandées et films de studios imitateurs (The Asylum). Diversité de réalisateurs requise.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 350;
     temperature = 0.3;
   } else {
     prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants pour : "${query}".
-Tolère les synonymes et variantes sémantiques.
+Tolère les synonymes et variantes sémantiques. Exclure les mockbusters et films de très mauvaise qualité (< 4.5/10 sur TMDB).
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 300;
     temperature = 0.3;
@@ -469,9 +471,14 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
 
           if (title.length > 1 && !seenTitles.has(title.toLowerCase())) {
             seenTitles.add(title.toLowerCase());
+            // Validation du match_rate : le LLM peut surestimer des films peu connus.
+            // On plafonne à 88 si le synopsis ou les votes sont absents du payload LLM.
+            const validatedMatchRate = (typeof matchRate === 'number' && matchRate >= 70 && matchRate <= 100)
+              ? matchRate
+              : 95;
             rawItems.push({
               title,
-              match_rate: matchRate,
+              match_rate: validatedMatchRate,
               tier,
               reason: reason || 'Sélectionné par Éliciné AI'
             });
@@ -1454,13 +1461,35 @@ export async function executeCinoraSearch(
   // VALIDATION NIVEAU 2 : Seuil minimal strict de 40% (0.40)
   if (globalSimilarityScore >= 0.40 && candidatePool.length > 0) {
     const limit = Math.max(specificity.maxResults || 8, 6);
-    const finalMovies = candidatePool.slice(0, limit).map((m, idx) => ({
+
+    // Tri qualitatif anti-mockbuster : en cas d'égalité de match_rate, les films
+    // avec plus de votes (plus reconnus) remontent en tête.
+    const sortedPool = [...candidatePool].sort((a, b) => {
+      const scoreDiff = (b.match_rate || 0) - (a.match_rate || 0);
+      if (Math.abs(scoreDiff) >= 3) return scoreDiff;
+      // En cas de score proche, favoriser les films mieux établis
+      const voteA = Number(a.vote_count || 0);
+      const voteB = Number(b.vote_count || 0);
+      return voteB - voteA;
+    });
+
+    // Filtrage doux : exclure les films vraiment mauvais (< 4.0) si d'autres existent
+    const qualityFiltered = sortedPool.filter((m, _idx) => {
+      const avg = Number(m.vote_average || 0);
+      const cnt = Number(m.vote_count || 0);
+      if (avg > 0 && avg < 4.0 && cnt > 50) return false; // Film franchement mauvais avec données
+      return true;
+    });
+    const finalPool = qualityFiltered.length >= 3 ? qualityFiltered : sortedPool;
+
+    const finalMovies = finalPool.slice(0, limit).map((m, idx) => ({
       ...m,
       match_rate: m.match_rate || Math.max(78, Math.round(globalSimilarityScore * 100) - idx * 2),
       ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique vectorielle (Niveau 2) : Ambiance et immersion thématique`
     }));
 
     console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
+
 
     const moodSummary = criteria.themes.length > 0
       ? `autour des thèmes « ${criteria.themes.join(', ')} »`

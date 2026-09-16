@@ -108,6 +108,8 @@ export function calculateGlobalSemanticSimilarity(
     const origLower = (movie.original_title || movie.original_name || '').toLowerCase();
     const overviewLower = (movie.overview || '').toLowerCase();
     const genreIds = (Array.isArray(movie.genre_ids) ? movie.genre_ids : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : [])) as number[];
+    const voteCount = Number(movie.vote_count || 0);
+    const voteAvg = Number(movie.vote_average || 0);
 
     // A. Présence dans les films archétypaux du trope
     if (targetConceptFilms.some(tf => titleLower.includes(tf) || origLower.includes(tf))) {
@@ -133,6 +135,20 @@ export function calculateGlobalSemanticSimilarity(
     // C. Genres attendus
     if (expectedGenres.some(eg => genreIds.includes(eg))) {
       itemScore += 0.15;
+    }
+
+    // D. Bonus qualité : films établis et bien notés (anti-mockbuster)
+    if (voteCount >= 5000) itemScore += 0.08;
+    else if (voteCount >= 1000) itemScore += 0.04;
+    else if (voteCount > 0 && voteCount < 100) itemScore -= 0.12; // Très obscur → pénalité
+
+    if (voteAvg >= 7.5) itemScore += 0.05;
+    else if (voteAvg >= 6.0) itemScore += 0.02;
+    else if (voteAvg > 0 && voteAvg < 4.5) itemScore -= 0.15; // Franchement mauvais → pénalité
+
+    // E. Pénalité mockbuster combinée : note basse + très peu de votes
+    if (voteCount > 0 && voteCount < 200 && voteAvg < 5.5) {
+      itemScore = Math.min(itemScore, 0.45); // Plafond mockbuster
     }
 
     // Si le film a déjà un score de similarité vectoriel natif Supabase
