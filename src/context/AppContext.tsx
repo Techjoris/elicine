@@ -805,15 +805,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
         let prof: any = null;
         if (email) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at').eq('email', email).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, expires_at').ilike('email', email.trim()).maybeSingle();
           if (data) prof = data;
         }
         if (!prof && currentUser.id && isUuid(currentUser.id)) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at').eq('id', currentUser.id).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id, email, is_pro, expires_at').eq('id', currentUser.id).maybeSingle();
           if (data) prof = data;
         }
         if (prof) {
-          const profExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
+          const profExpiry = prof.expires_at;
           if (profExpiry) expiresAtDirect = profExpiry;
 
           const isExpired = !isMaster && profExpiry && new Date(profExpiry).getTime() < Date.now();

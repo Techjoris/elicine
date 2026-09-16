@@ -108,11 +108,11 @@ export async function activateUserPassPro(email, planDetails = {}) {
     try {
       const { data: existingProf } = await supabaseAdmin
         .from('profiles')
-        .select('id, expires_at, pro_expires_at, is_pro')
-        .eq('email', rawEmail)
+        .select('id, expires_at, is_pro')
+        .ilike('email', rawEmail.trim())
         .maybeSingle();
 
-      const currentExpiry = existingProf?.expires_at || existingProf?.pro_expires_at;
+      const currentExpiry = existingProf?.expires_at;
       if (existingProf?.is_pro && currentExpiry && new Date(currentExpiry).getTime() > Date.now()) {
         baseExpiry = currentExpiry;
         console.log(`[Activation Pro Supabase] 🔄 Prolongation de l'abonnement existant pour ${rawEmail} depuis le ${currentExpiry}`);
@@ -134,13 +134,10 @@ export async function activateUserPassPro(email, planDetails = {}) {
 
       // 1.A. Mise à jour du profil utilisateur
       if (!isDonation) {
+        const cleanEmail = rawEmail.trim().toLowerCase();
         const profileUpdatePayload = {
           is_pro: true,
-          pass_status: 'pro',
           expires_at: expiresAt,
-          pro_expires_at: expiresAt,
-          subscription_ends_at: expiresAt,
-          last_reminder_sent_at: null, // Réinitialisation des alertes pour la nouvelle période
           updated_at: now
         };
 
@@ -149,33 +146,31 @@ export async function activateUserPassPro(email, planDetails = {}) {
           .update(profileUpdatePayload);
 
         if (validUserUuid) {
-          profileQuery = profileQuery.or(`id.eq.${validUserUuid},email.eq.${rawEmail}`);
+          profileQuery = profileQuery.or(`id.eq.${validUserUuid},email.ilike.${cleanEmail}`);
         } else {
-          profileQuery = profileQuery.eq('email', rawEmail);
+          profileQuery = profileQuery.ilike('email', cleanEmail);
         }
 
         const { error: profileError } = await profileQuery;
 
         if (profileError) {
-          console.warn('[Activation Pro Supabase] Note mise à jour profile complète:', profileError.message);
-          // Fallback avec mise à jour minimale si certaines colonnes n'existent pas encore
+          console.warn('[Activation Pro Supabase] Note mise à jour profile avec expires_at:', profileError.message);
+          // Fallback avec mise à jour minimale garantie
           const { error: fallbackErr } = await supabaseAdmin
             .from('profiles')
             .update({
               is_pro: true,
-              pass_status: 'pro',
-              expires_at: expiresAt,
               updated_at: now
             })
-            .eq('email', rawEmail);
+            .ilike('email', cleanEmail);
 
           if (fallbackErr) {
-            console.warn('[Activation Pro Supabase] Note mise à jour profile repli:', fallbackErr.message);
+            console.error('[Activation Pro Supabase] Erreur mise à jour profile repli:', fallbackErr.message);
           } else {
-            console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true avec expires_at`);
+            console.log(`[Activation Pro Supabase] ✅ Profil ${cleanEmail} passé à is_pro = true (repli minimal)`);
           }
         } else {
-          console.log(`[Activation Pro Supabase] ✅ Profil ${rawEmail} passé à is_pro = true & expiration définie au ${expiresAt}`);
+          console.log(`[Activation Pro Supabase] ✅ Profil ${cleanEmail} passé à is_pro = true & expiration définie au ${expiresAt}`);
         }
 
         // Si le profil n'existe pas encore et qu'on a un UUID d'authentification valide, création proactive
@@ -183,7 +178,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
           const { data: existingProfile } = await supabaseAdmin
             .from('profiles')
             .select('id, is_pro')
-            .eq('email', rawEmail)
+            .ilike('email', cleanEmail)
             .maybeSingle();
 
           if (!existingProfile && validUserUuid) {
@@ -191,17 +186,14 @@ export async function activateUserPassPro(email, planDetails = {}) {
               .from('profiles')
               .insert({
                 id: validUserUuid,
-                email: rawEmail,
+                email: cleanEmail,
                 username: cleanName,
                 is_pro: true,
-                pass_status: 'pro',
                 expires_at: expiresAt,
-                pro_expires_at: expiresAt,
-                subscription_ends_at: expiresAt,
                 created_at: now,
                 updated_at: now
               });
-            console.log(`[Activation Pro Supabase] 🆕 Profil créé pour ${rawEmail} (ID: ${validUserUuid}, Exp: ${expiresAt})`);
+            console.log(`[Activation Pro Supabase] 🆕 Profil créé pour ${cleanEmail} (ID: ${validUserUuid}, Exp: ${expiresAt})`);
           }
         } catch (insertErr) {
           console.warn('[Activation Pro Supabase] Note création profil:', insertErr?.message);
@@ -312,14 +304,14 @@ export async function downgradeExpiredSubscriptions() {
     // 2. Repli direct via requêtes Supabase REST
     const { data: expiredProfiles, error: fetchErr } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, expires_at, pro_expires_at, subscription_ends_at')
+      .select('id, email, expires_at')
       .eq('is_pro', true)
       .neq('email', 'ivanjoris959@gmail.com');
 
     if (!fetchErr && Array.isArray(expiredProfiles)) {
       const expiredIds = [];
       for (const p of expiredProfiles) {
-        const exp = p.expires_at || p.pro_expires_at || p.subscription_ends_at;
+        const exp = p.expires_at;
         if (exp && new Date(exp).getTime() < Date.now()) {
           expiredIds.push(p.id);
         }
@@ -330,7 +322,6 @@ export async function downgradeExpiredSubscriptions() {
           .from('profiles')
           .update({
             is_pro: false,
-            pass_status: 'free',
             updated_at: nowIso
           })
           .in('id', expiredIds);

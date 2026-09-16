@@ -587,22 +587,22 @@ export const subscriptionService = {
         if (email) {
           const { data } = await supabase
             .from('profiles')
-            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
-            .eq('email', email)
+            .select('id, email, is_pro, expires_at')
+            .ilike('email', email.trim())
             .maybeSingle();
           if (data) profileData = data;
         }
         if (!profileData && user.id && isUuid(user.id)) {
           const { data } = await supabase
             .from('profiles')
-            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .select('id, email, is_pro, expires_at')
             .eq('id', user.id)
             .maybeSingle();
           if (data) profileData = data;
         }
 
         if (profileData && (profileData.is_pro === true || String(profileData.is_pro) === 'true')) {
-          const effectiveExpiry = profileData.expires_at || profileData.pro_expires_at || profileData.subscription_ends_at;
+          const effectiveExpiry = profileData.expires_at;
 
           // Si une date d'expiration existe et qu'elle est dépassée, considérer comme non pro
           if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {

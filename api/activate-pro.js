@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         if (userId && isUuid(userId)) {
           const { data } = await supabaseAdmin
             .from('profiles')
-            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
+            .select('id, email, is_pro, expires_at')
             .eq('id', userId)
             .maybeSingle();
           if (data) prof = data;
@@ -135,14 +135,14 @@ export default async function handler(req, res) {
         if (!prof && email) {
           const { data } = await supabaseAdmin
             .from('profiles')
-            .select('id, email, is_pro, pass_status, expires_at, pro_expires_at, subscription_ends_at')
-            .eq('email', email)
+            .select('id, email, is_pro, expires_at')
+            .ilike('email', email.trim())
             .maybeSingle();
           if (data) prof = data;
         }
 
         if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
-          const effectiveExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
+          const effectiveExpiry = prof.expires_at;
 
           // 1. Vérification de dépassement de date d'expiration (Rétrogradation automatique au vol)
           if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {
@@ -151,7 +151,6 @@ export default async function handler(req, res) {
               .from('profiles')
               .update({
                 is_pro: false,
-                pass_status: 'free',
                 updated_at: new Date().toISOString()
               })
               .eq('id', prof.id);
