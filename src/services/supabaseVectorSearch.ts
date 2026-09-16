@@ -146,13 +146,33 @@ export function calculateGlobalSemanticSimilarity(
     else if (voteAvg >= 6.0) itemScore += 0.02;
     else if (voteAvg > 0 && voteAvg < 4.5) itemScore -= 0.15; // Franchement mauvais → pénalité
 
-    // E. Pénalité mockbuster combinée : note basse + très peu de votes
-    if (voteCount > 0 && voteCount < 200 && voteAvg < 5.5) {
-      itemScore = Math.min(itemScore, 0.45); // Plafond mockbuster
+    // E. Pénalité mockbuster : seuil aligné sur les directives LLM (< 500 votes ET < 5.5/10)
+    if (voteCount > 0 && voteCount < 500 && voteAvg < 5.5) {
+      itemScore = Math.min(itemScore, 0.35); // Sous le seuil de validation Niveau 2 (0.40)
+    }
+
+    // F. Rejet strict titre parasite : partage un seul mot avec la requête sans lien scénaristique
+    // Ce motif de rejet effondre le score indépendamment des notes (ex: "Bikini Inception" pour "Inception")
+    const titleWords = (titleLower + ' ' + origLower)
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((w: string) => w.length >= 3);
+
+    const sharedTokens = queryTokens.filter(qt =>
+      titleWords.some(tw => tw === qt || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+    );
+    const extraWords = titleWords.filter(tw =>
+      !queryTokens.some(qt => qt === tw || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+    );
+
+    const isParasiteTitle = sharedTokens.length === 1 && extraWords.length > 0 && voteCount < 5000;
+    if (isParasiteTitle && tokenMatches === 0 && !targetConceptFilms.some(tf => titleLower.includes(tf) || origLower.includes(tf))) {
+      // Aucun lien narratif réel dans le synopsis : score effondré (rejet strict)
+      itemScore = 0.05;
     }
 
     // Si le film a déjà un score de similarité vectoriel natif Supabase
-    if (typeof movie.similarity === 'number' && movie.similarity > 0) {
+    if (typeof movie.similarity === 'number' && movie.similarity > 0 && !isParasiteTitle) {
       itemScore = Math.max(itemScore, movie.similarity);
     }
 
@@ -163,6 +183,50 @@ export function calculateGlobalSemanticSimilarity(
   const finalScore = Math.min(1.0, averageScore + matchedConceptBonus);
 
   return Number(finalScore.toFixed(2));
+}
+
+/**
+ * Détermine si un film présente un titre parasite (partage un seul mot avec la requête
+ * en y ajoutant des termes externes, sans lien scénaristique réel dans son synopsis).
+ * Motif de rejet indépendant des notes du film.
+ */
+export function isMovieParasiteWithoutNarrativeLink(
+  queryText: string,
+  movie: any
+): boolean {
+  const clean = (queryText || '').toLowerCase().trim();
+  if (!clean || !movie) return false;
+  const voteCount = Number(movie.vote_count || 0);
+  if (voteCount >= 5000) return false; // Blockbusters et classiques populaires protégés
+
+  const queryTokens = clean
+    .replace(/^(un|une|le|la|les|film|films|cherche|trouve)\s+/gi, '')
+    .split(/\s+/)
+    .filter(w => w.length >= 4);
+  if (queryTokens.length === 0) return false;
+
+  const titleLower = (movie.title || movie.name || '').toLowerCase();
+  const origLower = (movie.original_title || movie.original_name || '').toLowerCase();
+  const overviewLower = (movie.overview || '').toLowerCase();
+
+  const titleWords = (titleLower + ' ' + origLower)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w: string) => w.length >= 3);
+
+  const sharedTokens = queryTokens.filter(qt =>
+    titleWords.some(tw => tw === qt || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+  );
+  const extraWords = titleWords.filter(tw =>
+    !queryTokens.some(qt => qt === tw || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+  );
+
+  const isParasiteTitle = sharedTokens.length === 1 && extraWords.length > 0;
+  if (!isParasiteTitle) return false;
+
+  // Lien scénaristique : présence d'au moins un mot-clé de la requête dans le synopsis
+  const hasNarrativeLink = queryTokens.some(qt => overviewLower.includes(qt));
+  return !hasNarrativeLink;
 }
 
 /**

@@ -468,9 +468,9 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   else if (voteAvg >= 6.0) score += 1;
   else if (voteAvg < 4.5 && voteAvg > 0) score -= 10; // Film mal noté
 
-  // 3. Pénalité mockbuster : titre court + note basse + très peu de votes
-  if (voteCount < 200 && voteAvg < 5.5 && voteCount > 0) {
-    score = Math.min(score, 65); // Plafond strict
+  // 3. Pénalité mockbuster : seuil aligné sur les directives LLM (< 500 votes ET < 5.5/10)
+  if (voteCount > 0 && voteCount < 500 && voteAvg < 5.5) {
+    score = Math.min(score, 60); // Plafond strict — ne peut pas dépasser 60
   }
 
   // 4. Bonus raison LLM spécifique (contient des mots forts du contexte)
@@ -490,31 +490,86 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
 }
 
 // ============================================================================
-// Helper : Filtre Anti-Mockbuster
-// Élimine les films de qualité insuffisante et les doublons par titre similaire
+// Helper : Filtre Anti-Mockbuster & Anti-Titres Parasites
+// Alignement strict sur les directives LLM (> 500 votes, note > 5.5).
+// Deux axes de rejet indépendants :
+//   1. Qualité insuffisante (seuil minimal de notoriété et de note)
+//   2. Titre parasite : le film partage un seul mot avec la requête en y ajoutant
+//      des termes parasites, sans lien scénaristique réel dans son synopsis.
+//      Ce motif de rejet est TOTALEMENT INDÉPENDANT de la note du film.
 // ============================================================================
 function filterMockbusters(movies, queryText) {
-  if (!Array.isArray(movies) || movies.length === 0) return movies;
+  if (!Array.isArray(movies) || movies.length === 0) return [];
 
-  const MOCKBUSTER_STUDIOS = [
-    'the asylum', 'asylum', 'global asylum', 'millennium films',
-    'alchemy', 'lionsgate premiere'
-  ];
+  // Mots significatifs de la requête (longueur >= 4, hors mots vides)
+  const queryTokens = (queryText || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !STOP_WORDS.has(w));
 
-  // 1. Filtrage hard : vote_average < 4.0 avec peu de votes → bruit
-  let filtered = movies.filter(m => {
+  const filtered = movies.filter(m => {
     const avg = Number(m.vote_average || 0);
     const cnt = Number(m.vote_count || 0);
-    // On garde si : pas de données (0/0), ou note >= 4.0, ou film très populaire
-    if (avg === 0 && cnt === 0) return true; // Données manquantes → bénéfice du doute
-    if (cnt < 50 && avg < 5.0) return false;  // Très obscur + mauvais
-    if (avg < 4.0 && cnt > 0) return false;   // Franchement mauvais
+    const titleLower = (m.title || m.original_title || '').toLowerCase();
+    const overviewLower = (m.overview || '').toLowerCase();
+
+    // 0. Bénéfice du doute si aucune donnée de vote disponible (film non encore coté)
+    if (avg === 0 && cnt === 0) return true;
+
+    // ── AXE 1 : Seuils de qualité alignés sur les directives LLM ──────────
+    // Directive : "au moins 500 votes ET note > 5.5"
+    // Protection : les grands classiques / blockbusters établis (cnt >= 5000)
+    if (cnt >= 5000) {
+      if (avg > 0 && avg < 4.0) return false; // Vraiment mauvais malgré la notoriété
+    } else if (cnt > 0 && cnt < 500 && avg < 5.5) {
+      // Échec aux critères minimaux de qualité TMDB (> 500 votes et > 5.5/10)
+      return false;
+    } else if (avg > 0 && avg < 4.0 && cnt >= 20) {
+      // Franchement mauvais confirmé
+      return false;
+    }
+
+    // ── AXE 2 : Titre parasite (REJET INDÉPENDANT DU SCORE DE NOTES) ──────
+    // Détection : le nom du film ne partage qu'un mot avec la requête tout en
+    // ajoutant des termes externes (ex: "Bikini Inception" pour "Inception"),
+    // sans qu'aucun lien scénaristique réel ne soit présent dans le synopsis.
+    // Protection : films très populaires (cnt >= 5000) protégés.
+    if (queryTokens.length > 0 && cnt < 5000) {
+      const titleWords = titleLower
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
+
+      // Mots du titre empruntés à la requête
+      const sharedQueryWords = queryTokens.filter(qt =>
+        titleWords.some(tw => tw === qt || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+      );
+
+      // Mots du titre n'appartenant pas à la requête (= ajouts opportunistes)
+      const extraWords = titleWords.filter(tw =>
+        !queryTokens.some(qt => qt === tw || (tw.length >= 4 && qt.length >= 4 && (tw.startsWith(qt) || qt.startsWith(tw))))
+      );
+
+      // Le film partage un seul mot clé avec la requête et contient des mots additionnels
+      const isParasiteTitle = sharedQueryWords.length === 1 && extraWords.length > 0;
+
+      if (isParasiteTitle) {
+        // Vérification de lien scénaristique réel dans le synopsis
+        const narrativeConfirmed = queryTokens.some(qt => overviewLower.includes(qt));
+        // Sans confirmation scénaristique réelle → rejet IMMÉDIAT et INDÉPENDANT de la note
+        if (!narrativeConfirmed) {
+          return false;
+        }
+      }
+    }
+
     return true;
   });
 
-  // 2. Déduplication par similarité de titre (évite "Inception" + "Inception 2" non officiel)
+  // Déduplication par base de titre (évite les suites non officielles en doublons)
   const seenTitleBases = new Set();
-  filtered = filtered.filter(m => {
+  const deduplicated = filtered.filter(m => {
     const titleBase = (m.title || m.original_title || '')
       .toLowerCase()
       .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
@@ -526,13 +581,9 @@ function filterMockbusters(movies, queryText) {
     return true;
   });
 
-  // 3. Si le filtre a été trop agressif (0 résultats), on retourne l'original trié par qualité
-  if (filtered.length === 0) {
-    return movies.sort((a, b) => (Number(b.vote_count || 0)) - (Number(a.vote_count || 0))).slice(0, movies.length);
-  }
-
-  return filtered;
+  return deduplicated;
 }
+
 
 // ============================================================================
 // Helper : Déduplication + enrichissement badge IA

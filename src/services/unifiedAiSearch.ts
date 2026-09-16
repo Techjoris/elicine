@@ -13,6 +13,7 @@ import {
 } from './searchRouterService';
 import { 
   calculateGlobalSemanticSimilarity, 
+  isMovieParasiteWithoutNarrativeLink,
   querySupabaseVectorSearch 
 } from './supabaseVectorSearch';
 
@@ -1473,11 +1474,27 @@ export async function executeCinoraSearch(
       return voteB - voteA;
     });
 
-    // Filtrage doux : exclure les films vraiment mauvais (< 4.0) si d'autres existent
-    const qualityFiltered = sortedPool.filter((m, _idx) => {
+    // Filtrage qualitatif anti-mockbuster & anti-titre parasite :
+    // 1. Rejet indépendant des notes si titre parasite sans lien scénaristique réel
+    // 2. Directives LLM : au moins 500 votes et note > 5.5
+    const qualityFiltered = sortedPool.filter((m) => {
       const avg = Number(m.vote_average || 0);
       const cnt = Number(m.vote_count || 0);
-      if (avg > 0 && avg < 4.0 && cnt > 50) return false; // Film franchement mauvais avec données
+
+      // Titre parasite sans lien scénaristique réel : rejet indépendant du score de notes
+      if (isMovieParasiteWithoutNarrativeLink(cleanQuery, m)) {
+        return false;
+      }
+
+      // Seuils minimaux de qualité alignés sur les directives LLM
+      if (cnt >= 5000) {
+        if (avg > 0 && avg < 4.0) return false;
+      } else if (cnt > 0 && cnt < 500 && avg < 5.5) {
+        return false;
+      } else if (avg > 0 && avg < 4.0 && cnt >= 20) {
+        return false;
+      }
+
       return true;
     });
     const finalPool = qualityFiltered.length >= 3 ? qualityFiltered : sortedPool;
