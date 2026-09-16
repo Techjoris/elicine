@@ -6,23 +6,39 @@ interface ThemeContextType {
   theme: ThemeMode;
   effectiveTheme: 'dark' | 'light';
   setTheme: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
+  showThemeOnboarding: boolean;
+  dismissThemeOnboarding: () => void;
 }
 
-const THEME_STORAGE_KEY = 'elicine-theme';
+export const THEME_STORAGE_KEY = 'elicine-theme';
+export const THEME_ONBOARDING_KEY = 'onboarding_theme_popup_seen';
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // 1. THÈME PAR DÉFAUT : 'light' pour tous les nouveaux visiteurs (sans préférence enregistrée)
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode;
       if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
     } catch {}
-    return 'dark';
+    return 'light';
+  });
+
+  // 2. ÉTAT ONBOARDING : affiché uniquement si l'utilisateur n'a jamais cliqué sur le bouton de thème
+  const [showThemeOnboarding, setShowThemeOnboarding] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const seen = localStorage.getItem(THEME_ONBOARDING_KEY);
+      return seen !== 'true';
+    } catch {
+      return false;
+    }
   });
 
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
@@ -63,6 +79,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [effectiveTheme]);
 
+  // Fermeture et persistance du flag d'onboarding (uniquement au clic sur le bouton thème)
+  const dismissThemeOnboarding = () => {
+    try {
+      localStorage.setItem(THEME_ONBOARDING_KEY, 'true');
+    } catch (e) {
+      console.error('Erreur sauvegarde onboarding thème:', e);
+    }
+    setShowThemeOnboarding(false);
+  };
+
   const setTheme = (mode: ThemeMode) => {
     setThemeState(mode);
     try {
@@ -70,10 +96,24 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {
       console.error('Erreur sauvegarde thème:', e);
     }
+    // Toute modification explicite du thème valide et ferme l'onboarding
+    dismissThemeOnboarding();
+  };
+
+  const toggleTheme = () => {
+    const nextTheme: ThemeMode = effectiveTheme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme }}>
+    <ThemeContext.Provider value={{ 
+      theme, 
+      effectiveTheme, 
+      setTheme, 
+      toggleTheme, 
+      showThemeOnboarding, 
+      dismissThemeOnboarding 
+    }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -84,9 +124,12 @@ export const useTheme = () => {
   if (!context) {
     // Graceful fallback for components outside ThemeProvider
     return {
-      theme: 'dark' as ThemeMode,
-      effectiveTheme: 'dark' as 'dark' | 'light',
-      setTheme: () => {}
+      theme: 'light' as ThemeMode,
+      effectiveTheme: 'light' as 'dark' | 'light',
+      setTheme: () => {},
+      toggleTheme: () => {},
+      showThemeOnboarding: false,
+      dismissThemeOnboarding: () => {}
     };
   }
   return context;

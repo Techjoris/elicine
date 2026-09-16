@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr" class="dark">
+<html lang="fr" class="light">
   <head>
     <meta charset="UTF-8" />
     <!-- Favicon & Base Icons -->
@@ -19,7 +19,7 @@
     <!-- Theme Colors (Dark & Light Mode aware) -->
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0c" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f9fc" />
-    <meta name="theme-color" content="#0a0a0c" />
+    <meta name="theme-color" content="#f8f9fc" />
 
     <!-- Web App Manifest (PWA Standalone) -->
     <link rel="manifest" href="/manifest.json" />
@@ -34,7 +34,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="Éliciné" />
     <meta name="msapplication-TileColor" content="#0a0a0c" />
-    <meta name="msapplication-navbutton-color" content="#0a0a0c" />
+    <meta name="msapplication-navbutton-color" content="#f8f9fc" />
     <meta name="msapplication-starturl" content="/?source=pwa" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="Éliciné : moteur de recommandation cinématographique intelligent. Trouvez instantanément les meilleurs films et séries selon votre humeur et vos catalogues de streaming." />
@@ -45,13 +45,13 @@
       (function() {
         try {
           var t = localStorage.getItem('elicine-theme');
-          var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (t === 'light' || (!t && !d && t !== 'dark')) {
-            document.documentElement.classList.remove('dark');
-            document.documentElement.classList.add('light');
-          } else {
+          if (t === 'dark') {
             document.documentElement.classList.add('dark');
             document.documentElement.classList.remove('light');
+          } else {
+            // Mode clair par défaut pour tous les nouveaux visiteurs
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
           }
         } catch (e) {}
       })();

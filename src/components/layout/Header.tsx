@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, LogIn, Download, Coffee, Heart } from 'lucide-react';
+import { Menu, X, LogIn, Download, Coffee, Heart, Sun, Moon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { ProfileMenu } from './ProfileMenu';
 import { InstallModal } from '../modals/InstallModal';
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { effectiveTheme, toggleTheme, showThemeOnboarding } = useTheme();
   const {
     user: appUser,
     watchlist,
@@ -213,6 +215,66 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Sélecteur de langue compact */}
             <div className="flex-shrink-0">
               <LanguageSelector compact={true} />
+            </div>
+
+            {/* Bouton Thème (Mode Clair / Sombre) & Bulle d'Onboarding ancrée */}
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                id="header-theme-toggle-btn"
+                className={`p-1.5 sm:p-2 rounded-full border transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                  showThemeOnboarding
+                    ? 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/60 ring-2 ring-amber-400/50 shadow-md shadow-amber-500/20'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title={effectiveTheme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+                aria-label={effectiveTheme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+              >
+                {effectiveTheme === 'dark' ? (
+                  <Sun size={15} className="text-amber-400 hover:rotate-45 transition-transform duration-300" />
+                ) : (
+                  <Moon size={15} className="text-slate-700 hover:-rotate-12 transition-transform duration-300" />
+                )}
+              </button>
+
+              {/* Bulle / Tooltip d'Onboarding au premier chargement (Fermeture STRICTE au clic sur le bouton de thème) */}
+              {showThemeOnboarding && (
+                <div 
+                  className="absolute right-0 top-full mt-2.5 z-50 w-64 sm:w-72 pointer-events-auto select-none animate-bounce-subtle"
+                  role="tooltip"
+                >
+                  {/* Flèche pointant vers le haut vers le bouton thème */}
+                  <div className="absolute right-3 -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-amber-500/50" />
+
+                  {/* Corps de la bulle d'onboarding */}
+                  <div 
+                    onClick={toggleTheme}
+                    className="relative bg-slate-950/95 dark:bg-zinc-900/95 backdrop-blur-xl text-white p-3.5 rounded-2xl border border-amber-500/40 shadow-2xl shadow-black/50 text-left cursor-pointer hover:border-amber-400 transition-all group"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                        <Moon size={14} className="text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                            Thème
+                          </span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                        </div>
+                        <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug">
+                          Vous préférez le mode sombre ?
+                        </p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-amber-300 transition-colors flex items-center gap-1">
+                          <span>Cliquez ici pour changer</span>
+                          <span className="text-amber-400 font-bold">→</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bouton Connexion ou Profil si connecté */}

@@ -16,10 +16,13 @@ import {
   LogIn,
   Settings,
   Download,
-  Search
+  Search,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
@@ -44,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigateTerms 
 }) => {
   const { user } = useAuth();
+  const { effectiveTheme, toggleTheme } = useTheme();
   const {
     user: appUser,
     activeView,
@@ -494,6 +498,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Options
           </span>
         </button>
+
+        {/* Commutateur de thème (Mode Clair / Sombre accessible dans le menu tiroir mobile) */}
+        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08]">
+          <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">Apparence</span>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 shadow-sm cursor-pointer active:scale-95 transition-all"
+          >
+            {effectiveTheme === 'dark' ? (
+              <>
+                <Moon size={12} className="text-amber-400" />
+                <span>Sombre</span>
+              </>
+            ) : (
+              <>
+                <Sun size={12} className="text-amber-500" />
+                <span>Clair</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Sélecteur de langue (accessible dans le menu tiroir mobile) */}
         <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08]">
