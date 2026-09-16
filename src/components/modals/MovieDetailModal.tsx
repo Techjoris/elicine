@@ -413,7 +413,7 @@ export const MovieDetailModal: React.FC = () => {
             </div>
           </div>
 
-          {/* AI Match Insight if available */}
+          {/* Match Insight if available */}
           {selectedMovie.ai_match_reason && (
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex items-start gap-3 text-sm text-slate-800 dark:text-zinc-200">
               <Sparkles className="w-5 h-5 text-[#e50914] flex-shrink-0 mt-0.5" />
@@ -422,7 +422,13 @@ export const MovieDetailModal: React.FC = () => {
                   {t.critiqueTitle}
                 </span>
                 <p className="leading-relaxed text-xs sm:text-sm text-slate-600 dark:text-zinc-300">
-                  {selectedMovie.ai_match_reason}
+                  {selectedMovie.ai_match_reason
+                    .replace(/Recherche Intelligente LLM/gi, 'Sélection Éliciné')
+                    .replace(/Recherche par contexte IA/gi, 'Sélection Éliciné')
+                    .replace(/Recherche sémantique vectorielle/gi, 'Algorithme Éliciné')
+                    .replace(/\bTMDB\b/gi, 'Éliciné')
+                    .replace(/\bLLM\b/gi, 'Éliciné')
+                    .replace(/\s*\(Niveau\s*\d+\)/gi, '')}
                 </p>
               </div>
             </div>
@@ -432,7 +438,7 @@ export const MovieDetailModal: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2.5">
             <div 
               className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 text-xs font-bold"
-              title={`Note moyenne spectateurs TMDB : ${selectedMovie.vote_average.toFixed(1)}/10`}
+              title={`Note moyenne spectateurs : ${selectedMovie.vote_average.toFixed(1)}/10`}
             >
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{selectedMovie.vote_average.toFixed(1)} / 10</span>
@@ -441,14 +447,14 @@ export const MovieDetailModal: React.FC = () => {
               )}
             </div>
 
-            {/* Badge de correspondance IA si présent */}
+            {/* Badge de correspondance si présent */}
             {selectedMovie.match_rate !== undefined && selectedMovie.match_rate > 0 && (
               <div 
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold"
-                title={`Indice de correspondance IA : ${selectedMovie.match_rate}% d'affinité avec votre recherche`}
+                title={`Indice de correspondance Éliciné : ${selectedMovie.match_rate}% d'affinité avec votre recherche`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                <span>{selectedMovie.match_rate}% match IA</span>
+                <span>{selectedMovie.match_rate}% affinité</span>
               </div>
             )}
 
@@ -472,7 +478,7 @@ export const MovieDetailModal: React.FC = () => {
             const isAiEnrichedSynopsis = selectedMovie.is_ai_overview || (isOriginalShort && Boolean(selectedMovie.ai_match_reason || selectedMovie.synopsis));
             const displayOverview = (isOriginalShort && (selectedMovie.synopsis || selectedMovie.ai_match_reason))
               ? (selectedMovie.synopsis || selectedMovie.ai_match_reason)
-              : (rawOverview || selectedMovie.ai_match_reason || "Synopsis complet en cours de synchronisation par Éliciné AI.");
+              : (rawOverview || selectedMovie.ai_match_reason || "Synopsis complet en cours de synchronisation par Éliciné.");
 
             return (
               <div className="space-y-2">
@@ -483,7 +489,7 @@ export const MovieDetailModal: React.FC = () => {
                   {isAiEnrichedSynopsis && (
                     <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 text-[10px] font-semibold animate-fade-in">
                       <Sparkles className="w-3 h-3 text-[#e50914]" />
-                      <span>Synopsis enrichi par l'IA</span>
+                      <span>Revue Éliciné</span>
                     </span>
                   )}
                 </div>

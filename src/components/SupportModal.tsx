@@ -294,7 +294,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
             Soutenez le projet Éliciné
           </h3>
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto break-words text-center">
-            Soutenez le développement indépendant et les serveurs IA d'Éliciné. Votre don libre finance les requêtes d'intelligence artificielle et l'hébergement du moteur indépendant.
+            Soutenez le développement indépendant et l'infrastructure d'Éliciné. Votre don libre finance les recherches cinématographiques en direct et l'hébergement de notre plateforme indépendante.
           </p>
         </div>
 
@@ -351,7 +351,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
                 Sur la page suivante, vous pourrez <strong>choisir librement votre montant</strong> de soutien et régler au choix par <strong>Carte bancaire</strong> (sans obligation de créer un compte) ou via <strong>PayPal</strong>.
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Votre contribution permet de financer directement les coûts des serveurs et les requêtes des modèles d'intelligence artificielle.
+                Votre contribution permet de financer directement les coûts des serveurs et l'infrastructure de recommandation haute performance.
               </p>
             </div>
 

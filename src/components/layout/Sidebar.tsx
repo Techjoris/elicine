@@ -426,7 +426,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <div 
             onClick={() => setIsProModalOpen(true)}
-            title="Pass Pro : Quotas IA illimités, filtres avancés & alertes personnalisées"
+            title="Pass Pro : Recherches illimitées, filtres avancés & alertes personnalisées"
             className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
           >
             <div className="flex items-center gap-2">

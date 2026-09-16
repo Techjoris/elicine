@@ -147,7 +147,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             Vivez le cinéma sans limite
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
-            Quotas IA illimités, filtres avancés par plateforme et alertes instantanées.
+            Recherches illimitées, filtres avancés par plateforme et alertes instantanées.
           </p>
 
           {/* Badge utilisateur connecté si disponible */}
@@ -162,7 +162,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="grid grid-cols-3 gap-2 py-1 text-center">
           <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800/80 flex flex-col items-center gap-1">
             <span className="text-base">⚡</span>
-            <span className="text-[10px] font-bold text-slate-900 dark:text-white leading-tight">Quotas IA Illimités</span>
+            <span className="text-[10px] font-bold text-slate-900 dark:text-white leading-tight">Recherches Illimitées</span>
           </div>
           <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800/80 flex flex-col items-center gap-1">
             <span className="text-base">🎯</span>

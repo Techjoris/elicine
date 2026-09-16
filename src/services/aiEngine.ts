@@ -316,15 +316,15 @@ async function executeDirectTmdbSearch(
   }
 
   const thought = isRescueMode
-    ? `Résultats directs TMDB (Mode secours)`
-    : `🎬 Recherche directe TMDB : ${movies.length} titre${movies.length > 1 ? 's' : ''} trouvé${movies.length > 1 ? 's' : ''}`;
+    ? `Résultats complémentaires Éliciné`
+    : `🎬 Sélection Éliciné : ${movies.length} titre${movies.length > 1 ? 's' : ''} trouvé${movies.length > 1 ? 's' : ''}`;
 
   return {
     thought,
     moodDetected: query,
     recommendedMovies: movies,
     isFallbackMode: isRescueMode,
-    providerUsed: isRescueMode ? 'TMDB Secours' : 'TMDB Direct',
+    providerUsed: isRescueMode ? 'Éliciné Secours' : 'Sélection Éliciné',
     suggestedPrompts: [
       'Un film de braquage drôle et haletant',
       'Un thriller psychologique sombre et mystérieux',
@@ -366,7 +366,7 @@ async function enrichMoviesWithTmdbParallel(
       match = {
         id: Math.floor(Math.random() * 900000) + 100000 + index,
         title: item.title,
-        overview: item.reason || `Film sélectionné par CinéIA pour votre recherche "${searchQuery}".`,
+        overview: item.reason || `Film sélectionné par Éliciné pour votre recherche "${searchQuery}".`,
         poster_path: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
         backdrop_path: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&q=80',
         release_date: String(item.year || '2024'),
@@ -386,14 +386,14 @@ async function enrichMoviesWithTmdbParallel(
   const resolved = await Promise.all(enrichmentPromises);
   const movies: Movie[] = resolved.filter((m): m is Movie => m !== null);
 
-  const thought = `✨ Analyse ${providerLabel} en direct : ${movies.length} films sélectionnés avec succès`;
+  const thought = `✨ Analyse Éliciné en cours : ${movies.length} films sélectionnés avec succès`;
 
   return {
     thought,
     moodDetected: searchQuery,
     recommendedMovies: movies,
     isFallbackMode: false,
-    providerUsed: providerLabel,
+    providerUsed: 'Algorithme Éliciné',
     suggestedPrompts: [
       'Un film de braquage drôle et haletant',
       'Un thriller psychologique sous haute tension',

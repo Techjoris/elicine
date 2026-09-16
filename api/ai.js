@@ -547,7 +547,7 @@ export default async function handler(req, res) {
             }
           }
 
-          throw new Error(`Tous les moteurs IA ont échoué : DeepSeek (${error?.message || error}) -> Qwen (${qwenError?.message || qwenError}) -> Gemini (${geminiError?.message || geminiError})`);
+          throw new Error("Le service d'analyse cinématographique est momentanément indisponible.");
         }
       }
     }
@@ -584,8 +584,8 @@ export default async function handler(req, res) {
   } catch (finalErr) {
     console.error('[API /api/ai] Erreur globale moteurs IA :', finalErr?.message || finalErr);
     return res.status(502).json({
-      error: 'Tous les moteurs IA ont échoué',
-      details: finalErr?.message || String(finalErr),
+      error: "Le service d'analyse cinématographique est momentanément indisponible.",
+      details: "Veuillez reformuler ou réessayer dans quelques instants.",
       fallback_suggested: true,
     });
   }

@@ -53,7 +53,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
           </div>
           <span className="hidden sm:inline text-slate-300 dark:text-zinc-700">•</span>
           <p className="text-[11px] leading-relaxed max-w-sm text-slate-500 dark:text-zinc-400">
-            Plateforme cinéphile propulsée par l'intelligence artificielle. Données et visuels fournis par TMDB.
+            Plateforme cinéphile de découverte et recommandations sur mesure.
           </p>
         </div>
 

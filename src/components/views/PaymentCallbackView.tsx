@@ -502,9 +502,10 @@ export const PaymentCallbackView: React.FC = () => {
         return;
       }
 
-      if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'declined') {
+      const resAny = result as any;
+      if (resAny.status === 'failed' || resAny.status === 'cancelled' || resAny.status === 'declined') {
         setState('failed');
-        const isCard = !!result.isCardDecline || currentGateway === 'card' || /carte|card|emetteur|issuer|decline|refus/i.test(result.message || '');
+        const isCard = !!resAny.isCardDecline || currentGateway === 'card' || /carte|card|emetteur|issuer|decline|refus/i.test(result.message || '');
         setIsCardDecline(isCard);
         setErrorMessage(isCard ? "Paiement rejeté par l'émetteur de la carte" : (result.message || "La transaction a été rejetée ou annulée."));
         isPollingRef.current = false;

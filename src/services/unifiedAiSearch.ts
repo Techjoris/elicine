@@ -267,7 +267,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       if (parsed.titles.length > 0) {
         return { 
           titles: parsed.titles, 
-          provider: data.provider_used || 'DeepSeek (deepseek-chat)',
+          provider: 'Algorithme Éliciné',
           criteria: parsed.criteria,
           rawItems: parsed.items
         };
@@ -307,7 +307,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
       if (parsed.titles.length > 0) {
         return { 
           titles: parsed.titles, 
-          provider: data.provider_used || 'Qwen (qwen-plus)',
+          provider: 'Algorithme Éliciné',
           criteria: parsed.criteria,
           rawItems: parsed.items
         };
@@ -348,7 +348,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
         if (parsed.titles.length > 0) {
           return { 
             titles: parsed.titles, 
-            provider: `Groq (${model})`,
+            provider: 'Algorithme Éliciné',
             criteria: parsed.criteria,
             rawItems: parsed.items
           };
@@ -362,7 +362,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
     }
   }
 
-  return { titles: [], provider: 'Fallback' };
+  return { titles: [], provider: 'Algorithme Éliciné' };
 }
 
 /**
@@ -1076,7 +1076,7 @@ export async function executeCinoraSearch(
         moodDetected: cleanQuery,
         recommendedMovies: directMovies,
         isFallbackMode: false,
-        providerUsed: 'TMDB Direct',
+        providerUsed: 'Sélection Éliciné',
         suggestedPrompts: [
           'Un film de braquage drôle et haletant',
           'Une série policière sombre et addictive',
@@ -1156,11 +1156,11 @@ export async function executeCinoraSearch(
         if (Array.isArray(searchData.movies) && searchData.movies.length > 0) {
           console.log(`[Éliciné LLM-First] ${searchData.movies.length} films trouvés dans le catalogue Supabase avec badge`);
           return {
-            thought: searchData.thought || `✨ Recherche Intelligente LLM : ${searchData.movies.length} film(s) correspondant(s) dans notre catalogue`,
+            thought: searchData.thought || `✨ Analyse Éliciné : ${searchData.movies.length} film(s) correspondant(s) dans notre catalogue`,
             moodDetected: cleanQuery,
             recommendedMovies: searchData.movies,
             isFallbackMode: false,
-            providerUsed: searchData.providerUsed || 'Recherche Intelligente LLM (Supabase)',
+            providerUsed: searchData.providerUsed || 'Algorithme Éliciné',
             suggestedPrompts: searchData.suggestedPrompts || [
               'Un film de science-fiction dystopique sombre',
               'Un thriller psychologique avec un twist final',
@@ -1382,7 +1382,7 @@ export async function executeCinoraSearch(
         tier1Movies.push({
           ...movie,
           match_rate: strictScore,
-          ai_match_reason: `🎯 Intention ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${structuredEval.reason}`
+          ai_match_reason: `🎯 Correspondance ciblée : ${primaryPerson ? `${primaryPerson} — ` : ''}${structuredEval.reason}`
         });
       } else {
         // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
@@ -1394,7 +1394,7 @@ export async function executeCinoraSearch(
         tier2Candidates.push({
           ...movie,
           match_rate: Math.min(85, Math.max(60, structuredEval.score)),
-          ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : ${structuredEval.reason || 'Ambiance et intrigue immersive'}`
+          ai_match_reason: `✨ Suggestion Éliciné : ${structuredEval.reason || 'Ambiance et intrigue immersive'}`
         });
       }
     }
@@ -1434,11 +1434,11 @@ export async function executeCinoraSearch(
               : `correspondant précisément à vos critères`;
 
         return {
-          thought: `🎯 Analyse d'intention (Niveau 1) : ${selectedTier1.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
+          thought: `🎯 Analyse Éliciné : ${selectedTier1.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
           moodDetected: cleanQuery,
           recommendedMovies: selectedTier1,
           isFallbackMode: false,
-          providerUsed: `${provider} (Niveau 1 : Filtrage structuré intelligent)`,
+          providerUsed: 'Algorithme Éliciné',
           suggestedPrompts: [
             'Un film de braquage haletant avec twist',
             'Une série policière sombre sous la pluie',
@@ -1558,7 +1558,7 @@ export async function executeCinoraSearch(
       return {
         ...m,
         match_rate: score,
-        ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique vectorielle (Niveau 2) : Ambiance et immersion thématique`
+        ai_match_reason: m.ai_match_reason || `✨ Sélection Éliciné : Ambiance et immersion thématique`
       };
     });
 
@@ -1571,11 +1571,11 @@ export async function executeCinoraSearch(
       : `pour "${sanitizedCleanQuery}"`;
 
     return {
-      thought: `✨ Recherche sémantique vectorielle (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
+      thought: `✨ Analyse Éliciné : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
       recommendedMovies: finalMovies,
       isFallbackMode: false,
-      providerUsed: `${provider} (Niveau 2 : Recherche sémantique vectorielle Supabase)`,
+      providerUsed: 'Algorithme Éliciné',
       suggestedPrompts: [
         'Un film de braquage haletant avec twist',
         'Une série policière sombre sous la pluie',
@@ -1605,7 +1605,7 @@ export async function executeCinoraSearch(
     moodDetected: cleanQuery,
     recommendedMovies: [],
     isFallbackMode: true,
-    providerUsed: `${provider} (Niveau 2 : Filet de sécurité anti-aberrations)`,
+    providerUsed: 'Algorithme Éliciné',
     suggestedPrompts: [
       "Un voyage dans l'espace avec des trous noirs",
       "Un film de braquage qui tourne mal",

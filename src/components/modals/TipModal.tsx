@@ -317,7 +317,7 @@ export const TipModal: React.FC = () => {
                 Soutenir le projet <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">Éliciné</span> ☕
               </h2>
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto">
-                Votre contribution libre finance directement les serveurs d'intelligence artificielle et l'indépendance de la plateforme.
+                Votre contribution libre finance directement l'infrastructure de recherche avancée et l'indépendance de la plateforme.
               </p>
             </div>
 

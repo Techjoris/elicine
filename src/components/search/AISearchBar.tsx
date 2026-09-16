@@ -204,19 +204,19 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             {(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com')) ? (
               <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1 truncate">
                 <span>👑</span>
-                <span>Pass Pro actif • Recherches IA illimitées</span>
+                <span>Pass Pro actif • Recherches illimitées</span>
               </span>
             ) : quota.remaining > 0 ? (
               <span className="text-slate-500 dark:text-zinc-400 flex items-center gap-1 truncate">
                 <span className="text-amber-500">⚡</span>
                 <span>
-                  Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} IA gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                  Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
                 </span>
               </span>
             ) : (
               <span className="text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                 <span>🔒</span>
-                <span>Quota gratuit atteint (0 recherche IA restante) •</span>
+                <span>Quota gratuit atteint (0 recherche restante) •</span>
                 <button
                   type="button"
                   onClick={(e) => {

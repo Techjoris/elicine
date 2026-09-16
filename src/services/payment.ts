@@ -109,7 +109,7 @@ export interface PlanFeature {
 }
 
 export const PRO_FEATURES: PlanFeature[] = [
-  { text: 'Analyses IA et recommandations illimitées', included: true },
+  { text: 'Analyses Éliciné et recommandations illimitées', included: true },
   { text: 'Accès prioritaire aux nouveautés et alertes sorties', included: true },
   { text: 'Filtres de plateformes avancés (Netflix, Canal+, Prime...)', included: true },
   { text: 'Synchronisation multi-écrans & Ma Liste', included: true },

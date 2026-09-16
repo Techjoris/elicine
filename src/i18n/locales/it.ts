@@ -142,7 +142,7 @@ export const termsIt: TermsTranslations = {
           title: "5.1. Oggetto e vantaggi dell'offerta Pass Pro",
           text: "L'opzione Pass Pro sblocca i seguenti vantaggi esclusivi:",
           items: [
-            { label: "Quote IA illimitate", text: "Accesso continuativo senza limiti giornalieri al motore di intelligenza artificiale CinéIA per ricerche e analisi su misura." },
+            { label: "Ricerche Éliciné illimitate", text: "Accesso continuativo senza limiti giornalieri al motore di raccomandazione Éliciné per ricerche e analisi su misura." },
             { label: "Filtri avanzati", text: "Perfezionamento immediato dei risultati in base agli abbonamenti di streaming attivi (Netflix, Prime Video, Disney+, Canal+, Apple TV+) e ai punteggi della critica." },
             { label: "Avvisi personalizzati di disponibilità", text: "Notifiche automatiche non appena i film o le serie monitorate diventano disponibili sulle piattaforme preferite." }
           ]

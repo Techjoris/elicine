@@ -1128,7 +1128,7 @@ export function evaluateStructuredMovieMatch(
     return {
       matches: false,
       score: 50,
-      reason: 'Aucun critère structuré exploitable pour le Niveau 1'
+      reason: 'Critères insuffisants pour une correspondance directe'
     };
   }
 

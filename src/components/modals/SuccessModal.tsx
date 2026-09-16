@@ -67,7 +67,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, typ
           </h2>
 
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-            Votre contribution aide directement à maintenir les serveurs IA, à financer les requêtes en temps réel et à préserver l'indépendance du projet Éliciné.
+            Votre contribution aide directement à maintenir l'infrastructure Éliciné, à financer les requêtes en temps réel et à préserver l'indépendance de la plateforme.
           </p>
         </div>
 
@@ -81,7 +81,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, typ
             <div className="space-y-1.5 pt-1 text-slate-700 dark:text-slate-300">
               <div className="flex items-start gap-2">
                 <span className="text-amber-500 font-bold flex-shrink-0">✓</span>
-                <span><strong>Quotas illimités :</strong> Vos requêtes IA sont désormais sans aucune restriction quotidienne.</span>
+                <span><strong>Recherches illimitées :</strong> Vos explorations sont désormais sans aucune restriction quotidienne.</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-sky-500 font-bold flex-shrink-0">✓</span>

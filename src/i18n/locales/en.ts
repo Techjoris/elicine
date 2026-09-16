@@ -148,7 +148,7 @@ export const termsEn: TermsTranslations = {
           title: "5.1. Nature and Scope of Pass Pro Offer",
           text: "Users may subscribe to Éliciné's optional Pass Pro upgrade, unlocking premium features:",
           items: [
-            { label: "Unlimited AI Quotas", text: "Continuous, unrestricted access to the CinéIA recommendation engine for tailor-made cinematic discovery." },
+            { label: "Unlimited Éliciné Searches", text: "Continuous, unrestricted access to the Éliciné recommendation engine for tailor-made cinematic discovery." },
             { label: "Advanced Post-Search Filters", text: "Instantly refine results by active streaming subscriptions (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) and top critical ratings." },
             { label: "Personalized Availability Alerts", text: "Automated tracking and notifications when monitored movies or series become available on streaming platforms." }
           ]

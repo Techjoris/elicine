@@ -98,19 +98,27 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       .replace(/""+/g, '"')
       .replace(/««+/g, '«')
       .replace(/»»+/g, '»')
+      .replace(/Recherche Intelligente LLM/gi, 'Sélection Éliciné')
+      .replace(/Recherche par contexte IA/gi, 'Sélection Éliciné')
+      .replace(/Recherche sémantique vectorielle/gi, 'Algorithme Éliciné')
+      .replace(/RECOMMANDATION IA \(TMDB\)/gi, 'RECOMMANDATION ÉLICINÉ')
+      .replace(/RECOMMANDATION IA/gi, 'RECOMMANDATION ÉLICINÉ')
+      .replace(/\bTMDB\b/gi, 'Éliciné')
+      .replace(/\bLLM\b/gi, 'Éliciné')
+      .replace(/\s*\(Niveau\s*\d+\)/gi, '')
       .trim();
   }, [aiThought]);
 
   return (
     <section id="results-section" className="w-full space-y-6">
 
-      {/* AI Thought Banner Épuré */}
+      {/* Thought Banner Épuré */}
       {cleanThought && (
         <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 space-y-2.5 shadow-sm dark:shadow-xl transition-colors">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-[#e50914]" />
-              Vision &amp; Recommandation Cinéphile IA
+              Vision &amp; Recommandation Éliciné
             </span>
             {aiMood && (
               <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 font-medium">
@@ -165,7 +173,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-              Notre IA cherche la perle rare, mais cette description est un peu trop mystérieuse...
+              L'algorithme Éliciné cherche la perle rare, mais cette description est un peu trop mystérieuse...
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto">

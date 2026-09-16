@@ -33,7 +33,7 @@ export const TrendingView: React.FC = () => {
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Films Tendances du Moment</h1>
         <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 max-w-xl mt-1.5">
-          Défilement infini automatique — synchronisé chaque semaine avec le catalogue mondial TMDB.
+          Défilement infini automatique — synchronisé chaque semaine avec les dernières sorties mondiales Éliciné.
         </p>
       </div>
 

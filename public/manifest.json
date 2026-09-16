@@ -1,8 +1,8 @@
 {
   "id": "/?source=pwa",
-  "name": "Éliciné - Cinéma & IA",
+  "name": "Éliciné - Cinéma d'Exception",
   "short_name": "Éliciné",
-  "description": "Découvrez des chefs-d'œuvre cinématographiques propulsés par l'intelligence artificielle.",
+  "description": "Découvrez des chefs-d'œuvre cinématographiques sélectionnés sur mesure pour vous.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

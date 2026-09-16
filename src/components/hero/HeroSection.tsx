@@ -531,19 +531,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com')) ? (
                 <span className="text-amber-400/90 font-medium flex items-center gap-1 truncate">
                   <span>👑</span>
-                  <span>Pass Pro actif • Recherches IA illimitées</span>
+                  <span>Pass Pro actif • Recherches illimitées</span>
                 </span>
               ) : quota.remaining > 0 ? (
                 <span className="text-zinc-400 flex items-center gap-1 truncate">
                   <span className="text-amber-400">⚡</span>
                   <span>
-                    Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} IA gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                    Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
                   </span>
                 </span>
               ) : (
                 <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                   <span>🔒</span>
-                  <span>Quota gratuit atteint (0 recherche IA restante) •</span>
+                  <span>Quota gratuit atteint (0 recherche restante) •</span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -560,11 +560,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           </div>
         </div>
 
-        {/* Banner de chargement IA */}
+        {/* Banner de chargement */}
         {isAiLoading && (
           <div className="mt-3 p-3 rounded-xl bg-zinc-900/90 backdrop-blur-md border border-white/10 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-2.5 animate-pulse max-w-xl w-full">
             <Loader2 className="w-4 h-4 animate-spin text-white flex-shrink-0" />
-            <span>✨ {t.aiAnalysisBadge} (Routage Hybride TMDB / IA)...</span>
+            <span>✨ {t.aiAnalysisBadge}...</span>
           </div>
         )}
 

@@ -564,7 +564,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         <ul className="space-y-1 text-[11px] text-slate-600 dark:text-zinc-300">
                           <li className="flex items-start gap-1.5">
                             <span className="text-amber-500 font-bold">•</span>
-                            <span><strong>Quotas illimités</strong> de requêtes IA</span>
+                            <span><strong>Recherches illimitées</strong> au quotidien</span>
                           </li>
                           <li className="flex items-start gap-1.5">
                             <span className="text-sky-500 font-bold">•</span>

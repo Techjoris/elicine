@@ -148,7 +148,7 @@ export const termsFr: TermsTranslations = {
           title: "5.1. Nature et périmètre de l'offre Pass Pro",
           text: "L'utilisateur a la faculté de souscrire à l'option payante Pass Pro d'Éliciné. Cette formule débloque l'accès à un ensemble exclusif de fonctionnalités avancées :",
           items: [
-            { label: "Quotas IA illimités", text: "Accès continu et sans restriction quotidienne au moteur d'intelligence artificielle CinéIA pour des recommandations, analyses et requêtes cinématographiques personnalisées." },
+            { label: "Recherches Éliciné illimitées", text: "Accès continu et sans restriction quotidienne au moteur de curation Éliciné pour des recommandations, analyses et requêtes cinématographiques personnalisées." },
             { label: "Filtres avancés post-recherche", text: "Possibilité d'affiner instantanément les résultats selon ses abonnements de streaming actifs (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) et par notes critiques d'agrégateurs reconnus." },
             { label: "Alertes personnalisées de disponibilité", text: "Suivi proactif et notifications automatiques dès qu'un film ou une série surveillée devient disponible sur ses plateformes favorites." }
           ]

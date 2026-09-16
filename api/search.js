@@ -345,7 +345,7 @@ async function resolveByTitles(extractedTitles, matches, queryText = '') {
     }
   }
 
-  return enrichWithBadges(selectedResults, matches, 'Recherche Intelligente LLM', queryText);
+  return enrichWithBadges(selectedResults, matches, 'Sélection Éliciné', queryText);
 }
 
 // ============================================================================
@@ -407,7 +407,7 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
       }
 
       if (results.length > 0) {
-        return enrichWithBadges(results, matches, 'Recherche par contexte & mots-clés', rawQuery);
+        return enrichWithBadges(results, matches, 'Recherche par contexte Éliciné', rawQuery);
       }
     }
   }
@@ -510,9 +510,9 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
         vote_count: bestMatch.vote_count || 0,
         genres: Array.isArray(bestMatch.genre_ids) ? bestMatch.genre_ids.join(',') : '',
         media_type: 'movie',
-        ai_badge: 'Recommandation IA (TMDB)',
-        badge: 'Recommandation IA (TMDB)',
-        ai_match_reason: matchReason || `Recommandé pour sa cohérence scénaristique avec "${rawTitle}"`,
+        ai_badge: 'Recommandation Éliciné',
+        badge: 'Recommandation Éliciné',
+        ai_match_reason: matchReason || `Recommandé pour sa cohérence avec "${rawTitle}"`,
         match_rate: dynamicScore
       });
     }
@@ -856,9 +856,9 @@ function filterMockbusters(movies, queryText) {
 
 
 // ============================================================================
-// Helper : Déduplication + enrichissement badge IA
+// Helper : Déduplication + enrichissement badge Éliciné
 // ============================================================================
-function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Recherche Intelligente LLM', queryText = '') {
+function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éliciné', queryText = '') {
   if (!Array.isArray(rawMovies) || rawMovies.length === 0) return [];
 
   const seenIds = new Set();
@@ -891,7 +891,7 @@ function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Recherche Intel
       ...movie,
       ai_badge: badgeLabel,
       badge: badgeLabel,
-      ai_match_reason: matchingLLM?.reason || "Sélectionné par l'encyclopédie cinématographique IA",
+      ai_match_reason: matchingLLM?.reason || "Sélectionné par l'algorithme Éliciné",
       match_rate: dynamicScore
     };
   });
@@ -1009,7 +1009,7 @@ export default async function handler(req, res) {
         movies: [],
         similarityScore: 0,
         isLowSimilarity: true,
-        message: "Recherche vectorielle native non disponible ou aucun résultat au-dessus du seuil"
+        message: "Aucun résultat correspondant aux critères dans notre catalogue"
       });
     }
 
@@ -1151,18 +1151,18 @@ export default async function handler(req, res) {
 
       // ─── Résultats trouvés (Phase A ou Phase B) ─────────────────────────────
       if (resolvedMovies.length > 0) {
-        const isPhaseB     = resolvedMovies.some(m => m.badge === 'Recherche par contexte & mots-clés');
-        const badgeLabel   = isPhaseB ? 'Recherche par contexte IA' : 'Recherche Intelligente LLM';
+        const isPhaseB     = resolvedMovies.some(m => m.badge === 'Recherche par contexte Éliciné' || m.badge === 'Recherche par contexte & mots-clés');
+        const badgeLabel   = isPhaseB ? 'Recherche par contexte Éliciné' : 'Sélection Éliciné';
         const thoughtMsg   = isPhaseB
           ? `🔍 Recherche élargie : ${resolvedMovies.length} film(s) correspondant à l'ambiance et au contexte`
-          : `✨ Recherche Intelligente LLM : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`;
+          : `✨ Analyse Éliciné : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`;
 
         return res.status(200).json({
           success: true,
           movies: resolvedMovies,
           count: resolvedMovies.length,
           badge: badgeLabel,
-          providerUsed: `LLM-First (${provider})`,
+          providerUsed: 'Algorithme Éliciné',
           correctedQuery: correctedQuery || null,
           thought: thoughtMsg,
           extractedTitles,
@@ -1182,10 +1182,10 @@ export default async function handler(req, res) {
         success: true,
         movies: [],
         isEmpty: true,
-        badge: 'Recherche Intelligente LLM',
-        providerUsed: `LLM-First (${provider} → 0 résultat)`,
+        badge: 'Sélection Éliciné',
+        providerUsed: 'Algorithme Éliciné',
         correctedQuery: correctedQuery || null,
-        message: "Notre IA a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
+        message: "L'algorithme Éliciné a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
         extractedTitles,
         suggestedPrompts: [
           "Un voyage dans l'espace avec des trous noirs",

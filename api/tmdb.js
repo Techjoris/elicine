@@ -5,7 +5,7 @@ export default async function handler(req, res) {
 
   const apiKey = req.query.api_key || process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Clé serveur TMDB manquante' });
+    return res.status(500).json({ error: 'Service de données cinématographiques indisponible' });
   }
 
   const { endpoint, ...params } = req.query;

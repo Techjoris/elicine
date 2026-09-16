@@ -263,7 +263,7 @@ export async function querySupabaseVectorSearch(
           movies,
           globalSimilarityScore: topSimilarity,
           isLowSimilarity: isLow,
-          providerUsed: 'Supabase pgvector (match_movies)'
+          providerUsed: 'Algorithme Éliciné'
         };
       }
     } catch (err: any) {
@@ -287,7 +287,7 @@ export async function querySupabaseVectorSearch(
           movies,
           globalSimilarityScore: sim,
           isLowSimilarity: sim < threshold,
-          providerUsed: 'Supabase Semantic TextSearch'
+          providerUsed: 'Algorithme Éliciné'
         };
       }
     } catch (_) {}
@@ -298,7 +298,7 @@ export async function querySupabaseVectorSearch(
     movies: [],
     globalSimilarityScore: 0.0,
     isLowSimilarity: true,
-    providerUsed: 'Supabase Vector Fallback'
+    providerUsed: 'Algorithme Éliciné'
   };
 }
 

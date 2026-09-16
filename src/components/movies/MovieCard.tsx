@@ -86,6 +86,35 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
     };
   }, [movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey, movie]);
 
+  const cleanBadge = (badge?: string) => {
+    if (!badge) return '';
+    return badge
+      .replace(/Recherche Intelligente LLM/gi, 'Sélection Éliciné')
+      .replace(/Recherche par contexte IA/gi, 'Sélection Éliciné')
+      .replace(/Recherche sémantique vectorielle/gi, 'Algorithme Éliciné')
+      .replace(/RECOMMANDATION IA \(TMDB\)/gi, 'RECOMMANDATION ÉLICINÉ')
+      .replace(/RECOMMANDATION IA/gi, 'RECOMMANDATION ÉLICINÉ')
+      .replace(/\bTMDB\b/gi, 'Éliciné')
+      .replace(/\bLLM\b/gi, 'Éliciné')
+      .replace(/\s*\(Niveau\s*\d+\)/gi, '')
+      .trim();
+  };
+
+  const cleanMatchReason = (reason?: string) => {
+    if (!reason) return '';
+    return reason
+      .replace(/Recherche Intelligente LLM/gi, 'Sélection Éliciné')
+      .replace(/Recherche par contexte IA/gi, 'Sélection Éliciné')
+      .replace(/Recherche sémantique vectorielle/gi, 'Algorithme Éliciné')
+      .replace(/\bTMDB\b/gi, 'Éliciné')
+      .replace(/\bLLM\b/gi, 'Éliciné')
+      .replace(/\s*\(Niveau\s*\d+\)/gi, '')
+      .trim();
+  };
+
+  const displayBadge = cleanBadge(movie.ai_badge || movie.badge);
+  const displayMatchReason = cleanMatchReason(movie.ai_match_reason);
+
   return (
     <div 
       onClick={() => setSelectedMovie(movie)}
@@ -113,16 +142,16 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             {showAiMatch && movie.match_rate !== undefined && movie.match_rate > 0 && (
               <span 
                 className="px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[9px] font-bold tracking-wide flex items-center gap-0.5"
-                title={`Indice de correspondance IA : ${movie.match_rate}% d'affinité avec votre requête`}
+                title={`Indice de correspondance Éliciné : ${movie.match_rate}% d'affinité avec votre requête`}
               >
                 <Sparkles className="w-2.5 h-2.5 text-emerald-400 flex-shrink-0" />
                 <span>{movie.match_rate}% match</span>
               </span>
             )}
           </div>
-          {(movie.ai_badge || movie.badge === 'Recherche Intelligente LLM') && (
+          {displayBadge && (
             <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-[#e50914] to-amber-600 backdrop-blur-md border border-white/20 text-white text-[8px] font-extrabold tracking-wide uppercase shadow-sm">
-              ✨ {movie.ai_badge || movie.badge}
+              ✨ {displayBadge}
             </span>
           )}
         </div>
@@ -187,7 +216,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             <span>{releaseYear}</span>
             <div 
               className="flex items-center gap-1 text-slate-700 dark:text-zinc-300"
-              title={`Note spectateurs TMDB : ${movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}/10`}
+              title={`Note spectateurs : ${movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}/10`}
             >
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
               <span className="font-semibold text-slate-900 dark:text-white">{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
@@ -208,10 +237,10 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
           </div>
         ) : null}
 
-        {/* AI Match Reason Pill if active */}
-        {showAiMatch && movie.ai_match_reason && (
+        {/* Match Reason Pill if active */}
+        {showAiMatch && displayMatchReason && (
           <p className="mt-1 text-[10px] text-slate-600 dark:text-zinc-400 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-md p-1.5 leading-tight line-clamp-2">
-            <span className="text-[#e50914] mr-1">●</span>{movie.ai_match_reason}
+            <span className="text-[#e50914] mr-1">●</span>{displayMatchReason}
           </p>
         )}
 

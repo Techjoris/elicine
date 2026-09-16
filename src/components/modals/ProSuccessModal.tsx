@@ -110,7 +110,7 @@ export const ProSuccessModal: React.FC<ProSuccessModalProps> = ({ isOpen, onClos
               !
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-              Votre abonnement est actif. Profitez dès maintenant des recherches IA illimitées,
+              Votre abonnement est actif. Profitez dès maintenant des recherches illimitées,
               de la synchronisation de vos favoris et de l'accès prioritaire aux nouveautés.
             </p>
           </div>
@@ -118,7 +118,7 @@ export const ProSuccessModal: React.FC<ProSuccessModalProps> = ({ isOpen, onClos
           {/* Benefits list */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
             {[
-              { icon: <Infinity className="w-4 h-4 text-sky-500 dark:text-sky-400" />, label: 'Recherches IA Illimitées', color: 'border-sky-500/30 bg-sky-500/10' },
+              { icon: <Infinity className="w-4 h-4 text-sky-500 dark:text-sky-400" />, label: 'Recherches Illimitées', color: 'border-sky-500/30 bg-sky-500/10' },
               { icon: <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500/30 dark:fill-amber-400/30" />, label: 'Streaming Mondial Débloqué', color: 'border-amber-500/30 bg-amber-500/10' },
               { icon: <Sparkles className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />, label: 'Nouveautés Prioritaires', color: 'border-emerald-500/30 bg-emerald-500/10' }
             ].map(({ icon, label, color }) => (

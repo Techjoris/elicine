@@ -142,7 +142,7 @@ export const termsDe: TermsTranslations = {
           title: "5.1. Leistungsumfang des Pass Pro",
           text: "Das Pass Pro-Abonnement schaltet folgende exklusive Funktionen frei:",
           items: [
-            { label: "Unbegrenzte KI-Kontingente", text: "Kontinuierlicher, unbegrenzter Zugriff auf die CinéIA-Engine für personalisierte Empfehlungen." },
+            { label: "Unbegrenzte Éliciné-Suchen", text: "Kontinuierlicher, unbegrenzter Zugriff auf die Éliciné-Engine für personalisierte Empfehlungen." },
             { label: "Erweiterte Filter", text: "Verfeinerung von Suchergebnissen nach aktiven Streaming-Abonnements (Netflix, Prime Video, Disney+, Canal+, Apple TV+) und Bestnoten." },
             { label: "Verfügbarkeits-Benachrichtigungen", text: "Automatische Benachrichtigungen bei Verfügbarkeit beobachteter Filme und Serien." }
           ]
