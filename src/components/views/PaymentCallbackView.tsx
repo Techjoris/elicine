@@ -436,8 +436,8 @@ export const PaymentCallbackView: React.FC = () => {
   }, [user]);
 
   const verifyTransaction = async (
-    targetSubId: string, 
-    targetRef: string, 
+    targetSubId: string,
+    targetRef: string,
     currentCount: number,
     currentGateway: PaymentGatewayType,
     clientEmail?: string,
@@ -448,10 +448,47 @@ export const PaymentCallbackView: React.FC = () => {
     isPollingRef.current = true;
     setPollCount(currentCount);
 
+    const PHASE1_MAX = 12;
+    const TOTAL_MAX = 45;
+    const PHASE1_INTERVAL = 3000;
+    const PHASE2_INTERVAL = 8000;
+
+    const scheduleNextPoll = (nextCount) => {
+      const interval = nextCount < PHASE1_MAX ? PHASE1_INTERVAL : PHASE2_INTERVAL;
+      pollTimerRef.current = setTimeout(() => {
+        isPollingRef.current = false;
+        verifyTransaction(targetSubId, targetRef, nextCount, currentGateway, clientEmail, targetPlan, isDonation);
+      }, interval);
+    };
+
+    const handleSuccess = async (serverPlan, serverExpiresAt, serverEmail) => {
+      const effectiveEmail = serverEmail || clientEmail || user?.email;
+      if (effectiveEmail) {
+        try {
+          await subscriptionService.activateProImmediately({
+            email: effectiveEmail,
+            userId: user?.id,
+            customerName: user?.name,
+            plan: serverPlan || targetPlan,
+            gateway: currentGateway,
+            paymentReference: targetRef,
+            subscriptionId: targetSubId,
+            isDonation
+          });
+        } catch (_) {}
+      }
+      setState('active_confirmed');
+      if (serverPlan) setPlan(serverPlan);
+      if (serverExpiresAt) setExpiresAt(serverExpiresAt);
+      confetti({ particleCount: 160, spread: 90, origin: { y: 0.55 }, colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff'] });
+      try { if (supabase?.auth) await supabase.auth.refreshSession(); } catch (_) {}
+      await refreshUserProStatus();
+      isPollingRef.current = false;
+    };
+
     try {
       const result = await subscriptionService.verifySubscriptionStatus(targetSubId, targetRef);
 
-      // Si le backend nous communique un moyen de paiement précis, mettre à jour le contexte
       if (result.gateway) {
         const serverDetected = detectGatewayType(result.gateway);
         if (serverDetected !== 'generic') {
@@ -461,70 +498,57 @@ export const PaymentCallbackView: React.FC = () => {
       }
 
       if (result.isPro && result.status === 'active') {
-        const effectiveEmail = clientEmail || user?.email || (result.subscription as any)?.email;
-        if (effectiveEmail) {
-          // Double garantie : appel de l'activation pour assurer Supabase pass_status et Resend
-          await subscriptionService.activateProImmediately({
-            email: effectiveEmail,
-            userId: user?.id,
-            customerName: user?.name,
-            plan: result.plan || targetPlan,
-            gateway: currentGateway,
-            paymentReference: targetRef,
-            subscriptionId: targetSubId,
-            isDonation
-          });
-        }
-
-        setState('active_confirmed');
-        if (result.plan) setPlan(result.plan);
-        if (result.expiresAt) setExpiresAt(result.expiresAt);
-
-        // Déclencher les confettis dorés et bleus de célébration
-        confetti({
-          particleCount: 160,
-          spread: 90,
-          origin: { y: 0.55 },
-          colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff']
-        });
-
-        // Rafraîchissement explicite de la session Supabase Auth
-        try {
-          if (supabase?.auth) {
-            await supabase.auth.refreshSession();
-          }
-        } catch (_) {}
-
-        // Synchroniser le contexte utilisateur global
-        await refreshUserProStatus();
-        isPollingRef.current = false;
+        await handleSuccess(result.plan, result.expiresAt, result.subscription?.email);
         return;
       }
 
-      if (result.status === 'failed' || result.status === 'cancelled' || (result.status as string) === 'declined') {
+      if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'declined') {
         setState('failed');
-        const isCard = !!(result as any).isCardDecline || currentGateway === 'card' || /carte|card|émetteur|issuer|decline|refus/i.test(result.message || '');
+        const isCard = !!result.isCardDecline || currentGateway === 'card' || /carte|card|emetteur|issuer|decline|refus/i.test(result.message || '');
         setIsCardDecline(isCard);
-        setErrorMessage(
-          isCard 
-            ? "Paiement rejeté par l'émetteur de la carte"
-            : (result.message || "La transaction a été rejetée ou annulée.")
-        );
+        setErrorMessage(isCard ? "Paiement rejeté par l'émetteur de la carte" : (result.message || "La transaction a été rejetée ou annulée."));
         isPollingRef.current = false;
         return;
       }
 
-      // Nombre de tentatives : 6 pour carte bancaire (autorisation rapide), 10 pour mobile money
-      const maxAttempts = currentGateway === 'card' ? 6 : 10;
+      if (currentCount >= 2) {
+        const emailToCheck = clientEmail || user?.email || '';
+        if (emailToCheck) {
+          try {
+            const checkRes = await fetch(`/api/activate-pro?action=check-status&email=${encodeURIComponent(emailToCheck)}`, {
+              headers: { 'Accept': 'application/json' }
+            });
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData?.isPro === true) {
+                console.log('[PaymentCallbackView] Activation confirmée via API check-status');
+                await handleSuccess(checkData.plan || targetPlan, checkData.expiresAt || undefined, emailToCheck);
+                return;
+              }
+            }
+          } catch (_) {}
 
-      if (currentCount < maxAttempts) {
-        // Continuer le polling toutes les 2.5 secondes
-        pollTimerRef.current = setTimeout(() => {
-          isPollingRef.current = false;
-          verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
-        }, 2500);
+          try {
+            const { data: profData } = await supabase
+              .from('profiles')
+              .select('is_pro, expires_at')
+              .ilike('email', emailToCheck)
+              .maybeSingle();
+            if (profData?.is_pro === true) {
+              console.log('[PaymentCallbackView] Activation confirmée via Supabase profiles.is_pro');
+              await handleSuccess(targetPlan, profData.expires_at || undefined, emailToCheck);
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (currentCount < TOTAL_MAX) {
+        if (currentCount === PHASE1_MAX && currentGateway !== 'card') {
+          setState('pending_operator');
+        }
+        scheduleNextPoll(currentCount + 1);
       } else {
-        // Fin de tentative : pour une carte sans réponse, basculer vers un échec clair au lieu d'une attente infinie
         if (currentGateway === 'card') {
           setState('failed');
           setIsCardDecline(true);
@@ -534,14 +558,10 @@ export const PaymentCallbackView: React.FC = () => {
         }
         isPollingRef.current = false;
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn('[PaymentCallbackView] Erreur vérification:', err);
-      const maxAttempts = currentGateway === 'card' ? 6 : 10;
-      if (currentCount < maxAttempts) {
-        pollTimerRef.current = setTimeout(() => {
-          isPollingRef.current = false;
-          verifyTransaction(targetSubId, targetRef, currentCount + 1, currentGateway);
-        }, 2500);
+      if (currentCount < TOTAL_MAX) {
+        scheduleNextPoll(currentCount + 1);
       } else {
         if (currentGateway === 'card') {
           setState('failed');
@@ -554,10 +574,11 @@ export const PaymentCallbackView: React.FC = () => {
       }
     }
   };
-
   const handleManualRetry = () => {
     setState('verifying');
-    verifyTransaction(subId, reference, 0, gatewayType);
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const isDonation = params?.get('type') === 'donation' || params?.get('donation') === 'true';
+    verifyTransaction(subId, reference, 0, gatewayType, user?.email || undefined, plan, isDonation);
   };
 
   const handleGoHome = async () => {
@@ -658,7 +679,7 @@ export const PaymentCallbackView: React.FC = () => {
 
             <div className="text-[11px] text-slate-500 flex items-center justify-center gap-2">
               <Clock className="w-3.5 h-3.5" />
-              <span>Tentative {pollCount + 1}/10 • Chiffrement SHA-256</span>
+              <span>Vérification {pollCount + 1} • SHA-256</span>
             </div>
           </div>
         )}

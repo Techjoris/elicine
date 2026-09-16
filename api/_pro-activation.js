@@ -383,7 +383,7 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
     // 1. Récupération des profils Pro actifs
     const { data: activeProfiles, error: fetchErr } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, username, is_pro, expires_at, pro_expires_at, subscription_ends_at, last_reminder_sent_at')
+      .select('id, email, is_pro, expires_at')
       .eq('is_pro', true)
       .neq('email', 'ivanjoris959@gmail.com')
       .limit(maxReminders);
@@ -397,7 +397,7 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
       const email = (profile.email || '').trim().toLowerCase();
       if (!email || !email.includes('@')) continue;
 
-      const effectiveExpiry = profile.expires_at || profile.pro_expires_at || profile.subscription_ends_at;
+      const effectiveExpiry = profile.expires_at;
       if (!effectiveExpiry) continue;
 
       const expTime = new Date(effectiveExpiry).getTime();
@@ -407,28 +407,15 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
       if (timeRemainingMs > 0 && timeRemainingMs <= threeDaysMs) {
         const daysRemaining = Math.max(1, Math.ceil(timeRemainingMs / (1000 * 60 * 60 * 24)));
 
-        // Vérifier si un rappel a déjà été envoyé dans les 24 dernières heures
-        const lastReminder = profile.last_reminder_sent_at ? new Date(profile.last_reminder_sent_at).getTime() : 0;
-        if (now - lastReminder < twentyFourHoursMs) {
-          console.log(`[Cron Reminders] ⏭️ Rappel déjà envoyé récemment pour ${email} (il y a moins de 24h).`);
-          continue;
-        }
-
         console.log(`[Cron Reminders] ✉️ Envoi relance expiration (J-${daysRemaining}) à ${email}...`);
         const emailRes = await sendProRenewalReminderEmail(email, {
-          customerName: profile.username || 'Cinéphile',
+          customerName: profile.email?.split('@')[0] || 'Cinéphile',
           daysRemaining,
           expiresAt: effectiveExpiry,
           renewalUrl: 'https://elicine.app?upgrade=pro'
         });
 
         if (emailRes?.success) {
-          // Mise à jour de last_reminder_sent_at dans la base
-          await supabaseAdmin
-            .from('profiles')
-            .update({ last_reminder_sent_at: new Date().toISOString() })
-            .eq('id', profile.id);
-
           results.push({ email, daysRemaining, status: 'sent' });
         } else {
           results.push({ email, daysRemaining, status: 'failed', error: emailRes?.error });

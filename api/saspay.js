@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
-import { activateUserPassPro } from './_pro-activation.js';
+import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -14,9 +14,9 @@ const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ||
   '';
 
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
+const supabase = supabaseAdmin || ((supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
   ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+  : null);
 
 // Mémoire globale des souscriptions pour le runtime Serverless
 const globalSubscriptions = (globalThis.__elicine_subscriptions = globalThis.__elicine_subscriptions || new Map());
@@ -617,9 +617,9 @@ export default async function handler(req, res) {
       if (subId) targetSub = globalSubscriptions.get(subId);
       if (!targetSub && supabase) {
         try {
-          const query = supabase.from('subscriptions').select('*');
-          if (subId) query.eq('id', subId);
-          else query.eq('payment_reference', txId);
+          let query = supabase.from('subscriptions').select('*');
+          if (subId) query = query.eq('id', subId);
+          else query = query.eq('payment_reference', txId);
           const { data } = await query.maybeSingle();
           if (data) targetSub = data;
         } catch (_) {}
@@ -644,20 +644,20 @@ export default async function handler(req, res) {
 
       // ÉCRITURE EXCLUSIVE DU STATUT EN BASE DE DONNÉES & NOTIFICATIONS RESEND
       const targetEmail = (
-        targetSub?.email || 
-        event?.email || 
-        event?.customer_email || 
-        event?.data?.customer_email || 
-        event?.data?.email || 
+        targetSub?.email ||
+        transactionData?.customer_email ||
+        transactionData?.email ||
+        webhookBody?.customer_email ||
+        webhookBody?.email ||
         ''
       ).trim().toLowerCase();
 
       if (targetEmail) {
         await activateUserPassPro(targetEmail, {
           plan,
-          customerName: targetSub?.customer_name || targetSub?.customerName || event?.customer_name,
-          amount: targetSub?.amount || event?.amount || 2,
-          currency: targetSub?.currency || event?.currency || 'XOF',
+          customerName: targetSub?.customer_name || targetSub?.customerName || transactionData?.customer_name || transactionData?.customer?.name || webhookBody?.customer_name,
+          amount: targetSub?.amount || transactionData?.amount || webhookBody?.amount || 2,
+          currency: targetSub?.currency || transactionData?.currency || webhookBody?.currency || 'XOF',
           gateway: 'saspay',
           paymentReference: txId,
           subscriptionId: subId || targetSub?.id,
@@ -699,7 +699,7 @@ export default async function handler(req, res) {
 
   // 3. GET : Vérification du statut d'une transaction SasPay
   if (req.method === 'GET') {
-    const sessionId = req.query?.id || req.query?.reference || req.query?.session_id;
+    const sessionId = req.query?.id || req.query?.reference || req.query?.session_id || req.query?.subscription_id || req.query?.subscriptionId;
 
     if (!sessionId) {
       return res.status(400).json({
@@ -788,8 +788,13 @@ export default async function handler(req, res) {
       }
 
       return res.status(response.status).json({
-        status: isSuccess ? 'complete' : (isFailed ? 'failed' : 'pending'),
+        success: isSuccess,
+        isPro: isSuccess,
+        status: isSuccess ? 'active' : (isFailed ? 'failed' : 'pending'),
         rawStatus,
+        plan: sub?.plan || 'monthly',
+        expiresAt: sub?.expires_at || computeSubscriptionExpiry(sub?.plan || 'monthly'),
+        gateway: 'saspay',
         data: data?.data || data
       });
     } catch (err) {

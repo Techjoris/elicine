@@ -373,7 +373,7 @@ export const subscriptionService = {
         const data = await res.json();
         const detectedGateway = data.gateway || data.subscription?.gateway || pending?.gateway || null;
 
-        if (data?.success && data?.status === 'active' && data?.isPro) {
+        if ((data?.success && data?.status === 'active' && data?.isPro) || data?.status === 'active' || data?.status === 'complete' || data?.isPro === true) {
           // Mise à jour du cache local UNIQUEMENT après validation formelle du serveur
           const activeSub: ProSubscription = data.subscription || {
             id: targetId || 'sub_active',
