@@ -110,9 +110,13 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
               {mediaType === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
             </span>
-            {movie.match_rate !== undefined && movie.match_rate > 0 && (
-              <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-medium tracking-wide">
-                {movie.match_rate}%
+            {showAiMatch && movie.match_rate !== undefined && movie.match_rate > 0 && (
+              <span 
+                className="px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[9px] font-bold tracking-wide flex items-center gap-0.5"
+                title={`Indice de correspondance IA : ${movie.match_rate}% d'affinité avec votre requête`}
+              >
+                <Sparkles className="w-2.5 h-2.5 text-emerald-400 flex-shrink-0" />
+                <span>{movie.match_rate}% match</span>
               </span>
             )}
           </div>
@@ -181,7 +185,10 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
           {/* Year and Rating */}
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-medium pt-0.5">
             <span>{releaseYear}</span>
-            <div className="flex items-center gap-1 text-slate-700 dark:text-zinc-300">
+            <div 
+              className="flex items-center gap-1 text-slate-700 dark:text-zinc-300"
+              title={`Note spectateurs TMDB : ${movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}/10`}
+            >
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
               <span className="font-semibold text-slate-900 dark:text-white">{movie.vote_average ? movie.vote_average.toFixed(1) : '7.5'}</span>
             </div>

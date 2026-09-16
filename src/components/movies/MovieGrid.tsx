@@ -88,11 +88,24 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
     }
   };
 
+  const cleanThought = React.useMemo(() => {
+    if (!aiThought) return '';
+    return aiThought
+      .trim()
+      // Enlève les guillemets englobants superflus au début et à la fin
+      .replace(/^["'«»]\s*|\s*["'«»]$/g, '')
+      // Corrige tout guillemet doublé accidentel (ex: "" -> ")
+      .replace(/""+/g, '"')
+      .replace(/««+/g, '«')
+      .replace(/»»+/g, '»')
+      .trim();
+  }, [aiThought]);
+
   return (
     <section id="results-section" className="w-full space-y-6">
 
       {/* AI Thought Banner Épuré */}
-      {aiThought && (
+      {cleanThought && (
         <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 space-y-2.5 shadow-sm dark:shadow-xl transition-colors">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -106,7 +119,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
             )}
           </div>
           <p className="text-xs sm:text-sm text-slate-700 dark:text-zinc-300 leading-relaxed italic">
-            "{aiThought}"
+            {cleanThought}
           </p>
         </div>
       )}

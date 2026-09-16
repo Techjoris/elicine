@@ -1063,11 +1063,15 @@ export async function executeCinoraSearch(
       const directMovies = results.slice(0, 6).map((m, idx) => ({
         ...m,
         match_rate: Math.max(82, 99 - idx * 4),
-        ai_match_reason: idx === 0 ? `🎯 Titre exact : "${m.title}"` : `Œuvre associée : "${m.title}"`
+        ai_match_reason: idx === 0 
+          ? `🎯 Titre exact : "${(m.title || '').replace(/^["'«»]+|["'«»]+$/g, '')}"` 
+          : `Œuvre associée : "${(m.title || '').replace(/^["'«»]+|["'«»]+$/g, '')}"`
       }));
 
+      const cleanDirectTitle = (directMovies[0]?.title || cleanQuery).replace(/^["'«»]+|["'«»]+$/g, '').trim();
+
       return {
-        thought: `🎬 Titre direct identifié : "${directMovies[0]?.title || cleanQuery}"`,
+        thought: `🎬 Titre direct identifié : "${cleanDirectTitle}"`,
         moodDetected: cleanQuery,
         recommendedMovies: directMovies,
         isFallbackMode: false,
@@ -1541,9 +1545,10 @@ export async function executeCinoraSearch(
     console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
 
 
+    const sanitizedCleanQuery = cleanQuery.replace(/^["'«»]+|["'«»]+$/g, '').trim();
     const moodSummary = criteria.themes.length > 0
       ? `autour des thèmes « ${criteria.themes.join(', ')} »`
-      : `correspondant à votre description`;
+      : `pour "${sanitizedCleanQuery}"`;
 
     return {
       thought: `✨ Recherche sémantique vectorielle (Niveau 2) : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,

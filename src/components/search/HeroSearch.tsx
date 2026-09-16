@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search as SearchIcon, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 
 interface HeroSearchProps {
   onSearch?: (query: string) => void;
@@ -11,11 +12,24 @@ interface HeroSearchProps {
 export const HeroSearch: React.FC<HeroSearchProps> = ({
   onSearch,
   isLoading = false,
-  placeholder = "Décrivez une ambiance, une émotion..."
+  placeholder
 }) => {
   const { quota, user, setIsProModalOpen, showToast, canPerformSearch } = useApp();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const activePlaceholder = placeholder || (isMobile ? (t.searchPlaceholderShort || "Ambiance, thème, acteur...") : (t.searchPlaceholder || "Décrivez une ambiance, un thème ou un acteur..."));
 
   // Auto-resize du textarea : démarre strictement à 1 ligne (28px) et grandit UNIQUEMENT si le texte dépasse
   const adjustTextareaHeight = () => {
@@ -92,7 +106,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
           rows={1}
           maxLength={350}
           className="flex-1 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder-zinc-400 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
-          placeholder={placeholder}
+          placeholder={activePlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value.slice(0, 350))}
           onPaste={(e) => {
@@ -111,8 +125,22 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
           onKeyDown={handleKeyDown}
         />
 
-        {/* Explorer Action Button inside the pill - Aligné en bas */}
-        <div className="flex items-center flex-shrink-0 self-end mb-0.5 sm:mb-1">
+        {/* Explorer Action Button & Compteur de caractères intégré */}
+        <div className="flex items-center gap-2 flex-shrink-0 self-end mb-0.5 sm:mb-1">
+          {/* Compteur discret façon X/Twitter : masqué par défaut, apparaît à l'approche de la limite (>= 280) */}
+          {query.length >= 280 && (
+            <span
+              className={`text-[11px] tabular-nums font-mono px-1.5 py-0.5 rounded transition-all select-none ${
+                query.length >= 350
+                  ? 'text-rose-400 bg-rose-500/15 border border-rose-500/30 font-bold'
+                  : 'text-amber-400 bg-amber-500/15 border border-amber-500/30 font-medium'
+              }`}
+              title={`${350 - query.length} caractères restants (limite : 350)`}
+            >
+              {350 - query.length}
+            </span>
+          )}
+
           <button
             type="button"
             onClick={handleSearchSubmit}
@@ -131,8 +159,8 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
         </div>
       </div>
 
-      {/* Ligne d'état discrète sous le champ de saisie : Quota restant & Compteur de caractères */}
-      <div className="flex items-center justify-between px-2 text-[11px] gap-2">
+      {/* Ligne d'état discrète sous le champ de saisie : Quota journalier uniquement */}
+      <div className="flex items-center px-2 text-[11px]">
         {/* Texte discret de quota journalier mis à jour en temps réel */}
         <div className="flex items-center gap-1.5 text-[11px] select-none text-left min-w-0">
           {user?.isPro ? (
@@ -144,13 +172,13 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
             <span className="text-zinc-400 flex items-center gap-1 truncate">
               <span className="text-amber-400">⚡</span>
               <span>
-                Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} IA gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
               </span>
             </span>
           ) : (
             <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
               <span>🔒</span>
-              <span>0 recherche restante aujourd'hui •</span>
+              <span>Quota gratuit atteint (0 recherche IA restante) •</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -164,20 +192,6 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
             </span>
           )}
         </div>
-
-        {/* Compteur de longueur max 350 */}
-        <span
-          className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors flex-shrink-0 ${
-            query.length >= 350
-              ? 'text-rose-400 font-bold'
-              : query.length >= 300
-              ? 'text-amber-400 font-medium'
-              : 'text-zinc-500 dark:text-zinc-400'
-          }`}
-          title={`${350 - query.length} caractères restants (max 350)`}
-        >
-          {query.length} / 350
-        </span>
       </div>
     </div>
   );

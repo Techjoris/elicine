@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
   Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { askCineIA, executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from './AdvancedSearchFilters';
 import { Movie } from '../../types';
@@ -34,8 +35,20 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
     showToast,
     setIsProModalOpen
   } = useApp();
+  const { t } = useTranslation();
 
   const [prompt, setPrompt] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [selectedMinRating, setSelectedMinRating] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
@@ -144,13 +157,27 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
                 }
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Décrivez une ambiance, une émotion..."
+              placeholder={isMobile ? (t.searchPlaceholderShort || "Ambiance, thème, acteur...") : (t.searchPlaceholder || "Décrivez une ambiance, un thème ou un acteur...")}
               className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm sm:text-base outline-none px-1 py-1.5 sm:py-2 min-w-0 font-normal"
               disabled={isLoading}
             />
 
-            {/* Explorer Action Button inside the pill */}
-            <div className="flex items-center flex-shrink-0">
+            {/* Explorer Action Button & Compteur de caractères intégré */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Compteur discret façon X/Twitter : masqué par défaut, apparaît à l'approche de la limite (>= 280) */}
+              {prompt.length >= 280 && (
+                <span
+                  className={`text-[11px] tabular-nums font-mono px-1.5 py-0.5 rounded transition-all select-none ${
+                    prompt.length >= 350
+                      ? 'text-rose-500 bg-rose-500/15 border border-rose-500/30 font-bold'
+                      : 'text-amber-500 bg-amber-500/15 border border-amber-500/30 font-medium'
+                  }`}
+                  title={`${350 - prompt.length} caractères restants (limite : 350)`}
+                >
+                  {350 - prompt.length}
+                </span>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleSearch()}
@@ -163,15 +190,15 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
                   <span>✨</span>
                 )}
                 <span className="hidden sm:inline">
-                  {isLoading ? 'Recherche...' : 'Explorer'}
+                  {isLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
                 </span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Ligne d'état discrète sous le champ de saisie : Quota restant & Compteur de caractères */}
-        <div className="flex items-center justify-between px-2 text-[11px] gap-2">
+        {/* Ligne d'état discrète sous le champ de saisie : Quota journalier uniquement */}
+        <div className="flex items-center px-2 text-[11px]">
           {/* Texte discret de quota journalier mis à jour en temps réel */}
           <div className="flex items-center gap-1.5 text-[11px] select-none text-left min-w-0">
             {user?.isPro ? (
@@ -183,13 +210,13 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               <span className="text-slate-500 dark:text-zinc-400 flex items-center gap-1 truncate">
                 <span className="text-amber-500">⚡</span>
                 <span>
-                  Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                  Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} IA gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
                 </span>
               </span>
             ) : (
               <span className="text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                 <span>🔒</span>
-                <span>0 recherche restante aujourd'hui •</span>
+                <span>Quota gratuit atteint (0 recherche IA restante) •</span>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -203,20 +230,6 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               </span>
             )}
           </div>
-
-          {/* Compteur de longueur max 350 */}
-          <span
-            className={`ml-auto text-[11px] tabular-nums font-mono select-none transition-colors flex-shrink-0 ${
-              prompt.length >= 350
-                ? 'text-rose-500 font-bold'
-                : prompt.length >= 300
-                ? 'text-amber-500 font-medium'
-                : 'text-slate-400 dark:text-zinc-500'
-            }`}
-            title={`${350 - prompt.length} caractères restants (max 350)`}
-          >
-            {prompt.length} / 350
-          </span>
         </div>
       </div>
 

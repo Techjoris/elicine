@@ -430,13 +430,27 @@ export const MovieDetailModal: React.FC = () => {
 
           {/* Genres & Rating */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 text-xs font-bold">
+            <div 
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 text-xs font-bold"
+              title={`Note moyenne spectateurs TMDB : ${selectedMovie.vote_average.toFixed(1)}/10`}
+            >
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{selectedMovie.vote_average.toFixed(1)} / 10</span>
               {selectedMovie.vote_count && (
                 <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({selectedMovie.vote_count.toLocaleString()} avis)</span>
               )}
             </div>
+
+            {/* Badge de correspondance IA si présent */}
+            {selectedMovie.match_rate !== undefined && selectedMovie.match_rate > 0 && (
+              <div 
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold"
+                title={`Indice de correspondance IA : ${selectedMovie.match_rate}% d'affinité avec votre recherche`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                <span>{selectedMovie.match_rate}% match IA</span>
+              </div>
+            )}
 
             {/* Badge Type Unique (Film ou Série) */}
             <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 text-xs font-semibold uppercase tracking-wider">

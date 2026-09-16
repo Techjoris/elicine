@@ -149,7 +149,7 @@ export const CatalogView: React.FC = () => {
             activeTab === 'popular'   ? '🔥 Films Populaires' :
             activeTab === 'top_rated' ? '⭐ Films les Mieux Notés' :
             activeTab === 'series'    ? '📺 Séries Populaires' :
-            `🔍 Résultats pour "${committedQuery}"`
+            `🔍 Résultats pour "${committedQuery.trim().replace(/^["'«»]+|["'«»]+$/g, '')}"`
           }
           subtitle={`${filtered.length} titres chargés${hasMore ? ' — défilez pour en voir plus' : ' — fin du catalogue'}`}
           movies={filtered}

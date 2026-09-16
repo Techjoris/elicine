@@ -379,7 +379,7 @@ async function enrichMoviesWithTmdbParallel(
     return {
       ...match,
       match_rate: assignedMatchRate,
-      ai_match_reason: item.reason || `Sélectionné pour "${searchQuery}"`
+      ai_match_reason: item.reason || `Sélectionné pour "${searchQuery.replace(/^["'«»]+|["'«»]+$/g, '').trim()}"`
     } as Movie;
   });
 

@@ -12,6 +12,7 @@ export type Language = 'fr' | 'en' | 'es' | 'de' | 'it';
 export interface TranslationSchema {
   tagline: string;
   searchPlaceholder: string;
+  searchPlaceholderShort: string;
   exploreBtn: string;
   featuredBadge: string;
   trailerBtn: string;
@@ -45,7 +46,8 @@ export interface TranslationSchema {
 const baseTranslations: Record<Language, TranslationSchema> = {
   fr: {
     tagline: "Le cinéma d'exception, élu pour vous.",
-    searchPlaceholder: "Décrivez une ambiance, une émotion...",
+    searchPlaceholder: "Décrivez une ambiance, un thème ou un acteur...",
+    searchPlaceholderShort: "Ambiance, thème, acteur...",
     exploreBtn: "Explorer",
     featuredBadge: "À L'AFFICHE",
     trailerBtn: "Bande-annonce",
@@ -76,7 +78,8 @@ const baseTranslations: Record<Language, TranslationSchema> = {
   },
   en: {
     tagline: "Exceptional cinema, handpicked for you.",
-    searchPlaceholder: "Describe a mood, an emotion...",
+    searchPlaceholder: "Describe a mood, theme or actor...",
+    searchPlaceholderShort: "Mood, theme, actor...",
     exploreBtn: "Explore",
     featuredBadge: "FEATURED",
     trailerBtn: "Trailer",
@@ -107,7 +110,8 @@ const baseTranslations: Record<Language, TranslationSchema> = {
   },
   es: {
     tagline: "El cine de excepción, elegido para ti.",
-    searchPlaceholder: "Describe un ambiente, una emoción...",
+    searchPlaceholder: "Describe un ambiente, tema o actor...",
+    searchPlaceholderShort: "Ambiente, tema, actor...",
     exploreBtn: "Explorar",
     featuredBadge: "EN CARTELERA",
     trailerBtn: "Tráiler",
@@ -138,7 +142,8 @@ const baseTranslations: Record<Language, TranslationSchema> = {
   },
   de: {
     tagline: "Außergewöhnliches Kino, handverlesen für Sie.",
-    searchPlaceholder: "Beschreiben Sie eine Stimmung, ein Gefühl...",
+    searchPlaceholder: "Beschreiben Sie eine Stimmung, ein Thema oder einen Schauspieler...",
+    searchPlaceholderShort: "Stimmung, Thema, Schauspieler...",
     exploreBtn: "Entdecken",
     featuredBadge: "HIGHLIGHT",
     trailerBtn: "Trailer",
@@ -169,7 +174,8 @@ const baseTranslations: Record<Language, TranslationSchema> = {
   },
   it: {
     tagline: "Il cinema d'eccezione, selezionato per te.",
-    searchPlaceholder: "Descrivi un'atmosfera, un'emozione...",
+    searchPlaceholder: "Descrivi un'atmosfera, un tema o un attore...",
+    searchPlaceholderShort: "Atmosfera, tema, attore...",
     exploreBtn: "Esplora",
     featuredBadge: "IN EVIDENZA",
     trailerBtn: "Trailer",
