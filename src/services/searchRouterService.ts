@@ -837,25 +837,29 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
   {
     id: 'guerre',
     triggers: [
-      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'front', 'tranchée', 'tranchées',
+      'guerre', 'guerres', 'soldat', 'soldats', 'seul soldat', 'point de vue d\'un soldat', 'point de vue d un soldat',
+      'point de vue d\'un seul soldat', 'combat', 'combats', 'front', 'tranchée', 'tranchées',
       'tranchee', 'tranchees', 'survie au combat', 'bataille', 'batailles', 'militaire', 'militaires',
       'armée', 'armee', 'débarquement', 'debarquement', 'seconde guerre', 'première guerre',
       'guerre mondiale', 'vietnam', 'sniper', 'tireur d\'élite', 'tireur d elite', 'peloton',
-      'régiment', 'regiment', 'bataillon', 'escadron'
+      'régiment', 'regiment', 'bataillon', 'escadron', 'guerrier', 'guerriers', 'champ de bataille',
+      'zone de guerre', 'ligne de front', 'assaut', 'offensive', 'fantassin', 'fantassins'
     ],
     primaryKeywords: [
-      'guerre', 'guerres', 'soldat', 'soldats', 'combat', 'combats', 'bataille', 'batailles',
+      'guerre', 'guerres', 'soldat', 'soldats', 'seul soldat', 'combat', 'combats', 'bataille', 'batailles',
       'front', 'tranchée', 'tranchées', 'tranchee', 'tranchees', 'militaire', 'militaires',
       'armée', 'armee', 'débarquement', 'debarquement', 'ennemi', 'ennemis', 'régiment',
       'bataillon', 'peloton', 'officier', 'capitaine', 'sergent', 'lieutenant', 'colonel',
-      'général', 'veteran', 'vétéran', 'tir', 'tireur', 'tireurs'
+      'général', 'veteran', 'vétéran', 'tir', 'tireur', 'tireurs', 'sniper', 'champ de bataille',
+      'ligne de front', 'belligérant', 'belligérants'
     ],
     secondaryKeywords: [
       'survie au combat', 'survie', 'survivre', 'mission', 'tireur d\'élite', 'sniper', 'fusil',
       'obus', 'bombardement', 'char', 'chars', 'tank', 'tanks', 'bunker', 'héroïque', 'heroique',
       'sacrifice', 'prisonnier de guerre', 'sauvetage', 'sauver', 'frères d\'armes', 'freres d armes',
       'assaut', 'offensive', 'conflit', 'artillerie', 'normandie', 'irak', 'afghanistan', 'pacifique',
-      'aviation', 'pilote de chasse', 'patrie'
+      'aviation', 'pilote de chasse', 'patrie', 'point de vue', 'seul', 'isolement', 'escouade',
+      'commando', 'incursion', 'bataillon'
     ],
     expectedGenres: [10752, 36, 28],
     conflictingGenres: [10749, 35, 10751, 10402],
@@ -866,12 +870,13 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
       'les sentiers de la gloire', 'paths of glory', 'lettres d\'iwo jima', 'letters from iwo jima',
       'enemy at the gates', 'stalingrad', 'black hawk down', 'la chute du faucon noir',
       'all quiet on the western front', 'à l\'ouest rien de nouveau', 'a l\'ouest rien de nouveau',
-      'le pont de la rivière kwaï', 'inglourious basterds', 'voyage au bout de l\'enfer', 'the deer hunter'
+      'le pont de la rivière kwaï', 'inglourious basterds', 'voyage au bout de l\'enfer', 'the deer hunter',
+      'glory', 'jarhead', 'le pianiste', 'the pianist', 'outlaw king', 'midway', 'da 5 bloods', 'das boot'
     ],
     disqualifiedTitles: [
-      'la la land', 'notting hill', 'coup de foudre à notting hill', 'pretty woman',
+      'titanic', 'titanic 2', 'la la land', 'notting hill', 'coup de foudre à notting hill', 'pretty woman',
       'clueless', 'le fabuleux destin d\'amélie poulain', 'bridget jones', 'le journal de bridget jones',
-      'mamma mia', 'love actually'
+      'mamma mia', 'love actually', 'dirty dancing'
     ]
   },
   {
@@ -907,7 +912,7 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
   {
     id: 'amnesie',
     triggers: ['amnésie', 'amnesie', 'amnésique', 'amnesique', 'perte de mémoire', 'perte de memoire'],
-    primaryKeywords: ['amnésie', 'amnesie', 'amnésique', 'amnesique', 'mémoire', 'memoire', 'souvenir', 'souvenirs', 'oubli', 'oublier'],
+    primaryKeywords: ['amnésie', 'amnesie', 'amnésique', 'amnesique', 'mémoire', 'memoire', 'souvenir', 'souvers', 'oubli', 'oublier'],
     secondaryKeywords: ['identité', 'identite', 'passé', 'passe', 'qui suis-je', 'inconnu', 'traumatisme', 'réveil'],
     expectedGenres: [9648, 53, 878],
     conflictingGenres: [10749, 35],
@@ -1099,7 +1104,7 @@ export function evaluateMovieNarrativeRelevance(
   const finalScore = Math.min(99, Math.max(25, Math.round(composite)));
   const matches = hasPerson
     ? (finalScore >= 75 && thematicScore >= 60)
-    : (finalScore >= 65 && thematicScore >= 50);
+    : (finalScore >= 58 && thematicScore >= 45);
 
   return {
     matches,

@@ -8,6 +8,7 @@ import {
   ExtractedCriteria,
   evaluateMovieNarrativeRelevance,
   evaluateStructuredMovieMatch,
+  findActiveThematicCluster,
   SPATIAL_SETTINGS_MAP,
   TONE_PATTERNS
 } from './searchRouterService';
@@ -1293,6 +1294,23 @@ export async function executeCinoraSearch(
     }
   }
 
+  // Récupération proactive des œuvres de référence pour le cluster thématique actif (ex: guerre, braquage, survie, twist)
+  let thematicCandidateWorks: Movie[] = [];
+  const activeThematicCluster = findActiveThematicCluster(criteria, cleanQuery);
+  if (activeThematicCluster && activeThematicCluster.archetypeTitles && activeThematicCluster.archetypeTitles.length > 0) {
+    for (const archTitle of activeThematicCluster.archetypeTitles.slice(0, 8)) {
+      try {
+        const rawArch = await resolveTitleToTmdb(archTitle, tmdbKey);
+        if (rawArch) {
+          const formatted = formatTmdbResults([rawArch])[0];
+          if (formatted && !thematicCandidateWorks.some(tw => tw.id === formatted.id)) {
+            thematicCandidateWorks.push(formatted);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   // ============================================================================
   // NIVEAU 1 : ANALYSE D'INTENTION & FILTRAGE STRUCTURÉ INTELLIGENT
   // ============================================================================
@@ -1307,10 +1325,12 @@ export async function executeCinoraSearch(
 
   // Priorité d'injection selon l'intention dominante
   const sourcePool = (criteria.spatialSettings.length > 0 && spatialCandidateWorks.length > 0)
-    ? [...spatialCandidateWorks, ...initialResolved, ...personCandidateWorks]
+    ? [...spatialCandidateWorks, ...initialResolved, ...thematicCandidateWorks, ...personCandidateWorks]
     : (criteria.hasNarrativeConstraint && personCandidateWorks.length > 0)
-      ? [...personCandidateWorks, ...initialResolved]
-      : [...initialResolved, ...personCandidateWorks];
+      ? [...personCandidateWorks, ...initialResolved, ...thematicCandidateWorks]
+      : (thematicCandidateWorks.length > 0)
+        ? [...initialResolved, ...thematicCandidateWorks, ...personCandidateWorks]
+        : [...initialResolved, ...personCandidateWorks];
 
   for (const m of sourcePool) {
     if (m?.id && !seenIds.has(m.id)) {
@@ -1366,7 +1386,7 @@ export async function executeCinoraSearch(
         });
       } else {
         // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
-        const minReserveScore = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 50;
+        const minReserveScore = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
         if (criteria.hasNarrativeConstraint && structuredEval.score < minReserveScore) {
           console.log(`[UnifiedAI] Disqualification narrative (${structuredEval.score}%) : "${movie.title}"`);
           continue;
@@ -1508,7 +1528,7 @@ export async function executeCinoraSearch(
       // Rejet si incohérence narrative formelle avec la requête
       if (criteria.hasNarrativeConstraint) {
         const evalRes = evaluateStructuredMovieMatch(m, criteria);
-        const minThreshold = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 50;
+        const minThreshold = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
         if (evalRes.score < minThreshold) {
           return false;
         }
