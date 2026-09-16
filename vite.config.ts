@@ -62,6 +62,34 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 1.5 ROUTE /api/search
+            if (pathname === '/api/search') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                process.env.TMDB_API_KEY = env.TMDB_API_KEY || env.VITE_TMDB_API_KEY || process.env.TMDB_API_KEY;
+                process.env.GROQ_API_KEY = env.GROQ_API_KEY || env.AI_API_KEY || process.env.GROQ_API_KEY;
+                process.env.QWEN_API_KEY = env.QWEN_API_KEY || process.env.QWEN_API_KEY;
+                process.env.DASHSCOPE_API_KEY = env.DASHSCOPE_API_KEY || env.VITE_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY;
+                process.env.DEEPSEEK_API_KEY = env.DEEPSEEK_API_KEY || env.VITE_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
+                process.env.GEMINI_API_KEY = env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+                process.env.SUPABASE_URL = env.SUPABASE_URL || env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+                process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+                const fileUrl = pathToFileURL(path.resolve('./api/search.js')).href;
+                const searchHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await searchHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 2. ROUTE /api/tmdb
             if (pathname === '/api/tmdb' && req.method === 'GET') {
               adaptResponse();

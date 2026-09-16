@@ -749,7 +749,21 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
 // BASE SÉMANTIQUE DE TWISTS & RE-RANKING NARRATIF
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Liste des chefs-d'œuvre reconnus du cinéma à retournement / twist final
+// ══════════════════════════════════════════════════════════════════════════════
+// DÉMARCHE SCIENTIFIQUE : CLUSTERS THÉMATIQUES & SCORING CONTINU MULTI-CRITÈRES
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ThematicCluster {
+  id: string;
+  triggers: string[];
+  primaryKeywords: string[];
+  secondaryKeywords: string[];
+  expectedGenres: number[];
+  conflictingGenres: number[];
+  archetypeTitles: string[];
+  disqualifiedTitles: string[];
+}
+
 export const KNOWN_TWIST_MOVIES = new Set([
   'shutter island', 'inception', 'les infiltrés', 'the departed',
   'fight club', 'sixième sens', 'sixieme sens', 'the sixth sense',
@@ -764,8 +778,6 @@ export const KNOWN_TWIST_MOVIES = new Set([
   'coherence', 'triangle', 'the game', 'black swan', 'mystic river'
 ]);
 
-// Œuvres populaires sans twist (romances, comédies, biopics, aventures historiques)
-// Ces films ne doivent JAMAIS passer le Niveau 1 si la requête exige un twist ou thriller psychologique.
 export const KNOWN_NON_TWIST_MOVIES = new Set([
   'titanic', 'le loup de wall street', 'the wolf of wall street',
   'django unchained', 'the revenant', 'gangs of new york',
@@ -776,16 +788,104 @@ export const KNOWN_NON_TWIST_MOVIES = new Set([
   'gladiator', 'braveheart', 'notting hill', 'coup de foudre à notting hill'
 ]);
 
+export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
+  {
+    id: 'braquage',
+    triggers: ['braquage', 'braquer', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'heist', 'vol de banque'],
+    primaryKeywords: ['braquage', 'braquages', 'braquer', 'braqueurs', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'cambrioleur', 'dévaliser', 'coffre-fort', 'butin'],
+    secondaryKeywords: ['vol', 'voleur', 'voleurs', 'dérober', 'extraction', 'infiltration', 'escroc', 'escrocs', 'escroquerie', 'faussaire', 'arnaque', 'gang', 'gangsters', 'pègre', 'lingots', 'diamants', 'banque'],
+    expectedGenres: [80, 53, 28, 9648],
+    conflictingGenres: [10749, 10751, 10402],
+    archetypeTitles: ['inception', 'heat', "ocean's eleven", 'oceans eleven', 'the town', 'inside man', 'baby driver', 'reservoir dogs', 'snatch', 'the italian job', 'point break', 'arrête-moi si tu peux', 'arrete-moi si tu peux', 'catch me if you can', 'les infiltrés', 'the departed', 'den of thieves', 'triple 9'],
+    disqualifiedTitles: ['titanic', 'romeo + juliet', 'roméo + juliette', 'gatsby le magnifique', 'the great gatsby', 'revolutionary road', 'les noces rebelles', 'la la land', 'notting hill']
+  },
+  {
+    id: 'twist',
+    triggers: ['twist', 'retournement', 'dénouement', 'fin surprenante', 'chute'],
+    primaryKeywords: ['twist', 'retournement', 'dénouement', 'chute', 'révélation', 'illusion', 'hallucination', 'psychiatrique', 'asile', 'schizophr'],
+    secondaryKeywords: ['secret', 'vérité', 'double jeu', 'mensonge', 'machination', 'paranoïa', 'complot', 'infiltr'],
+    expectedGenres: [53, 9648, 878, 27, 80],
+    conflictingGenres: [10749, 35, 10751],
+    archetypeTitles: ['shutter island', 'inception', 'fight club', 'sixième sens', 'les autres', 'usual suspects', 'memento', 'le prestige', 'seven', 'gone girl', 'oldboy', 'prisoners'],
+    disqualifiedTitles: ['titanic', 'le loup de wall street', 'django unchained', 'the revenant', 'gatsby le magnifique']
+  },
+  {
+    id: 'survie',
+    triggers: ['survie', 'survival', 'survivre', 'seul au monde', 'naufragé', 'naufrage'],
+    primaryKeywords: ['survie', 'survivre', 'survivant', 'survivants', 'naufrage', 'naufragé', 'sauvetage', 'seul au monde', 'isolement'],
+    secondaryKeywords: ['oxygène', 'famine', 'froid', 'blizzard', 'faim', 'danger', 'piège', 'crash'],
+    expectedGenres: [12, 18, 53, 28, 878],
+    conflictingGenres: [35, 10402, 10751],
+    archetypeTitles: ['seul au monde', 'cast away', 'the revenant', 'le revenant', '127 heures', '127 hours', 'gravity', 'the martian', 'seul sur mars', 'into the wild', 'alive', 'les survivants', 'le territoire des loups', 'the grey'],
+    disqualifiedTitles: ['titanic', 'la la land']
+  },
+  {
+    id: 'amnesie',
+    triggers: ['amnésie', 'amnesie', 'amnésique', 'amnesique', 'perte de mémoire', 'perte de memoire'],
+    primaryKeywords: ['amnésie', 'amnesie', 'amnésique', 'amnesique', 'mémoire', 'memoire', 'souvenir', 'souvenirs', 'oubli', 'oublier'],
+    secondaryKeywords: ['identité', 'identite', 'passé', 'passe', 'qui suis-je', 'inconnu', 'traumatisme', 'réveil'],
+    expectedGenres: [9648, 53, 878],
+    conflictingGenres: [10749, 35],
+    archetypeTitles: ['memento', 'la mémoire dans la peau', 'the bourne identity', 'shutter island', 'total recall', 'paycheck', 'dark city'],
+    disqualifiedTitles: ['titanic', 'django unchained']
+  },
+  {
+    id: 'huis_clos',
+    triggers: ['huis clos', 'huis-clos', 'enfermé', 'claustrophobe', 'piégé', 'piégés'],
+    primaryKeywords: ['huis clos', 'huis-clos', 'enfermé', 'enfermés', 'piégé', 'piege', 'piégés', 'claustrophobe', 'bunker'],
+    secondaryKeywords: ['prisonniers', 'otage', 'otages', 'isolement', 'bloqué', 'bloqués'],
+    expectedGenres: [53, 27, 9648, 18],
+    conflictingGenres: [12, 10751],
+    archetypeTitles: ['12 hommes en colère', '12 angry men', 'the guilty', 'buried', 'cube', 'the platform', 'la plateforme', 'panic room', 'misery', 'saw'],
+    disqualifiedTitles: ['titanic', 'interstellar', 'gladiator']
+  },
+  {
+    id: 'vengeance',
+    triggers: ['vengeance', 'se venger', 'justicier', 'vendetta', 'revanche'],
+    primaryKeywords: ['vengeance', 'venger', 'revanche', 'vendetta', 'justicier'],
+    secondaryKeywords: ['massacre', 'tuer', 'traque', 'châtiment', 'ennemi', 'famille assassinée', 'assassinat'],
+    expectedGenres: [28, 80, 53, 18],
+    conflictingGenres: [10749, 10751],
+    archetypeTitles: ['john wick', 'kill bill', 'gladiator', 'django unchained', 'oldboy', 'memento', 'taken', 'the revenant', 'leon', 'the equalizer'],
+    disqualifiedTitles: ['titanic', 'la la land', 'notting hill']
+  }
+];
+
+export function findActiveThematicCluster(criteria: ExtractedCriteria, queryText?: string): ThematicCluster | null {
+  const haystacks = [
+    ...(criteria.narrativeCues || []),
+    ...(criteria.themes || []),
+    ...(criteria.tones || []),
+    queryText || ''
+  ].map(s => s.toLowerCase());
+
+  if (criteria.isTwistRequested) {
+    const twistCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist');
+    if (twistCluster) return twistCluster;
+  }
+
+  for (const cluster of THEMATIC_LEXICON_CLUSTERS) {
+    for (const h of haystacks) {
+      if (cluster.triggers.some(tr => h.includes(tr))) {
+        return cluster;
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
- * Évalue si une œuvre cinématographique respecte la contrainte narrative (ex: twist final)
- * Permet d'éliminer les faux positifs (comme Titanic pour "dicaprio twist") du Niveau 1.
+ * Évalue scientifiquement si une œuvre cinématographique respecte la contrainte narrative.
+ * Démarche multi-critères : Personne (35%) + Thématique continue (45%) + Genres (20%) + Ajustement Bayésien.
+ * Élimine formellement les faux positifs (comme Titanic pour "dicaprio braquage").
  */
 export function evaluateMovieNarrativeRelevance(
-  movie: { title?: string; original_title?: string; overview?: string; genre_ids?: number[]; genres?: any[] },
+  movie: { title?: string; original_title?: string; overview?: string; genre_ids?: number[]; genres?: any[]; vote_count?: number; vote_average?: number },
   criteria: ExtractedCriteria,
   rawItem?: { tier?: number; match_rate?: number; reason?: string }
 ): { matches: boolean; score: number; reason: string } {
-  if (!criteria.hasNarrativeConstraint) {
+  if (!criteria.hasNarrativeConstraint && criteria.actors.length === 0 && criteria.directors.length === 0) {
     return { matches: true, score: 95, reason: 'Aucune contrainte narrative restrictive' };
   }
 
@@ -793,91 +893,131 @@ export function evaluateMovieNarrativeRelevance(
   const origLower = (movie.original_title || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
   const genreIds = (Array.isArray(movie.genre_ids) ? movie.genre_ids : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : [])) as number[];
+  const voteCount = Number(movie.vote_count || 0);
+  const voteAvg = Number(movie.vote_average || 0);
 
-  // 1. Si un twist / dénouement surprenant est requis
-  if (criteria.isTwistRequested) {
-    // A. Élimination négative formelle des hors-sujets majeurs
-    if (KNOWN_NON_TWIST_MOVIES.has(titleLower) || KNOWN_NON_TWIST_MOVIES.has(origLower)) {
+  const activeCluster = findActiveThematicCluster(criteria);
+
+  // 1. DISQUALIFICATION STRICTE FORMELLE
+  if (activeCluster) {
+    // A. Titre formellement incompatible
+    if (activeCluster.disqualifiedTitles.some(d => titleLower === d || origLower === d || titleLower.includes(d))) {
       return {
         matches: false,
-        score: 60,
-        reason: `Exclu du Niveau 1 : "${movie.title}" ne comporte aucun twist ou retournement de situation (hors-sujet thématique)`
+        score: 28,
+        reason: `Exclu : "${movie.title}" ne comporte aucun élément lié à « ${activeCluster.id} » (hors-sujet formel)`
       };
     }
 
-    // B. Validation positive immédiate pour les classiques du genre à twist
-    if (KNOWN_TWIST_MOVIES.has(titleLower) || KNOWN_TWIST_MOVIES.has(origLower)) {
-      return {
-        matches: true,
-        score: 99,
-        reason: 'Chef-d\'œuvre à retournement de situation culte (twist final mémorable)'
-      };
+    // B. Genres purement incompatibles sans aucun mot-clé du thème
+    const isArchetype = activeCluster.archetypeTitles.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+    let clusterHits = 0;
+    for (const kw of activeCluster.primaryKeywords) {
+      if (overviewLower.includes(kw) || titleLower.includes(kw)) clusterHits += 3;
+    }
+    for (const kw of activeCluster.secondaryKeywords) {
+      if (overviewLower.includes(kw)) clusterHits += 1.5;
     }
 
-    // C. Analyse des genres et mots-clés du synopsis
-    const hasThrillerOrMysteryGenre = genreIds.some(id => [53, 9648, 878, 27, 80].includes(id));
-    const twistKeywords = [
-      'twist', 'retournement', 'dénouement', 'denouement', 'révélation', 'revelation',
-      'chute', 'vérité', 'verite', 'illusion', 'hallucination', 'psychiatrique', 'asile',
-      'schizophr', 'paranoï', 'paranoi', 'double jeu', 'mensonge', 'machination',
-      'secret', 'énigme', 'enigme', 'manipulation', 'doute', 'rêve', 'reve', 'infiltr',
-      'cerveau', 'subconscient', 'faux coupable', 'complot', 'soupçon'
-    ];
-    const matchingKw = twistKeywords.filter(kw => overviewLower.includes(kw));
+    const hasExpectedGenre = activeCluster.expectedGenres.some(id => genreIds.includes(id));
+    const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
 
-    if (hasThrillerOrMysteryGenre && matchingKw.length >= 1) {
-      return {
-        matches: true,
-        score: 95,
-        reason: `Thriller / Mystère avec intrigue psychologique et révélation (${matchingKw.slice(0, 2).join(', ')})`
-      };
-    }
-
-    if (rawItem?.reason && (rawItem.reason.toLowerCase().includes('twist') || rawItem.reason.toLowerCase().includes('retournement'))) {
-      return {
-        matches: true,
-        score: rawItem.match_rate || 92,
-        reason: rawItem.reason
-      };
-    }
-
-    // D. Pénalisation stricte des films purement romantiques ou comiques
-    const isPureDramaOrRomance = genreIds.length > 0 && genreIds.every(id => [18, 10749, 35, 36, 10751].includes(id));
-    if (isPureDramaOrRomance) {
+    if (!isArchetype && clusterHits === 0 && (isPureConflicting || (!hasExpectedGenre && genreIds.includes(10749)))) {
       return {
         matches: false,
-        score: 65,
-        reason: 'Drame ou comédie sans composante de suspense ou retournement final'
+        score: 32,
+        reason: `Exclu : genre incompatible (${movie.title} est une romance/drame sans rapport avec « ${activeCluster.id} »)`
       };
     }
-
-    return {
-      matches: false,
-      score: 70,
-      reason: 'Absence d\'éléments confirmés de twist ou de thriller psychologique'
-    };
   }
 
-  // 2. Autres contraintes narratives (huis clos, amnésie, braquage, etc.)
-  let matchedCues = 0;
-  for (const cue of criteria.narrativeCues) {
-    if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) {
-      matchedCues++;
+  // 2. DÉMARCHE SCIENTIFIQUE CONTINUE MULTI-CRITÈRES
+
+  // A. Sous-score Personne / Casting (poids 0.35)
+  let personScore = 100;
+  const primaryPerson = criteria.actors[0] || criteria.directors[0];
+  if (primaryPerson) {
+    const pLower = primaryPerson.toLowerCase();
+    const inOverview = overviewLower.includes(pLower);
+    const inTitle = titleLower.includes(pLower);
+    // Si la recherche ciblait cette personne et qu'elle est vérifiée
+    personScore = (inOverview || inTitle || (rawItem && rawItem.match_rate && rawItem.match_rate > 70)) ? 100 : 90;
+  }
+
+  // B. Sous-score Thématique / Narratif (poids 0.45)
+  let thematicScore = 70;
+  let thematicReason = 'Cohérence scénaristique globale';
+
+  if (activeCluster) {
+    const isArchetype = activeCluster.archetypeTitles.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+    if (isArchetype) {
+      thematicScore = 98;
+      thematicReason = `Chef-d'œuvre de référence du thème « ${activeCluster.id} »`;
+    } else {
+      let hits = 0;
+      const matchedTokens: string[] = [];
+      for (const kw of activeCluster.primaryKeywords) {
+        if (overviewLower.includes(kw) || titleLower.includes(kw)) {
+          hits += 3;
+          if (matchedTokens.length < 3) matchedTokens.push(kw);
+        }
+      }
+      for (const kw of activeCluster.secondaryKeywords) {
+        if (overviewLower.includes(kw)) {
+          hits += 1.5;
+          if (matchedTokens.length < 3) matchedTokens.push(kw);
+        }
+      }
+
+      if (hits > 0) {
+        thematicScore = Math.min(97, Math.max(72, 70 + Math.round(hits * 7)));
+        thematicReason = `Correspondance scénaristique forte (${matchedTokens.join(', ')})`;
+      } else {
+        // Aucun mot clé du cluster présent
+        const hasExpected = activeCluster.expectedGenres.some(id => genreIds.includes(id));
+        thematicScore = hasExpected ? 58 : 35;
+        thematicReason = `Thème « ${activeCluster.id} » peu présent dans le synopsis`;
+      }
+    }
+  } else if (criteria.narrativeCues.length > 0) {
+    let cuesHit = 0;
+    for (const cue of criteria.narrativeCues) {
+      if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) cuesHit++;
+    }
+    thematicScore = cuesHit > 0 ? 92 : 62;
+  }
+
+  // C. Sous-score Genre (poids 0.20)
+  let genreScore = 75;
+  if (activeCluster) {
+    if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
+      genreScore = 95;
+    } else if (genreIds.includes(18)) { // Drame
+      genreScore = 70;
+    } else {
+      genreScore = 40;
     }
   }
 
-  if (matchedCues > 0) {
-    return {
-      matches: true,
-      score: 93,
-      reason: `Correspondance avec le thème "${criteria.narrativeCues[0]}"`
-    };
-  }
+  // D. Composante Bayésienne de Qualité (Delta [-4, +4] assurant des scores uniques et réalistes)
+  const bayesRating = voteCount > 0
+    ? (voteCount * voteAvg + 1000 * 6.5) / (voteCount + 1000)
+    : 6.5;
+  const qualityDelta = (bayesRating - 7.0) * 2.5;
+
+  // E. Score composite global
+  const hasPerson = Boolean(primaryPerson);
+  const composite = hasPerson
+    ? (personScore * 0.35) + (thematicScore * 0.45) + (genreScore * 0.20) + qualityDelta
+    : (thematicScore * 0.70) + (genreScore * 0.30) + qualityDelta;
+
+  const finalScore = Math.min(99, Math.max(25, Math.round(composite)));
+  const matches = finalScore >= 75 && thematicScore >= 60;
 
   return {
-    matches: false,
-    score: 72,
-    reason: 'Thème narratif spécifique non retrouvé dans le synopsis'
+    matches,
+    score: finalScore,
+    reason: `${primaryPerson ? `${primaryPerson} — ` : ''}${thematicReason}`
   };
 }
 

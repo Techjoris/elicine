@@ -1,7 +1,7 @@
 import { Movie, StreamingProvider } from '../types';
 import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
 import { getCachedCountryCode, MOBILE_MONEY_COUNTRIES } from './geoService';
-import { KNOWN_TWIST_MOVIES, KNOWN_NON_TWIST_MOVIES } from './searchRouterService';
+import { KNOWN_TWIST_MOVIES, KNOWN_NON_TWIST_MOVIES, THEMATIC_LEXICON_CLUSTERS } from './searchRouterService';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -796,28 +796,53 @@ export async function searchPersonAndGetWorks(
             const ovLower = (m.overview || '').toLowerCase();
             const genreIds = (Array.isArray(m.genre_ids) ? m.genre_ids : []) as number[];
 
+            // 1. Détection du cluster thématique actif
+            const cues = [
+              ...(thematicFilter?.narrativeCues || []),
+              ...(thematicFilter?.themes || [])
+            ].map(c => c.toLowerCase());
+
+            let matchedCluster = null;
             if (thematicFilter?.isTwistRequested) {
-              if (KNOWN_TWIST_MOVIES.has(tLower) || KNOWN_TWIST_MOVIES.has(oLower)) {
-                score += 10000;
-              } else if (KNOWN_NON_TWIST_MOVIES.has(tLower) || KNOWN_NON_TWIST_MOVIES.has(oLower)) {
-                score -= 10000;
+              matchedCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist');
+            } else if (cues.length > 0) {
+              matchedCluster = THEMATIC_LEXICON_CLUSTERS.find(c =>
+                c.triggers.some(tr => cues.some(cue => cue.includes(tr) || tr.includes(cue)))
+              );
+            }
+
+            if (matchedCluster) {
+              const isArchetype = matchedCluster.archetypeTitles.some(a => tLower === a || oLower === a || tLower.includes(a));
+              const isDisqualified = matchedCluster.disqualifiedTitles.some(d => tLower === d || oLower === d || tLower.includes(d));
+
+              if (isDisqualified) {
+                score -= 50000; // Élimination totale
+              } else if (isArchetype) {
+                score += 25000; // Priorité absolue aux chefs-d'œuvre du thème
               } else {
-                // Bonus pour les genres propices aux twists (Thriller, Mystère, SF, Horreur)
-                if (genreIds.some(id => [53, 9648, 878, 27].includes(id))) {
-                  score += 500;
+                let clusterHits = 0;
+                for (const kw of matchedCluster.primaryKeywords) {
+                  if (ovLower.includes(kw) || tLower.includes(kw)) clusterHits += 3;
                 }
-                if (['twist', 'dénouement', 'retournement', 'vérité', 'illusion', 'asile', 'psychiatrique', 'schizophr', 'secret'].some(k => ovLower.includes(k))) {
-                  score += 350;
+                for (const kw of matchedCluster.secondaryKeywords) {
+                  if (ovLower.includes(kw)) clusterHits += 1.5;
                 }
-                // Pénalisation des comédies/romances pures si on cherche un twist
-                if (genreIds.length > 0 && genreIds.every(id => [18, 10749, 35, 36].includes(id))) {
-                  score -= 500;
+
+                if (clusterHits > 0) {
+                  score += 2000 + clusterHits * 800;
+                }
+
+                // Cohérence de genre
+                if (matchedCluster.expectedGenres.some(id => genreIds.includes(id))) {
+                  score += 1200;
+                } else if (genreIds.length > 0 && genreIds.every(id => matchedCluster.conflictingGenres.includes(id)) && clusterHits === 0) {
+                  score -= 20000; // Pénalisation sévère si genre conflictuel sans aucun mot-clé
                 }
               }
-            } else if (thematicFilter?.narrativeCues && Array.isArray(thematicFilter.narrativeCues) && thematicFilter.narrativeCues.length > 0) {
-              for (const cue of thematicFilter.narrativeCues) {
-                if (ovLower.includes(cue.toLowerCase()) || tLower.includes(cue.toLowerCase())) {
-                  score += 400;
+            } else if (cues.length > 0) {
+              for (const cue of cues) {
+                if (ovLower.includes(cue) || tLower.includes(cue)) {
+                  score += 500;
                 }
               }
             }

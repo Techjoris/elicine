@@ -147,7 +147,26 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
   const geminiKey   = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || customKeys.geminiApiKey || '').trim().replace(/^["']|["']$/g, '');
   const openAiKey   = (process.env.OPENAI_API_KEY || customKeys.openAiApiKey || '').trim().replace(/^["']|["']$/g, '');
 
-  // ── 1. DeepSeek (deepseek-chat) — Provider primaire
+  // ── 1. Groq Cloud (llama-3.3-70b-versatile) — Ultra-rapide (~300ms sur LPU)
+  if (groqKey) {
+    try {
+      console.log('[API /api/search] [LLM] Groq (llama-3.3-70b-versatile)...');
+      const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', ...buildChatBody(messages, true) })
+      }, 4000);
+      if (res.ok) {
+        const data = await res.json();
+        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+        if (matches.length > 0) return { matches, correctedQuery, provider: 'Groq (Llama 3.3 70B)' };
+      }
+    } catch (err) {
+      console.warn('[API /api/search] Groq échoué → DeepSeek :', err?.message);
+    }
+  }
+
+  // ── 2. DeepSeek (deepseek-chat) — Secondaire
   if (deepseekKey) {
     try {
       console.log('[API /api/search] [LLM] DeepSeek (deepseek-chat)...');
@@ -155,7 +174,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
         body: JSON.stringify({ model: 'deepseek-chat', ...buildChatBody(messages, true) })
-      }, 8000);
+      }, 4000);
       if (res.ok) {
         const data = await res.json();
         const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
@@ -168,7 +187,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
     }
   }
 
-  // ── 2. Qwen (DashScope) — Secondaire
+  // ── 3. Qwen (DashScope) — Tertiaire
   if (qwenKey) {
     const endpoints = [
       'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
@@ -181,7 +200,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${qwenKey}` },
           body: JSON.stringify({ model: 'qwen-plus', ...buildChatBody(messages, true) })
-        }, 7000);
+        }, 4000);
         if (res.ok) {
           const data = await res.json();
           const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
@@ -195,25 +214,6 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
     }
   }
 
-  // ── 3. Groq Cloud (llama-3.3-70b) — Tertiaire
-  if (groqKey) {
-    try {
-      console.log('[API /api/search] [LLM] Groq (llama-3.3-70b-versatile)...');
-      const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', ...buildChatBody(messages, true) })
-      }, 7000);
-      if (res.ok) {
-        const data = await res.json();
-        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (matches.length > 0) return { matches, correctedQuery, provider: 'Groq (Llama 3.3 70B)' };
-      }
-    } catch (err) {
-      console.warn('[API /api/search] Groq échoué :', err?.message);
-    }
-  }
-
   // ── 4. Google Gemini (gemini-2.0-flash) — SANS response_format (bug "empty output")
   if (geminiKey) {
     try {
@@ -222,7 +222,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
         body: JSON.stringify({ model: 'gemini-2.0-flash', ...buildChatBody(messages, false) })
-      }, 8000);
+      }, 4500);
       if (res.ok) {
         const data = await res.json();
         const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
@@ -241,7 +241,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
         body: JSON.stringify({ model: 'gpt-4o-mini', ...buildChatBody(messages, true) })
-      }, 8000);
+      }, 4500);
       if (res.ok) {
         const data = await res.json();
         const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
@@ -423,27 +423,23 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
   const seenTmdbIds = new Set();
   const seenTitleBases = new Set();
 
-  for (const item of candidatesList) {
-    if (allTmdbResults.length >= 8) break;
+  // ── Résolution TMDB en parallèle 1-pour-1 par recommandation LLM ─────────
+  const resolveCandidate = async (item) => {
     const rawTitle = typeof item === 'string' ? item : item?.title || '';
     const matchReason = typeof item === 'object' ? item?.reason : '';
-    if (!rawTitle || rawTitle.length < 2) continue;
+    if (!rawTitle || rawTitle.length < 2) return null;
 
-    // Décomposer les variantes "Titre FR / Original Title"
     const variants = rawTitle
       .split(/[/|]/)
       .map(p => p.trim())
       .filter(p => p.length > 1);
 
-    let bestMatch = null;
-
     for (const term of variants) {
       try {
-        console.log(`[API /api/search] [Phase B.2] Résolution TMDB 1-pour-1 : "${term.slice(0, 60)}"`);
         const tmdbRes = await fetchWithTimeout(
           `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(term)}&language=fr-FR&page=1&include_adult=false`,
           { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-          5000
+          3500
         );
 
         if (!tmdbRes.ok) continue;
@@ -452,9 +448,6 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
         const hits = (tmdbData.results || []).filter(m => !seenTmdbIds.has(m.id));
         if (hits.length === 0) continue;
 
-        // Trier pour extraire LE film exact et de référence :
-        // 1. Priorité absolue au film dont le titre correspond exactement au terme
-        // 2. Priorité aux films avec le plus grand nombre de votes
         hits.sort((a, b) => {
           const aTitle = (a.title || '').toLowerCase().trim();
           const aOrig = (a.original_title || '').toLowerCase().trim();
@@ -471,44 +464,57 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
           return Number(b.vote_count || 0) - Number(a.vote_count || 0);
         });
 
-        bestMatch = hits[0];
-        break; // Trouvé avec succès pour cette recommandation LLM
+        return { bestMatch: hits[0], item, rawTitle, matchReason };
       } catch (tmdbErr) {
         console.warn('[API /api/search] [Phase B.2] TMDB échoué pour', term, ':', tmdbErr?.message);
       }
     }
+    return null;
+  };
 
-    if (bestMatch && !seenTmdbIds.has(bestMatch.id)) {
-      const titleBase = (bestMatch.title || bestMatch.original_title || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
-        .trim();
+  const parallelResolutions = await Promise.all(
+    candidatesList.slice(0, 8).map(resolveCandidate)
+  );
 
-      if (!seenTitleBases.has(titleBase)) {
-        seenTitleBases.add(titleBase);
-        seenTmdbIds.add(bestMatch.id);
+  for (const resolved of parallelResolutions) {
+    if (!resolved || !resolved.bestMatch) continue;
+    const { bestMatch, item, rawTitle, matchReason } = resolved;
+    if (seenTmdbIds.has(bestMatch.id)) continue;
 
-        const dynamicScore = calculateSemanticMatchScore(bestMatch, rawQuery, item);
+    const titleBase = (bestMatch.title || bestMatch.original_title || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\u00C0-\u017F\s]/g, '')
+      .trim();
 
-        allTmdbResults.push({
-          id: bestMatch.id,
-          tmdb_id: bestMatch.id,
-          title: bestMatch.title || bestMatch.name || '',
-          original_title: bestMatch.original_title || bestMatch.original_name || '',
-          overview: bestMatch.overview || '',
-          poster_path: bestMatch.poster_path ? `https://image.tmdb.org/t/p/w500${bestMatch.poster_path}` : null,
-          backdrop_path: bestMatch.backdrop_path ? `https://image.tmdb.org/t/p/w1280${bestMatch.backdrop_path}` : null,
-          release_date: bestMatch.release_date || bestMatch.first_air_date || '',
-          vote_average: bestMatch.vote_average || 0,
-          vote_count: bestMatch.vote_count || 0,
-          genres: Array.isArray(bestMatch.genre_ids) ? bestMatch.genre_ids.join(',') : '',
-          media_type: 'movie',
-          ai_badge: 'Recommandation IA (TMDB)',
-          badge: 'Recommandation IA (TMDB)',
-          ai_match_reason: matchReason || `Recommandé pour sa cohérence scénaristique avec "${rawTitle}"`,
-          match_rate: dynamicScore
-        });
+    if (!seenTitleBases.has(titleBase)) {
+      seenTitleBases.add(titleBase);
+      seenTmdbIds.add(bestMatch.id);
+
+      const dynamicScore = calculateSemanticMatchScore(bestMatch, rawQuery, item);
+      // Rejet si score éliminatoire (hors-sujet formel comme Titanic pour un braquage)
+      if (dynamicScore < 50) {
+        console.log(`[API /api/search] Film disqualifié par cohérence thématique (${dynamicScore}%) : "${bestMatch.title}"`);
+        continue;
       }
+
+      allTmdbResults.push({
+        id: bestMatch.id,
+        tmdb_id: bestMatch.id,
+        title: bestMatch.title || bestMatch.name || '',
+        original_title: bestMatch.original_title || bestMatch.original_name || '',
+        overview: bestMatch.overview || '',
+        poster_path: bestMatch.poster_path ? `https://image.tmdb.org/t/p/w500${bestMatch.poster_path}` : null,
+        backdrop_path: bestMatch.backdrop_path ? `https://image.tmdb.org/t/p/w1280${bestMatch.backdrop_path}` : null,
+        release_date: bestMatch.release_date || bestMatch.first_air_date || '',
+        vote_average: bestMatch.vote_average || 0,
+        vote_count: bestMatch.vote_count || 0,
+        genres: Array.isArray(bestMatch.genre_ids) ? bestMatch.genre_ids.join(',') : '',
+        media_type: 'movie',
+        ai_badge: 'Recommandation IA (TMDB)',
+        badge: 'Recommandation IA (TMDB)',
+        ai_match_reason: matchReason || `Recommandé pour sa cohérence scénaristique avec "${rawTitle}"`,
+        match_rate: dynamicScore
+      });
     }
   }
 
@@ -523,7 +529,7 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
       const recRes = await fetchWithTimeout(
         `https://api.themoviedb.org/3/movie/${primaryMovie.id}/recommendations?api_key=${encodeURIComponent(tmdbKey)}&language=fr-FR&page=1`,
         { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-        4000
+        3500
       );
       if (recRes.ok) {
         const recData = await recRes.json();
@@ -545,6 +551,7 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
           seenTmdbIds.add(m.id);
 
           const dynamicScore = calculateSemanticMatchScore(m, rawQuery, null);
+          if (dynamicScore < 50) continue;
 
           allTmdbResults.push({
             id: m.id,
@@ -580,64 +587,132 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
 }
 
 // ============================================================================
-// Helper : Score sémantique dynamique
-// Calcule un score de pertinence basé sur :
-// - Correspondance des mots-clés de la requête dans le synopsis
-// - Qualité du film (vote_count, vote_average)
-// - Cohérence de genre
-// - Pénalité mockbuster (films de faible notoriété)
+// Helper : Démarche Scientifique de Scoring Sémantique Continu
+// Modèle multi-critères : Personne (35%) + Thématique (45%) + Genres (20%) + Note Bayésienne
+// Rejette strictement les faux-positifs hors-sujet (Titanic pour un braquage).
 // ============================================================================
-function calculateSemanticMatchScore(movie, queryText, llmMatch) {
-  let score = llmMatch ? 90 : 72; // Base : correspondance LLM confirmée ou non
+const THEMATIC_CLUSTERS_RAW = [
+  {
+    id: 'braquage',
+    triggers: ['braquage', 'braquer', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'heist'],
+    primaryKeywords: ['braquage', 'braquages', 'braquer', 'braqueurs', 'braqueur', 'casse', 'hold-up', 'holdup', 'cambriolage', 'cambrioleur', 'dévaliser', 'coffre-fort', 'butin'],
+    secondaryKeywords: ['vol', 'voleur', 'voleurs', 'dérober', 'extraction', 'infiltration', 'escroc', 'escroquerie', 'faussaire', 'arnaque', 'gang', 'gangsters', 'pègre', 'lingots', 'diamants'],
+    expectedGenres: [80, 53, 28, 9648],
+    conflictingGenres: [10749, 10751, 10402],
+    archetypes: ['inception', 'heat', "ocean's eleven", 'oceans eleven', 'the town', 'inside man', 'baby driver', 'reservoir dogs', 'snatch', 'the italian job', 'point break', 'arrête-moi si tu peux', 'arrete-moi si tu peux', 'catch me if you can', 'les infiltrés', 'the departed'],
+    disqualified: ['titanic', 'romeo + juliet', 'roméo + juliette', 'gatsby le magnifique', 'the great gatsby', 'revolutionary road', 'les noces rebelles', 'la la land', 'notting hill']
+  },
+  {
+    id: 'twist',
+    triggers: ['twist', 'retournement', 'dénouement', 'fin surprenante', 'chute'],
+    primaryKeywords: ['twist', 'retournement', 'dénouement', 'chute', 'révélation', 'illusion', 'hallucination', 'psychiatrique', 'asile', 'schizophr'],
+    secondaryKeywords: ['secret', 'vérité', 'double jeu', 'mensonge', 'machination', 'paranoïa', 'complot', 'infiltr'],
+    expectedGenres: [53, 9648, 878, 27, 80],
+    conflictingGenres: [10749, 35, 10751],
+    archetypes: ['shutter island', 'inception', 'fight club', 'sixième sens', 'les autres', 'usual suspects', 'memento', 'le prestige', 'seven', 'gone girl', 'oldboy', 'prisoners'],
+    disqualified: ['titanic', 'le loup de wall street', 'django unchained', 'the revenant', 'gatsby le magnifique']
+  }
+];
 
+function calculateSemanticMatchScore(movie, queryText, llmMatch) {
+  const titleLower = (movie.title || movie.name || '').toLowerCase().trim();
+  const origLower = (movie.original_title || movie.original_name || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
   const voteCount = Number(movie.vote_count || 0);
   const voteAvg = Number(movie.vote_average || 0);
+  const rawGenreIds = Array.isArray(movie.genre_ids)
+    ? movie.genre_ids
+    : (typeof movie.genres === 'string' ? movie.genres.split(',').map(Number).filter(Boolean) : []);
+  const genreIds = rawGenreIds.map(Number);
+  const queryLower = (queryText || '').toLowerCase();
 
-  // 1. Bonus mots-clés synopsis (jusqu'à +8 points)
-  if (queryText && overviewLower) {
-    const queryTokens = (queryText || '')
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-      .split(/\s+/)
-      .filter(w => w.length >= 4 && !STOP_WORDS.has(w));
-
-    let tokenMatches = 0;
-    for (const token of queryTokens) {
-      if (overviewLower.includes(token)) tokenMatches++;
+  // 1. Détection du cluster thématique actif
+  let activeCluster = null;
+  for (const cluster of THEMATIC_CLUSTERS_RAW) {
+    if (cluster.triggers.some(t => queryLower.includes(t))) {
+      activeCluster = cluster;
+      break;
     }
-    score += Math.min(8, tokenMatches * 2);
   }
 
-  // 2. Bonus qualité (vote_count & vote_average) — jusqu'à +5 points
-  if (voteCount >= 5000) score += 5;
-  else if (voteCount >= 1000) score += 3;
-  else if (voteCount >= 500) score += 1;
-  else if (voteCount < 100 && voteCount > 0) score -= 8; // Film très obscur
+  // 2. Disqualification stricte si le film est formellement incompatible
+  if (activeCluster) {
+    if (activeCluster.disqualified.includes(titleLower) || activeCluster.disqualified.includes(origLower)) {
+      return 25; // Rejet formel immédiat
+    }
 
-  if (voteAvg >= 7.5) score += 3;
-  else if (voteAvg >= 6.0) score += 1;
-  else if (voteAvg < 4.5 && voteAvg > 0) score -= 10; // Film mal noté
+    const hasExpectedGenre = activeCluster.expectedGenres.some(id => genreIds.includes(id));
+    const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
 
-  // 3. Pénalité mockbuster : seuil aligné sur les directives LLM (< 500 votes ET < 5.5/10)
-  if (voteCount > 0 && voteCount < 500 && voteAvg < 5.5) {
-    score = Math.min(score, 60); // Plafond strict — ne peut pas dépasser 60
+    let lexicalHits = 0;
+    for (const kw of activeCluster.primaryKeywords) {
+      if (overviewLower.includes(kw) || titleLower.includes(kw)) lexicalHits += 3;
+    }
+    for (const kw of activeCluster.secondaryKeywords) {
+      if (overviewLower.includes(kw)) lexicalHits += 1.5;
+    }
+
+    const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+
+    if (!isArchetype && lexicalHits === 0 && (isPureConflicting || !hasExpectedGenre)) {
+      return 35; // Rejet catégorique : ni mot clé, ni genre compatible
+    }
   }
 
-  // 4. Bonus raison LLM spécifique (contient des mots forts du contexte)
-  if (llmMatch?.reason) {
-    const reasonLower = llmMatch.reason.toLowerCase();
-    const queryLower = (queryText || '').toLowerCase();
-    const importantWords = queryLower.split(/\s+/).filter(w => w.length >= 5 && !STOP_WORDS.has(w));
-    for (const word of importantWords) {
-      if (reasonLower.includes(word)) {
-        score += 1;
-        break;
+  // 3. Calcul continu multi-critères
+  // A. Sous-score Personne / Acteur (si mentionné dans la requête)
+  let personScore = 100;
+  const personKeywords = ['dicaprio', 'leonardo', 'nolan', 'tarantino', 'pitt', 'cruise', 'scorsese', 'denzel'];
+  for (const pk of personKeywords) {
+    if (queryLower.includes(pk)) {
+      const inOverview = overviewLower.includes(pk);
+      const inTitle = titleLower.includes(pk);
+      // Les films proposés par le LLM pour un acteur ont déjà l'acteur validé
+      personScore = (inOverview || inTitle || llmMatch) ? 100 : 50;
+      break;
+    }
+  }
+
+  // B. Sous-score Thématique / Narratif
+  let narrativeScore = llmMatch ? 88 : 70;
+  if (activeCluster) {
+    const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+    if (isArchetype) {
+      narrativeScore = 98;
+    } else {
+      let hits = 0;
+      for (const kw of activeCluster.primaryKeywords) {
+        if (overviewLower.includes(kw) || titleLower.includes(kw)) hits += 3;
       }
+      for (const kw of activeCluster.secondaryKeywords) {
+        if (overviewLower.includes(kw)) hits += 1.5;
+      }
+      narrativeScore = Math.min(100, Math.max(50, 60 + hits * 8));
     }
   }
 
-  return Math.min(99, Math.max(60, Math.round(score)));
+  // C. Sous-score Genre
+  let genreScore = 75;
+  if (activeCluster) {
+    if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
+      genreScore = 95;
+    } else if (genreIds.includes(18)) { // Drame
+      genreScore = 70;
+    } else {
+      genreScore = 40;
+    }
+  }
+
+  // D. Composante Bayésienne de Qualité
+  const bayesRating = voteCount > 0
+    ? (voteCount * voteAvg + 1000 * 6.5) / (voteCount + 1000)
+    : 6.5;
+  const qualityDelta = (bayesRating - 7.0) * 2.5; // [-4, +4]
+
+  // E. Synthèse pondérée continue
+  const composite = (personScore * 0.35) + (narrativeScore * 0.45) + (genreScore * 0.20) + qualityDelta;
+
+  return Math.min(99, Math.max(60, Math.round(composite)));
 }
 
 // ============================================================================

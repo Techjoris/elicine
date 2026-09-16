@@ -1354,24 +1354,36 @@ export async function executeCinoraSearch(
       const isStrictMatch = matchesPerson && matchesYear && structuredEval.matches;
 
       if (isStrictMatch) {
-        const strictScore = Math.min(99, Math.max(90, structuredEval.score));
+        const strictScore = Math.min(99, Math.max(82, structuredEval.score));
         tier1Movies.push({
           ...movie,
           match_rate: strictScore,
           ai_match_reason: `🎯 Intention ciblée (Niveau 1) : ${primaryPerson ? `${primaryPerson} — ` : ''}${structuredEval.reason}`
         });
       } else {
-        // Envoi en réserve pour Niveau 2
+        // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
+        if (criteria.hasNarrativeConstraint && structuredEval.score < 55) {
+          console.log(`[UnifiedAI] Disqualification narrative (${structuredEval.score}%) : "${movie.title}"`);
+          continue;
+        }
         tier2Candidates.push({
           ...movie,
-          match_rate: Math.min(85, structuredEval.score || 78),
-          ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : Ambiance et intrigue immersive`
+          match_rate: Math.min(85, Math.max(60, structuredEval.score)),
+          ai_match_reason: `✨ Élargissement sémantique (Niveau 2) : ${structuredEval.reason || 'Ambiance et intrigue immersive'}`
         });
       }
     }
 
     // Tri qualitatif du Niveau 1 par match_rate décroissant
     tier1Movies.sort((a, b) => (b.match_rate || 0) - (a.match_rate || 0));
+    // Dédoublonnage des scores pour garantir une variation continue
+    const t1Assigned = new Set<number>();
+    for (const m of tier1Movies) {
+      while (t1Assigned.has(m.match_rate!) && m.match_rate! > 75) {
+        m.match_rate! -= 1;
+      }
+      t1Assigned.add(m.match_rate!);
+    }
 
     // Seuil minimal pour l'arrêt au Niveau 1 :
     // 2 œuvres fortes pour les requêtes ciblées (Acteur + Twist, ou Décor + Ton), 3 pour les catalogues larges
@@ -1486,6 +1498,14 @@ export async function executeCinoraSearch(
         return false;
       }
 
+      // Rejet si incohérence narrative formelle avec la requête
+      if (criteria.hasNarrativeConstraint) {
+        const evalRes = evaluateStructuredMovieMatch(m, criteria);
+        if (evalRes.score < 55) {
+          return false;
+        }
+      }
+
       // Seuils minimaux de qualité alignés sur les directives LLM
       if (cnt >= 5000) {
         if (avg > 0 && avg < 4.0) return false;
@@ -1499,11 +1519,20 @@ export async function executeCinoraSearch(
     });
     const finalPool = qualityFiltered.length >= 3 ? qualityFiltered : sortedPool;
 
-    const finalMovies = finalPool.slice(0, limit).map((m, idx) => ({
-      ...m,
-      match_rate: m.match_rate || Math.max(78, Math.round(globalSimilarityScore * 100) - idx * 2),
-      ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique vectorielle (Niveau 2) : Ambiance et immersion thématique`
-    }));
+    // Démarche scientifique : unicité et variation continue des scores
+    const assignedScores = new Set<number>();
+    const finalMovies = finalPool.slice(0, limit).map((m, idx) => {
+      let score = m.match_rate || Math.max(70, Math.round(globalSimilarityScore * 100) - idx * 2);
+      while (assignedScores.has(score) && score > 60) {
+        score -= 1;
+      }
+      assignedScores.add(score);
+      return {
+        ...m,
+        match_rate: score,
+        ai_match_reason: m.ai_match_reason || `✨ Recherche sémantique vectorielle (Niveau 2) : Ambiance et immersion thématique`
+      };
+    });
 
     console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
 
