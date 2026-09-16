@@ -2,7 +2,13 @@
  * Endpoint API Serverless : /api/activate-pro
  * Active instantanément le Pass Pro d'un utilisateur dans Supabase et déclenche l'envoi de l'e-mail Resend
  */
-import { activateUserPassPro, supabaseAdmin, isUuid } from './_pro-activation.js';
+import { 
+  activateUserPassPro, 
+  supabaseAdmin, 
+  isUuid,
+  downgradeExpiredSubscriptions,
+  processRenewalReminders 
+} from './_pro-activation.js';
 
 export default async function handler(req, res) {
   // En-têtes CORS universels
@@ -41,6 +47,61 @@ export default async function handler(req, res) {
     req.query?.user_id || 
     ''
   ).trim();
+
+  // ─── ACTION : Exécution de la tâche planifiée (Cron Subscriptions & Relances) ───
+  if (action === 'cron' || action === 'cron-subscriptions') {
+    const authHeader = req.headers['authorization'] || '';
+    const cronSecret = process.env.CRON_SECRET || '';
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.headers['x-cron-secret'] !== cronSecret) {
+      console.warn('[Cron Subscriptions] ⚠️ Requête sans secret strict.');
+    }
+
+    try {
+      const downgradeResult = await downgradeExpiredSubscriptions();
+      const remindersResult = await processRenewalReminders();
+      return res.status(200).json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        downgrades: downgradeResult,
+        reminders: remindersResult
+      });
+    } catch (cronErr) {
+      console.error('[Cron Subscriptions Exception]:', cronErr);
+      return res.status(500).json({ success: false, error: cronErr?.message || 'Erreur interne cron' });
+    }
+  }
+
+  // ─── ACTION : Envoi direct de l'e-mail de remerciement ou don (Thank You API) ───
+  if (action === 'thank-you-email' || action === 'thank-you' || action === 'send-thank-you-email') {
+    const targetEmail = email || 'support@elicine.app';
+    const customerName = (body.customerName || body.customer_name || body.name || targetEmail.split('@')[0] || 'Cinéphile').trim();
+    const amount = Number(body.amount || body.value || 2);
+    const currency = String(body.currency || 'USD').toUpperCase();
+    const reference = body.reference || body.paymentReference || body.orderId || `dir_${Date.now()}`;
+    const isPro = body.isPro === true || body.type === 'pro' || body.plan === 'yearly' || body.plan === 'monthly';
+
+    const activationResult = await activateUserPassPro(targetEmail, {
+      plan: isPro ? (body.plan === 'yearly' ? 'yearly' : 'monthly') : 'donation',
+      customerName,
+      amount,
+      currency,
+      gateway: body.gateway || 'direct',
+      paymentReference: reference,
+      isDonation: !isPro
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: isPro 
+        ? 'Pass Pro activé avec succès et e-mail de bienvenue envoyé.' 
+        : 'E-mail de remerciement envoyé avec succès via Resend.',
+      email: targetEmail,
+      customerName,
+      amount,
+      currency,
+      activation: activationResult
+    });
+  }
 
   // ─── ACTION : Vérification directe du statut Pro via Service Role (Bypasse RLS) ───
   if (req.method === 'GET' || action === 'check-status' || action === 'status') {
