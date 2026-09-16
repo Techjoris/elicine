@@ -448,11 +448,12 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
     return {
       success: true,
       remindersSent: results.filter(r => r.status === 'sent').length,
-      details: results
+      results
     };
   } catch (error) {
-    console.error('[Cron Reminders] Erreur processing reminders:', error);
+    console.error('[Cron Reminders] Exception globale:', error);
     return { success: false, error: error?.message, remindersSent: 0 };
   }
 }
 
+export const processRenewalReminders = processExpirationReminders;

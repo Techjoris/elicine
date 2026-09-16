@@ -9,9 +9,12 @@ const supabaseUrl =
 const supabaseAnonKey = 
   process.env.VITE_SUPABASE_ANON_KEY || 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  process.env.SUPABASE_ANON_KEY ||
   '';
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 /**
  * Point d'entrée serveur unifié pour toutes les opérations d'authentification Éliciné.

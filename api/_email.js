@@ -367,6 +367,19 @@ export function getDonationThankYouEmailHtml({ customerName = 'Généreux Donate
 }
 
 /**
+ * Déclenche l'envoi de l'email de remerciement pour un don / soutien
+ */
+export async function sendDonationThankYouEmail(email, { customerName = 'Généreux Donateur', amount = '2' } = {}) {
+  const html = getDonationThankYouEmailHtml({ customerName, amount });
+  return sendEmailWithResend({
+    to: email,
+    subject: 'Merci pour votre soutien à Éliciné ☕',
+    html,
+    text: `Bonjour ${customerName},\n\nToute l'équipe d'Éliciné vous adresse ses sincères remerciements pour votre don de ${amount}.\n\nVotre contribution aide directement à financer nos serveurs d'intelligence artificielle, à enrichir le catalogue de films et à maintenir la plateforme libre d'accès pour toute la communauté.\n\nL'équipe Éliciné — L'intelligence artificielle au service du cinéma d'exception.`
+  });
+}
+
+/**
  * Déclenche l'envoi de l'email de bienvenue Pro
  */
 export async function sendProWelcomeEmail(email, { customerName = 'Cinéphile', plan = 'monthly' } = {}) {
