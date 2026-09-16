@@ -60,7 +60,10 @@ interface AppContextType {
   removeAlert: (alertId: string) => void;
   isMovieAlertActive: (movieId: number) => boolean;
 
-  // Search History
+  // Search History & Interactive Query
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  triggerSearch: (query: string) => void;
   searchHistory: SearchHistoryItem[];
   addHistoryItem: (query: string, count: number, mood?: string) => void;
   clearHistory: () => void;
@@ -279,7 +282,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return [];
   });
 
-  // 7. Search History
+  // 7. Search History & Interactive Input
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>(() => {
     const saved = localStorage.getItem('cineia_history');
     if (saved) {
@@ -1015,6 +1019,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Historique IA vidé.');
   };
 
+  const triggerSearch = (query: string) => {
+    const cleanQuery = (query || '').replace(/^#\s*/, '').trim();
+    if (!cleanQuery) return;
+    setSearchQuery(cleanQuery);
+    setActiveView('home');
+    if (isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+    // Émission synchrone de l'événement global de recherche
+    window.dispatchEvent(new CustomEvent('elicine-trigger-search', { detail: { prompt: cleanQuery } }));
+    // Sécurité au cas où la vue d'accueil vient d'être activée et se monte
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('elicine-trigger-search', { detail: { prompt: cleanQuery } }));
+    }, 100);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1048,6 +1068,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAlert,
         removeAlert,
         isMovieAlertActive,
+        searchQuery,
+        setSearchQuery,
+        triggerSearch,
         searchHistory,
         addHistoryItem,
         clearHistory,

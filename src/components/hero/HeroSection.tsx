@@ -118,7 +118,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setIsProModalOpen,
     apiSettings,
     addHistoryItem,
-    showToast
+    showToast,
+    searchQuery,
+    setSearchQuery
   } = useApp();
 
   const { t } = useTranslation();
@@ -382,9 +384,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         const cleanPrompt = prompt.trim();
         if (cleanPrompt) {
           setSearchPrompt(cleanPrompt);
-          const searchInput = document.getElementById('main-ai-search');
+          setSearchQuery(cleanPrompt);
+          const searchInput = (document.getElementById('main-ai-search') || textareaRef.current) as HTMLTextAreaElement | null;
           if (searchInput) {
             searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+              searchInput.focus();
+              adjustTextareaHeight();
+            }, 80);
           }
           handleSearchRef.current(cleanPrompt);
         }
@@ -395,7 +402,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     return () => {
       window.removeEventListener('elicine-trigger-search', handleTriggerSearch);
     };
-  }, []);
+  }, [setSearchQuery]);
 
   return (
     <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
