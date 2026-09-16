@@ -36,6 +36,7 @@ export interface TranslationSchema {
   synopsisTitle: string;
   critiqueTitle: string;
   resetHome: string;
+  supportBtn: string;
   tmdbLang: string;
   aiPromptLang: string;
   // Sections légales i18n
@@ -71,6 +72,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     synopsisTitle: "SYNOPSIS",
     critiqueTitle: "VISION CRITIQUE ÉLICINÉ",
     resetHome: "Accueil",
+    supportBtn: "Soutenir",
     tmdbLang: "fr-FR",
     aiPromptLang: "Réponds STRICTEMENT en français pour les descriptions et raisons.",
     terms: termsFr,
@@ -103,6 +105,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     synopsisTitle: "SYNOPSIS",
     critiqueTitle: "ÉLICINÉ CURATOR'S NOTE",
     resetHome: "Home",
+    supportBtn: "Support",
     tmdbLang: "en-US",
     aiPromptLang: "Respond STRICTLY in English for movie summaries and reasons.",
     terms: termsEn,
@@ -135,6 +138,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     synopsisTitle: "SINOPSIS",
     critiqueTitle: "VISIÓN CRÍTICA ÉLICINÉ",
     resetHome: "Inicio",
+    supportBtn: "Apoyar",
     tmdbLang: "es-ES",
     aiPromptLang: "Responde ESTRICTAMENTE en español para los resúmenes y motivos.",
     terms: termsEs,
@@ -167,6 +171,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     synopsisTitle: "INHALTSANGABE",
     critiqueTitle: "ÉLICINÉ KRITIKER-NOTIZ",
     resetHome: "Startseite",
+    supportBtn: "Unterstützen",
     tmdbLang: "de-DE",
     aiPromptLang: "Antworte STRIKT auf Deutsch für Filmbeschreibungen und Gründe.",
     terms: termsDe,
@@ -199,6 +204,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     synopsisTitle: "TRAMA",
     critiqueTitle: "NOTA CRITICA ÉLICINÉ",
     resetHome: "Home",
+    supportBtn: "Sostieni",
     tmdbLang: "it-IT",
     aiPromptLang: "Rispondi RIGOROSAMENTE in italiano per le descrizioni e i motivi.",
     terms: termsIt,

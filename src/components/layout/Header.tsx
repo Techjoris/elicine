@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, LogIn, Download, Coffee } from 'lucide-react';
+import { Menu, X, LogIn, Download, Coffee, Heart } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { ProfileMenu } from './ProfileMenu';
 import { InstallModal } from '../modals/InstallModal';
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenInstallModal
 }) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const {
     user: appUser,
     watchlist,
@@ -180,16 +182,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Actions de droite (Soutenir, Installer, Langue, Connexion / Profil) */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Bouton Soutenir (masqué sur très petit écran ou réduit) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {/* Bouton d'appel à l'action "Soutenir le projet" / "Café" */}
             <button
               type="button"
               onClick={handleOpenTip}
-              className="hidden sm:flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer font-medium"
-              title="Soutenir Éliciné"
+              className="group relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
+              title="Soutenir le projet Éliciné (Offrir un café)"
+              aria-label="Soutenir le projet Éliciné"
             >
-              <Coffee size={14} className="text-amber-500 flex-shrink-0" />
-              <span>Soutenir</span>
+              <Coffee size={14} className="text-amber-600 dark:text-amber-400 group-hover:rotate-12 transition-transform duration-200 flex-shrink-0" />
+              <span className="font-semibold tracking-tight">{t.supportBtn || 'Soutenir'}</span>
+              <span className="hidden xl:inline text-amber-600/80 dark:text-amber-400/80 font-normal text-[11px]">le projet</span>
             </button>
 
             {/* Bouton Installer PWA : Masqué dynamiquement en mode autonome (standalone) */}
