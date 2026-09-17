@@ -29,7 +29,7 @@ const SEED_USERS = [
     id: 'usr_master_admin',
     username: 'techjoris',
     email: 'ivanjoris959@gmail.com',
-    name: 'Joris (Master Admin)',
+    name: 'Ivan Joris (Master Admin)',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
     provider: 'google',
     role: 'admin',
@@ -39,60 +39,9 @@ const SEED_USERS = [
     proPlanExpiresAt: 'Illimité (Fondateur)',
     referralCode: 'ELICINE-CREATOR',
     createdAt: '2026-08-01T10:00:00.000Z',
-    moviesInListCount: 42,
-    aiQueriesCount: 215,
+    moviesInListCount: 0,
+    aiQueriesCount: 0,
     lastActiveAt: 'En direct'
-  },
-  {
-    id: 'usr_seed_02',
-    username: 'sarah_cine',
-    email: 'sarah.k@cinema.fr',
-    name: 'Sarah K.',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
-    provider: 'credentials',
-    role: 'user',
-    is_admin: false,
-    isPro: true,
-    proPlanType: 'monthly',
-    proPlanExpiresAt: '2026-10-15T00:00:00.000Z',
-    referralCode: 'CINE-SARAH9',
-    createdAt: '2026-08-14T14:22:10.000Z',
-    moviesInListCount: 18,
-    aiQueriesCount: 84,
-    lastActiveAt: 'Il y a 2h'
-  },
-  {
-    id: 'usr_seed_03',
-    username: 'alex_marcus',
-    email: 'alex.marcus@gmail.com',
-    name: 'Alexandre Marcus',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-    provider: 'google',
-    role: 'user',
-    is_admin: false,
-    isPro: false,
-    referralCode: 'CINE-ALEX2',
-    createdAt: '2026-08-28T09:15:00.000Z',
-    moviesInListCount: 7,
-    aiQueriesCount: 19,
-    lastActiveAt: 'Hier'
-  },
-  {
-    id: 'usr_seed_04',
-    username: 'mouloud_cine',
-    email: 'mouloud.b@orange.fr',
-    name: 'Mouloud B.',
-    provider: 'credentials',
-    role: 'user',
-    is_admin: false,
-    isPro: true,
-    proPlanType: 'yearly',
-    proPlanExpiresAt: '2027-08-15T00:00:00.000Z',
-    referralCode: 'CINE-MOULOUD',
-    createdAt: '2026-08-15T18:40:00.000Z',
-    moviesInListCount: 29,
-    aiQueriesCount: 112,
-    lastActiveAt: 'Aujourd\'hui'
   }
 ];
 
@@ -131,7 +80,7 @@ async function verifyAdminAuth(req) {
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret');
 
   if (req.method === 'OPTIONS') {
@@ -281,6 +230,95 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error('[Admin API PATCH Error]:', err);
       return res.status(500).json({ error: "Erreur lors de la mise à jour utilisateur." });
+    }
+  }
+
+  // ─── DELETE : SUPPRESSION DÉFINITIVE & EN CASCADE D'UN UTILISATEUR ─────────
+  if (req.method === 'DELETE') {
+    try {
+      const targetUserId = (req.body?.userId || req.query?.userId || '').trim();
+      const targetEmail = (req.body?.email || req.query?.email || '').toLowerCase().trim();
+
+      if (!targetUserId && !targetEmail) {
+        return res.status(400).json({ error: 'userId ou email requis pour la suppression.' });
+      }
+
+      // 🛡️ Protection absolue des comptes administrateurs & fondateurs
+      if (
+        targetEmail === MASTER_ADMIN_EMAIL.toLowerCase() ||
+        ADMIN_EMAILS.includes(targetEmail) ||
+        targetUserId === 'usr_master_admin' ||
+        targetUserId === 'usr_master_admin_01' ||
+        targetUserId === 'usr_creator_01'
+      ) {
+        return res.status(403).json({
+          error: "Action interdite : Les comptes administrateurs et fondateurs ne peuvent pas être supprimés."
+        });
+      }
+
+      // 1. Suppression en cascade dans Supabase si configuré
+      if (supabaseAdmin) {
+        try {
+          // a. Suppression des souscriptions associées
+          if (targetEmail) {
+            await supabaseAdmin.from('subscriptions').delete().eq('email', targetEmail);
+          }
+          if (targetUserId) {
+            await supabaseAdmin.from('subscriptions').delete().eq('user_id', targetUserId);
+          }
+
+          // b. Suppression des quotas / recherches associées
+          if (targetUserId) {
+            await supabaseAdmin.from('user_searches').delete().eq('user_id', targetUserId);
+          }
+
+          // c. Suppression du profil utilisateur
+          if (targetUserId) {
+            await supabaseAdmin.from('profiles').delete().eq('id', targetUserId);
+          }
+          if (targetEmail) {
+            await supabaseAdmin.from('profiles').delete().eq('email', targetEmail);
+          }
+
+          // d. Suppression dans auth.users si disponible (UUID standard)
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
+          if (isUuid && supabaseAdmin.auth?.admin?.deleteUser) {
+            await supabaseAdmin.auth.admin.deleteUser(targetUserId).catch((e) => {
+              console.warn('[Admin API DELETE auth.users UUID notice]:', e?.message);
+            });
+          } else if (targetEmail && supabaseAdmin.auth?.admin?.listUsers && supabaseAdmin.auth?.admin?.deleteUser) {
+            // Chercher par email si le userId n'est pas un UUID direct
+            try {
+              const { data: { users: authUsers } } = await supabaseAdmin.auth.admin.listUsers();
+              const matchedAuthUser = authUsers?.find(u => u.email?.toLowerCase() === targetEmail);
+              if (matchedAuthUser?.id) {
+                await supabaseAdmin.auth.admin.deleteUser(matchedAuthUser.id);
+              }
+            } catch (authListErr) {
+              console.warn('[Admin API DELETE auth.users lookup notice]:', authListErr?.message);
+            }
+          }
+        } catch (dbErr) {
+          console.error('[Admin API DELETE Supabase Error]:', dbErr);
+        }
+      }
+
+      // 2. Suppression en mémoire locale du seed
+      const seedIndex = SEED_USERS.findIndex(
+        u => (targetUserId && u.id === targetUserId) || (targetEmail && u.email.toLowerCase() === targetEmail)
+      );
+      if (seedIndex >= 0) {
+        SEED_USERS.splice(seedIndex, 1);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `L'utilisateur ${targetEmail || targetUserId} a été définitivement supprimé avec toutes ses données associées.`,
+        deleted: { userId: targetUserId, email: targetEmail }
+      });
+    } catch (err) {
+      console.error('[Admin API DELETE Error]:', err);
+      return res.status(500).json({ error: "Erreur serveur lors de la suppression de l'utilisateur." });
     }
   }
 

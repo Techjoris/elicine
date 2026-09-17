@@ -66,68 +66,6 @@ const ADMIN_SEED_USERS: AdminUserData[] = [
     moviesInListCount: 42,
     aiQueriesCount: 156,
     lastActiveAt: 'Aujourd\'hui'
-  },
-  {
-    id: 'usr_seed_02',
-    username: 'sarah_cine',
-    email: 'sarah.k@cinema.fr',
-    name: 'Sarah K.',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
-    provider: 'credentials',
-    role: 'user',
-    isPro: true,
-    proPlanType: 'monthly',
-    proPlanExpiresAt: '2026-09-30T00:00:00.000Z',
-    referralCode: 'CINE-SARAH9',
-    createdAt: '2026-08-14T14:22:10.000Z',
-    moviesInListCount: 18,
-    aiQueriesCount: 84,
-    lastActiveAt: 'Il y a 2h'
-  },
-  {
-    id: 'usr_seed_03',
-    username: 'alex_marcus',
-    email: 'alex.marcus@gmail.com',
-    name: 'Alexandre Marcus',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-    provider: 'google',
-    role: 'user',
-    isPro: false,
-    referralCode: 'CINE-ALEX2',
-    createdAt: '2026-08-28T09:15:00.000Z',
-    moviesInListCount: 7,
-    aiQueriesCount: 19,
-    lastActiveAt: 'Hier'
-  },
-  {
-    id: 'usr_seed_04',
-    username: 'mouloud_cine',
-    email: 'mouloud.b@orange.fr',
-    name: 'Mouloud B.',
-    provider: 'credentials',
-    role: 'user',
-    isPro: true,
-    proPlanType: 'yearly',
-    proPlanExpiresAt: '2027-08-15T00:00:00.000Z',
-    referralCode: 'CINE-MOULOUD',
-    createdAt: '2026-08-15T18:40:00.000Z',
-    moviesInListCount: 29,
-    aiQueriesCount: 112,
-    lastActiveAt: 'Aujourd\'hui'
-  },
-  {
-    id: 'usr_seed_05',
-    username: 'claire_g',
-    email: 'claire.girard@yahoo.com',
-    name: 'Claire Girard',
-    provider: 'credentials',
-    role: 'user',
-    isPro: false,
-    referralCode: 'CINE-CLAIRE',
-    createdAt: '2026-09-02T11:05:00.000Z',
-    moviesInListCount: 3,
-    aiQueriesCount: 12,
-    lastActiveAt: 'Il y a 3 jours'
   }
 ];
 
@@ -864,5 +802,66 @@ export const authService = {
     }
 
     return targetPro;
+  },
+
+  /**
+   * Supprime définitivement un utilisateur et toutes ses données associées (Admin only)
+   */
+  async deleteUser(userId: string, email?: string): Promise<{ success: boolean; error?: string }> {
+    const cleanEmail = (email || '').toLowerCase().trim();
+
+    // 🛡️ Garde-fou absolu pour les comptes fondateurs et administrateurs
+    if (
+      cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase() ||
+      ADMIN_EMAILS.includes(cleanEmail) ||
+      userId === 'usr_master_admin' ||
+      userId === 'usr_master_admin_01' ||
+      userId === 'usr_creator_01'
+    ) {
+      return {
+        success: false,
+        error: 'Impossible de supprimer un compte administrateur ou fondateur principal.'
+      };
+    }
+
+    // 1. Appel DELETE à l'API serveur pour suppression en cascade dans Supabase
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
+      const res = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': 'elicine2026',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ userId, email: cleanEmail })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (errorData.error) {
+          console.warn('[authService.deleteUser] Notice serveur:', errorData.error);
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[authService.deleteUser] API request notice:', apiErr);
+    }
+
+    // 2. Nettoyage dans le stockage local des comptes enregistrés
+    if (typeof window !== 'undefined') {
+      try {
+        const accounts = getStoredAccounts();
+        const filtered = accounts.filter(
+          a => a.id !== userId && (!cleanEmail || a.email.toLowerCase() !== cleanEmail)
+        );
+        saveStoredAccounts(filtered);
+        localStorage.removeItem(`cineia_watchlist_${userId}`);
+      } catch (e) {
+        console.warn('[authService.deleteUser] Local storage purge error:', e);
+      }
+    }
+
+    return { success: true };
   }
 };
+

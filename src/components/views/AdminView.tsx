@@ -19,7 +19,9 @@ import {
   Sparkles,
   TrendingUp,
   FileSpreadsheet,
-  FileJson
+  FileJson,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { authService } from '../../services/authService';
@@ -44,6 +46,8 @@ export const AdminView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pro' | 'free' | 'admin'>('all');
+  const [userToDelete, setUserToDelete] = useState<AdminUserData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Check auth whenever user state changes
   useEffect(() => {
@@ -117,6 +121,39 @@ export const AdminView: React.FC = () => {
     });
 
     showToast(newStatus ? 'Pass Pro accordé à l\'utilisateur ! 👑 (Supabase synchronisé)' : 'Pass Pro révoqué.');
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await authService.deleteUser(userToDelete.id, userToDelete.email);
+      if (res.success) {
+        setUsers(prev => prev.filter(u => u.id !== userToDelete.id && u.email.toLowerCase() !== userToDelete.email.toLowerCase()));
+        setMetrics(prev => {
+          const wasPro = userToDelete.isPro;
+          const newTotal = Math.max(0, prev.totalUsers - 1);
+          const newPro = wasPro ? Math.max(0, prev.premiumSubscribers - 1) : prev.premiumSubscribers;
+          const newFree = Math.max(0, newTotal - newPro);
+          return {
+            ...prev,
+            totalUsers: newTotal,
+            premiumSubscribers: newPro,
+            freeUsers: newFree,
+            conversionRate: newTotal > 0 ? ((newPro / newTotal) * 100).toFixed(1) + '%' : '0%'
+          };
+        });
+        showToast(`Utilisateur ${userToDelete.name || userToDelete.email} supprimé définitivement. 🗑️`);
+        setUserToDelete(null);
+      } else {
+        showToast(res.error || 'Erreur lors de la suppression.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Erreur lors de la suppression de l\'utilisateur.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -635,6 +672,16 @@ export const AdminView: React.FC = () => {
                           >
                             {u.isPro ? 'Révoquer Pro' : '+ Accorder Pro'}
                           </button>
+                          {!isUserAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setUserToDelete(u)}
+                              className="p-1.5 rounded-xl font-bold text-[11px] transition-all cursor-pointer border bg-zinc-900 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 border-zinc-800 hover:border-red-500/40"
+                              title="Supprimer définitivement cet utilisateur (purge en cascade)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -657,6 +704,84 @@ export const AdminView: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* MODAL DE CONFIRMATION DE SUPPRESSION D'UTILISATEUR */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md p-6 bg-zinc-950 border border-red-500/30 rounded-3xl shadow-2xl space-y-5 text-white">
+            
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 flex-shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-white">Supprimer l'utilisateur ?</h3>
+                <p className="text-xs text-zinc-400">Cette action est irréversible et supprimera en cascade toutes ses données.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-white/5 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Nom :</span>
+                <span className="font-bold text-zinc-200">{userToDelete.name || 'Inconnu'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Email :</span>
+                <span className="font-mono text-zinc-300">{userToDelete.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Statut :</span>
+                <span className={userToDelete.isPro ? 'text-amber-400 font-bold' : 'text-zinc-400'}>
+                  {userToDelete.isPro ? 'Pass Pro VIP' : 'Compte Gratuit'}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-zinc-400 bg-red-950/20 border border-red-500/20 rounded-xl p-3 space-y-1">
+              <p className="font-bold text-red-300 flex items-center gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> Suppression en cascade automatique :
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-zinc-400 pl-1">
+                <li>Profil utilisateur (<code className="text-zinc-300">public.profiles</code>)</li>
+                <li>Abonnements et paiements (<code className="text-zinc-300">public.subscriptions</code>)</li>
+                <li>Quotas de recherche et requêtes IA (<code className="text-zinc-300">public.user_searches</code>)</li>
+                <li>Compte d'authentification Supabase (<code className="text-zinc-300">auth.users</code>)</li>
+                <li>Watchlists et stockage local</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer border border-zinc-800"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteUser}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer shadow-lg shadow-red-600/20 flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Supprimer définitivement
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
