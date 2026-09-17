@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Menu, X, LogIn, Download, Coffee, Heart, Sun, Moon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -82,6 +82,70 @@ export const Header: React.FC<HeaderProps> = ({
   // 2. L'utilisateur n'a pas encore cliqué sur le bouton d'installation
   // 3. La popup de thème est FERMÉE (séquentiel : thème d'abord, installation ensuite — jamais les 2 en même temps)
   const showInstallOnboarding = !isStandalone && !hasSeenInstallOnboarding && !showThemeOnboarding;
+
+  // Référence DOM directe sur le bouton d'installation pour ancrage au pixel près (getBoundingClientRect)
+  const installButtonRef = useRef<HTMLButtonElement>(null);
+  const [installTooltipStyle, setInstallTooltipStyle] = useState<{
+    top: number;
+    left: number;
+    arrowLeft: number;
+    width: number;
+  } | null>(null);
+
+  const updateInstallTooltipPosition = () => {
+    if (!installButtonRef.current) return;
+    const rect = installButtonRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+
+    // Contrainte stricte pour mobile et grands écrans
+    // Marge de 16px de chaque côté -> largeur max calc(100vw - 32px)
+    const screenMargin = 16;
+    const maxAvailableWidth = Math.max(220, viewportWidth - (screenMargin * 2));
+    const popupWidth = Math.min(290, maxAvailableWidth);
+
+    // Centre horizontal réel du bouton "Installer"
+    const buttonCenterX = rect.left + (rect.width / 2);
+
+    // Position idéale centrée sous le bouton
+    let idealLeft = buttonCenterX - (popupWidth / 2);
+
+    // Détection de collision et repositionnement vers la gauche/droite si proche d'un bord
+    const minLeft = screenMargin;
+    const maxLeft = viewportWidth - popupWidth - screenMargin;
+    const clampedLeft = Math.max(minLeft, Math.min(maxLeft, idealLeft));
+
+    // Position de la flèche relative au bord gauche de la popup
+    // Doit pointer EXACTEMENT vers le centre du bouton (buttonCenterX)
+    const arrowPosition = buttonCenterX - clampedLeft;
+    // Sécurité pour garder la flèche dans les bords arrondis du conteneur
+    const clampedArrowLeft = Math.max(18, Math.min(popupWidth - 18, arrowPosition));
+
+    setInstallTooltipStyle({
+      top: Math.round(rect.bottom + 8),
+      left: Math.round(clampedLeft),
+      arrowLeft: Math.round(clampedArrowLeft),
+      width: Math.round(popupWidth)
+    });
+  };
+
+  useEffect(() => {
+    if (!showInstallOnboarding) return;
+
+    updateInstallTooltipPosition();
+    const rafId = requestAnimationFrame(updateInstallTooltipPosition);
+    const timer = setTimeout(updateInstallTooltipPosition, 100);
+
+    window.addEventListener('resize', updateInstallTooltipPosition);
+    window.addEventListener('scroll', updateInstallTooltipPosition, true);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateInstallTooltipPosition);
+      window.removeEventListener('scroll', updateInstallTooltipPosition, true);
+    };
+  }, [showInstallOnboarding]);
+
 
   useEffect(() => {
     setIsStandalone(checkIsStandalone());
@@ -229,15 +293,16 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Soutenir le projet Éliciné"
             >
               <Coffee size={14} className="text-amber-600 dark:text-amber-400 group-hover:rotate-12 transition-transform duration-200 flex-shrink-0" />
-              <span className="font-semibold tracking-tight">{t.supportBtn || 'Soutenir'}</span>
+              <span className="hidden sm:inline font-semibold tracking-tight">{t.supportBtn || 'Soutenir'}</span>
               <span className="hidden xl:inline text-amber-600/80 dark:text-amber-400/80 font-normal text-[11px]">le projet</span>
             </button>
 
-            {/* Bouton Installer PWA & Bulle d'Onboarding ancrée (Masqué si PWA déjà installée) */}
+            {/* Bouton Installer PWA (Masqué si PWA déjà installée) */}
             {!isStandalone && (
               <div className="relative flex-shrink-0">
                 <button
                   type="button"
+                  ref={installButtonRef}
                   id="header-install-app-btn"
                   onClick={handleInstallClick}
                   className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all duration-200 cursor-pointer font-medium ${
@@ -251,45 +316,58 @@ export const Header: React.FC<HeaderProps> = ({
                   <Download size={14} className="text-red-500 flex-shrink-0" />
                   <span>Installer<span className="hidden lg:inline"> l'application</span></span>
                 </button>
-
-                {/* Bulle / Tooltip d'Onboarding Installation PWA (Séquentielle : affichée après fermeture du thème) */}
-                {showInstallOnboarding && (
-                  <div 
-                    className="absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 w-64 sm:w-72 max-w-[calc(100vw-24px)] pointer-events-auto select-none animate-bounce-subtle"
-                    role="tooltip"
-                  >
-                    {/* Flèche pointant vers le haut vers le bouton installer */}
-                    <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-red-500/50" />
-
-                    {/* Corps de la bulle d'onboarding (fermeture au clic sur l'action d'installation) */}
-                    <div 
-                      onClick={handleInstallClick}
-                      className="relative bg-slate-950/95 dark:bg-zinc-900/95 backdrop-blur-xl text-white p-3.5 rounded-2xl border border-red-500/40 shadow-2xl shadow-black/50 text-left cursor-pointer hover:border-red-400 transition-all group"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-7 h-7 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
-                          <Download size={14} className="text-red-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
-                              Application
-                            </span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
-                          </div>
-                          <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug">
-                            Installer l'application
-                          </p>
-                          <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-red-300 transition-colors">
-                            Cliquez ici et suivez les instructions pour installer Éliciné sur votre appareil.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
+
+            {/* Bulle / Tooltip d'Onboarding Installation PWA (Ancrée via installButtonRef.getBoundingClientRect & anti-collision viewport) */}
+            {showInstallOnboarding && installTooltipStyle && (
+              <div 
+                className="fixed z-[100] pointer-events-auto select-none animate-bounce-subtle"
+                role="tooltip"
+                style={{
+                  top: `${installTooltipStyle.top}px`,
+                  left: `${installTooltipStyle.left}px`,
+                  width: `${installTooltipStyle.width}px`,
+                  maxWidth: 'calc(100vw - 32px)',
+                }}
+              >
+                {/* Flèche pointant vers le haut vers le centre EXACT du bouton installer */}
+                <div 
+                  className="absolute -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-red-500/50"
+                  style={{
+                    left: `${installTooltipStyle.arrowLeft}px`,
+                    transform: 'translateX(-50%) rotate(45deg)'
+                  }}
+                />
+
+                {/* Corps de la bulle d'onboarding (fermeture au clic sur l'action d'installation) */}
+                <div 
+                  onClick={handleInstallClick}
+                  className="relative bg-slate-950/95 dark:bg-zinc-900/95 backdrop-blur-xl text-white p-3 sm:p-3.5 rounded-2xl border border-red-500/40 shadow-2xl shadow-black/50 text-left cursor-pointer hover:border-red-400 transition-all group"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                      <Download size={14} className="text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                          Application
+                        </span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+                      </div>
+                      <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug whitespace-normal break-words">
+                        Installer l'application
+                      </p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-red-300 transition-colors whitespace-normal break-words">
+                        Cliquez ici et suivez les instructions pour installer Éliciné sur votre appareil.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
 
 
             {/* Sélecteur de langue compact */}
