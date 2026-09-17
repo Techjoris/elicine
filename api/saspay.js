@@ -775,7 +775,7 @@ export default async function handler(req, res) {
               plan: sub?.plan || 'monthly',
               customerName: sub?.customer_name || sub?.customerName,
               amount: sub?.amount || data?.amount || data?.data?.amount || 1.99,
-              currency: sub?.currency || data?.currency || data?.data?.currency || 'USD',
+              currency: sub?.currency || data?.currency || data?.data?.currency || 'XOF',
               gateway: 'saspay',
               paymentReference: sessionId,
               subscriptionId: sub?.id || sessionId,

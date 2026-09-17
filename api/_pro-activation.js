@@ -79,7 +79,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
     plan = 'monthly',
     customerName,
     amount,
-    currency = 'USD',
+    currency: rawCurrency,
     gateway = 'online',
     paymentReference = '',
     subscriptionId = '',
@@ -91,6 +91,9 @@ export async function activateUserPassPro(email, planDetails = {}) {
   const now = new Date().toISOString();
   const cleanName = (customerName || rawEmail.split('@')[0] || 'Cinéphile').trim();
   const numericAmount = Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
+  const currency = (rawCurrency 
+    ? String(rawCurrency).trim() 
+    : ((gateway === 'saspay' || numericAmount >= 100) ? 'FCFA' : 'USD')).toUpperCase();
 
   // Détection don vs abonnement Pro
   const isDonation = explicitDonation === true || (
@@ -244,17 +247,21 @@ export async function activateUserPassPro(email, planDetails = {}) {
   let emailSent = false;
   try {
     if (isDonation) {
-      console.log(`[Activation Pro] ✉️ Envoi de l'e-mail de remerciement pour don à ${rawEmail}...`);
+      console.log(`[Activation Pro] ✉️ Envoi de l'e-mail de remerciement pour don à ${rawEmail} (${numericAmount} ${currency})...`);
       const emailRes = await sendDonationThankYouEmail(rawEmail, {
         customerName: cleanName,
-        amount: String(numericAmount)
+        amount: numericAmount,
+        currency: currency
       });
       emailSent = emailRes?.success || false;
     } else {
-      console.log(`[Activation Pro] ✉️ Envoi de l'e-mail de bienvenue Pro à ${rawEmail}...`);
+      console.log(`[Activation Pro] ✉️ Envoi de l'e-mail de bienvenue Pro à ${rawEmail} (${normalizedPlan}, ${numericAmount} ${currency})...`);
       const emailRes = await sendProWelcomeEmail(rawEmail, {
         customerName: cleanName,
-        plan: normalizedPlan
+        plan: normalizedPlan,
+        amount: numericAmount,
+        currency: currency,
+        expiresAt
       });
       emailSent = emailRes?.success || false;
     }
@@ -407,12 +414,31 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
       if (timeRemainingMs > 0 && timeRemainingMs <= threeDaysMs) {
         const daysRemaining = Math.max(1, Math.ceil(timeRemainingMs / (1000 * 60 * 60 * 24)));
 
-        console.log(`[Cron Reminders] ✉️ Envoi relance expiration (J-${daysRemaining}) à ${email}...`);
+        // Récupération optionnelle des détails de devise de la dernière souscription
+        let subAmount = null;
+        let subCurrency = '';
+        try {
+          const { data: subData } = await supabaseAdmin
+            .from('subscriptions')
+            .select('amount, currency')
+            .eq('email', email)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (subData) {
+            subAmount = subData.amount;
+            subCurrency = subData.currency;
+          }
+        } catch (_) {}
+
+        console.log(`[Cron Reminders] ✉️ Envoi relance expiration (J-${daysRemaining}) à ${email} (${subCurrency || 'défaut'})...`);
         const emailRes = await sendProRenewalReminderEmail(email, {
           customerName: profile.email?.split('@')[0] || 'Cinéphile',
           daysRemaining,
           expiresAt: effectiveExpiry,
-          renewalUrl: 'https://elicine.app?upgrade=pro'
+          renewalUrl: 'https://elicine.app?upgrade=pro',
+          amount: subAmount,
+          currency: subCurrency
         });
 
         if (emailRes?.success) {

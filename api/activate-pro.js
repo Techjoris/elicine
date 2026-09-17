@@ -76,7 +76,8 @@ export default async function handler(req, res) {
     const targetEmail = email || 'support@elicine.app';
     const customerName = (body.customerName || body.customer_name || body.name || targetEmail.split('@')[0] || 'Cinéphile').trim();
     const amount = Number(body.amount || body.value || 2);
-    const currency = String(body.currency || 'USD').toUpperCase();
+    const rawCurr = body.currency || body.currencyCode;
+    const currency = String(rawCurr || (amount >= 100 ? 'FCFA' : 'USD')).toUpperCase();
     const reference = body.reference || body.paymentReference || body.orderId || `dir_${Date.now()}`;
     const isPro = body.isPro === true || body.type === 'pro' || body.plan === 'yearly' || body.plan === 'monthly';
 
