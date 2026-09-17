@@ -13,6 +13,8 @@ interface ThemeContextType {
 
 export const THEME_STORAGE_KEY = 'elicine-theme';
 export const THEME_ONBOARDING_KEY = 'onboarding_theme_popup_seen';
+export const INSTALL_ONBOARDING_KEY = 'onboarding_install_popup_seen';
+
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 

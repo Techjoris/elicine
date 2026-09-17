@@ -3,10 +3,12 @@ import { Menu, X, LogIn, Download, Coffee, Heart, Sun, Moon } from 'lucide-react
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, INSTALL_ONBOARDING_KEY } from '../../context/ThemeContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { ProfileMenu } from './ProfileMenu';
 import { InstallModal } from '../modals/InstallModal';
+
+export { INSTALL_ONBOARDING_KEY };
 
 interface HeaderProps {
   onGoHome?: () => void;
@@ -15,11 +17,14 @@ interface HeaderProps {
   onOpenInstallModal?: () => void;
 }
 
-const checkIsStandalone = (): boolean => {
+export const checkIsStandalone = (): boolean => {
   if (typeof window === 'undefined') return false;
   const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const isDisplayFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+  const isDisplayMinimalUi = window.matchMedia('(display-mode: minimal-ui)').matches;
   const isIosStandalone = (window.navigator as any)?.standalone === true;
-  return Boolean(isDisplayStandalone || isIosStandalone);
+  const isAndroidReferrer = typeof document !== 'undefined' && document.referrer.includes('android-app://');
+  return Boolean(isDisplayStandalone || isDisplayFullscreen || isDisplayMinimalUi || isIosStandalone || isAndroidReferrer);
 };
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -52,6 +57,31 @@ export const Header: React.FC<HeaderProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState<boolean>(() => checkIsStandalone());
+
+  // État onboarding d'installation PWA
+  const [hasSeenInstallOnboarding, setHasSeenInstallOnboarding] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(INSTALL_ONBOARDING_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissInstallOnboarding = () => {
+    try {
+      localStorage.setItem(INSTALL_ONBOARDING_KEY, 'true');
+    } catch (e) {
+      console.error('Erreur sauvegarde onboarding installation:', e);
+    }
+    setHasSeenInstallOnboarding(true);
+  };
+
+  // Condition d'affichage séquentielle :
+  // 1. L'application n'est PAS déjà installée (non-standalone)
+  // 2. L'utilisateur n'a pas encore cliqué sur le bouton d'installation
+  // 3. La popup de thème est FERMÉE (séquentiel : thème d'abord, installation ensuite — jamais les 2 en même temps)
+  const showInstallOnboarding = !isStandalone && !hasSeenInstallOnboarding && !showThemeOnboarding;
 
   useEffect(() => {
     setIsStandalone(checkIsStandalone());
@@ -94,6 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
     // Détection de l'installation terminée
     const handleAppInstalled = () => {
       setIsStandalone(true);
+      dismissInstallOnboarding();
       setDeferredPrompt(null);
       setIsInstallModalOpen(false);
       if (typeof window !== 'undefined') {
@@ -121,6 +152,9 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleInstallClick = async () => {
+    // Marquer l'onboarding installation comme vu UNIQUEMENT lors du clic effectif
+    dismissInstallOnboarding();
+
     // Récupération de deferredPrompt (variable globale ou état)
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
 
@@ -155,6 +189,7 @@ export const Header: React.FC<HeaderProps> = ({
       setIsInstallModalOpen(true);
     }
   };
+
 
   return (
     <>
@@ -198,19 +233,64 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xl:inline text-amber-600/80 dark:text-amber-400/80 font-normal text-[11px]">le projet</span>
             </button>
 
-            {/* Bouton Installer PWA : Masqué dynamiquement en mode autonome (standalone) */}
+            {/* Bouton Installer PWA & Bulle d'Onboarding ancrée (Masqué si PWA déjà installée) */}
             {!isStandalone && (
-              <button
-                type="button"
-                onClick={handleInstallClick}
-                className="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 transition cursor-pointer font-medium"
-                title="Installer l'application"
-                aria-label="Installer l'application sur votre appareil"
-              >
-                <Download size={14} className="text-red-500 flex-shrink-0" />
-                <span>Installer<span className="hidden lg:inline"> l'application</span></span>
-              </button>
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  id="header-install-app-btn"
+                  onClick={handleInstallClick}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all duration-200 cursor-pointer font-medium ${
+                    showInstallOnboarding
+                      ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/60 ring-2 ring-red-500/50 shadow-md shadow-red-500/20'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
+                  }`}
+                  title="Installer l'application"
+                  aria-label="Installer l'application sur votre appareil"
+                >
+                  <Download size={14} className="text-red-500 flex-shrink-0" />
+                  <span>Installer<span className="hidden lg:inline"> l'application</span></span>
+                </button>
+
+                {/* Bulle / Tooltip d'Onboarding Installation PWA (Séquentielle : affichée après fermeture du thème) */}
+                {showInstallOnboarding && (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 w-64 sm:w-72 max-w-[calc(100vw-24px)] pointer-events-auto select-none animate-bounce-subtle"
+                    role="tooltip"
+                  >
+                    {/* Flèche pointant vers le haut vers le bouton installer */}
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-red-500/50" />
+
+                    {/* Corps de la bulle d'onboarding (fermeture au clic sur l'action d'installation) */}
+                    <div 
+                      onClick={handleInstallClick}
+                      className="relative bg-slate-950/95 dark:bg-zinc-900/95 backdrop-blur-xl text-white p-3.5 rounded-2xl border border-red-500/40 shadow-2xl shadow-black/50 text-left cursor-pointer hover:border-red-400 transition-all group"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-7 h-7 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                          <Download size={14} className="text-red-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                              Application
+                            </span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+                          </div>
+                          <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug">
+                            Installer l'application
+                          </p>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-red-300 transition-colors">
+                            Cliquez ici et suivez les instructions pour installer Éliciné sur votre appareil.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
+
 
             {/* Sélecteur de langue compact */}
             <div className="flex-shrink-0">

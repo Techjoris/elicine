@@ -22,12 +22,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, INSTALL_ONBOARDING_KEY } from '../../context/ThemeContext';
 import { ActiveView } from '../../types';
 import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { InstallModal } from '../modals/InstallModal';
 import { supabase } from '../../lib/supabase';
+import { checkIsStandalone } from './Header';
+
 
 export interface SidebarProps {
   onGoHome?: () => void;
@@ -72,12 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [isStandalone, setIsStandalone] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    const isIosStandalone = (window.navigator as any)?.standalone === true;
-    return Boolean(isDisplayStandalone || isIosStandalone);
-  });
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => checkIsStandalone());
+
 
   // État local réactif pour le statut Pro (alimenté directement par Supabase)
   const [isPro, setIsPro] = useState<boolean>(() => {
@@ -202,6 +200,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // Détection de l'installation terminée
     const handleAppInstalled = () => {
       setIsStandalone(true);
+      try {
+        localStorage.setItem(INSTALL_ONBOARDING_KEY, 'true');
+      } catch (e) {}
       setDeferredPrompt(null);
       setIsInstallModalOpen(false);
       if (typeof window !== 'undefined') {
@@ -229,6 +230,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const handleInstallClick = async () => {
+    try {
+      localStorage.setItem(INSTALL_ONBOARDING_KEY, 'true');
+    } catch (e) {}
+
     // Récupération de deferredPrompt (variable globale ou état)
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
 
