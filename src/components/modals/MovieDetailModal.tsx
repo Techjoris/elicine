@@ -40,7 +40,8 @@ export const MovieDetailModal: React.FC = () => {
     addAlert, 
     isMovieAlertActive,
     apiSettings,
-    showToast 
+    showToast,
+    user
   } = useApp();
 
   const { lang, t } = useTranslation();
@@ -161,6 +162,22 @@ export const MovieDetailModal: React.FC = () => {
 
   const inWatchlist = isInWatchlist(selectedMovie.id);
   const alertActive = isMovieAlertActive(selectedMovie.id);
+
+  const releaseDateObj = selectedMovie.release_date ? new Date(selectedMovie.release_date) : null;
+  const isUpcoming = Boolean(
+    releaseDateObj && 
+    !isNaN(releaseDateObj.getTime()) && 
+    releaseDateObj.getTime() > Date.now()
+  );
+
+  const isUserSubscriberPro = Boolean(
+    user && (
+      user.isPro || 
+      user.is_pro || 
+      user.pass_status === 'pro' || 
+      (user.email && ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'].includes(user.email.toLowerCase()))
+    )
+  );
 
   const isTv = (
     selectedMovie.media_type === 'SÉRIE' ||
@@ -392,14 +409,24 @@ export const MovieDetailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => addAlert(selectedMovie)}
-                className={`p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                className={`p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                   alertActive
-                    ? 'bg-[#e50914] border-[#e50914] text-white'
+                    ? 'bg-amber-500 border-amber-500 text-zinc-950 font-bold shadow-neon-gold'
                     : 'bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-white/15 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800'
                 }`}
-                title={t.alertBtn}
+                title={alertActive ? 'Alerte active (J-2 & Jour J)' : (isUpcoming ? 'Être notifié par email de la sortie (Pass Pro)' : t.alertBtn)}
               >
                 <Bell className="w-4 h-4" />
+                {isUpcoming && (
+                  <span className="text-[11px] font-bold hidden sm:inline">
+                    {alertActive ? 'Alerte active ✓' : 'M\'alerter'}
+                  </span>
+                )}
+                {!isUserSubscriberPro && (
+                  <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-black">
+                    PRO
+                  </span>
+                )}
               </button>
 
               <button
@@ -412,6 +439,44 @@ export const MovieDetailModal: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Bannière Dédiée Sortie à Venir & Notification Pass Pro */}
+          {isUpcoming && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-zinc-900/80 to-zinc-900/50 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-md">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-black text-[10px] uppercase tracking-wider border border-amber-500/30">
+                    Exclusivité Pass Pro
+                  </span>
+                  <span className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                    Sortie le {releaseDateObj ? releaseDateObj.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : selectedMovie.release_date}
+                  </span>
+                </div>
+                <p className="text-zinc-400 text-[11px]">
+                  Recevez un rappel par e-mail à <strong>J-2</strong> puis le <strong>Jour J</strong> dès sa disponibilité officielle.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => addAlert(selectedMovie)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 shadow-md ${
+                  alertActive
+                    ? 'bg-amber-500 text-zinc-950 font-black shadow-neon-gold hover:bg-amber-400'
+                    : 'bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-zinc-950'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>{alertActive ? 'Alerte de sortie active ✓' : 'M\'alerter de la sortie'}</span>
+                {!isUserSubscriberPro && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/20 text-zinc-950 font-black uppercase">
+                    PRO
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Match Insight if available */}
           {selectedMovie.ai_match_reason && (

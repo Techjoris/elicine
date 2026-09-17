@@ -988,3 +988,591 @@ export async function sendProRenewalReminderEmail(email, {
     text: `Bonjour ${customerName},\n\nVotre Pass Pro Éliciné arrive à expiration dans ${daysRemaining} jour(s).\n\nPour continuer à profiter de vos recommandations illimitées et de tous les filtres sans interruption, renouvelez votre formule en cliquant ici : ${renewalUrl}\n\nÉliciné — Le cinéma d'exception, élu pour vous.`
   });
 }
+
+/**
+ * Normalise l'URL du poster TMDB pour les emails
+ */
+function normalizeMoviePosterUrl(poster) {
+  if (!poster) return 'https://elicine.app/icons/icon-512x512.png';
+  if (poster.startsWith('http')) return poster;
+  return `https://image.tmdb.org/t/p/w500${poster.startsWith('/') ? '' : '/'}${poster}`;
+}
+
+/**
+ * Formate une date en français pour les emails d'alerte
+ */
+function formatMovieReleaseDate(dateStr) {
+  if (!dateStr) return 'Prochainement';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Template HTML Dark Theme Responsive pour l'alerte J-2 avant la sortie d'un film/série
+ */
+export function getMovieAlertJMinus2EmailHtml({ 
+  customerName = 'Cinéphile',
+  movieTitle = 'Film à venir',
+  moviePoster = null,
+  releaseDate = null,
+  movieId = '',
+  mediaType = 'movie',
+  overview = ''
+} = {}) {
+  const formattedDate = formatMovieReleaseDate(releaseDate);
+  const posterUrl = normalizeMoviePosterUrl(moviePoster);
+  const movieUrl = movieId ? `https://elicine.app?movie=${movieId}` : 'https://elicine.app';
+  const typeLabel = (mediaType === 'tv' || mediaType === 'SÉRIE') ? 'cette série' : 'ce film';
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alerte Sortie J-2 : ${movieTitle}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #08080a;
+      color: #e4e4e7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #08080a;
+      padding: 40px 16px;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      background-color: #121319;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-top: 3px solid #f59e0b;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+    }
+    .header {
+      padding: 32px 32px 16px 32px;
+      text-align: left;
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #f59e0b;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #f59e0b;
+      background-color: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 3px 9px;
+      border-radius: 6px;
+    }
+    .title {
+      font-size: 23px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.3px;
+      line-height: 1.3;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #f59e0b;
+      margin: 0;
+      font-weight: 600;
+    }
+    .content {
+      padding: 16px 32px 32px 32px;
+    }
+    .paragraph {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: #d4d4d8;
+      margin: 0 0 16px 0;
+    }
+    .movie-card {
+      background-color: #171822;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 18px;
+      margin: 20px 0;
+      display: flex;
+      gap: 16px;
+    }
+    .movie-poster {
+      width: 100px;
+      height: 145px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      flex-shrink: 0;
+    }
+    .movie-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .movie-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 6px 0;
+      line-height: 1.3;
+    }
+    .movie-date {
+      font-size: 12.5px;
+      color: #f59e0b;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .movie-overview {
+      font-size: 12px;
+      color: #a1a1aa;
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .countdown-banner {
+      background-color: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin: 16px 0 24px 0;
+      font-size: 13px;
+      color: #fbbf24;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cta-wrapper {
+      text-align: left;
+      padding: 8px 0 20px 0;
+    }
+    .cta-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #000000 !important;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+      padding: 13px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+    }
+    .signature {
+      font-size: 13.5px;
+      color: #a1a1aa;
+      margin: 22px 0 0 0;
+      line-height: 1.6;
+    }
+    .footer {
+      padding: 20px 32px;
+      background-color: #0b0c10;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: left;
+      font-size: 12px;
+      color: #71717a;
+      line-height: 1.6;
+    }
+    .footer-motto {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #a1a1aa;
+      margin: 0 0 6px 0;
+    }
+    .footer a {
+      color: #a1a1aa;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="header-top">
+          <div class="brand">Éliciné Pro</div>
+          <div class="badge">Alerte Sortie • J-2</div>
+        </div>
+        <h1 class="title">Préparez vos popcorns !</h1>
+        <p class="subtitle">Sortie dans 2 jours : ${formattedDate}</p>
+      </div>
+
+      <div class="content">
+        <p class="paragraph">Bonjour ${customerName},</p>
+        <p class="paragraph">
+          En tant que membre privilégié du <strong>Pass Pro Éliciné</strong>, vous avez activé le suivi de ${typeLabel} très attendu(e) :
+        </p>
+
+        <!-- Carte Film -->
+        <div class="movie-card">
+          <img src="${posterUrl}" alt="${movieTitle}" class="movie-poster" />
+          <div class="movie-info">
+            <h2 class="movie-title">${movieTitle}</h2>
+            <div class="movie-date">✦ Sortie officielle le ${formattedDate}</div>
+            ${overview ? `<p class="movie-overview">${overview}</p>` : ''}
+          </div>
+        </div>
+
+        <div class="countdown-banner">
+          🍿 Plus que 48 heures avant la sortie officielle ! Vous recevrez une nouvelle alerte le jour J dès sa mise à disposition.
+        </div>
+
+        <div class="cta-wrapper">
+          <a href="${movieUrl}" class="cta-btn">Voir la fiche sur Éliciné</a>
+        </div>
+
+        <p class="signature">
+          À très vite pour cette grande sortie,<br>
+          <strong style="color: #ffffff;">L'équipe Éliciné</strong>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p class="footer-motto">Éliciné — Le cinéma d'exception, élu pour vous.</p>
+        <p style="margin: 0;">Alerte exclusive réservée aux membres actifs du Pass Pro Éliciné. Besoin d'aide ? <a href="mailto:support@elicine.app">support@elicine.app</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Template HTML Dark Theme Responsive pour l'alerte Jour J (Jour de la sortie)
+ */
+export function getMovieAlertReleaseDayEmailHtml({ 
+  customerName = 'Cinéphile',
+  movieTitle = 'Film du jour',
+  moviePoster = null,
+  releaseDate = null,
+  movieId = '',
+  mediaType = 'movie',
+  overview = ''
+} = {}) {
+  const formattedDate = formatMovieReleaseDate(releaseDate);
+  const posterUrl = normalizeMoviePosterUrl(moviePoster);
+  const movieUrl = movieId ? `https://elicine.app?movie=${movieId}` : 'https://elicine.app';
+  const typeLabel = (mediaType === 'tv' || mediaType === 'SÉRIE') ? 'la série' : 'le film';
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jour J : ${movieTitle} est disponible !</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #08080a;
+      color: #e4e4e7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #08080a;
+      padding: 40px 16px;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      background-color: #121319;
+      border: 1px solid rgba(229, 9, 20, 0.3);
+      border-top: 3px solid #e50914;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+    }
+    .header {
+      padding: 32px 32px 16px 32px;
+      text-align: left;
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #e50914;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #4ade80;
+      background-color: rgba(74, 222, 128, 0.12);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      padding: 3px 9px;
+      border-radius: 6px;
+    }
+    .title {
+      font-size: 23px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.3px;
+      line-height: 1.3;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #e50914;
+      margin: 0;
+      font-weight: 600;
+    }
+    .content {
+      padding: 16px 32px 32px 32px;
+    }
+    .paragraph {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: #d4d4d8;
+      margin: 0 0 16px 0;
+    }
+    .movie-card {
+      background-color: #171822;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 18px;
+      margin: 20px 0;
+      display: flex;
+      gap: 16px;
+    }
+    .movie-poster {
+      width: 100px;
+      height: 145px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      flex-shrink: 0;
+    }
+    .movie-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .movie-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 6px 0;
+      line-height: 1.3;
+    }
+    .movie-status {
+      font-size: 12.5px;
+      color: #4ade80;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .movie-overview {
+      font-size: 12px;
+      color: #a1a1aa;
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .release-banner {
+      background-color: rgba(74, 222, 128, 0.08);
+      border: 1px solid rgba(74, 222, 128, 0.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin: 16px 0 24px 0;
+      font-size: 13px;
+      color: #4ade80;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cta-wrapper {
+      text-align: left;
+      padding: 8px 0 20px 0;
+    }
+    .cta-btn {
+      display: inline-block;
+      background-color: #e50914;
+      color: #ffffff !important;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 13px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(229, 9, 20, 0.35);
+    }
+    .signature {
+      font-size: 13.5px;
+      color: #a1a1aa;
+      margin: 22px 0 0 0;
+      line-height: 1.6;
+    }
+    .footer {
+      padding: 20px 32px;
+      background-color: #0b0c10;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: left;
+      font-size: 12px;
+      color: #71717a;
+      line-height: 1.6;
+    }
+    .footer-motto {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #a1a1aa;
+      margin: 0 0 6px 0;
+    }
+    .footer a {
+      color: #a1a1aa;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="header-top">
+          <div class="brand">Éliciné Pro</div>
+          <div class="badge">Jour J • Disponible</div>
+        </div>
+        <h1 class="title">C'est le grand jour !</h1>
+        <p class="subtitle">« ${movieTitle} » est officiellement disponible</p>
+      </div>
+
+      <div class="content">
+        <p class="paragraph">Bonjour ${customerName},</p>
+        <p class="paragraph">
+          L'attente est enfin terminée ! Comme convenu avec votre alerte <strong>Pass Pro Éliciné</strong>, nous avons le plaisir de vous informer que ${typeLabel} <strong>« ${movieTitle} »</strong> sort officiellement aujourd'hui (${formattedDate}).
+        </p>
+
+        <!-- Carte Film -->
+        <div class="movie-card">
+          <img src="${posterUrl}" alt="${movieTitle}" class="movie-poster" />
+          <div class="movie-info">
+            <h2 class="movie-title">${movieTitle}</h2>
+            <div class="movie-status">● Disponible dès aujourd'hui</div>
+            ${overview ? `<p class="movie-overview">${overview}</p>` : ''}
+          </div>
+        </div>
+
+        <div class="release-banner">
+          🎬 Retrouvez toutes les disponibilités de streaming, bandes-annonces et détails directement sur votre plateforme.
+        </div>
+
+        <div class="cta-wrapper">
+          <a href="${movieUrl}" class="cta-btn">Découvrir sur Éliciné</a>
+        </div>
+
+        <p class="signature">
+          Nous vous souhaitons un excellent visionnage,<br>
+          <strong style="color: #ffffff;">L'équipe Éliciné</strong>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p class="footer-motto">Éliciné — Le cinéma d'exception, élu pour vous.</p>
+        <p style="margin: 0;">Alerte exclusive réservée aux membres actifs du Pass Pro Éliciné. Besoin d'aide ? <a href="mailto:support@elicine.app">support@elicine.app</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Déclenche l'envoi de l'email d'alerte J-2 avant la sortie d'un film ou d'une série
+ */
+export async function sendMovieAlertJMinus2Email(email, {
+  customerName = 'Cinéphile',
+  movieTitle = 'Film à venir',
+  moviePoster = null,
+  releaseDate = null,
+  movieId = '',
+  mediaType = 'movie',
+  overview = ''
+} = {}) {
+  const html = getMovieAlertJMinus2EmailHtml({
+    customerName,
+    movieTitle,
+    moviePoster,
+    releaseDate,
+    movieId,
+    mediaType,
+    overview
+  });
+
+  return sendEmailWithResend({
+    to: email,
+    subject: `🍿 Plus que 2 jours : « ${movieTitle} » sort très bientôt !`,
+    html,
+    text: `Bonjour ${customerName},\n\nPréparez vos popcorns ! Le film ou la série « ${movieTitle} » que vous suivez sur Éliciné Pro sort officiellement dans 2 jours (${formatMovieReleaseDate(releaseDate)}).\n\nDécouvrir sur Éliciné : https://elicine.app?movie=${movieId}\n\nÉliciné — Le cinéma d'exception, élu pour vous.`
+  });
+}
+
+/**
+ * Déclenche l'envoi de l'email d'alerte le Jour J de la sortie d'un film ou d'une série
+ */
+export async function sendMovieAlertReleaseDayEmail(email, {
+  customerName = 'Cinéphile',
+  movieTitle = 'Film du jour',
+  moviePoster = null,
+  releaseDate = null,
+  movieId = '',
+  mediaType = 'movie',
+  overview = ''
+} = {}) {
+  const html = getMovieAlertReleaseDayEmailHtml({
+    customerName,
+    movieTitle,
+    moviePoster,
+    releaseDate,
+    movieId,
+    mediaType,
+    overview
+  });
+
+  return sendEmailWithResend({
+    to: email,
+    subject: `🎬 C'est le jour J ! « ${movieTitle} » est disponible dès aujourd'hui`,
+    html,
+    text: `Bonjour ${customerName},\n\nL'attente est terminée ! Le film ou la série « ${movieTitle} » que vous suivez sur Éliciné Pro est officiellement disponible dès aujourd'hui (${formatMovieReleaseDate(releaseDate)}).\n\nAccéder au film sur Éliciné : https://elicine.app?movie=${movieId}\n\nÉliciné — Le cinéma d'exception, élu pour vous.`
+  });
+}
+

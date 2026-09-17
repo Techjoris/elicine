@@ -222,6 +222,34 @@ export async function fetchDiscoverPage(
   }
 }
 
+/**
+ * Récupère les films à paraître ("coming soon") pour le suivi et les alertes de sortie par e-mail
+ */
+export async function fetchUpcomingMovies(
+  page: number = 1,
+  options: { apiKey?: string; language?: string; region?: string } = {}
+): Promise<{ results: Movie[]; total_pages: number }> {
+  try {
+    const lang = getActiveTmdbLanguage(options.language);
+    const todayIso = new Date().toISOString().split('T')[0];
+    const params: Record<string, any> = {
+      page,
+      language: lang,
+      sort_by: 'primary_release_date.asc',
+      'primary_release_date.gte': todayIso,
+      include_adult: false
+    };
+    if (options.region) params.region = options.region;
+
+    const res = await fetchTmdbEndpoint('discover/movie', params, options.apiKey);
+    if (!res.ok) throw new Error(`TMDB ${res.status}`);
+    const data = await res.json();
+    return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
+  } catch {
+    return { results: [], total_pages: 1 };
+  }
+}
+
 /** Paginated TMDB search */
 export async function fetchSearchPage(
   query: string,

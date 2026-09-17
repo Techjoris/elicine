@@ -197,9 +197,15 @@ export interface AlertItem {
   movieTitle: string;
   releaseDate: string;
   posterPath: string | null;
+  backdropPath?: string | null;
   email: string;
+  userId?: string;
+  mediaType?: string;
+  overview?: string;
   createdAt: string;
-  notified: boolean;
+  notified?: boolean;
+  notified_j_minus_2?: boolean;
+  notified_release_day?: boolean;
 }
 
 export interface SearchHistoryItem {

@@ -17,6 +17,7 @@ import { supabase, signInWithGoogle } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 import { subscriptionService } from '../services/subscriptionService';
+import { movieAlertsService } from '../services/movieAlertsService';
 
 interface AppContextType {
   // Quota & AI
@@ -57,6 +58,7 @@ interface AppContextType {
 
   alerts: AlertItem[];
   addAlert: (movie: Movie, email?: string) => void;
+  toggleAlert: (movie: Movie) => Promise<void>;
   removeAlert: (alertId: string) => void;
   isMovieAlertActive: (movieId: number) => boolean;
 
@@ -271,16 +273,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 6. Alerts
   const [alerts, setAlerts] = useState<AlertItem[]>(() => {
-    const saved = localStorage.getItem('cineia_alerts');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
+    return movieAlertsService.getLocalAlerts();
   });
+
+  // Synchronisation des alertes cinématographiques avec Supabase / API lors de la connexion
+  useEffect(() => {
+    if (user) {
+      movieAlertsService.getUserAlerts(user).then(syncedAlerts => {
+        if (Array.isArray(syncedAlerts)) {
+          setAlerts(syncedAlerts);
+        }
+      });
+    }
+  }, [user?.id, user?.email]);
 
   // 7. Search History & Interactive Input
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -975,25 +980,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return watchlist.some(m => m.id === movieId);
   };
 
-  // Alerts Actions
-  const addAlert = (movie: Movie, email?: string) => {
-    const alertEmail = email || user?.email || 'votre email';
-    const newAlert: AlertItem = {
-      id: 'alt_' + Date.now(),
-      movieId: movie.id,
-      movieTitle: movie.title,
-      releaseDate: movie.release_date,
-      posterPath: movie.poster_path,
-      email: alertEmail,
-      createdAt: new Date().toISOString(),
-      notified: false
-    };
+  // Alerts Actions (Strictement réservées aux membres Pass Pro)
+  const toggleAlert = async (movie: Movie) => {
+    const isPro = Boolean(
+      user && (
+        user.isPro || 
+        user.is_pro || 
+        user.pass_status === 'pro' || 
+        (user.email && ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'].includes(user.email.toLowerCase()))
+      )
+    );
 
-    setAlerts(prev => [...prev, newAlert]);
-    showToast(`🔔 Alerte activée pour "${movie.title}" ! Notification sur ${alertEmail}`);
+    // 🛡️ Condition d'accès obligatoire : Pass Pro actif
+    if (!isPro) {
+      setIsProModalOpen(true);
+      showToast("⭐ Le suivi des sorties par e-mail est une exclusivité Pass Pro ! Débloquez vos alertes prioritaires.");
+      return;
+    }
+
+    const res = await movieAlertsService.toggleMovieAlert(movie, user);
+    if (res.requirePro) {
+      setIsProModalOpen(true);
+      showToast(res.error || "Abonnement Pass Pro requis pour activer cette alerte.");
+      return;
+    }
+
+    if (res.active && res.alert) {
+      setAlerts(prev => [res.alert!, ...prev.filter(a => a.movieId !== movie.id)]);
+      showToast(`🔔 Alerte activée pour « ${movie.title} » ! Rappel par e-mail à J-2 et le jour J.`);
+    } else {
+      setAlerts(prev => prev.filter(a => a.movieId !== movie.id));
+      showToast(`Alerte de sortie désactivée pour « ${movie.title} »`);
+    }
+  };
+
+  const addAlert = (movie: Movie, _email?: string) => {
+    toggleAlert(movie);
   };
 
   const removeAlert = (alertId: string) => {
+    movieAlertsService.removeAlert(alertId, user);
     setAlerts(prev => prev.filter(a => a.id !== alertId));
     showToast('Alerte supprimée.');
   };
@@ -1066,6 +1092,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isInWatchlist,
         alerts,
         addAlert,
+        toggleAlert,
         removeAlert,
         isMovieAlertActive,
         searchQuery,

@@ -3,6 +3,10 @@
     {
       "path": "/api/activate-pro?action=cron",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/movie-alerts?action=cron",
+      "schedule": "0 9 * * *"
     }
   ],
   "rewrites": [
