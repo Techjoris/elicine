@@ -309,7 +309,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="flex flex-col gap-3 pt-1">
           {paymentMethod === 'paypal_card' ? (
             /* Mode PayPal & Carte Bancaire -> Déclencheur PayPal Checkout avec URLs de retour sécurisées */
-            <button
+            <>
+              <button
               type="button"
               onClick={handleCheckoutClick}
               disabled={isProcessing}
@@ -322,11 +323,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               ) : (
                 <>
-                  <span>👑 S'abonner avec PayPal & CB ({amountToPay} {currentPrice.symbol})</span>
+                  <span>👑 S'abonner par Carte Bancaire ou PayPal ({amountToPay} {currentPrice.symbol})</span>
                   <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </>
               )}
             </button>
+            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 -mt-1">
+              💳 CB acceptées (Visa, Mastercard) sans compte obligatoire • Chiffrement sécurisé PayPal
+            </p>
+          </>
           ) : (
             /* Mode Paiement Mobile -> Déclencheur Saspay */
             <button

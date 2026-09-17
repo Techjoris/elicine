@@ -271,9 +271,6 @@ export const subscriptionService = {
         customerName: name,
         subscriptionId: subscription.id
       });
-      if (typeof window !== 'undefined') {
-        window.open(paypalUrl, '_blank', 'noopener,noreferrer');
-      }
       return { success: true, redirectUrl: paypalUrl };
     }
 

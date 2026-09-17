@@ -71,11 +71,16 @@ export function getPayPalProCheckoutUrl(options: {
     item_number: `ELICINE_PRO_${plan.toUpperCase()}`,
     amount: numericAmount,
     currency_code: normalizedCurrency,
+    // Configuration indispensable pour le Paiement par Carte sans compte (PayPal Guest Checkout)
+    solution_type: 'Sole',
+    landing_page: 'Billing',
     no_shipping: '1',
     no_note: '1',
+    charset: 'utf-8',
     return: returnUrl,
     cancel_return: cancelUrl,
-    rm: '2', // Retour par GET/POST avec les données de transaction
+    // rm=1 : Redirection propre en HTTP GET vers l'application SPA (évite le 405 Method Not Allowed de Vercel causé par rm=2)
+    rm: '1',
     cbt: 'Retourner sur Éliciné pour activer mon Pass Pro'
   });
 
@@ -133,10 +138,14 @@ export function getPayPalDonationUrl(options: {
     item_name: 'Soutien et Don — Éliciné',
     amount: numericAmount,
     currency_code: normalizedCurrency,
+    // Configuration Guest Checkout pour le don
+    solution_type: 'Sole',
+    landing_page: 'Billing',
     no_shipping: '1',
+    charset: 'utf-8',
     return: returnUrl,
     cancel_return: cancelUrl,
-    rm: '2',
+    rm: '1',
     cbt: 'Retourner sur Éliciné'
   });
 

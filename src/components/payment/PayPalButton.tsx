@@ -160,20 +160,46 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                 return actions.resolve();
               },
               createOrder: (data: any, actions: any) => {
+                const isYearly = billingCycle === 'yearly';
+                const itemDescription = `Pass Pro Éliciné (${isYearly ? 'Formule Annuelle - 1 an' : 'Formule Mensuelle - 1 mois'})`;
+
                 return actions.order.create({
+                  intent: 'CAPTURE',
                   purchase_units: [
                     {
-                      description: `Pass Pro Éliciné (${billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'})`,
+                      reference_id: `ELICINE_PRO_${billingCycle.toUpperCase()}`,
+                      description: itemDescription,
                       amount: {
                         currency_code: normalizedCurrency,
-                        value: formattedAmount
-                      }
+                        value: formattedAmount,
+                        breakdown: {
+                          item_total: {
+                            currency_code: normalizedCurrency,
+                            value: formattedAmount
+                          }
+                        }
+                      },
+                      items: [
+                        {
+                          name: `Pass Pro Éliciné (${isYearly ? 'Annuel' : 'Mensuel'})`,
+                          description: 'Accès illimité aux recherches IA, filtres avancés et alertes de sorties',
+                          unit_amount: {
+                            currency_code: normalizedCurrency,
+                            value: formattedAmount
+                          },
+                          quantity: '1',
+                          category: 'DIGITAL_GOODS'
+                        }
+                      ]
                     }
                   ],
                   application_context: {
                     brand_name: 'Éliciné',
+                    // Autorise et met en avant le paiement par carte sans compte (Guest Checkout)
+                    landing_page: 'GUEST_CHECKOUT',
                     shipping_preference: 'NO_SHIPPING',
                     user_action: 'PAY_NOW',
+                    payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
                     return_url: `${origin}/payment-callback?gateway=paypal&status=success&plan=${billingCycle}`,
                     cancel_url: `${origin}/?payment=cancelled`
                   }
@@ -187,8 +213,17 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   await onSuccess(details || data, capturedOrderId);
                 } catch (captureErr: any) {
                   console.error('[PayPalButton] Capture failed:', captureErr);
-                  const msg = captureErr?.message || "Échec de la validation de la transaction PayPal.";
-                  setErrorMessage(msg);
+                  const issue = captureErr?.details?.[0]?.issue || captureErr?.name || '';
+                  let userMsg = "Échec de la validation de la transaction.";
+
+                  if (issue === 'INSTRUMENT_DECLINED') {
+                    userMsg = "Votre carte a été refusée par votre banque. Veuillez vérifier vos plafonds ou essayer une autre carte.";
+                  } else if (captureErr?.message) {
+                    userMsg = captureErr.message;
+                  }
+
+                  setErrorMessage(userMsg);
+                  setHasError(true);
                   if (onError) onError(captureErr);
                 } finally {
                   if (isMounted) setIsCapturing(false);
@@ -198,7 +233,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                 console.error('[PayPalButton] SDK Error:', err);
                 if (!isMounted) return;
                 setHasError(true);
-                setErrorMessage("Une erreur est survenue lors de l'affichage du paiement PayPal.");
+                setErrorMessage("Une erreur est survenue lors de la communication sécurisée avec PayPal. Vous pouvez réessayer ou utiliser le lien direct.");
                 if (onError) onError(err);
               },
               onCancel: (data: any) => {
@@ -290,17 +325,29 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
       {/* Gestion des erreurs & Bouton de repli automatique */}
       {hasError && (
-        <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center flex flex-col items-center gap-2">
+        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-center flex flex-col items-center gap-2.5">
           <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-            {errorMessage || "Le module PayPal n'a pas pu se charger."}
+            {errorMessage || "Le module de paiement a rencontré un problème."}
           </p>
-          <button
-            type="button"
-            onClick={handleDirectCheckout}
-            className="w-full py-2.5 px-4 rounded-xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <span>💳 Payer via le portail sécurisé PayPal ({formattedAmount} {normalizedCurrency}) →</span>
-          </button>
+          <div className="w-full flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setHasError(false);
+                setErrorMessage('');
+              }}
+              className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+            >
+              🔄 Réessayer
+            </button>
+            <button
+              type="button"
+              onClick={handleDirectCheckout}
+              className="flex-1 py-2 px-3 rounded-xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <span>💳 Portail sécurisé PayPal →</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

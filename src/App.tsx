@@ -122,6 +122,20 @@ export const AppContent: React.FC = () => {
       (params.get('payment_status') === 'success' && params.get('type') === 'don') ||
       params.get('tip') === 'success';
 
+    // --- CANCELLATION RETURN ---
+    const isPaymentCancelled =
+      params.get('payment') === 'cancelled' ||
+      params.get('payment') === 'canceled' ||
+      params.get('donation') === 'cancelled' ||
+      params.get('donation') === 'canceled' ||
+      params.get('status') === 'cancelled';
+
+    if (isPaymentCancelled) {
+      showToast('ℹ️ Paiement ou don annulé. Vous pouvez réessayer à tout moment.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     if (isProReturn) {
       // 🔒 SÉCURITÉ : Aucun passage automatique en Pro côté client !
       // Redirection vers la vue de vérification cryptographique et interrogation de la base de données.

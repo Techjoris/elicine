@@ -37,7 +37,13 @@ export default async function handler(req, res) {
       businessId,
       currency: 'USD',
       monthlyAmount: 1.99,
-      yearlyAmount: 15.99
+      yearlyAmount: 15.99,
+      guestCheckout: {
+        enabled: true,
+        solutionType: 'Sole',
+        landingPage: 'Billing',
+        supportedCurrencies: ['USD', 'EUR', 'CAD', 'GBP', 'AUD']
+      }
     });
   }
 

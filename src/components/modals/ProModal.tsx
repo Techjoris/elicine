@@ -97,7 +97,11 @@ export const ProModal: React.FC = () => {
           }
         } catch (_) {}
 
-        showToast('Redirection vers le paiement sécurisé SasaPay...');
+        if (isPaypal || isCard) {
+          showToast('Redirection vers le paiement sécurisé PayPal & Carte bancaire...');
+        } else {
+          showToast('Redirection vers le paiement sécurisé Mobile Money (SasaPay)...');
+        }
         if (typeof window !== 'undefined') {
           window.location.href = result.redirectUrl;
         }
