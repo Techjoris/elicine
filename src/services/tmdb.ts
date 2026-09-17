@@ -804,7 +804,7 @@ export async function searchPersonAndGetWorks(
 
             let matchedCluster = null;
             if (thematicFilter?.isTwistRequested) {
-              matchedCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist');
+              matchedCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist_narratif' || c.id === 'twist');
             } else if (cues.length > 0) {
               matchedCluster = THEMATIC_LEXICON_CLUSTERS.find(c =>
                 c.triggers.some(tr => cues.some(cue => cue.includes(tr) || tr.includes(cue)))

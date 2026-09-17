@@ -17,6 +17,12 @@ import {
   isMovieParasiteWithoutNarrativeLink,
   querySupabaseVectorSearch 
 } from './supabaseVectorSearch';
+import {
+  getCachedJustification,
+  setCachedJustification,
+  buildJustificationCacheKey,
+  resolveOrFetchJustification
+} from './justificationCache';
 
 export interface RawAiMovieItem {
   title: string;
@@ -1129,6 +1135,7 @@ export async function executeCinoraSearch(
       headers: searchHeaders,
       body: JSON.stringify({
         query: cleanQuery,
+        thematicCluster: offlineCriteria?.thematicCluster,
         groqApiKey: groqKey || undefined,
         deepseekApiKey: deepseekKey || undefined,
         qwenApiKey: qwenKey || undefined,
@@ -1155,10 +1162,28 @@ export async function executeCinoraSearch(
         // Cas A : Des correspondances réelles ont été trouvées dans Supabase
         if (Array.isArray(searchData.movies) && searchData.movies.length > 0) {
           console.log(`[Éliciné LLM-First] ${searchData.movies.length} films trouvés dans le catalogue Supabase avec badge`);
+          const clusterId = offlineCriteria?.thematicCluster;
+          const moviesWithCache = searchData.movies.map((m: any) => {
+            const mId = m.id || m.tmdb_id;
+            let reason = m.ai_match_reason;
+            if (clusterId && mId) {
+              const cached = getCachedJustification(mId, clusterId);
+              if (cached) {
+                reason = cached;
+              } else if (reason) {
+                setCachedJustification(mId, clusterId, reason);
+              }
+            }
+            return {
+              ...m,
+              ai_match_reason: reason || m.ai_match_reason
+            };
+          });
+
           return {
-            thought: searchData.thought || `✨ Analyse Éliciné : ${searchData.movies.length} film(s) correspondant(s) dans notre catalogue`,
+            thought: searchData.thought || `✨ Analyse Éliciné : ${moviesWithCache.length} film(s) correspondant(s) dans notre catalogue`,
             moodDetected: cleanQuery,
-            recommendedMovies: searchData.movies,
+            recommendedMovies: moviesWithCache,
             isFallbackMode: false,
             providerUsed: searchData.providerUsed || 'Algorithme Éliciné',
             suggestedPrompts: searchData.suggestedPrompts || [
@@ -1169,7 +1194,7 @@ export async function executeCinoraSearch(
             cascade: {
               tierReached: 1,
               criteria: offlineCriteria,
-              tier1Count: searchData.movies.length,
+              tier1Count: moviesWithCache.length,
               tier2Count: 0,
               tier3Count: 0
             }
@@ -1425,6 +1450,24 @@ export async function executeCinoraSearch(
         const selectedTier1 = finalTier1.slice(0, limit);
         console.log(`[Éliciné Cascade] Arrêt au Niveau 1 : ${selectedTier1.length} correspondances ciblées validées.`);
 
+        const clusterId = criteria.thematicCluster || activeThematicCluster?.id;
+        const tier1WithCache = selectedTier1.map(m => {
+          const mId = m.id;
+          let reason = m.ai_match_reason;
+          if (clusterId && mId) {
+            const cached = getCachedJustification(mId, clusterId);
+            if (cached) {
+              reason = cached;
+            } else if (reason) {
+              setCachedJustification(mId, clusterId, reason);
+            }
+          }
+          return {
+            ...m,
+            ai_match_reason: reason || m.ai_match_reason
+          };
+        });
+
         const intentSummary = primaryPerson
           ? `avec ${primaryPerson}${criteria.isTwistRequested ? ' et twist' : ''}`
           : criteria.spatialSettings.length > 0
@@ -1434,9 +1477,9 @@ export async function executeCinoraSearch(
               : `correspondant précisément à vos critères`;
 
         return {
-          thought: `🎯 Analyse Éliciné : ${selectedTier1.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
+          thought: `🎯 Analyse Éliciné : ${tier1WithCache.length} œuvres trouvées ${intentSummary}${formatFilterSuffix(filters)}`,
           moodDetected: cleanQuery,
-          recommendedMovies: selectedTier1,
+          recommendedMovies: tier1WithCache,
           isFallbackMode: false,
           providerUsed: 'Algorithme Éliciné',
           suggestedPrompts: [
@@ -1549,16 +1592,29 @@ export async function executeCinoraSearch(
 
     // Démarche scientifique : unicité et variation continue des scores
     const assignedScores = new Set<number>();
+    const clusterId = criteria.thematicCluster || activeThematicCluster?.id;
     const finalMovies = finalPool.slice(0, limit).map((m, idx) => {
       let score = m.match_rate || Math.max(70, Math.round(globalSimilarityScore * 100) - idx * 2);
       while (assignedScores.has(score) && score > 60) {
         score -= 1;
       }
       assignedScores.add(score);
+
+      const mId = m.id;
+      let reason = m.ai_match_reason;
+      if (clusterId && mId) {
+        const cached = getCachedJustification(mId, clusterId);
+        if (cached) {
+          reason = cached;
+        } else if (reason) {
+          setCachedJustification(mId, clusterId, reason);
+        }
+      }
+
       return {
         ...m,
         match_rate: score,
-        ai_match_reason: m.ai_match_reason || `✨ Sélection Éliciné : Ambiance et immersion thématique`
+        ai_match_reason: reason || `✨ Sélection Éliciné : Ambiance et immersion thématique`
       };
     });
 

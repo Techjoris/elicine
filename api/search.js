@@ -41,6 +41,38 @@ Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 }`;
 
 // ============================================================================
+// CACHE CONTEXTUEL DES JUSTIFICATIONS (movie_id + cluster_id)
+// Clé obligatoire : `${movieId}:${clusterId}` (jamais movieId seul)
+// ============================================================================
+if (!globalThis.__elicine_justification_cache) {
+  globalThis.__elicine_justification_cache = new Map();
+}
+
+export function buildJustificationCacheKey(movieId, clusterId) {
+  if (movieId === undefined || movieId === null || clusterId === undefined || clusterId === null) {
+    return null;
+  }
+  const cleanId = String(movieId).trim();
+  const cleanCluster = String(clusterId).trim().toLowerCase();
+  if (!cleanId || !cleanCluster) return null;
+  return `${cleanId}:${cleanCluster}`;
+}
+
+export function getCachedJustification(movieId, clusterId) {
+  const key = buildJustificationCacheKey(movieId, clusterId);
+  if (!key) return null;
+  return globalThis.__elicine_justification_cache.get(key) || null;
+}
+
+export function setCachedJustification(movieId, clusterId, justification) {
+  const key = buildJustificationCacheKey(movieId, clusterId);
+  if (!key || !justification) return;
+  const cleanJustif = String(justification).trim();
+  if (!cleanJustif) return;
+  globalThis.__elicine_justification_cache.set(key, cleanJustif);
+}
+
+// ============================================================================
 // Mots vides français & anglais pour l'extraction de mots-clés
 // ============================================================================
 const STOP_WORDS = new Set([
@@ -261,7 +293,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}) {
 // Ex: "Prisonniers / Prisoners" → cherche "Prisonniers" ET "Prisoners" séparément
 // Sélectionne impérativement 1 seul film par recommandation LLM (anti-doublon)
 // ============================================================================
-async function resolveByTitles(extractedTitles, matches, queryText = '') {
+async function resolveByTitles(extractedTitles, matches, queryText = '', clusterId = null) {
   if (!supabaseServer || !Array.isArray(extractedTitles) || extractedTitles.length === 0) return [];
 
   const orClauses = [];
@@ -345,7 +377,7 @@ async function resolveByTitles(extractedTitles, matches, queryText = '') {
     }
   }
 
-  return enrichWithBadges(selectedResults, matches, 'Sélection Éliciné', queryText);
+  return enrichWithBadges(selectedResults, matches, 'Sélection Éliciné', queryText, clusterId);
 }
 
 // ============================================================================
@@ -353,7 +385,7 @@ async function resolveByTitles(extractedTitles, matches, queryText = '') {
 // - Résout STRICTEMENT 1 SEUL film TMDB par recommandation LLM (évite les doublons de nom).
 // - Enrichit si besoin par les recommandations TMDB basées sur le scénario et l'affinité.
 // ============================================================================
-async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
+async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '', clusterId = null) {
   const candidatesList = Array.isArray(matches) && matches.length > 0
     ? matches
     : [{ title: rawQuery }];
@@ -497,6 +529,17 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
         continue;
       }
 
+      const mId = bestMatch.id;
+      let finalReason = matchReason;
+      if (mId && clusterId) {
+        const cached = getCachedJustification(mId, clusterId);
+        if (cached) {
+          finalReason = cached;
+        } else if (finalReason) {
+          setCachedJustification(mId, clusterId, finalReason);
+        }
+      }
+
       allTmdbResults.push({
         id: bestMatch.id,
         tmdb_id: bestMatch.id,
@@ -512,7 +555,7 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '') {
         media_type: 'movie',
         ai_badge: 'Recommandation Éliciné',
         badge: 'Recommandation Éliciné',
-        ai_match_reason: matchReason || `Recommandé pour sa cohérence avec "${rawTitle}"`,
+        ai_match_reason: finalReason || matchReason || `Recommandé pour sa cohérence avec "${rawTitle}"`,
         match_rate: dynamicScore
       });
     }
@@ -643,14 +686,33 @@ const THEMATIC_CLUSTERS_RAW = [
     disqualified: ['titanic', 'romeo + juliet', 'roméo + juliette', 'gatsby le magnifique', 'the great gatsby', 'revolutionary road', 'les noces rebelles', 'la la land', 'notting hill']
   },
   {
-    id: 'twist',
-    triggers: ['twist', 'retournement', 'dénouement', 'fin surprenante', 'chute'],
+    id: 'twist_narratif',
+    triggers: [
+      'twist', 'twists', 'twist final', 'twist_narratif', 'twist narratif',
+      'twist final surprenant', 'retournement', 'retournements', 'dénouement',
+      'denouement', 'fin surprenante', 'chute finale', 'chute', 'mindfuck',
+      'revelation finale', 'révélation finale'
+    ],
     primaryKeywords: ['twist', 'retournement', 'dénouement', 'chute', 'révélation', 'illusion', 'hallucination', 'psychiatrique', 'asile', 'schizophr'],
     secondaryKeywords: ['secret', 'vérité', 'double jeu', 'mensonge', 'machination', 'paranoïa', 'complot', 'infiltr'],
     expectedGenres: [53, 9648, 878, 27, 80],
     conflictingGenres: [10749, 35, 10751],
     archetypes: ['shutter island', 'inception', 'fight club', 'sixième sens', 'les autres', 'usual suspects', 'memento', 'le prestige', 'seven', 'gone girl', 'oldboy', 'prisoners'],
     disqualified: ['titanic', 'le loup de wall street', 'django unchained', 'the revenant', 'gatsby le magnifique']
+  },
+  {
+    id: 'consumerisme',
+    triggers: [
+      'consumerisme', 'consumérisme', 'societe de consommation', 'société de consommation',
+      'capitalisme', 'aliénation', 'alienation', 'matérialisme', 'materialisme',
+      'critique sociale', 'satire sociale'
+    ],
+    primaryKeywords: ['consommation', 'société', 'capitalisme', 'système', 'aliénation', 'argent', 'publicité', 'matérialisme'],
+    secondaryKeywords: ['banlieue', 'bureau', 'conformisme', 'rébellion', 'révolte', 'vide existentiel', 'dystopie'],
+    expectedGenres: [18, 53, 35, 878],
+    conflictingGenres: [10751, 10749],
+    archetypes: ['fight club', 'american psycho', 'they live', 'invasion los angeles', 'the truman show', 'truman show', 'network'],
+    disqualified: ['titanic', 'notting hill', 'pretty woman']
   },
   {
     id: 'espionnage',
@@ -687,6 +749,17 @@ const THEMATIC_CLUSTERS_RAW = [
     ]
   }
 ];
+
+export function detectThematicClusterId(queryText) {
+  if (!queryText) return null;
+  const qLower = queryText.toLowerCase();
+  for (const cluster of THEMATIC_CLUSTERS_RAW) {
+    if (cluster.triggers.some(t => qLower.includes(t))) {
+      return cluster.id;
+    }
+  }
+  return null;
+}
 
 function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   const titleLower = (movie.title || movie.name || '').toLowerCase().trim();
@@ -923,7 +996,7 @@ function filterMockbusters(movies, queryText) {
 // ============================================================================
 // Helper : Déduplication + enrichissement badge Éliciné
 // ============================================================================
-function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éliciné', queryText = '') {
+function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éliciné', queryText = '', clusterId = null) {
   if (!Array.isArray(rawMovies) || rawMovies.length === 0) return [];
 
   const seenIds = new Set();
@@ -932,6 +1005,8 @@ function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éli
     const key = movie.id || movie.tmdb_id || movie.title;
     if (!seenIds.has(key)) { seenIds.add(key); unique.push(movie); }
   }
+
+  const effectiveClusterId = clusterId || detectThematicClusterId(queryText);
 
   return unique.map(movie => {
     const movieTitleLower = (movie.title || '').toLowerCase().trim();
@@ -952,11 +1027,23 @@ function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éli
     // Score dynamique basé sur la sémantique et la qualité du film
     const dynamicScore = calculateSemanticMatchScore(movie, queryText, matchingLLM);
 
+    const mId = movie.id || movie.tmdb_id;
+    let justification = matchingLLM?.reason || null;
+
+    if (mId && effectiveClusterId) {
+      const cached = getCachedJustification(mId, effectiveClusterId);
+      if (cached) {
+        justification = cached;
+      } else if (justification) {
+        setCachedJustification(mId, effectiveClusterId, justification);
+      }
+    }
+
     return {
       ...movie,
       ai_badge: badgeLabel,
       badge: badgeLabel,
-      ai_match_reason: matchingLLM?.reason || "Sélectionné par l'algorithme Éliciné",
+      ai_match_reason: justification || "Sélectionné par l'algorithme Éliciné",
       match_rate: dynamicScore
     };
   });
@@ -1142,10 +1229,18 @@ export default async function handler(req, res) {
         console.log(`[API /api/search] [Étape 1] Requête corrigée : "${cleanQuery}" → "${correctedQuery}"`);
       }
 
+      // Résolution du cluster thématique (hérité du scoring client ou détecté)
+      const explicitThematicCluster = req.body?.thematicCluster || null;
+      const detectedThematicCluster = detectThematicClusterId(cleanQuery);
+      const activeClusterId = explicitThematicCluster || detectedThematicCluster;
+      if (activeClusterId) {
+        console.log(`[API /api/search] Cluster thématique actif pour le cache : "${activeClusterId}"`);
+      }
+
       // ─── ÉTAPE 2 — Phase A : Résolution par titres (ilike souple) ─────────────
       let resolvedMovies = [];
       if (extractedTitles.length > 0) {
-        resolvedMovies = await resolveByTitles(extractedTitles, matches, effectiveQuery);
+        resolvedMovies = await resolveByTitles(extractedTitles, matches, effectiveQuery, activeClusterId);
         console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
       }
 
@@ -1155,7 +1250,8 @@ export default async function handler(req, res) {
         resolvedMovies = await resolveByKeywords(
           effectiveQuery,
           matches,
-          req.body?.tmdbApiKey || ''
+          req.body?.tmdbApiKey || '',
+          activeClusterId
         );
         console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
       }

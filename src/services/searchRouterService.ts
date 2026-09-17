@@ -324,6 +324,7 @@ export interface ExtractedCriteria {
   hasStructuredIntent: boolean;
   primaryEntity?: string;
   hasHardCriteria: boolean;
+  thematicCluster?: string;
 }
 
 export interface SpatialSettingDefinition {
@@ -771,7 +772,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  return {
+  const criteriaObj: ExtractedCriteria = {
     actors,
     directors,
     spatialSettings,
@@ -789,6 +790,13 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     primaryEntity,
     hasHardCriteria
   };
+
+  const detectedCluster = findActiveThematicCluster(criteriaObj, clean);
+  if (detectedCluster) {
+    criteriaObj.thematicCluster = detectedCluster.id;
+  }
+
+  return criteriaObj;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -891,14 +899,48 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
     disqualifiedTitles: ['titanic', 'romeo + juliet', 'roméo + juliette', 'gatsby le magnifique', 'the great gatsby', 'revolutionary road', 'les noces rebelles', 'la la land', 'notting hill']
   },
   {
-    id: 'twist',
-    triggers: ['twist', 'retournement', 'dénouement', 'fin surprenante', 'chute'],
+    id: 'twist_narratif',
+    triggers: [
+      'twist', 'twists', 'twist narratif', 'twist final', 'twist final surprenant',
+      'retournement', 'retournements', 'retournement de situation',
+      'dénouement', 'denouement', 'fin surprenante', 'chute', 'chute finale',
+      'mindfuck', 'mind-bending', 'révélation finale', 'revelation finale'
+    ],
     primaryKeywords: ['twist', 'retournement', 'dénouement', 'chute', 'révélation', 'illusion', 'hallucination', 'psychiatrique', 'asile', 'schizophr'],
     secondaryKeywords: ['secret', 'vérité', 'double jeu', 'mensonge', 'machination', 'paranoïa', 'complot', 'infiltr'],
     expectedGenres: [53, 9648, 878, 27, 80],
     conflictingGenres: [10749, 35, 10751],
     archetypeTitles: ['shutter island', 'inception', 'fight club', 'sixième sens', 'les autres', 'usual suspects', 'memento', 'le prestige', 'seven', 'gone girl', 'oldboy', 'prisoners'],
     disqualifiedTitles: ['titanic', 'le loup de wall street', 'django unchained', 'the revenant', 'gatsby le magnifique']
+  },
+  {
+    id: 'consumerisme',
+    triggers: [
+      'consumérisme', 'consumerisme', 'consommation', 'société de consommation',
+      'societe de consommation', 'capitalisme', 'anti-capitalisme', 'anticapitalisme',
+      'matérialisme', 'materialisme', 'aliénation', 'alienation', 'société moderne',
+      'critique sociale', 'surconsommation', 'critique du capitalisme'
+    ],
+    primaryKeywords: [
+      'consumérisme', 'consumerisme', 'consommation', 'société de consommation',
+      'capitalisme', 'matérialisme', 'matériel', 'aliénation', 'marchandise',
+      'vide existentiel', 'critique'
+    ],
+    secondaryKeywords: [
+      'système', 'monde moderne', 'illusion', 'révolte', 'insurrection',
+      'corporation', 'publicité', 'argent', 'banque', 'travail', 'conformisme'
+    ],
+    expectedGenres: [18, 53, 35, 878],
+    conflictingGenres: [10751, 10402],
+    archetypeTitles: [
+      'fight club', 'american psycho', 'they live', 'invasion los angeles',
+      'the truman show', 'wall-e', 'requiem for a dream', 'parasite',
+      'le loup de wall street', 'the wolf of wall street', 'network',
+      'captain fantastic', 'into the wild'
+    ],
+    disqualifiedTitles: [
+      'titanic', 'la la land', 'notting hill'
+    ]
   },
   {
     id: 'survie',
@@ -987,14 +1029,14 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
 
 export function findActiveThematicCluster(criteria: ExtractedCriteria, queryText?: string): ThematicCluster | null {
   const haystacks = [
+    queryText || '',
     ...(criteria.narrativeCues || []),
     ...(criteria.themes || []),
-    ...(criteria.tones || []),
-    queryText || ''
+    ...(criteria.tones || [])
   ].map(s => s.toLowerCase());
 
   if (criteria.isTwistRequested) {
-    const twistCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist');
+    const twistCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === 'twist_narratif' || c.id === 'twist');
     if (twistCluster) return twistCluster;
   }
 
@@ -1054,7 +1096,7 @@ export function evaluateMovieNarrativeRelevance(
     }
 
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
-    if (!isArchetype && isAnimationOrFamily && clusterHits === 0 && ['espionnage', 'guerre', 'braquage', 'twist', 'survie', 'vengeance', 'huis_clos'].includes(activeCluster.id)) {
+    if (!isArchetype && isAnimationOrFamily && clusterHits === 0 && ['espionnage', 'guerre', 'braquage', 'twist', 'twist_narratif', 'survie', 'vengeance', 'huis_clos', 'consumerisme'].includes(activeCluster.id)) {
       return {
         matches: false,
         score: 20,
@@ -1149,7 +1191,7 @@ export function evaluateMovieNarrativeRelevance(
   let genreScore = 75;
   if (activeCluster) {
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
-    if (isAnimationOrFamily && ['espionnage', 'guerre', 'braquage', 'twist', 'survie', 'vengeance', 'huis_clos'].includes(activeCluster.id)) {
+    if (isAnimationOrFamily && ['espionnage', 'guerre', 'braquage', 'twist', 'twist_narratif', 'survie', 'vengeance', 'huis_clos', 'consumerisme'].includes(activeCluster.id)) {
       genreScore = 20;
     } else if (activeCluster.expectedGenres.some(id => genreIds.includes(id))) {
       genreScore = 95;
