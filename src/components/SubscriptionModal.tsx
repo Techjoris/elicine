@@ -50,6 +50,12 @@ function parsePayPalErrorMessage(err: any): string {
     if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
       return "L'authentification 3D-Secure auprès de votre banque a échoué ou a été annulée.";
     }
+    if (lower.includes('permission_denied') || lower.includes('not_authorized')) {
+      return "Le compte marchand PayPal n'autorise pas cette transaction ou les cartes invitées. Veuillez payer avec votre compte PayPal.";
+    }
+    if (lower.includes('enregistrer') || lower.includes('vault') || lower.includes('sauvegard')) {
+      return "Impossible d'enregistrer cette carte bancaire. Les cartes virtuelles et à usage unique ne peuvent pas être mémorisées. Veuillez utiliser votre compte PayPal.";
+    }
     return err;
   }
 
@@ -70,8 +76,11 @@ function parsePayPalErrorMessage(err: any): string {
   if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
     return "L'authentification bancaire 3D-Secure n'a pas pu être validée. Veuillez réessayer.";
   }
-  if (lower.includes('popup close') || lower.includes('window closed') || lower.includes('user closed')) {
-    return "La fenêtre de paiement a été fermée avant la finalisation de la transaction.";
+  if (lower.includes('permission_denied') || lower.includes('not_authorized')) {
+    return "Le compte marchand PayPal n'autorise pas cette transaction ou les cartes invitées. Veuillez payer avec votre compte PayPal.";
+  }
+  if (lower.includes('enregistrer') || lower.includes('vault') || lower.includes('sauvegard')) {
+    return "Impossible d'enregistrer cette carte bancaire. Les cartes virtuelles et à usage unique ne peuvent pas être mémorisées. Veuillez utiliser votre compte PayPal.";
   }
 
   return rawMsg || "Le paiement n'a pas pu aboutir. Veuillez vérifier vos informations bancaires ou utiliser une autre carte.";

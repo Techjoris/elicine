@@ -306,7 +306,8 @@ export default async function handler(req, res) {
       guestCheckout: {
         enabled: true,
         solutionType: 'Sole',
-        landingPage: 'Billing',
+        landingPage: 'NO_PREFERENCE',
+        shippingPreference: 'NO_SHIPPING',
         supportedCurrencies: ['USD', 'EUR', 'CAD', 'GBP', 'AUD']
       }
     });
@@ -384,6 +385,8 @@ export default async function handler(req, res) {
           humanMsg = "La transaction a été refusée par l'émetteur de votre carte bancaire.";
         } else if (issue === 'PAYER_ACTION_REQUIRED') {
           humanMsg = "Une authentification 3D-Secure auprès de votre banque est requise pour valider le paiement.";
+        } else if (issue === 'PERMISSION_DENIED' || issue === 'NOT_AUTHORIZED' || orderData.data?.name === 'PERMISSION_DENIED') {
+          humanMsg = "Le compte marchand PayPal n'autorise pas cette transaction ou les paiements par carte invités. Veuillez utiliser un compte PayPal ou contacter le support.";
         } else if (description) {
           humanMsg = `Paiement refusé : ${description}`;
         }

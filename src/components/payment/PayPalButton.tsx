@@ -75,14 +75,15 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   }
 
   // Configuration stricte du SDK officiel PayPal : Paiement unique (intent: 'capture'), boutons natifs et CB activée
-  // vault: false désactive la sauvegarde forcée de la carte (indispensable pour les cartes virtuelles et prépayées)
+  // intent=capture&commit=true&vault=false bloque toute tentative de sauvegarde de carte
   const initialOptions = useMemo(() => ({
     clientId: clientId,
     currency: normalizedCurrency,
     intent: 'capture' as const, // PAIEMENT UNIQUE STRICT (Orders API, pas de souscription récurrente)
-    vault: false, // DÉSACTIVE STRICTEMENT LE VAULTING (aucun enregistrement de carte)
+    commit: true,               // Force le mode "Payer maintenant" direct sans création ni enregistrement de carte
+    vault: false,              // DÉSACTIVE STRICTEMENT LE VAULTING (interdit tout enregistrement de carte)
     components: 'buttons',
-    enableFunding: 'card', // Active explicitement le bouton Carte Bancaire sans compte
+    enableFunding: 'card',     // Active explicitement le bouton Carte Bancaire sans compte
     dataSdkIntegrationSource: 'react-paypal-js'
   }), [clientId, normalizedCurrency]);
 
@@ -123,7 +124,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             });
 
             // STRICTEMENT PAIEMENT UNIQUE (Orders API avec intent: 'CAPTURE')
-            // Aucun abonnement récurrent ni mandat de prélèvement automatique
+            // Aucun objet payment_source.card.attributes.vault ni demande de sauvegarde de carte
             return actions.order.create({
               intent: 'CAPTURE',
               purchase_units: [
@@ -156,9 +157,9 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
               ],
               application_context: {
                 brand_name: 'Éliciné',
-                landing_page: 'BILLING',
-                shipping_preference: 'NO_SHIPPING',
-                user_action: 'PAY_NOW'
+                landing_page: 'NO_PREFERENCE',      // Évite de forcer l'enregistrement d'un compte PayPal ou de sauvegarder la carte
+                shipping_preference: 'NO_SHIPPING', // Allège les contrôles de risque / anti-fraude de PayPal
+                user_action: 'PAY_NOW'              // Bouton "Payer maintenant" immédiat
               }
             });
           }}
@@ -191,7 +192,26 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             if (onCancel) onCancel();
           }}
           onError={(err: any) => {
-            console.error('[PayPal SDK React] ❌ Erreur détaillée remontée par PayPalButtons :', err);
+            const errDetails = {
+              message: err?.message,
+              name: err?.name,
+              details: err?.details,
+              stack: err?.stack,
+              raw: String(err),
+              full: err
+            };
+            console.error('[PayPal SDK React] ❌ Échec bouton PayPal / Carte bancaire (Payload complète) :', errDetails);
+
+            // Diagnostic précis pour déceler INSTRUMENT_DECLINED ou PERMISSION_DENIED
+            const errStr = (JSON.stringify(err || {}) + ' ' + (err?.message || '') + ' ' + (err?.name || '')).toUpperCase();
+            if (errStr.includes('PERMISSION_DENIED')) {
+              console.error('[PayPal SDK React] 🚫 PERMISSION_DENIED détecté : Le compte PayPal marchand restreint les paiements par carte invité (Guest Checkout) ou exige une validation d\'identité.');
+            } else if (errStr.includes('INSTRUMENT_DECLINED')) {
+              console.error('[PayPal SDK React] 💳 INSTRUMENT_DECLINED détecté : La banque émettrice a refusé le débit (solde insuffisant, carte virtuelle non autorisée ou restriction 3D-Secure).');
+            } else if (errStr.includes('VAULT') || errStr.includes('SAVE')) {
+              console.error('[PayPal SDK React] 🔒 Erreur d\'enregistrement de carte (Vaulting) détectée.');
+            }
+
             if (onError) onError(err);
           }}
         />
