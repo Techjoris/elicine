@@ -189,10 +189,18 @@ function buildChatBody(messages, useJsonFormat = true) {
 // ============================================================================
 // ÉTAPE 1 : Cascade LLM — DeepSeek → Qwen → Groq → Gemini → OpenAI
 // ============================================================================
-async function queryLlmCandidates(cleanQuery, customKeys = {}) {
+async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType = 'Tous') {
+  let userPrompt = `Requête de l'utilisateur : "${cleanQuery}"`;
+  if (targetMediaType === 'Séries TV') {
+    userPrompt += `\n\nCONTRAINTE STRICTE DE FORMAT : L'utilisateur recherche EXCLUSIVEMENT des SÉRIES TÉLÉVISÉES (TV Shows / mini-séries). Tu dois recommander UNIQUEMENT des séries télévisées réelles, AUCUN film !`;
+  } else if (targetMediaType === 'Films') {
+    userPrompt += `\n\nCONTRAINTE STRICTE DE FORMAT : L'utilisateur recherche EXCLUSIVEMENT des FILMS de cinéma (longs métrages). Tu dois recommander UNIQUEMENT des films de cinéma, AUCUNE série télévisée !`;
+  }
+  userPrompt += `\n\nRéponds UNIQUEMENT avec l'objet JSON strict demandé.`;
+
   const messages = [
     { role: 'system', content: LLM_SYSTEM_PROMPT },
-    { role: 'user', content: `Requête de l'utilisateur : "${cleanQuery}"\n\nRéponds UNIQUEMENT avec l'objet JSON strict demandé.` }
+    { role: 'user', content: userPrompt }
   ];
 
   const deepseekKey = (process.env.DEEPSEEK_API_KEY || customKeys.deepseekApiKey || '').trim().replace(/^["']|["']$/g, '');
@@ -1425,7 +1433,22 @@ export default async function handler(req, res) {
         }
       }
 
-      console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}"`);
+      // 1. Parsing sémantique des intentions de format :
+      let requestedMediaType = filters?.mediaType || 'Tous';
+      if (requestedMediaType === 'Tous') {
+        const queryToParse = (req.body?.rawQuery || cleanQuery || '').toLowerCase();
+        const shielded = queryToParse
+          .replace(/tueur(?:s)?\s+en\s+s[ée]rie(?:s)?/gi, '__TK__')
+          .replace(/meurtre(?:s)?\s+en\s+s[ée]rie(?:s)?/gi, '__MK__')
+          .replace(/serial\s+killer(?:s)?/gi, '__SK__');
+        if (/\b(?:s[ée]rie(?:s)?|saison(?:s)?|[ée]pisode(?:s)?|feuilleton(?:s)?|tv\s*show(?:s)?)\b/i.test(shielded)) {
+          requestedMediaType = 'Séries TV';
+        } else if (/\b(?:film(?:s)?|movie(?:s)?|long\s*m[ée]trage(?:s)?|cin[ée]ma)\b/i.test(shielded)) {
+          requestedMediaType = 'Films';
+        }
+      }
+
+      console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}" (format: ${requestedMediaType})`);
 
       // ─── ÉTAPE 1 : Cerveau LLM — Extraction & Correction ─────────────────────
       const { matches, correctedQuery, provider } = await queryLlmCandidates(cleanQuery, {
@@ -1434,7 +1457,7 @@ export default async function handler(req, res) {
         qwenApiKey:     req.body?.qwenApiKey,
         geminiApiKey:   req.body?.geminiApiKey,
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
-      });
+      }, requestedMediaType);
 
       const extractedTitles = matches.map(m => m.title);
       const effectiveQuery  = correctedQuery || cleanQuery;
@@ -1484,6 +1507,64 @@ export default async function handler(req, res) {
           const rating = Number(m.vote_average || m.rating || 0);
           return rating >= minVal;
         });
+      }
+
+      // Application du filtre strict de format et règle contractuelle de repli (Fallback)
+      if (requestedMediaType && requestedMediaType !== 'Tous' && resolvedMovies.length > 0) {
+        if (requestedMediaType === 'Séries TV') {
+          const seriesOnly = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
+          if (seriesOnly.length > 0) {
+            resolvedMovies = seriesOnly;
+          } else {
+            // 3. Règle de fallback :
+            // Si le catalogue ne contient aucune série correspondant exactement au critère strict,
+            // renvoyer un message explicite : "Aucune série trouvée pour ce thème. Voici des films similaires :"
+            const similarFilms = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie' || !m.media_type);
+            if (similarFilms.length > 0) {
+              return res.status(200).json({
+                success: true,
+                movies: similarFilms,
+                count: similarFilms.length,
+                isFallbackMode: true,
+                badge: 'Sélection Éliciné',
+                providerUsed: 'Algorithme Éliciné',
+                correctedQuery: correctedQuery || null,
+                thought: "Aucune série trouvée pour ce thème. Voici des films similaires :",
+                extractedTitles,
+                suggestedPrompts: [
+                  'Une série policière sombre et addictive',
+                  'Une série de science-fiction dystopique',
+                  'Une comédie feel-good et touchante'
+                ]
+              });
+            }
+          }
+        } else if (requestedMediaType === 'Films') {
+          const filmsOnly = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie');
+          if (filmsOnly.length > 0) {
+            resolvedMovies = filmsOnly;
+          } else {
+            const similarSeries = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
+            if (similarSeries.length > 0) {
+              return res.status(200).json({
+                success: true,
+                movies: similarSeries,
+                count: similarSeries.length,
+                isFallbackMode: true,
+                badge: 'Sélection Éliciné',
+                providerUsed: 'Algorithme Éliciné',
+                correctedQuery: correctedQuery || null,
+                thought: "Aucun film trouvé pour ce thème. Voici des séries similaires :",
+                extractedTitles,
+                suggestedPrompts: [
+                  'Un film de braquage haletant avec twist',
+                  'Un chef-d\'œuvre de science-fiction dystopique',
+                  'Un thriller psychologique sombre et mystérieux'
+                ]
+              });
+            }
+          }
+        }
       }
 
       // Incrémentation du quota pour les recherches exécutées (si non-pro)

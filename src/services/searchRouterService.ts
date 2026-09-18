@@ -617,6 +617,100 @@ export const GENRE_AND_THEME_WORDS = new Set([
   'tranchée', 'tranchées', 'bataille', 'batailles', 'seul', 'peintre', 'peinture', 'musique'
 ]);
 
+export interface FormatIntentResult {
+  mediaType: 'movie' | 'tv' | 'all';
+  cleanQuery: string;
+  matchedPattern?: 'movie' | 'tv';
+}
+
+/**
+ * Parsing sémantique des intentions de format (Film vs Série / TV Show)
+ * et nettoyage de la requête transmise à l'IA pour ne pas polluer l'embedding.
+ */
+export function parseFormatIntent(rawQuery: string): FormatIntentResult {
+  if (!rawQuery || typeof rawQuery !== 'string') {
+    return { mediaType: 'all', cleanQuery: '' };
+  }
+
+  const trimmed = rawQuery.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. Protection des expressions idiomatiques ("tueur en série", "serial killer", etc.)
+  const IDIOM_PLACEHOLDER = '___SERIAL_CRIME_IDIOM___';
+  let protectedLower = lower;
+  const serialIdioms = [
+    /\b(?:tueur|tueurs|meurtre|meurtres|crime|crimes|vol|vols)\s+en\s+s[ée]ries?\b/gi,
+    /\ben\s+s[ée]ries?\b/gi,
+    /\bserial\s+killers?\b/gi
+  ];
+  
+  const savedIdioms: string[] = [];
+  serialIdioms.forEach((regex) => {
+    protectedLower = protectedLower.replace(regex, (match) => {
+      savedIdioms.push(match);
+      return `${IDIOM_PLACEHOLDER}_${savedIdioms.length - 1}___`;
+    });
+  });
+
+  // 2. Détection du format (Série vs Film)
+  const SERIES_REGEX = /\b(?:s[ée]ries?|saisons?|[ée]pisodes?|feuilletons?|tv\s*shows?|s[ée]rie\s+tv|series\s+tv|mini[- ]s[ée]ries?)\b/i;
+  const MOVIE_REGEX = /\b(?:films?|movies?|longs?[- ]m[ée]trages?|cin[ée]ma|courts?[- ]m[ée]trages?)\b/i;
+
+  const hasSeries = SERIES_REGEX.test(protectedLower);
+  const hasMovie = MOVIE_REGEX.test(protectedLower);
+
+  let mediaType: 'movie' | 'tv' | 'all' = 'all';
+  let matchedPattern: 'movie' | 'tv' | undefined;
+
+  if (hasSeries && !hasMovie) {
+    mediaType = 'tv';
+    matchedPattern = 'tv';
+  } else if (hasMovie && !hasSeries) {
+    mediaType = 'movie';
+    matchedPattern = 'movie';
+  } else {
+    mediaType = 'all';
+  }
+
+  // 3. Nettoyage de la requête pour l'IA (retirer les mots-clés structurels de format)
+  // Ex: "série d'action avec avions de guerre" -> "action avec avions de guerre"
+  let clean = protectedLower;
+
+  // A. Supprimer les formules d'introduction
+  clean = clean.replace(/^(?:recommande[- ]moi|donne[- ]moi|trouve[- ]moi|montre[- ]moi|cherche[- ]moi|je\s+cherche|je\s+veux\s+voir|je\s+voudrais\s+voir|j['’]aimerais\s+voir|trouve|cherche|propose)\s+(?:des?\s+|une?\s+|le\s+|la\s+|les\s+)?/i, '');
+
+  // B. Supprimer les blocs structurels de format avec préposition
+  const structuralRegex = /\b(?:une?\s+|des\s+|le\s+|la\s+|les\s+)?(?:s[ée]ries?(?:\s+tv)?|films?|movies?|tv\s*shows?|feuilletons?|longs?[- ]m[ée]trages?|cin[ée]ma)\s+(?:d['’]|de\s+la\s+|du\s+|des\s+|de\s+|sur\s+les\s+|sur\s+des\s+|sur\s+le\s+|sur\s+la\s+|sur\s+|avec\s+des\s+|avec\s+le\s+|avec\s+la\s+|avec\s+|qui\s+parle\s+d['’]|qui\s+parle\s+de\s+|qui\s+se\s+passe\s+dans\s+|qui\s+|autour\s+d['’]|autour\s+de\s+|about\s+|with\s+)?\b/gi;
+  clean = clean.replace(structuralRegex, ' ');
+
+  // C. Supprimer les mentions de format résiduelles isolées
+  const standaloneFormatRegex = /\b(?:s[ée]rie\s+tv|series\s+tv|s[ée]ries?|films?|movies?|tv\s*shows?|feuilletons?|longs?[- ]m[ée]trages?)\b/gi;
+  clean = clean.replace(standaloneFormatRegex, ' ');
+
+  // D. Restaurer les expressions protégées
+  savedIdioms.forEach((idiom, idx) => {
+    clean = clean.replace(`${IDIOM_PLACEHOLDER}_${idx}___`, idiom);
+  });
+
+  // E. Nettoyer les prépositions orphelines en début ou fin de chaîne
+  clean = clean
+    .replace(/^(?:sur|de|d['’]|avec|dans|pour|en|about|with)\s+/i, '')
+    .replace(/\s+(?:sur|de|d['’]|avec|dans|pour|en|about|with)$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // F. Sécurité : si la chaîne résultante est trop courte (< 2 caractères), garder la requête d'origine
+  if (clean.length < 2) {
+    clean = trimmed;
+  }
+
+  return {
+    mediaType,
+    cleanQuery: clean,
+    matchedPattern
+  };
+}
+
 /**
  * Isole les critères durs (acteur, réalisateur, format, année) et dégage l'entité principale
  * pour alimenter la recherche stricte (Niveau 1) et le recadrage intelligent (Niveau 3).
@@ -631,25 +725,14 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   const themes: string[] = [];
   let era: string | undefined;
   let year: number | undefined;
+
+  // 1. Format (Film vs Série) via parseFormatIntent
+  const formatIntent = parseFormatIntent(queryText);
   let format: 'film' | 'serie' | 'all' = 'all';
-
-  // 1. Format (Film vs Série)
-  // Prise en compte rigoureuse des expressions idiomatiques ("tueur en série", "meurtres en série", "serial killer")
-  // où "en série" désigne la répétition criminelle (serial) et non une œuvre télévisée.
-  const textWithoutSerialIdioms = lower
-    .replace(/\b(?:tueur|tueurs|meurtre|meurtres|crime|crimes|vol|vols)\s+en\s+s[ée]ries?\b/gi, '')
-    .replace(/\ben\s+s[ée]ries?\b/gi, '')
-    .replace(/\bserial\s+killers?\b/gi, '');
-
-  const hasExplicitFilm = /\b(film|films|long-métrage|long metrage|court-métrage|court metrage|cinéma|cinema)\b/i.test(lower);
-  const hasExplicitSerie = /\b(série|séries|serie|series|mini-série|mini-serie|série tv|serie tv|saisons?)\b/i.test(textWithoutSerialIdioms);
-
-  if (hasExplicitFilm && !hasExplicitSerie) {
-    format = 'film';
-  } else if (hasExplicitSerie && !hasExplicitFilm) {
+  if (formatIntent.mediaType === 'tv') {
     format = 'serie';
-  } else {
-    format = 'all';
+  } else if (formatIntent.mediaType === 'movie') {
+    format = 'film';
   }
 
   // 2. Décennie / Époque ou Année précise

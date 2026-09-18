@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
+import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
 import { Movie } from '../../types';
 
@@ -275,7 +275,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
     const platformToUse = overridePlatform !== undefined ? overridePlatform : selectedPlatform;
     const minRatingToUse = overrideMinRating !== undefined ? overrideMinRating : selectedMinRating;
-    const typeFilterToUse = overrideTypeFilter !== undefined ? overrideTypeFilter : selectedTypeFilter;
+
+    // 1. Parsing sémantique des intentions de format :
+    // Si la requête contient ["série", "series", "saison", "épisodes", "feuilleton", "tv show"] -> "Séries TV" (TV Shows)
+    // Si la requête contient ["film", "movie", "long métrage", "cinéma"] -> "Films" (Movies)
+    const formatIntent = parseFormatIntent(q);
+    let typeFilterToUse: 'Tous' | 'Films' | 'Séries TV' = 
+      overrideTypeFilter !== undefined ? overrideTypeFilter : selectedTypeFilter;
+
+    if (formatIntent.mediaType === 'tv') {
+      typeFilterToUse = 'Séries TV';
+      setSelectedTypeFilter('Séries TV');
+    } else if (formatIntent.mediaType === 'movie') {
+      typeFilterToUse = 'Films';
+      setSelectedTypeFilter('Films');
+    }
 
     setIsAiLoading(true);
     setInternalHasSearched(true);
@@ -284,7 +298,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
 
     try {
-      console.log(`[Éliciné AI] Exécution requête IA réelle pour : "${q}" (${t.aiPromptLang})`);
+      console.log(`[Éliciné AI] Exécution requête IA réelle pour : "${q}" (${t.aiPromptLang}, formatIntent: ${formatIntent.mediaType})`);
       const res: AIRecommendationResult = await executeCinoraSearch(
         q, 
         apiSettings, 
@@ -312,9 +326,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       }
 
       if (res.recommendedMovies.length === 0) {
-        showToast("Aucun film ne correspond précisément à votre recherche.");
+        showToast(res.thought || "Aucun film ne correspond précisément à votre recherche.");
       } else if (res.isFallbackMode) {
-        showToast(`🔍 ${res.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+        showToast(res.thought || `🔍 ${res.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+      } else if (typeFilterToUse === 'Séries TV') {
+        showToast(`📺 ${res.recommendedMovies.length} série${res.recommendedMovies.length > 1 ? 's' : ''} trouvée${res.recommendedMovies.length > 1 ? 's' : ''} par l'algorithme !`);
       } else if (res.recommendedMovies.length <= 2) {
         showToast(`🎯 ${res.recommendedMovies.length} correspondance${res.recommendedMovies.length > 1 ? 's' : ''} exacte${res.recommendedMovies.length > 1 ? 's' : ''} identifiée${res.recommendedMovies.length > 1 ? 's' : ''} !`);
       } else if (res.recommendedMovies.length >= 10) {
@@ -470,6 +486,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 const val = e.target.value.slice(0, 350);
                 setSearchPrompt(val);
                 if (errorMessage) setErrorMessage(null);
+                const intent = parseFormatIntent(val);
+                if (intent.mediaType === 'tv') {
+                  setSelectedTypeFilter('Séries TV');
+                } else if (intent.mediaType === 'movie') {
+                  setSelectedTypeFilter('Films');
+                }
               }}
               onPaste={(e) => {
                 e.preventDefault();

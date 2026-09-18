@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { askCineIA, executeCinoraSearch, AIRecommendationResult } from '../../services/aiEngine';
+import { askCineIA, executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from './AdvancedSearchFilters';
 import { Movie } from '../../types';
 
@@ -73,6 +73,11 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
       return;
     }
 
+    const formatIntent = parseFormatIntent(query);
+    const mediaTypeToUse = formatIntent.mediaType === 'tv' 
+      ? 'Séries TV' 
+      : (formatIntent.mediaType === 'movie' ? 'Films' : 'Tous');
+
     setIsLoading(true);
     setHasSearched(true);
     try {
@@ -83,7 +88,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         undefined,
         {
           platform: user?.isPro ? selectedPlatform : 'all',
-          minRating: user?.isPro ? selectedMinRating : 0
+          minRating: user?.isPro ? selectedMinRating : 0,
+          mediaType: mediaTypeToUse
         }
       );
       
@@ -98,9 +104,11 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         suggestedPrompts: result.suggestedPrompts
       });
       if (result.recommendedMovies.length === 0) {
-        showToast("Aucun film ne correspond précisément à votre recherche.");
+        showToast(result.thought || "Aucun film ne correspond précisément à votre recherche.");
       } else if (result.isFallbackMode) {
-        showToast(`🔍 ${result.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+        showToast(result.thought || `🔍 ${result.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
+      } else if (mediaTypeToUse === 'Séries TV') {
+        showToast(`📺 ${result.recommendedMovies.length} série${result.recommendedMovies.length > 1 ? 's' : ''} trouvée${result.recommendedMovies.length > 1 ? 's' : ''} par l'algorithme !`);
       } else if (result.recommendedMovies.length <= 2) {
         showToast(`🎯 ${result.recommendedMovies.length} correspondance${result.recommendedMovies.length > 1 ? 's' : ''} exacte${result.recommendedMovies.length > 1 ? 's' : ''} identifiée${result.recommendedMovies.length > 1 ? 's' : ''} !`);
       } else if (result.recommendedMovies.length >= 10) {

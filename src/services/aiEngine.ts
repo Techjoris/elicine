@@ -45,6 +45,8 @@ export {
 } from './unifiedAiSearch';
 export {
   extractHardCriteriaAndEntities,
+  parseFormatIntent,
+  type FormatIntentResult,
   evaluateMovieNarrativeRelevance,
   evaluateStructuredMovieMatch,
   SPATIAL_SETTINGS_MAP,
