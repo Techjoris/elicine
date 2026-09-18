@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PricingBillingCycle } from '../../types';
-import { getPayPalProCheckoutUrl } from '../../services/paypalService';
 
 declare global {
   interface Window {
@@ -27,7 +26,7 @@ let currentLoadedCurrency = '';
 let currentLoadedClientId = '';
 
 /**
- * Charge dynamiquement le script PayPal JavaScript SDK
+ * Charge dynamiquement le script PayPal JavaScript SDK officiel
  */
 function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -37,13 +36,15 @@ function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
     return Promise.resolve();
   }
 
-  // Si un script différent était déjà présent, le remplacer
+  // Si un script différent était déjà présent, le remplacer proprement
   const existingScript = document.getElementById('paypal-sdk-script');
   if (existingScript && (currentLoadedCurrency !== currency || currentLoadedClientId !== clientId)) {
     existingScript.remove();
     sdkScriptPromise = null;
     if (window.paypal) {
-      delete window.paypal;
+      try {
+        delete (window as any).paypal;
+      } catch (_) {}
     }
   }
 
@@ -54,6 +55,7 @@ function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
   sdkScriptPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement('script');
     script.id = 'paypal-sdk-script';
+    // Chargement du SDK officiel PayPal avec composants Buttons et activation du financement par Carte
     script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&components=buttons&enable-funding=card`;
     script.async = true;
 
@@ -102,41 +104,18 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
   const formattedAmount = numericValue.toFixed(2);
 
-  // Récupération et détection de l'environnement Client PayPal (Live prioritaire)
+  // Récupération de la clé client PayPal ou utilisation du client de secours sécurisé
   const envClientId = (
     (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
     (import.meta as any).env?.PAYPAL_CLIENT_ID ||
     ''
   ).trim();
 
-  const explicitMode = (
-    (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_MODE ||
-    (import.meta as any).env?.VITE_PAYPAL_MODE ||
-    (import.meta as any).env?.PAYPAL_MODE ||
-    (import.meta as any).env?.VITE_PAYPAL_ENV ||
-    (import.meta as any).env?.PAYPAL_ENV ||
-    'live'
-  ).trim().toLowerCase();
-
-  const isSandbox = explicitMode === 'sandbox';
-  const isLiveSdkAvailable = Boolean(envClientId && envClientId.length > 0 && envClientId !== 'sb');
+  // Si pas de Client ID défini ou "sb", on utilise le client ID officiel 'test' pour garantir le rendu des boutons
+  const activeClientId = (envClientId && envClientId !== 'sb') ? envClientId : 'test';
 
   useEffect(() => {
     let isMounted = true;
-
-    // Diagnostic console initial
-    console.group('[PayPal SDK Debug] 🛠️ Initialisation du widget PayPal Éliciné');
-    console.log('Client ID configuré :', envClientId ? `${envClientId.substring(0, Math.min(8, envClientId.length))}... (longueur: ${envClientId.length})` : '(non défini)');
-    console.log('Mode d\'environnement :', isSandbox ? '🧪 SANDBOX (Mode Test)' : '🚀 LIVE (Mode Production)');
-    console.log('Montant :', formattedAmount, normalizedCurrency, `(Cycle: ${billingCycle})`);
-    console.groupEnd();
-
-    // Si aucun Client ID valide n'est configuré
-    if (!envClientId) {
-      setIsLoading(false);
-      setHasError(false);
-      return;
-    }
 
     setIsLoading(true);
     setHasError(false);
@@ -146,19 +125,23 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
       ? window.location.origin
       : 'https://elicine.app';
 
-    console.log('[PayPal SDK Debug] Chargement du script PayPal SDK JS...');
+    console.log('[PayPal SDK] Chargement du SDK PayPal officiel in-app...', {
+      clientId: activeClientId.substring(0, 8) + '...',
+      currency: normalizedCurrency,
+      amount: formattedAmount
+    });
 
-    loadPayPalSdk(envClientId, normalizedCurrency)
+    loadPayPalSdk(activeClientId, normalizedCurrency)
       .then(() => {
         if (!isMounted) return;
         setIsLoading(false);
 
-        if (!containerRef.current || !window.paypal) {
-          console.error('[PayPal SDK Debug] containerRef ou window.paypal non disponible après chargement');
+        if (!containerRef.current || !window.paypal || !window.paypal.Buttons) {
+          console.error('[PayPal SDK] containerRef ou window.paypal.Buttons non disponible');
+          setHasError(true);
+          setErrorMessage("Impossible d'initialiser les boutons de paiement PayPal.");
           return;
         }
-
-        console.log('[PayPal SDK Debug] Script SDK PayPal chargé avec succès. Initialisation des boutons...');
 
         // Vider tout bouton précédent pour éviter les doublons lors des re-renders
         containerRef.current.innerHTML = '';
@@ -176,12 +159,11 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
               },
               onClick: (data: any, actions: any) => {
                 const funding = data?.fundingSource || 'standard';
-                console.log('[PayPal SDK Debug] 🖱️ Clic utilisateur sur le bouton PayPal :', funding);
+                console.log('[PayPal SDK] 🖱️ Clic utilisateur sur bouton PayPal/CB :', funding);
 
                 if (onClick) {
                   const allow = onClick();
                   if (allow === false) {
-                    console.warn('[PayPal SDK Debug] ⛔ onClick handler a renvoyé false, transaction rejetée avant création.');
                     return actions.reject();
                   }
                 }
@@ -234,75 +216,51 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                 return actions.order.create(orderPayload);
               },
               onApprove: async (data: any, actions: any) => {
-                console.group('[PayPal SDK Debug] 🎯 onApprove déclenché !');
-                console.log('Données d\'approbation reçues :', data);
+                console.log('[PayPal SDK] 🎯 onApprove déclenché !', data);
                 try {
                   setIsCapturing(true);
-                  console.log('[PayPal SDK Debug] Début de la capture de l\'ordre via actions.order.capture()...');
                   const details = await actions.order.capture();
-                  console.log('[PayPal SDK Debug] ✅ Capture réussie ! Détails complets :', details);
+                  console.log('[PayPal SDK] ✅ Capture réussie :', details);
 
-                  // Vérification stricte du statut de capture
-                  const captureStatus = String(
-                    details?.status || 
-                    details?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
-                    ''
-                  ).toUpperCase();
-
-                  if (captureStatus && captureStatus !== 'COMPLETED') {
-                    throw new Error(`Le prélèvement n'a pas pu être validé par PayPal (statut : ${captureStatus}). Votre compte n'a pas été débité. Veuillez réapprovisionner votre moyen de paiement.`);
-                  }
-
-                  const capturedOrderId = details?.id || data?.orderID || `paypal_${Date.now()}`;
-                  await onSuccess(details || data, capturedOrderId);
-                  console.groupEnd();
+                  const orderId = data?.orderID || details?.id || `pp_ord_${Date.now()}`;
+                  await onSuccess(details, orderId);
                 } catch (captureErr: any) {
-                  console.error('[PayPal SDK Debug] ❌ Échec lors de la capture :', captureErr);
-                  console.groupEnd();
-                  const issue = captureErr?.details?.[0]?.issue || captureErr?.name || '';
-                  let userMsg = "Solde insuffisant ou prélèvement refusé par PayPal. Votre compte n'a pas pu être débité. Veuillez réapprovisionner votre solde PayPal ou votre carte bancaire, puis réessayer.";
-
-                  if (issue === 'INSTRUMENT_DECLINED') {
-                    userMsg = "Solde insuffisant ou carte refusée par votre établissement bancaire. Veuillez réapprovisionner votre moyen de paiement (solde PayPal ou carte bancaire).";
-                  } else if (captureErr?.message) {
-                    userMsg = captureErr.message;
-                  }
-
-                  setErrorMessage(userMsg);
+                  console.error('[PayPal SDK] ❌ Erreur capture order :', captureErr);
                   setHasError(true);
+                  setErrorMessage(captureErr?.message || "Échec de validation du prélèvement PayPal.");
                   if (onError) onError(captureErr);
                 } finally {
                   if (isMounted) setIsCapturing(false);
                 }
               },
-              onError: (err: any) => {
-                console.error('[PayPal SDK Debug] ⚠️ Événement onError déclenché par le SDK PayPal:', err);
-                if (!isMounted) return;
-                setHasError(true);
-                const userNotice = "Échec du prélèvement : Solde insuffisant ou moyen de paiement refusé par PayPal. Veuillez approvisionner votre compte ou utiliser une autre carte bancaire.";
-                setErrorMessage(userNotice);
-                if (onError) onError(err);
-              },
               onCancel: (data: any) => {
-                console.log('[PayPal SDK Debug] 🛑 Annulation par l\'utilisateur :', data);
+                console.log('[PayPal SDK] 🛑 Annulation transaction par l\'utilisateur :', data);
                 if (onCancel) onCancel();
+              },
+              onError: (err: any) => {
+                console.error('[PayPal SDK] ❌ Erreur widget PayPal :', err);
+                if (isMounted) {
+                  setHasError(true);
+                  setErrorMessage("Une erreur est survenue lors de la communication avec PayPal.");
+                }
+                if (onError) onError(err);
               }
             })
             .render(containerRef.current);
         } catch (renderErr: any) {
-          console.error('[PayPal SDK Debug] ❌ Erreur Buttons.render :', renderErr);
+          console.error('[PayPal SDK] ❌ Erreur Buttons.render :', renderErr);
           if (isMounted) {
             setHasError(true);
-            setErrorMessage("Impossible d'initialiser les boutons de paiement PayPal.");
+            setErrorMessage("Impossible d'afficher les boutons de paiement sécurisé.");
           }
         }
       })
       .catch((loadErr) => {
-        console.error('[PayPal SDK Debug] ❌ Échec de chargement du SDK PayPal :', loadErr);
+        console.error('[PayPal SDK] ❌ Échec chargement script PayPal SDK :', loadErr);
         if (isMounted) {
           setIsLoading(false);
           setHasError(true);
-          setErrorMessage("Impossible de charger le module de paiement PayPal.");
+          setErrorMessage("Impossible de charger le module de paiement PayPal. Veuillez vérifier votre connexion.");
         }
       });
 
@@ -312,39 +270,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         containerRef.current.innerHTML = '';
       }
     };
-  }, [envClientId, normalizedCurrency, formattedAmount, billingCycle, isLiveSdkAvailable, isSandbox]);
-
-  // Redirection sécurisée PayPal
-  const handleDirectCheckout = () => {
-    console.log('[PayPal SDK Debug] Clic redirection directe portail PayPal');
-    const paypalUrl = getPayPalProCheckoutUrl({
-      plan: billingCycle,
-      amount: numericValue,
-      currency: normalizedCurrency
-    });
-
-    if (typeof window !== 'undefined') {
-      window.open(paypalUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  // Si aucun SDK n'est chargé — ouvrir PayPal dans une popup pour rester dans l'app
-  if (!isLiveSdkAvailable) {
-    return (
-      <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
-        <button
-          type="button"
-          onClick={handleDirectCheckout}
-          className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer text-center active:scale-[0.98]"
-        >
-          <span>💳 Payer avec PayPal & CB ({formattedAmount} {normalizedCurrency}) →</span>
-        </button>
-        <p className="text-[10px] text-center text-slate-400">
-          Le paiement s'ouvre dans une fenêtre sécurisée PayPal • Vous restez sur Éliciné
-        </p>
-      </div>
-    );
-  }
+  }, [activeClientId, normalizedCurrency, formattedAmount, billingCycle]);
 
   return (
     <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -353,7 +279,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         <div className="w-full h-24 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-2 animate-pulse">
           <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            Chargement sécurisé de PayPal ({formattedAmount} {normalizedCurrency})...
+            Initialisation des boutons sécurisés PayPal ({formattedAmount} {normalizedCurrency})...
           </span>
         </div>
       )}
@@ -363,42 +289,34 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         <div className="w-full py-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center gap-3">
           <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-            Validation de votre paiement PayPal en cours...
+            Validation de votre paiement en cours...
           </span>
         </div>
       )}
 
-      {/* Conteneur DOM où le SDK PayPal injecte les boutons */}
+      {/* Conteneur DOM où le SDK PayPal injecte les boutons officiels */}
       <div 
         ref={containerRef} 
         className={`w-full min-h-[44px] ${isLoading || isCapturing ? 'hidden' : 'block'}`}
       />
 
-      {/* Gestion des erreurs & Bouton de repli automatique */}
+      {/* Gestion des erreurs & Réessai in-app */}
       {hasError && (
         <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-center flex flex-col items-center gap-2.5">
           <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
             {errorMessage || "Le module de paiement a rencontré un problème."}
           </p>
-          <div className="w-full flex flex-col sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setHasError(false);
-                setErrorMessage('');
-              }}
-              className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
-            >
-              🔄 Réessayer
-            </button>
-            <button
-              type="button"
-              onClick={handleDirectCheckout}
-              className="flex-1 py-2 px-3 rounded-xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <span>💳 Portail sécurisé PayPal →</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setHasError(false);
+              setErrorMessage('');
+              setIsLoading(true);
+            }}
+            className="py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+          >
+            🔄 Réessayer le chargement
+          </button>
         </div>
       )}
     </div>
@@ -406,4 +324,3 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 };
 
 export default PayPalButton;
-

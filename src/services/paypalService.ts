@@ -32,18 +32,7 @@ export function getPayPalProCheckoutUrl(options: {
   customerName?: string;
   subscriptionId?: string;
 } = {}): string {
-  const customLink = (
-    process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK ||
-    (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_PRO_LINK ||
-    (import.meta as any).env?.VITE_PAYPAL_PRO_LINK ||
-    process.env.VITE_PAYPAL_PRO_LINK ||
-    ''
-  ).trim();
 
-  // Si un lien personnalisé valide et différent de l'ancien lien cassé est fourni
-  if (customLink && !customLink.includes('F5HDRFLUH7YJN') && !customLink.includes('localhost') && customLink.startsWith('https://')) {
-    return customLink;
-  }
 
   const plan = options.plan || 'monthly';
   const isYearly = plan === 'yearly';

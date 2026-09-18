@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
 import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
-import { getPayPalProCheckoutUrl, getPayPalDonationUrl } from '../services/paypalService';
+import { getPayPalDonationUrl } from '../services/paypalService';
 import { Heart, ExternalLink, Sparkles } from 'lucide-react';
 
 export interface CheckoutPayload {

@@ -220,7 +220,7 @@ export const subscriptionService = {
   async executeCheckoutWithIntent(
     intent: CheckoutIntent,
     user: any
-  ): Promise<{ success: boolean; redirectUrl?: string; error?: string }> {
+  ): Promise<{ success: boolean; redirectUrl?: string; error?: string; subscriptionId?: string; subscription?: any; isNativeModal?: boolean }> {
     if (!user || (!user.email && !user.id)) {
       return { success: false, error: "Utilisateur non connecté pour exécuter le paiement." };
     }
@@ -263,15 +263,9 @@ export const subscriptionService = {
 
     // 3. Déclencher la passerelle choisie
     if (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' || intent.provider === 'paypal') {
-      const paypalUrl = getPayPalProCheckoutUrl({
-        plan: intent.plan,
-        amount: intent.numericAmount,
-        currency: intent.currency,
-        email,
-        customerName: name,
-        subscriptionId: subscription.id
-      });
-      return { success: true, redirectUrl: paypalUrl };
+      // Pour PayPal, le paiement est intégralement traité dans la modale in-app via les Smart Buttons officiels
+      console.log('[SubscriptionService] Mode PayPal natif : pas de redirection externe, modale native active.');
+      return { success: true, subscriptionId: subscription.id, subscription, isNativeModal: true };
     }
 
     // Par défaut : SasPay Mobile Money & Cartes
