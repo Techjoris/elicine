@@ -13,30 +13,42 @@ import {
 // Rôle : Corriger les fautes, interpréter les descriptions libres,
 //        et renvoyer impérativement 3 à 5 titres de films pertinents.
 // ============================================================================
+// SYSTEM PROMPT — ÉTAPE 1 : Cerveau LLM (Extraction & Correction)
+// Rôle : Corriger les fautes, interpréter les descriptions libres,
+//        et renvoyer impérativement 5 à 8 films pertinents.
+// ============================================================================
 const LLM_SYSTEM_PROMPT = `Tu es une encyclopédie universelle du cinéma dotée d'une intelligence exceptionnelle.
 
 Ta mission est double :
 1. CORRIGER silencieusement toutes les fautes de frappe, d'orthographe ou de grammaire dans la requête de l'utilisateur avant de l'analyser.
-2. TRANSFORMER toute description littéraire, ambiance, situation narrative ou mots-clés en une liste précise de 5 à 8 films cinématographiques qui correspondent le mieux à cette intention.
+2. TRANSFORMER toute description littéraire, métaphore sensorielle, ambiance poétique, situation narrative, époque ou mots-clés en une liste précise de 5 à 8 films cinématographiques qui correspondent le mieux à cette intention.
 
-Règles strictes à respecter :
-- Tu DOIS toujours retourner entre 5 et 8 films distincts et variés. Jamais moins de 5, jamais un tableau vide.
-- SIMILARITÉ DE SCÉNARIO, SYNOPSIS ET AMBIANCE : Tes propositions doivent reposer EXCLUSIVEMENT sur la similarité des intrigues, des scénarios et des thèmes profonds, et JAMAIS sur une simple ressemblance de mots dans le titre. Ne propose JAMAIS des films qui partagent un mot dans leur nom sans rapport scénaristique.
-- DIVERSITÉ : Propose des films de réalisateurs différents qui explorent la même idée sous des angles cinématographiques riches.
-- Si la requête mentionne un acteur ou un réalisateur (ex: "Leonardo DiCaprio"), inclus en priorité ses films majeurs qui incarnent fidèlement le scénario et le genre demandés (ex: Inception, Les Infiltrés, Arrête-moi si tu peux pour un film de braquage/escroquerie avec DiCaprio), complétés par d'autres chefs-d'œuvre majeurs du même genre.
-- Si la requête cible un film précis que l'utilisateur a probablement déjà vu, propose volontairement des films SIMILAIRES (même scénario, même ambiance) plutôt que ce film lui-même ou ses suites directes.
-- Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Prisonniers / Prisoners").
-- Chaque film doit avoir une justification courte et précise expliquant pourquoi son SCÉNARIO correspond à la demande.
-- N'invente jamais un film qui n'existe pas.
-- INTERDICTION ABSOLUE des mockbusters, copies bon marché, parodies ou productions dérivées (aucun court-métrage promotionnel, spin-off obscur, making-of ou film Asylum).
-- QUALITÉ MINIMALE : Films ayant obtenu au moins 500 votes sur TMDB et une note supérieure à 5.5.
+Directives cinématographiques majeures :
+- EXPANSION SÉMANTIQUE & AMBIANCES SENSORIELLES :
+  Si la requête contient une métaphore ou une sensation (ex: "un film qui donne l'impression d'être enfermé dans un ascenseur sous la pluie"), ne cherche JAMAIS une correspondance littérale mot-à-mot. Traduis l'intention en sous-genres cinématographiques : Huis clos oppressant, claustrophobie, tension psychologique, esthétique sombre/néo-noir ou polar pluvieux (ex: Devil, Buried, Panic Room, Se7en, Phone Game, Blade Runner).
+- TOLÉRANCE HISTORIQUE & CROISEMENTS TEMPORELS :
+  Pour un croisement temporel (ex: "SF des années 70", "polar des années 80"), comprends qu'il s'agit du cinéma de ce genre sorti au cours de cette décennie (les dystopies et rétro-futurismes des années 70 comme Alien, Solaris, Soleil Vert / Soylent Green, Rencontres du troisième type, Rollerball, Orange Mécanique).
+- CONTRE-EMPLOI & RÔLES SPÉCIFIQUES :
+  Si un acteur est associé à un registre inhabituel (ex: "Jim Carrey dans un rôle dramatique"), sélectionne ses films sérieux et dramatiques (The Truman Show, Eternal Sunshine of the Spotless Mind, Man on the Moon, The Number 23).
+- CONTRAINTES NÉGATIVES & EXCLUSIONS :
+  Si la requête contient une exclusion (ex: "film de SF sans extraterrestre"), respecte rigoureusement la contrainte en proposant de la SF d'anticipation, d'intelligence artificielle, d'exploration temporelle ou de dystopie humaine (Interstellar, Gattaca, Ex Machina, Blade Runner, Her, Les Fils de l'homme / Children of Men).
+- INTERDICTION DU BLOCAGE SEC :
+  Tu DOIS toujours retourner entre 5 et 8 films distincts et variés. Ne retourne JAMAIS un tableau vide "matches": [] sauf si la requête est du pur gibberish incompréhensible (ex: frappe aléatoire de clavier "asdfghjkl").
+- DIVERSITÉ & QUALITÉ :
+  Propose des films de réalisateurs différents qui explorent la même idée sous des angles riches. Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Soleil Vert / Soylent Green").
+  Chaque film doit avoir une justification courte et précise formulée comme suit : "Atmosphère : [explication du lien d'ambiance, de décor, d'époque ou de rôle]".
+- CONTRAINTES DE FORMAT ET EXCLUSION STRICTE DES NON-FICTIONS :
+  Tu ne dois recommander QUE des œuvres cinématographiques / fictions narratives réelles.
+  INTERDICTION FORMELLE ABSOLUE des émissions télévisées de discussion, talk-shows, interviews d'acteurs, télé-réalités, cérémonies de remise de prix, making-of, podcasts vidéo ou documentaires (ex: 'Actors on Actors', 'Inside the Actors Studio', émissions de variétés, talk-shows de fin de soirée), sauf si l'utilisateur demande explicitement un documentaire ou un talk-show.
+  Si la requête demande des 'films' (ex: 'films de tueur en série'), ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
+- INTERDICTION ABSOLUE des mockbusters, parodies bon marché, téléfilms obscurs ou films Asylum. Films reconnus ayant au moins 500 votes sur TMDB et note >= 5.5.
 
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
   "corrected_query": "la requête corrigée de l'utilisateur",
   "matches": [
-    { "title": "Titre français / Original Title", "reason": "courte justification du scénario en français" },
-    { "title": "Titre 2", "reason": "justification scénaristique" }
+    { "title": "Titre français / Original Title", "reason": "Atmosphère : courte justification du scénario ou de l'ambiance en français" },
+    { "title": "Titre 2", "reason": "Atmosphère : courte justification" }
   ]
 }`;
 
@@ -747,6 +759,43 @@ const THEMATIC_CLUSTERS_RAW = [
       'kung fu panda', 'kung fu panda 2', 'kung fu panda 3', 'kung fu panda 4',
       'gang de requins', 'shark tale', 'maléfique', 'maleficent', 'titanic', 'la la land', 'notting hill'
     ]
+  },
+  {
+    id: 'tueur_en_serie',
+    triggers: [
+      'tueur en série', 'tueurs en série', 'tueur en serie', 'tueurs en serie',
+      'serial killer', 'serial killers', 'psychopathe', 'psychopathes',
+      'meurtres en série', 'meurtres en serie', 'meurtre en série', 'meurtre en serie',
+      'tueur psychopathe', 'tueurs psychopathes', 'profiler', 'profilers',
+      'chasse au tueur', 'traque du tueur', 'tueur sanguinaire'
+    ],
+    primaryKeywords: [
+      'tueur', 'tueurs', 'série', 'serie', 'serial killer', 'psychopathe', 'psychopathes',
+      'meurtre', 'meurtres', 'victime', 'victimes', 'profiler', 'enquête', 'enquete',
+      'enquêtes', 'enquetes', 'inspecteur', 'inspecteurs', 'cadavre', 'cadavres',
+      'criminel', 'criminels', 'assassin', 'assassins', 'police', 'fbi', 'mode opératoire', 'traque'
+    ],
+    secondaryKeywords: [
+      'macabre', 'sanglant', 'folie', 'obsession', 'mystère', 'mystere', 'rituel',
+      'sadique', 'indice', 'indices', 'chasseur', 'autopsie', 'recherche', 'arrestation',
+      'terreur', 'angoisse', 'suspense'
+    ],
+    expectedGenres: [80, 53, 27, 9648, 18],
+    conflictingGenres: [10751, 10402, 10767, 10764, 10763, 10749],
+    archetypes: [
+      'se7en', 'seven', 'le silence des agneaux', 'the silence of the lambs',
+      'zodiac', 'memories of murder', 'monster', 'american psycho',
+      'the house that jack built', 'le parfum', 'saw', 'psychose', 'psycho',
+      'm le maudit', 'henry, portrait d\'un serial killer', 'henry: portrait of a serial killer',
+      'mr. brooks', 'mr brooks', 'copycat', 'le diable tout le temps', 'prisoners',
+      'chasing the dragon', 'cure', 'manhunter', 'red dragon', 'dragon rouge'
+    ],
+    disqualified: [
+      'actors on actors', 'variety studio: actors on actors', 'inside the actors studio',
+      'the graham norton show', 'the tonight show', 'the late show', 'jimmy kimmel live',
+      'titanic', 'la la land', 'notting hill', 'pretty woman', 'mamma mia', 'clueless',
+      'le fabuleux destin d\'amélie poulain', 'kung fu panda', 'gang de requins'
+    ]
   }
 ];
 
@@ -761,7 +810,75 @@ export function detectThematicClusterId(queryText) {
   return null;
 }
 
+/**
+ * Détermine formellement si une œuvre doit être disqualifiée car il s'agit d'un contenu
+ * non-fictionnel (talk-show, interview d'acteurs, émission de divertissement, télé-réalité)
+ * alors que l'utilisateur recherche une œuvre cinématographique / fiction.
+ */
+export function isDisqualifiedNonFiction(queryText, movie) {
+  if (!movie) return false;
+  const qLower = (queryText || '').toLowerCase();
+  const isNonFictionExplicitlyRequested = /\b(documentaire|documentaires|docu|docus|reportage|reportages|talk-show|talk show|interview|interviews|télé-réalité|tele-realite|biographie réelle)\b/i.test(qLower);
+
+  const titleLower = (movie.title || movie.name || '').toLowerCase().trim();
+  const origLower = (movie.original_title || movie.original_name || '').toLowerCase().trim();
+
+  // 1. Titres blacklistés formels (émissions de discussion, interviews, remises de prix, talk-shows)
+  const blacklistedShowTitles = [
+    'actors on actors',
+    'variety studio: actors on actors',
+    'inside the actors studio',
+    'the graham norton show',
+    'the tonight show',
+    'the late show',
+    'jimmy kimmel live',
+    'the late late show',
+    'conan',
+    'hot ones',
+    'oscars',
+    'golden globes',
+    'cesar',
+    'césar'
+  ];
+  if (blacklistedShowTitles.some(bt => titleLower.includes(bt) || origLower.includes(bt))) {
+    return true;
+  }
+
+  // 2. Genres TMDB :
+  // 10767 = Talk Show (TV)
+  // 10764 = Reality (TV)
+  // 10763 = News (TV)
+  // 10766 = Soap (TV)
+  // 99 = Documentary
+  const rawGenreIds = Array.isArray(movie.genre_ids)
+    ? movie.genre_ids
+    : (typeof movie.genres === 'string'
+        ? movie.genres.split(',').map(Number).filter(Boolean)
+        : (Array.isArray(movie.genres) ? movie.genres.map(g => typeof g === 'number' ? g : g?.id) : []));
+  const genreIds = rawGenreIds.map(Number).filter(Boolean);
+
+  if (!isNonFictionExplicitlyRequested) {
+    if (genreIds.includes(10767) || genreIds.includes(10764) || genreIds.includes(10763)) {
+      return true;
+    }
+    if (genreIds.includes(99)) {
+      const fictionGenres = [28, 12, 16, 35, 80, 18, 14, 27, 9648, 878, 53, 10752, 37];
+      const hasFiction = genreIds.some(id => fictionGenres.includes(id));
+      if (!hasFiction) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function calculateSemanticMatchScore(movie, queryText, llmMatch) {
+  // 0. Disqualification immédiate des talk-shows, interviews, docu non demandés
+  if (isDisqualifiedNonFiction(queryText, movie)) {
+    return 15;
+  }
+
   const titleLower = (movie.title || movie.name || '').toLowerCase().trim();
   const origLower = (movie.original_title || movie.original_name || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
@@ -834,6 +951,15 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   const nonPersonWords = queryWords.filter(w => !personKeywords.some(pk => pk.includes(w) || w.includes(pk)) && !stopWords.includes(w));
   const hasNarrativeIntent = Boolean(activeCluster) || nonPersonWords.length >= 2;
 
+  const movieYear = parseInt((movie.release_date || movie.first_air_date || '').slice(0, 4), 10);
+  const is70s = (queryLower.includes('70') || queryLower.includes('seventies')) && movieYear >= 1968 && movieYear <= 1981;
+  const is80s = (queryLower.includes('80') || queryLower.includes('eighties')) && movieYear >= 1978 && movieYear <= 1991;
+  const is90s = (queryLower.includes('90') || queryLower.includes('nineties')) && movieYear >= 1988 && movieYear <= 2001;
+  const isEraMatch = is70s || is80s || is90s;
+
+  const isDramaticActorIntent = hasPersonInQuery && /dramatique|drame|serieux|sérieux|sombre/i.test(queryLower);
+  const isExclusionIntent = queryLower.includes('sans ') || queryLower.includes('pas de ') || queryLower.includes("pas d'");
+
   let narrativeScore = llmMatch ? 88 : 70;
   if (activeCluster) {
     const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
@@ -849,22 +975,42 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
       }
       if (hits > 0) {
         narrativeScore = Math.min(100, Math.max(50, 60 + hits * 8));
+      } else if (llmMatch) {
+        narrativeScore = 80;
       } else {
         const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
         narrativeScore = isAnimationOrFamily ? 10 : 25;
       }
+    }
+  } else if (isEraMatch) {
+    narrativeScore = (genreIds.includes(878) || genreIds.includes(53) || genreIds.includes(18)) ? 94 : 85;
+  } else if (isDramaticActorIntent && genreIds.includes(18)) {
+    narrativeScore = 95;
+  } else if (isExclusionIntent) {
+    const sansMatch = queryLower.match(/(?:sans|pas d['e])\s+([a-zà-ÿ0-9'-]+)/i);
+    const excludedWord = sansMatch ? sansMatch[1].toLowerCase() : '';
+    if (excludedWord && (overviewLower.includes(excludedWord) || titleLower.includes(excludedWord))) {
+      narrativeScore = 25; // Contient l'élément interdit
+    } else {
+      narrativeScore = llmMatch ? 90 : 80;
     }
   } else if (hasPersonInQuery && nonPersonWords.length >= 2) {
     let hits = 0;
     for (const w of nonPersonWords) {
       if (overviewLower.includes(w) || titleLower.includes(w)) hits++;
     }
-    narrativeScore = hits > 0 ? 75 : 20;
+    narrativeScore = hits > 0 ? 80 : (llmMatch ? 80 : 35);
+  } else if (llmMatch) {
+    narrativeScore = Math.max(80, (llmMatch.match_rate || 82));
   }
 
   // C. Sous-score Genre
   let genreScore = 75;
-  if (activeCluster) {
+  if (isDramaticActorIntent && genreIds.includes(18)) {
+    genreScore = 95;
+  } else if (queryLower.includes('sf') || queryLower.includes('science-fiction')) {
+    genreScore = genreIds.includes(878) ? 95 : 60;
+  } else if (activeCluster) {
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
     if (isAnimationOrFamily) {
       genreScore = 20;
@@ -889,8 +1035,8 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     : (narrativeScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
   // RÈGLE CARDINALE : Le score personne seul ne suffit JAMAIS si la requête contient une description narrative explicite
-  // et que le score narratif/thématique est nul ou insuffisant (< 50).
-  if (hasPersonInQuery && hasNarrativeIntent && narrativeScore < 50) {
+  // et que le score narratif/thématique est nul ou insuffisant (< 50) ET que ce n'est pas un match LLM ou contre-emploi.
+  if (hasPersonInQuery && hasNarrativeIntent && narrativeScore < 50 && !llmMatch && !isDramaticActorIntent) {
     return Math.min(38, Math.round(narrativeScore));
   }
 
@@ -917,6 +1063,9 @@ function filterMockbusters(movies, queryText) {
     .filter(w => w.length >= 4 && !STOP_WORDS.has(w));
 
   const filtered = movies.filter(m => {
+    // Rejet catégorique immédiat des talk-shows, interviews d'acteurs et contenus non-fictionnels
+    if (isDisqualifiedNonFiction(queryText, m)) return false;
+
     const avg = Number(m.vote_average || 0);
     const cnt = Number(m.vote_count || 0);
     const titleLower = (m.title || m.original_title || '').toLowerCase();

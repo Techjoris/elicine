@@ -333,6 +333,22 @@ export default async function handler(req, res) {
     });
   }
 
+  // ─── SÉCURITÉ STRICTE : Interdiction formelle de l'activation directe côté client ───
+  const authHeader = req.headers['authorization'] || '';
+  const internalSecret = process.env.INTERNAL_ACTIVATION_SECRET || process.env.CRON_SECRET || '';
+  const isAuthorizedBackend = (
+    (internalSecret && (authHeader === `Bearer ${internalSecret}` || req.headers['x-internal-secret'] === internalSecret)) ||
+    (process.env.SUPABASE_SERVICE_ROLE_KEY && authHeader === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`)
+  );
+
+  if (!isAuthorizedBackend) {
+    console.warn(`[API /api/activate-pro] ⛔ Tentative d'activation directe client bloquée pour ${email}. Seuls les webhooks officiels sont autorisés.`);
+    return res.status(403).json({
+      success: false,
+      error: "L'activation directe du Pass Pro côté client est strictement interdite. La validation dépend obligatoirement d'un prélèvement réel vérifié par webhook officiel."
+    });
+  }
+
   try {
     const result = await activateUserPassPro(email, {
       userId,

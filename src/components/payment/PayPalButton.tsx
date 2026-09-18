@@ -102,43 +102,37 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
   const formattedAmount = numericValue.toFixed(2);
 
-  // Récupération et détection de l'environnement Client PayPal (Live vs Sandbox)
+  // Récupération et détection de l'environnement Client PayPal (Live prioritaire)
   const envClientId = (
     (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
     (import.meta as any).env?.PAYPAL_CLIENT_ID ||
-    'sb'
+    ''
   ).trim();
 
   const explicitMode = (
+    (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_MODE ||
+    (import.meta as any).env?.VITE_PAYPAL_MODE ||
+    (import.meta as any).env?.PAYPAL_MODE ||
     (import.meta as any).env?.VITE_PAYPAL_ENV ||
     (import.meta as any).env?.PAYPAL_ENV ||
-    ''
+    'live'
   ).trim().toLowerCase();
 
-  const isSandbox = explicitMode === 'sandbox' || envClientId === 'sb' || envClientId.toLowerCase().includes('sandbox');
-  const isLiveSdkAvailable = Boolean(envClientId && envClientId.length > 0);
+  const isSandbox = explicitMode === 'sandbox';
+  const isLiveSdkAvailable = Boolean(envClientId && envClientId.length > 0 && envClientId !== 'sb');
 
   useEffect(() => {
     let isMounted = true;
 
     // Diagnostic console initial
     console.group('[PayPal SDK Debug] 🛠️ Initialisation du widget PayPal Éliciné');
-    console.log('Client ID configuré :', envClientId ? `${envClientId.substring(0, Math.min(8, envClientId.length))}... (longueur: ${envClientId.length})` : 'sb (par défaut)');
+    console.log('Client ID configuré :', envClientId ? `${envClientId.substring(0, Math.min(8, envClientId.length))}... (longueur: ${envClientId.length})` : '(non défini)');
     console.log('Mode d\'environnement :', isSandbox ? '🧪 SANDBOX (Mode Test)' : '🚀 LIVE (Mode Production)');
     console.log('Montant :', formattedAmount, normalizedCurrency, `(Cycle: ${billingCycle})`);
-    if (isSandbox) {
-      console.warn(
-        '⚠️ AVERTISSEMENT TEST SANDBOX :\n' +
-        'Le Client ID actuel est configuré en mode SANDBOX ("sb" ou clé de test).\n' +
-        'En mode Sandbox, PayPal REFUSE SYSTÉMATIQUEMENT toutes les cartes bancaires réelles ("Nous n\'avons pas pu enregistrer cette carte") sans contacter la banque.\n' +
-        'Pour tester la soumission par carte en Sandbox, utilisez un numéro de carte de test généré sur https://developer.paypal.com (Dashboard > Mock Card Generator).\n' +
-        'Pour débiter une carte bancaire réelle (test 1$ ou production), vous devez définir un Client ID Live dans la variable VITE_PAYPAL_CLIENT_ID.'
-      );
-    }
     console.groupEnd();
 
-    // Si aucun Client ID n'est configuré
-    if (!isLiveSdkAvailable) {
+    // Si aucun Client ID valide n'est configuré
+    if (!envClientId) {
       setIsLoading(false);
       setHasError(false);
       return;
@@ -182,26 +176,15 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
               },
               onClick: (data: any, actions: any) => {
                 const funding = data?.fundingSource || 'standard';
-                console.group('[PayPal SDK Debug] 🖱️ Clic utilisateur sur le bouton PayPal');
-                console.log('Méthode sélectionnée (fundingSource) :', funding);
-                console.log('Détails événement clic :', data);
-                console.log('Paramètres de l\'offre :', {
-                  amount: formattedAmount,
-                  currency: normalizedCurrency,
-                  billingCycle,
-                  isSandbox
-                });
+                console.log('[PayPal SDK Debug] 🖱️ Clic utilisateur sur le bouton PayPal :', funding);
 
                 if (onClick) {
                   const allow = onClick();
                   if (allow === false) {
                     console.warn('[PayPal SDK Debug] ⛔ onClick handler a renvoyé false, transaction rejetée avant création.');
-                    console.groupEnd();
                     return actions.reject();
                   }
                 }
-                console.log('[PayPal SDK Debug] ✅ Pré-validation OK, résolution vers createOrder.');
-                console.groupEnd();
                 return actions.resolve();
               },
               createOrder: (data: any, actions: any) => {
@@ -240,7 +223,6 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   ],
                   application_context: {
                     brand_name: 'Éliciné',
-                    // Note technique Orders v2 : 'BILLING' affiche directement le formulaire de saisie carte
                     landing_page: 'BILLING',
                     shipping_preference: 'NO_SHIPPING',
                     user_action: 'PAY_NOW',
@@ -249,19 +231,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   }
                 };
 
-                console.group('[PayPal SDK Debug] 🚀 Déclenchement de actions.order.create');
-                console.log('Order Payload complet envoyé à PayPal API :', JSON.stringify(orderPayload, null, 2));
-                console.groupEnd();
-
-                return actions.order.create(orderPayload)
-                  .then((orderId: string) => {
-                    console.log('[PayPal SDK Debug] ✅ actions.order.create réussi avec succès ! Order ID :', orderId);
-                    return orderId;
-                  })
-                  .catch((createErr: any) => {
-                    console.error('[PayPal SDK Debug] ❌ Échec de actions.order.create :', createErr);
-                    throw createErr;
-                  });
+                return actions.order.create(orderPayload);
               },
               onApprove: async (data: any, actions: any) => {
                 console.group('[PayPal SDK Debug] 🎯 onApprove déclenché !');
@@ -271,6 +241,18 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   console.log('[PayPal SDK Debug] Début de la capture de l\'ordre via actions.order.capture()...');
                   const details = await actions.order.capture();
                   console.log('[PayPal SDK Debug] ✅ Capture réussie ! Détails complets :', details);
+
+                  // Vérification stricte du statut de capture
+                  const captureStatus = String(
+                    details?.status || 
+                    details?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
+                    ''
+                  ).toUpperCase();
+
+                  if (captureStatus && captureStatus !== 'COMPLETED') {
+                    throw new Error(`Le prélèvement n'a pas pu être validé par PayPal (statut : ${captureStatus}). Votre compte n'a pas été débité. Veuillez réapprovisionner votre moyen de paiement.`);
+                  }
+
                   const capturedOrderId = details?.id || data?.orderID || `paypal_${Date.now()}`;
                   await onSuccess(details || data, capturedOrderId);
                   console.groupEnd();
@@ -278,10 +260,10 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   console.error('[PayPal SDK Debug] ❌ Échec lors de la capture :', captureErr);
                   console.groupEnd();
                   const issue = captureErr?.details?.[0]?.issue || captureErr?.name || '';
-                  let userMsg = "Échec de la validation de la transaction.";
+                  let userMsg = "Solde insuffisant ou prélèvement refusé par PayPal. Votre compte n'a pas pu être débité. Veuillez réapprovisionner votre solde PayPal ou votre carte bancaire, puis réessayer.";
 
                   if (issue === 'INSTRUMENT_DECLINED') {
-                    userMsg = "Votre carte a été refusée par votre banque. Veuillez vérifier vos plafonds ou essayer une autre carte.";
+                    userMsg = "Solde insuffisant ou carte refusée par votre établissement bancaire. Veuillez réapprovisionner votre moyen de paiement (solde PayPal ou carte bancaire).";
                   } else if (captureErr?.message) {
                     userMsg = captureErr.message;
                   }
@@ -294,32 +276,11 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                 }
               },
               onError: (err: any) => {
-                console.group('[PayPal SDK Debug] ⚠️ Événement onError déclenché par le SDK PayPal');
-                console.error('Erreur brute :', err);
-                console.error('Propriétés inspectées :', {
-                  name: err?.name,
-                  message: err?.message,
-                  stack: err?.stack,
-                  details: err?.details,
-                  keys: err && typeof err === 'object' ? Object.keys(err) : []
-                });
-
-                if (isSandbox) {
-                  console.warn(
-                    '🔍 DIAGNOSTIC SANDBOX : Si cette erreur survient lors de la saisie d\'une vraie carte bancaire,' +
-                    ' cela confirme que PayPal Sandbox bloque les cartes réelles ("Nous n\'avons pas pu enregistrer cette carte").' +
-                    ' Utilisez une carte de test Sandbox ou basculez sur un Client ID Live dans vos variables d\'environnement.'
-                  );
-                }
-                console.groupEnd();
-
+                console.error('[PayPal SDK Debug] ⚠️ Événement onError déclenché par le SDK PayPal:', err);
                 if (!isMounted) return;
                 setHasError(true);
-                const isDecline = String(err?.message || '').toLowerCase().includes('card') || String(err?.message || '').toLowerCase().includes('declined');
-                const userNotice = isSandbox
-                  ? "Note (Mode Sandbox) : PayPal refuse les vraies cartes en environnement de test. Utilisez une carte de test Sandbox ou le lien sécurisé direct."
-                  : "Une erreur est survenue lors de la communication sécurisée avec PayPal. Vous pouvez réessayer ou utiliser le portail officiel.";
-                setErrorMessage(isDecline ? "Votre carte a été refusée ou n'a pas pu être validée." : userNotice);
+                const userNotice = "Échec du prélèvement : Solde insuffisant ou moyen de paiement refusé par PayPal. Veuillez approvisionner votre compte ou utiliser une autre carte bancaire.";
+                setErrorMessage(userNotice);
                 if (onError) onError(err);
               },
               onCancel: (data: any) => {

@@ -157,6 +157,26 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.6. ROUTE /api/webhook
+            if (pathname.startsWith('/api/webhook')) {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/webhook.js')).href;
+                const webhookHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await webhookHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 4. ROUTE /api/auth (login, register, send-verification, google)
             if (pathname.startsWith('/api/auth')) {
               adaptResponse();
@@ -186,6 +206,8 @@ export default defineConfig(({ mode }) => {
     ],
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     define: {
+      'process.env.NEXT_PUBLIC_PAYPAL_MODE': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_MODE || env.PAYPAL_MODE || env.VITE_PAYPAL_MODE || env.VITE_PAYPAL_ENV || 'live'),
+      'process.env.PAYPAL_MODE': JSON.stringify(env.PAYPAL_MODE || env.NEXT_PUBLIC_PAYPAL_MODE || env.VITE_PAYPAL_MODE || env.VITE_PAYPAL_ENV || 'live'),
       'process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_PRO_LINK || env.VITE_PAYPAL_PRO_LINK || process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || process.env.VITE_PAYPAL_PRO_LINK || ''),
       'process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || env.VITE_PAYPAL_SUPPORT_LINK || process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || process.env.VITE_PAYPAL_SUPPORT_LINK || ''),
     },

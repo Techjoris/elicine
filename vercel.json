@@ -31,6 +31,10 @@
       "destination": "/api/activate-pro?action=cron"
     },
     {
+      "source": "/api/paypal/webhook",
+      "destination": "/api/paypal?action=webhook"
+    },
+    {
       "source": "/api/saspay/webhook",
       "destination": "/api/saspay?action=webhook"
     },

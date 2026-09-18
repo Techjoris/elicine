@@ -319,12 +319,92 @@ export interface ExtractedCriteria {
   format?: 'film' | 'serie' | 'all';
   themes: string[];
   narrativeCues: string[];
+  exclusions?: string[];       // ex: ['extraterrestre', 'armes', 'romance']
+  isMetaphorical?: boolean;    // ex: requêtes sensorielles / métaphoriques
+  cinematicExpansion?: string; // ex: 'Huis clos oppressant, thriller psychologique sombre'
   isTwistRequested: boolean;
   hasNarrativeConstraint: boolean;
   hasStructuredIntent: boolean;
   primaryEntity?: string;
   hasHardCriteria: boolean;
   thematicCluster?: string;
+}
+
+/**
+ * Détecte si une requête est du gibberish pur (frappe aléatoire de touches, zéro voyelle, suites absurdes)
+ * afin de ne réserver l'écran "trop mystérieuse" qu'aux requêtes véritablement incompréhensibles.
+ */
+export function isGibberishQuery(query: string): boolean {
+  if (!query || typeof query !== 'string') return true;
+  const clean = query.trim().toLowerCase();
+  if (clean.length < 2) return true;
+
+  const lettersOnly = clean.replace(/[^a-zà-ÿ]/gi, '');
+  if (lettersOnly.length < 2) return true;
+
+  const words = clean.split(/[\s,.'’"-]+/).filter(w => w.length > 0);
+  if (words.length === 0) return true;
+
+  const vowels = /[aeiouyàâäéèêëîïôöùûü]/i;
+  let noVowelLongWords = 0;
+  for (const w of words) {
+    if (w.length >= 4 && !vowels.test(w)) {
+      noVowelLongWords++;
+    }
+  }
+  if (noVowelLongWords > 0 && noVowelLongWords === words.length) {
+    return true;
+  }
+
+  // Répétition d'un même caractère 5+ fois de suite (ex: "zzzzzzz", "aaaaaa")
+  if (/([a-zà-ÿ])\1{5,}/i.test(clean)) {
+    return true;
+  }
+
+  // Répétition d'un mot unique 4+ fois (ex: "bla bla bla bla")
+  if (words.length >= 4 && new Set(words).size === 1) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Vérifie avec souplesse historique si une année de sortie cinématographique
+ * s'inscrit dans la décennie ou l'époque demandée (ex: "années 70" englobe 1968-1981).
+ */
+export function isYearInEra(movieYear: number, era?: string): boolean {
+  if (!era || !movieYear) return true;
+  const cleanEra = era.toLowerCase().trim();
+
+  if (cleanEra.includes('70') || cleanEra.includes('seventies')) {
+    return movieYear >= 1968 && movieYear <= 1981;
+  }
+  if (cleanEra.includes('80') || cleanEra.includes('eighties')) {
+    return movieYear >= 1978 && movieYear <= 1991;
+  }
+  if (cleanEra.includes('90') || cleanEra.includes('nineties')) {
+    return movieYear >= 1988 && movieYear <= 2001;
+  }
+  if (cleanEra.includes('2000') || cleanEra.includes('00s')) {
+    return movieYear >= 1998 && movieYear <= 2011;
+  }
+  if (cleanEra.includes('2010') || cleanEra.includes('10s')) {
+    return movieYear >= 2008 && movieYear <= 2021;
+  }
+  if (cleanEra.includes('60') || cleanEra.includes('sixties')) {
+    return movieYear >= 1958 && movieYear <= 1971;
+  }
+  if (cleanEra.includes('50') || cleanEra.includes('fifties')) {
+    return movieYear >= 1948 && movieYear <= 1961;
+  }
+  if (cleanEra.includes('classique') || cleanEra.includes('vieux')) {
+    return movieYear < 1980;
+  }
+  if (cleanEra.includes('récent') || cleanEra.includes('recent') || cleanEra.includes('nouveaut')) {
+    return movieYear >= 2018;
+  }
+  return true;
 }
 
 export interface SpatialSettingDefinition {
@@ -372,15 +452,17 @@ export const SPATIAL_SETTINGS_MAP: Record<string, SpatialSettingDefinition> = {
     triggers: [
       'huis clos', 'huis-clos', 'cercueil', 'enterré vivant', 'enterre vivant', 'bunker',
       'pièce fermée', 'piece fermee', 'chambre forte', 'coffre-fort', 'cabine téléphonique',
-      'cabine telephonique', 'chambre d\'hôtel', 'cellule', 'dans une boîte', 'dans une boite'
+      'cabine telephonique', 'chambre d\'hôtel', 'cellule', 'dans une boîte', 'dans une boite',
+      'ascenseur', 'dans un ascenseur', 'enfermé dans un ascenseur', 'bloqué dans un ascenseur',
+      'panne d\'ascenseur', 'espace confiné', 'espace clos', 'confinement'
     ],
-    situations: ['enfermé dans un cercueil', 'bloqué dans une pièce', 'huis clos angoissant', 'bunker sous-terrain'],
+    situations: ['enfermé dans un cercueil', 'bloqué dans une pièce', 'bloqué dans un ascenseur', 'huis clos angoissant', 'bunker sous-terrain'],
     expectedGenres: [53, 9648, 27, 80],
     archetypeFilms: [
-      'Buried', '10 Cloverfield Lane', 'Panic Room', 'Saw', 'Phone Game', 'Phone Booth',
-      'Oxygen', 'Exam', 'The Platform', 'La Plateforme', 'Devil', 'Misery', 'Fenêtre sur cour', '12 Hommes en colère'
+      'Devil', 'Buried', '10 Cloverfield Lane', 'Panic Room', 'Saw', 'Phone Game', 'Phone Booth',
+      'Oxygen', 'Exam', 'The Platform', 'La Plateforme', 'Misery', 'Fenêtre sur cour', '12 Hommes en colère', 'Cube'
     ],
-    keywords: ['enfermé', 'piégé', 'pièce', 'cercueil', 'bunker', 'huis clos', 'cellule', 'prisonnier', 'survie']
+    keywords: ['enfermé', 'piégé', 'pièce', 'ascenseur', 'cercueil', 'bunker', 'huis clos', 'cellule', 'prisonnier', 'survie', 'étouffant', 'claustrophobie']
   },
   abysses_aquatique: {
     id: 'abysses_aquatique',
@@ -437,7 +519,8 @@ export const TONE_PATTERNS: Record<string, ToneDefinition> = {
     id: 'distressing',
     triggers: [
       'angoissant', 'angoisse', 'oppressant', 'oppressante', 'terrifiant', 'flippant',
-      'peur', 'claustrophobe', 'claustrophobique', 'cauchemar', 'horreur', 'angoissante'
+      'peur', 'claustrophobe', 'claustrophobique', 'cauchemar', 'horreur', 'angoissante',
+      'suffocant', 'étouffant', 'etouffant', 'étouffante', 'panique', 'asphyxie'
     ],
     genres: [27, 53], // Horreur, Thriller
     intensity: 'distressing'
@@ -463,8 +546,9 @@ export const TONE_PATTERNS: Record<string, ToneDefinition> = {
   dark_melancholic: {
     id: 'dark_melancholic',
     triggers: [
-      'sombre', 'noir', 'pluvieux', 'néo-noir', 'mélancolique',
-      'désespéré', 'glauque', 'poisseux'
+      'sombre', 'noir', 'pluvieux', 'pluvieuse', 'pluie', 'sous la pluie', 'pluie battante',
+      'déluge', 'orage', 'néo-noir', 'neo-noir', 'mélancolique', 'melancolique',
+      'désespéré', 'glauque', 'poisseux', 'crépusculaire'
     ],
     genres: [80, 18, 53],
     intensity: 'dark'
@@ -550,24 +634,74 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   let format: 'film' | 'serie' | 'all' = 'all';
 
   // 1. Format (Film vs Série)
-  if (/\b(série|séries|serie|series|mini-série|mini-serie|série tv|serie tv)\b/i.test(lower)) {
-    format = 'serie';
-  } else if (/\b(film|films|long-métrage|long metrage|court-métrage|court metrage)\b/i.test(lower)) {
+  // Prise en compte rigoureuse des expressions idiomatiques ("tueur en série", "meurtres en série", "serial killer")
+  // où "en série" désigne la répétition criminelle (serial) et non une œuvre télévisée.
+  const textWithoutSerialIdioms = lower
+    .replace(/\b(?:tueur|tueurs|meurtre|meurtres|crime|crimes|vol|vols)\s+en\s+s[ée]ries?\b/gi, '')
+    .replace(/\ben\s+s[ée]ries?\b/gi, '')
+    .replace(/\bserial\s+killers?\b/gi, '');
+
+  const hasExplicitFilm = /\b(film|films|long-métrage|long metrage|court-métrage|court metrage|cinéma|cinema)\b/i.test(lower);
+  const hasExplicitSerie = /\b(série|séries|serie|series|mini-série|mini-serie|série tv|serie tv|saisons?)\b/i.test(textWithoutSerialIdioms);
+
+  if (hasExplicitFilm && !hasExplicitSerie) {
     format = 'film';
+  } else if (hasExplicitSerie && !hasExplicitFilm) {
+    format = 'serie';
+  } else {
+    format = 'all';
   }
 
-  // 2. Année précise ou décennie
-  const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/);
-  if (yearMatch) {
-    const y = parseInt(yearMatch[1], 10);
-    if (y >= 1900 && y <= 2035) {
-      year = y;
+  // 2. Décennie / Époque ou Année précise
+  // A. Détection des décennies / époques (ex: "années 70", "70s", "seventies", "années 1970")
+  const decadeRegex = /\b(?:années|annees)\s*(?:de\s+)?(50|60|70|80|90|2000|2010|2020|1950|1960|1970|1980|1990)\b|\b(50s|60s|70s|80s|90s|fifties|sixties|seventies|eighties|nineties)\b/i;
+  const decadeMatch = lower.match(decadeRegex);
+  if (decadeMatch) {
+    const rawMatch = (decadeMatch[1] || decadeMatch[2] || '').toLowerCase();
+    if (rawMatch.includes('70') || rawMatch.includes('seventies')) era = 'années 70';
+    else if (rawMatch.includes('80') || rawMatch.includes('eighties')) era = 'années 80';
+    else if (rawMatch.includes('90') || rawMatch.includes('nineties')) era = 'années 90';
+    else if (rawMatch.includes('2000') || rawMatch.includes('00s')) era = 'années 2000';
+    else if (rawMatch.includes('2010') || rawMatch.includes('10s')) era = 'années 2010';
+    else if (rawMatch.includes('60') || rawMatch.includes('sixties')) era = 'années 60';
+    else if (rawMatch.includes('50') || rawMatch.includes('fifties')) era = 'années 50';
+    else era = decadeMatch[0];
+  } else {
+    const eraMatch = BROAD_ERAS.find(e => lower.includes(e));
+    if (eraMatch) {
+      era = eraMatch;
     }
   }
 
-  const eraMatch = BROAD_ERAS.find(e => lower.includes(e));
-  if (eraMatch) {
-    era = eraMatch;
+  // B. Année exacte (uniquement si aucune décennie large n'est demandée)
+  if (!era) {
+    const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/);
+    if (yearMatch) {
+      const y = parseInt(yearMatch[1], 10);
+      if (y >= 1900 && y <= 2035) {
+        year = y;
+      }
+    }
+  }
+
+  // 2b. Détection des contraintes négatives / exclusions ("sans...", "pas de...")
+  const exclusions: string[] = [];
+  const sansRegex = /\b(?:sans|pas d['e]|aucun[e]?)\s+([a-zà-ÿ0-9'-]+)/gi;
+  let sMatch;
+  while ((sMatch = sansRegex.exec(lower)) !== null) {
+    if (sMatch[1] && sMatch[1].length > 2) {
+      exclusions.push(sMatch[1].trim());
+    }
+  }
+
+  // 2c. Détection des métaphores sensorielles ou d'ambiance
+  let isMetaphorical = false;
+  let cinematicExpansion: string | undefined;
+  if (/\b(impression d['e]|comme si|sensation d['e]|ambiance de|atmosphère de|donne l'impression|impression de)\b/i.test(lower)) {
+    isMetaphorical = true;
+    if (lower.includes('ascenseur') || lower.includes('enferm') || lower.includes('pluie')) {
+      cinematicExpansion = 'Huis clos oppressant, thriller psychologique sombre';
+    }
   }
 
   // 3. Détection des Réalisateurs (Mappage connu + motifs 'réalisé par', 'de [Nom]')
@@ -727,7 +861,15 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  const hasNarrativeConstraint = isTwistRequested || narrativeCues.length > 0 || spatialSettings.length > 0;
+  // Nettoyage des narrativeCues : exclure les termes de contraintes négatives ou de décennies
+  const cleanNarrativeCues = narrativeCues.filter(cue => {
+    const cueLower = cue.toLowerCase();
+    const isExcluded = exclusions.some(ex => cueLower.includes(ex.toLowerCase()) || ex.toLowerCase().includes(cueLower));
+    const isEraWord = era && era.toLowerCase().includes(cueLower);
+    return !isExcluded && !isEraWord;
+  });
+
+  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || isMetaphorical || Boolean(era);
 
   // 10. Calcul de l'intention globale structurée (Niveau 1)
   // Vrai dès qu'une entité humaine, un cadre spatial, une situation ou un ton/twist est identifié
@@ -738,6 +880,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     situations.length > 0 ||
     tones.length > 0 ||
     isTwistRequested ||
+    isMetaphorical ||
     year !== undefined ||
     era !== undefined ||
     format !== 'all';
@@ -783,7 +926,10 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     year,
     format,
     themes,
-    narrativeCues,
+    narrativeCues: cleanNarrativeCues,
+    exclusions,
+    isMetaphorical,
+    cinematicExpansion,
     isTwistRequested,
     hasNarrativeConstraint,
     hasStructuredIntent,
@@ -794,6 +940,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   const detectedCluster = findActiveThematicCluster(criteriaObj, clean);
   if (detectedCluster) {
     criteriaObj.thematicCluster = detectedCluster.id;
+    criteriaObj.hasNarrativeConstraint = true;
   }
 
   return criteriaObj;
@@ -1024,12 +1171,119 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
       'maleficent: mistress of evil', 'titanic', 'la la land', 'notting hill',
       'coup de foudre à notting hill', 'pretty woman', 'mamma mia'
     ]
+  },
+  {
+    id: 'tueur_en_serie',
+    triggers: [
+      'tueur en série', 'tueurs en série', 'tueur en serie', 'tueurs en serie',
+      'serial killer', 'serial killers', 'psychopathe', 'psychopathes',
+      'meurtres en série', 'meurtres en serie', 'meurtre en série', 'meurtre en serie',
+      'tueur psychopathe', 'tueurs psychopathes', 'profiler', 'profilers',
+      'chasse au tueur', 'traque du tueur', 'tueur sanguinaire'
+    ],
+    primaryKeywords: [
+      'tueur', 'tueurs', 'série', 'serie', 'serial killer', 'psychopathe', 'psychopathes',
+      'meurtre', 'meurtres', 'victime', 'victimes', 'profiler', 'enquête', 'enquete',
+      'enquêtes', 'enquetes', 'inspecteur', 'inspecteurs', 'cadavre', 'cadavres',
+      'criminel', 'criminels', 'assassin', 'assassins', 'police', 'fbi', 'mode opératoire', 'traque'
+    ],
+    secondaryKeywords: [
+      'macabre', 'sanglant', 'folie', 'obsession', 'mystère', 'mystere', 'rituel',
+      'sadique', 'indice', 'indices', 'chasseur', 'autopsie', 'recherche', 'arrestation',
+      'terreur', 'angoisse', 'suspense'
+    ],
+    expectedGenres: [80, 53, 27, 9648, 18],
+    conflictingGenres: [10751, 10402, 10767, 10764, 10763, 10749],
+    archetypeTitles: [
+      'se7en', 'seven', 'le silence des agneaux', 'the silence of the lambs',
+      'zodiac', 'memories of murder', 'monster', 'american psycho',
+      'the house that jack built', 'le parfum', 'saw', 'psychose', 'psycho',
+      'm le maudit', 'henry, portrait d\'un serial killer', 'henry: portrait of a serial killer',
+      'mr. brooks', 'mr brooks', 'copycat', 'le diable tout le temps', 'prisoners',
+      'chasing the dragon', 'cure', 'manhunter', 'red dragon', 'dragon rouge'
+    ],
+    disqualifiedTitles: [
+      'actors on actors', 'variety studio: actors on actors', 'inside the actors studio',
+      'the graham norton show', 'the tonight show', 'the late show', 'jimmy kimmel live',
+      'titanic', 'la la land', 'notting hill', 'pretty woman', 'mamma mia', 'clueless',
+      'le fabuleux destin d\'amélie poulain', 'kung fu panda', 'gang de requins'
+    ]
   }
 ];
 
+/**
+ * Détermine formellement si une œuvre doit être disqualifiée car il s'agit d'un contenu
+ * non-fictionnel (talk-show, interview d'acteurs, émission de divertissement, télé-réalité)
+ * alors que l'utilisateur recherche une œuvre cinématographique / fiction.
+ */
+export function isDisqualifiedNonFiction(queryText: string, movie: any): boolean {
+  if (!movie) return false;
+  const qLower = (queryText || '').toLowerCase();
+  const isNonFictionExplicitlyRequested = /\b(documentaire|documentaires|docu|docus|reportage|reportages|talk-show|talk show|interview|interviews|télé-réalité|tele-realite|biographie réelle)\b/i.test(qLower);
+
+  const titleLower = (movie.title || movie.name || '').toLowerCase().trim();
+  const origLower = (movie.original_title || movie.original_name || '').toLowerCase().trim();
+
+  // 1. Titres blacklistés formels (émissions de discussion, interviews, remises de prix, talk-shows)
+  const blacklistedShowTitles = [
+    'actors on actors',
+    'variety studio: actors on actors',
+    'inside the actors studio',
+    'the graham norton show',
+    'the tonight show',
+    'the late show',
+    'jimmy kimmel live',
+    'the late late show',
+    'conan',
+    'hot ones',
+    'oscars',
+    'golden globes',
+    'cesar',
+    'césar'
+  ];
+  if (blacklistedShowTitles.some(bt => titleLower.includes(bt) || origLower.includes(bt))) {
+    return true;
+  }
+
+  // 2. Genres TMDB :
+  // 10767 = Talk Show (TV)
+  // 10764 = Reality (TV)
+  // 10763 = News (TV)
+  // 10766 = Soap (TV)
+  // 99 = Documentary
+  const rawGenreIds = Array.isArray(movie.genre_ids)
+    ? movie.genre_ids
+    : (Array.isArray(movie.genres) ? movie.genres.map((g: any) => typeof g === 'number' ? g : g?.id) : []);
+  const genreIds = rawGenreIds.map(Number).filter(Boolean);
+
+  if (!isNonFictionExplicitlyRequested) {
+    // Émissions d'interviews, talk-shows, reality, news sont systématiquement éliminées pour toute recherche de cinéma/fiction
+    if (genreIds.includes(10767) || genreIds.includes(10764) || genreIds.includes(10763)) {
+      return true;
+    }
+    // Documentaires (99) rejetés sauf s'il y a un genre fiction majeur
+    if (genreIds.includes(99)) {
+      const fictionGenres = [28, 12, 16, 35, 80, 18, 14, 27, 9648, 878, 53, 10752, 37];
+      const hasFiction = genreIds.some(id => fictionGenres.includes(id));
+      if (!hasFiction) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function findActiveThematicCluster(criteria: ExtractedCriteria, queryText?: string): ThematicCluster | null {
+  if (criteria.thematicCluster) {
+    const directCluster = THEMATIC_LEXICON_CLUSTERS.find(c => c.id === criteria.thematicCluster);
+    if (directCluster) return directCluster;
+  }
+
   const haystacks = [
     queryText || '',
+    criteria.primaryEntity || '',
+    criteria.cinematicExpansion || '',
     ...(criteria.narrativeCues || []),
     ...(criteria.themes || []),
     ...(criteria.tones || [])
@@ -1061,6 +1315,27 @@ export function evaluateMovieNarrativeRelevance(
   criteria: ExtractedCriteria,
   rawItem?: { tier?: number; match_rate?: number; reason?: string }
 ): { matches: boolean; score: number; reason: string } {
+  // 0. DISQUALIFICATION DES CONTENUS NON-FICTION (Talk-shows, Reality TV, News, Documentaires non sollicités)
+  if (isDisqualifiedNonFiction(criteriaObjString(criteria) + ' ' + (criteria.thematicCluster || ''), movie)) {
+    return {
+      matches: false,
+      score: 15,
+      reason: `Exclu : "${movie.title}" est une émission, interview ou contenu non-fictionnel hors de la thématique cinéma demandée`
+    };
+  }
+
+  // 0b. Disqualification stricte par format
+  if (criteria.format !== 'all') {
+    const isSeries = (movie as any).media_type === 'SÉRIE' || (movie as any).media_type === 'tv';
+    if ((criteria.format === 'film' && isSeries) || (criteria.format === 'serie' && !isSeries)) {
+      return {
+        matches: false,
+        score: 15,
+        reason: `Exclu : format incompatible (${isSeries ? 'Série' : 'Film'} au lieu de ${criteria.format === 'film' ? 'Film' : 'Série'})`
+      };
+    }
+  }
+
   if (!criteria.hasNarrativeConstraint && criteria.actors.length === 0 && criteria.directors.length === 0) {
     return { matches: true, score: 95, reason: 'Aucune contrainte narrative restrictive' };
   }
@@ -1118,7 +1393,30 @@ export function evaluateMovieNarrativeRelevance(
 
   // 2. DÉMARCHE SCIENTIFIQUE CONTINUE MULTI-CRITÈRES
 
-  // A. Sous-score Personne / Casting (poids 0.35)
+  // A. Extraction de l'année du film et vérification d'époque
+  const releaseDate = (movie as any).release_date || (movie as any).first_air_date || '';
+  const movieYear = releaseDate ? parseInt(releaseDate.substring(0, 4), 10) : ((movie as any).year || 0);
+  const isEraMatched = criteria.era ? isYearInEra(movieYear, criteria.era) : true;
+
+  // B. Détection de correspondance de genre demandé
+  const GENRE_MAP: Record<string, number> = {
+    'science-fiction': 878, 'sf': 878, 'drame': 18, 'drames': 18, 'comédie': 35, 'comedie': 35,
+    'action': 28, 'thriller': 53, 'thrillers': 53, 'horreur': 27, 'angoisse': 27, 'aventure': 12,
+    'fantastique': 14, 'fantasy': 14, 'animation': 16, 'policier': 80, 'guerre': 10752, 'romance': 10749,
+    'mystère': 9648, 'mystere': 9648, 'western': 37
+  };
+  let matchesRequestedGenre = false;
+  if (criteria.genres && criteria.genres.length > 0) {
+    for (const g of criteria.genres) {
+      const gid = GENRE_MAP[g.toLowerCase()];
+      if (gid && genreIds.includes(gid)) {
+        matchesRequestedGenre = true;
+        break;
+      }
+    }
+  }
+
+  // C. Sous-score Personne / Casting (poids 0.35)
   let personScore = 100;
   const primaryPerson = criteria.actors[0] || criteria.directors[0];
   if (primaryPerson) {
@@ -1129,7 +1427,7 @@ export function evaluateMovieNarrativeRelevance(
     personScore = (inOverview || inTitle || (rawItem && rawItem.match_rate && rawItem.match_rate > 70)) ? 100 : 90;
   }
 
-  // B. Sous-score Thématique / Narratif (poids 0.45)
+  // D. Sous-score Thématique / Narratif (poids 0.45)
   let thematicScore = 70;
   let thematicReason = 'Cohérence scénaristique globale';
 
@@ -1157,6 +1455,9 @@ export function evaluateMovieNarrativeRelevance(
       if (hits > 0) {
         thematicScore = Math.min(97, Math.max(72, 70 + Math.round(hits * 7)));
         thematicReason = `Correspondance scénaristique forte (${matchedTokens.join(', ')})`;
+      } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
+        thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 80));
+        thematicReason = rawItem.reason || `Atmosphère : Recommandation liée à « ${activeCluster.id} »`;
       } else {
         // Aucun mot clé du cluster présent
         const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
@@ -1165,8 +1466,8 @@ export function evaluateMovieNarrativeRelevance(
           thematicReason = `Thème « ${activeCluster.id} » totalement absent (animation/famille)`;
         } else {
           const hasExpected = activeCluster.expectedGenres.some(id => genreIds.includes(id));
-          thematicScore = hasExpected ? 30 : 15;
-          thematicReason = `Thème « ${activeCluster.id} » non trouvé dans le synopsis`;
+          thematicScore = hasExpected ? 45 : 25;
+          thematicReason = `Thème « ${activeCluster.id} » non explicité dans le court résumé`;
         }
       }
     }
@@ -1178,18 +1479,63 @@ export function evaluateMovieNarrativeRelevance(
     if (cuesHit > 0) {
       thematicScore = 92;
       thematicReason = 'Correspondance avec les éléments narratifs demandés';
+    } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
+      // Tolérance sémantique : le LLM a validé l'affinité
+      thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 82));
+      thematicReason = rawItem.reason ? `Atmosphère : ${rawItem.reason}` : 'Correspondance thématique validée par l\'analyse cinématographique';
+    } else if (criteria.era && isEraMatched && matchesRequestedGenre) {
+      thematicScore = 90;
+      thematicReason = `Classique marquant de ${criteria.era}`;
     } else {
-      thematicScore = 20;
-      thematicReason = 'Intrigue demandée non retrouvée dans le synopsis';
+      thematicScore = 35;
+      thematicReason = 'Intrigue demandée non retrouvée directement dans le synopsis';
     }
+  } else if (criteria.era && isEraMatched) {
+    thematicScore = matchesRequestedGenre ? 92 : 82;
+    thematicReason = `Œuvre emblématique des ${criteria.era} (${movieYear || criteria.era})`;
+  } else if (criteria.isMetaphorical) {
+    thematicScore = rawItem?.match_rate ? Math.max(78, rawItem.match_rate) : 80;
+    thematicReason = rawItem?.reason ? `Atmosphère : ${rawItem.reason}` : 'Atmosphère immersive et sensorielle';
+  } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
+    thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 80));
+    thematicReason = rawItem.reason ? `Atmosphère : ${rawItem.reason}` : 'Recommandation cinématographique';
   } else if (criteria.hasNarrativeConstraint) {
-    thematicScore = 25;
+    thematicScore = 35;
     thematicReason = 'Contrainte narrative demandée non vérifiée';
   }
 
-  // C. Sous-score Genre (poids 0.20)
+  // E. Prise en compte des rôles spécifiques / contre-emploi (ex: Jim Carrey dans un rôle dramatique)
+  if (primaryPerson) {
+    const isDramaticIntent = /dramatique|drame|serieux|sérieux|sombre/i.test(criteriaObjString(criteria));
+    if (isDramaticIntent && genreIds.includes(18)) {
+      thematicScore = Math.max(thematicScore, 92);
+      thematicReason = `Rôle dramatique marquant pour ${primaryPerson}`;
+    }
+  }
+
+  // F. Prise en compte des contraintes négatives / exclusions ("sans extraterrestre", etc.)
+  if (criteria.exclusions && criteria.exclusions.length > 0) {
+    let containsExcluded = false;
+    for (const ex of criteria.exclusions) {
+      if (overviewLower.includes(ex.toLowerCase()) || titleLower.includes(ex.toLowerCase())) {
+        containsExcluded = true;
+        break;
+      }
+    }
+    if (containsExcluded) {
+      thematicScore = Math.min(thematicScore, 30);
+      thematicReason = `Contient un élément expressément exclu (${criteria.exclusions.join(', ')})`;
+    } else if (matchesRequestedGenre || thematicScore >= 70) {
+      thematicScore = Math.max(thematicScore, 88);
+      thematicReason = `Conforme à la demande : sans ${criteria.exclusions.join(', ')}`;
+    }
+  }
+
+  // G. Sous-score Genre (poids 0.20)
   let genreScore = 75;
-  if (activeCluster) {
+  if (matchesRequestedGenre) {
+    genreScore = 95;
+  } else if (activeCluster) {
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
     if (isAnimationOrFamily && ['espionnage', 'guerre', 'braquage', 'twist', 'twist_narratif', 'survie', 'vengeance', 'huis_clos', 'consumerisme'].includes(activeCluster.id)) {
       genreScore = 20;
@@ -1202,13 +1548,13 @@ export function evaluateMovieNarrativeRelevance(
     }
   }
 
-  // D. Composante Bayésienne de Qualité (Delta [-4, +4] assurant des scores uniques et réalistes)
+  // H. Composante Bayésienne de Qualité (Delta [-4, +4] assurant des scores uniques et réalistes)
   const bayesRating = voteCount > 0
     ? (voteCount * voteAvg + 1000 * 6.5) / (voteCount + 1000)
     : 6.5;
   const qualityDelta = (bayesRating - 7.0) * 2.5;
 
-  // E. Score composite global
+  // I. Score composite global
   const hasPerson = Boolean(primaryPerson);
   const composite = hasPerson
     ? (personScore * 0.35) + (thematicScore * 0.45) + (genreScore * 0.20) + qualityDelta
@@ -1218,20 +1564,23 @@ export function evaluateMovieNarrativeRelevance(
 
   const hasExplicitNarrative = criteria.hasNarrativeConstraint || Boolean(activeCluster) || criteria.narrativeCues.length > 0;
 
-  // RÈGLE CARDINALE : Le score personne seul (S_person) ne suffit JAMAIS à faire remonter un film
-  // si la requête comporte une description narrative explicite et que le score thématique est nul ou insuffisant.
   let matches = false;
   if (hasExplicitNarrative) {
     if (thematicScore < 50) {
-      matches = false;
-      finalScore = Math.min(finalScore, 38); // Plafond strict : élimination garantie sous le seuil d'affichage
+      // Si ce n'est NI un match LLM, NI un match d'époque, NI métaphorique
+      if (!rawItem && (!criteria.era || !isEraMatched) && !criteria.isMetaphorical) {
+        matches = false;
+        finalScore = Math.min(finalScore, 38); // Plafond strict uniquement pour hors-sujet flagrant
+      } else {
+        matches = finalScore >= 55;
+      }
     } else {
-      matches = hasPerson ? (finalScore >= 75 && thematicScore >= 65) : (finalScore >= 58 && thematicScore >= 50);
+      matches = hasPerson ? (finalScore >= 70 && thematicScore >= 58) : (finalScore >= 55 && thematicScore >= 48);
     }
   } else if (hasPerson) {
-    matches = (finalScore >= 70);
+    matches = (finalScore >= 65);
   } else {
-    matches = (finalScore >= 58 && thematicScore >= 45);
+    matches = (finalScore >= 55 && thematicScore >= 45);
   }
 
   return {
@@ -1239,6 +1588,15 @@ export function evaluateMovieNarrativeRelevance(
     score: finalScore,
     reason: `${primaryPerson ? `${primaryPerson} — ` : ''}${thematicReason}`
   };
+}
+
+function criteriaObjString(criteria: ExtractedCriteria): string {
+  return [
+    ...(criteria.narrativeCues || []),
+    ...(criteria.themes || []),
+    ...(criteria.tones || []),
+    criteria.cinematicExpansion || ''
+  ].join(' ');
 }
 
 /**
@@ -1294,8 +1652,8 @@ export function evaluateStructuredMovieMatch(
       const matchingKws = settingDef.keywords.filter(kw => overviewLower.includes(kw));
 
       // C. Validation conjointe Décor + Ton (ex: souterrain + angoissant)
-      const isDistressingTone = criteria.tones.some(t => ['distressing', 'angoissant', 'claustrophobe'].includes(t));
-      const hasHorrorThriller = genreIds.some(gid => [27, 53].includes(gid));
+      const isDistressingTone = criteria.tones.some(t => ['distressing', 'angoissant', 'claustrophobe', 'dark_melancholic'].includes(t));
+      const hasHorrorThriller = genreIds.some(gid => [27, 53, 9648, 80].includes(gid));
 
       if (matchingKws.length >= 1 && (matchesGenre || matchingKws.length >= 2)) {
         let calculatedScore = 90 + Math.min(7, matchingKws.length * 2);
@@ -1304,10 +1662,17 @@ export function evaluateStructuredMovieMatch(
           bestSettingScore = calculatedScore;
           matchReason = `Atmosphère ${settingDef.id} validée avec composante ${criteria.tones.join(', ') || 'immersive'} (${matchingKws.slice(0, 2).join(', ')})`;
         }
+      } else if (matchesGenre && (criteria.isMetaphorical || rawItem)) {
+        // Tolérance atmosphérique pour les requêtes poétiques/sensorielles
+        const calculatedScore = rawItem?.match_rate ? Math.max(78, rawItem.match_rate) : 82;
+        if (calculatedScore > bestSettingScore) {
+          bestSettingScore = calculatedScore;
+          matchReason = rawItem?.reason ? `Atmosphère : ${rawItem.reason}` : `Ambiance ${settingDef.id} et tension psychologique`;
+        }
       }
     }
 
-    if (bestSettingScore >= 90) {
+    if (bestSettingScore >= 78) {
       return {
         matches: true,
         score: Math.min(99, bestSettingScore),
@@ -1315,10 +1680,14 @@ export function evaluateStructuredMovieMatch(
       };
     }
 
-    // Si le cadre spatial était formellement requis mais est absent du film
+    // Si le film a été recommandé par le LLM ou est métaphorique, ne pas le bloquer sèchement
+    if (rawItem || criteria.isMetaphorical) {
+      return evaluateMovieNarrativeRelevance(movie, criteria, rawItem);
+    }
+
     return {
       matches: false,
-      score: 60,
+      score: 55,
       reason: `Cadre spatial spécifique (${criteria.spatialSettings.join(', ')}) non présent dans ce film`
     };
   }

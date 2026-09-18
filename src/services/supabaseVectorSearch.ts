@@ -9,6 +9,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Movie } from '../types';
 import { formatTmdbResults } from './tmdb';
+import { isDisqualifiedNonFiction } from './searchRouterService';
 
 export interface VectorMovieMatch {
   id: number;
@@ -62,6 +63,15 @@ const NARRATIVE_CONCEPT_MAP: Record<string, { triggers: string[]; genres: number
     triggers: ['cercueil', 'enterré vivant', 'enterre vivant', 'dans une boite', 'dans une boîte'],
     genres: [53, 9648],
     films: ['Buried', 'Kill Bill: Vol. 2', 'Oxygen']
+  },
+  serial_killer: {
+    triggers: [
+      'tueur en série', 'tueurs en série', 'tueur en serie', 'tueurs en serie',
+      'serial killer', 'serial killers', 'psychopathe', 'psychopathes',
+      'meurtre en série', 'meurtres en série', 'meurtre en serie', 'meurtres en serie'
+    ],
+    genres: [80, 53, 27, 9648, 18],
+    films: ['Se7en', 'Le Silence des agneaux', 'Zodiac', 'Memories of Murder', 'Monster', 'American Psycho', 'Mindhunter', 'Saw', 'Psychose', 'Prisoners']
   }
 };
 
@@ -84,10 +94,15 @@ export function calculateGlobalSemanticSimilarity(
     return 0.15; // Inférieur à 40% -> Niveau 3 filet de sécurité
   }
 
-  // 2. Détection des concepts d'intrigue forts
+  // 2. Détection des concepts d'intrigue forts ou d'époques / métaphores
   let matchedConceptBonus = 0;
   let targetConceptFilms: string[] = [];
   let expectedGenres: number[] = [];
+
+  const isMetaphorOrEra = /\b(impression|comme si|sensation|ascenseur|pluie|70s|80s|90s|années 70|années 80|années 90|dramatique|sans )\b/i.test(clean);
+  if (isMetaphorOrEra) {
+    matchedConceptBonus += 0.25;
+  }
 
   for (const [, concept] of Object.entries(NARRATIVE_CONCEPT_MAP)) {
     if (concept.triggers.some(t => clean.includes(t))) {
@@ -103,7 +118,12 @@ export function calculateGlobalSemanticSimilarity(
   let cumulativeScore = 0;
 
   for (const movie of topCandidates) {
-    let itemScore = 0.35; // Score de base pour un film cinéphile proposé
+    if (isDisqualifiedNonFiction(clean, movie)) {
+      continue;
+    }
+
+    // Score bonifié si l'œuvre a déjà été recommandée avec justification par l'IA ou TMDB
+    let itemScore = (movie.ai_match_reason || (movie.match_rate && movie.match_rate >= 60)) ? 0.60 : 0.35;
     const titleLower = (movie.title || movie.name || '').toLowerCase();
     const origLower = (movie.original_title || movie.original_name || '').toLowerCase();
     const overviewLower = (movie.overview || '').toLowerCase();
@@ -196,6 +216,7 @@ export function isMovieParasiteWithoutNarrativeLink(
 ): boolean {
   const clean = (queryText || '').toLowerCase().trim();
   if (!clean || !movie) return false;
+  if (isDisqualifiedNonFiction(clean, movie)) return true;
   const voteCount = Number(movie.vote_count || 0);
   if (voteCount >= 5000) return false; // Blockbusters et classiques populaires protégés
 

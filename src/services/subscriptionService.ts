@@ -733,7 +733,7 @@ export const subscriptionService = {
     amount: number;
     currency: string;
     details?: any;
-  }): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
+  }): Promise<{ success: boolean; subscriptionId?: string; error?: string; pendingWebhook?: boolean }> {
     const subId = `sub_paypal_${params.orderId}`;
     const email = (params.email || params.details?.payer?.email_address || 'support@elicine.app').trim().toLowerCase();
     const name = (
@@ -791,18 +791,29 @@ export const subscriptionService = {
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        return { success: true, subscriptionId: data.subscriptionId || subId };
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        return { 
+          success: true, 
+          subscriptionId: data.subscriptionId || subId,
+          pendingWebhook: data.pendingWebhook || false
+        };
       }
+
+      return {
+        success: false,
+        error: data?.error || "Le prélèvement n'a pas été validé par PayPal (solde insuffisant ou rejet bancaire).",
+        subscriptionId: subId
+      };
     } catch (err: any) {
       console.error('[subscriptionService] Erreur appel /api/paypal:', err);
+      return {
+        success: false,
+        error: err?.message || "Erreur de connexion au serveur de vérification de paiement.",
+        subscriptionId: subId
+      };
     }
-
-    return {
-      success: true,
-      subscriptionId: subId
-    };
   },
 
   /**

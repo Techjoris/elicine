@@ -9,6 +9,9 @@ import {
   evaluateMovieNarrativeRelevance,
   evaluateStructuredMovieMatch,
   findActiveThematicCluster,
+  isDisqualifiedNonFiction,
+  isYearInEra,
+  isGibberishQuery,
   SPATIAL_SETTINGS_MAP,
   TONE_PATTERNS
 } from './searchRouterService';
@@ -172,21 +175,21 @@ export async function queryAiTitles(
   if (spec.level === 'ultra_targeted') {
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
-Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films ou séries très proches (Niveau 2 : élargissement souple).
-IMPORTANT : Exclure STRICTEMENT les parodies, mockbusters (The Asylum, copies bon marché) et films à très faible notoriété (< 500 votes TMDB). Privilégier les films reconnus et bien notés (>= 6/10).
+Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films très proches (Niveau 2 : élargissement souple).
+IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si explicitement demandés), parodies et mockbusters (The Asylum). Si des films sont demandés, ne proposer QUE des films de cinéma de fiction reconnus (>= 6/10 sur TMDB).
 Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 260;
     temperature = 0.35;
   } else if (spec.level === 'broad') {
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
 Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
-IMPORTANT : Exclure les mockbusters, parodies non demandées et films de studios imitateurs (The Asylum). Diversité de réalisateurs requise.
+IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si demandés) et mockbusters. Si des films sont demandés, ne proposer QUE des œuvres de cinéma de fiction. Diversité de réalisateurs requise.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 350;
     temperature = 0.3;
   } else {
     prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants pour : "${query}".
-Tolère les synonymes et variantes sémantiques. Exclure les mockbusters et films de très mauvaise qualité (< 4.5/10 sur TMDB).
+Tolère les synonymes et variantes sémantiques. Exclure STRICTEMENT les talk-shows, émissions d'interviews (ex: 'Actors on Actors'), télé-réalités, mockbusters et contenus non-fictionnels. Si des films sont demandés, ne proposer QUE des films de cinéma de fiction.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 300;
     temperature = 0.3;
@@ -1367,23 +1370,34 @@ export async function executeCinoraSearch(
   // Si une intention structurée est présente (acteur, décor/cadre spatial, ton, format, année)
   if (criteria.hasStructuredIntent || criteria.hasHardCriteria) {
     for (const movie of allCandidatePool) {
+      // 0. Rejet catégorique immédiat des talk-shows, interviews d'acteurs et documentaires non sollicités
+      if (isDisqualifiedNonFiction(cleanQuery, movie)) {
+        continue;
+      }
+
       const matchingRawItem = rawItems.find(
         r => r.title.toLowerCase() === movie.title.toLowerCase() || (movie.original_title && r.title.toLowerCase() === movie.original_title.toLowerCase())
       );
 
       // 1. Filtrage strict par format
       if (criteria.format !== 'all') {
-        const isSeries = movie.media_type === 'SÉRIE';
+        const isSeries = movie.media_type === 'SÉRIE' || (movie as any).media_type === 'tv';
         if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
           continue;
         }
       }
 
-      // 2. Filtrage par année
+      // 2. Filtrage par année ou époque/décennie
       let matchesYear = true;
       if (criteria.year) {
         const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
         matchesYear = movieYear > 0 && Math.abs(movieYear - criteria.year) <= 1;
+        if (!matchesYear) {
+          continue;
+        }
+      } else if (criteria.era) {
+        const movieYear = parseInt(movie.release_date?.slice(0, 4) || '0', 10);
+        matchesYear = movieYear > 0 ? isYearInEra(movieYear, criteria.era) : true;
         if (!matchesYear) {
           continue;
         }
@@ -1412,7 +1426,7 @@ export async function executeCinoraSearch(
       } else {
         // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
         const minReserveScore = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
-        if (criteria.hasNarrativeConstraint && structuredEval.score < minReserveScore) {
+        if (criteria.hasNarrativeConstraint && structuredEval.score < minReserveScore && !matchingRawItem && !criteria.isMetaphorical && !criteria.era) {
           console.log(`[UnifiedAI] Disqualification narrative (${structuredEval.score}%) : "${movie.title}"`);
           continue;
         }
@@ -1560,6 +1574,19 @@ export async function executeCinoraSearch(
     // 1. Rejet indépendant des notes si titre parasite sans lien scénaristique réel
     // 2. Directives LLM : au moins 500 votes et note > 5.5
     const qualityFiltered = sortedPool.filter((m) => {
+      // Rejet catégorique immédiat des talk-shows, interviews d'acteurs et contenus non-fictionnels
+      if (isDisqualifiedNonFiction(cleanQuery, m)) {
+        return false;
+      }
+
+      // Rejet strict de format si spécifié
+      if (criteria.format !== 'all') {
+        const isSeries = m.media_type === 'SÉRIE' || (m as any).media_type === 'tv';
+        if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
+          return false;
+        }
+      }
+
       const avg = Number(m.vote_average || 0);
       const cnt = Number(m.vote_count || 0);
 
@@ -1572,7 +1599,7 @@ export async function executeCinoraSearch(
       if (criteria.hasNarrativeConstraint) {
         const evalRes = evaluateStructuredMovieMatch(m, criteria);
         const minThreshold = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
-        if (evalRes.score < minThreshold) {
+        if (evalRes.score < minThreshold && !criteria.isMetaphorical && !criteria.era) {
           return false;
         }
       }
@@ -1588,48 +1615,105 @@ export async function executeCinoraSearch(
 
       return true;
     });
-    const finalPool = qualityFiltered.length >= 3 ? qualityFiltered : sortedPool;
+    const finalPool = qualityFiltered;
 
-    // Démarche scientifique : unicité et variation continue des scores
+    if (finalPool.length > 0) {
+      // Démarche scientifique : unicité et variation continue des scores
+      const assignedScores = new Set<number>();
+      const clusterId = criteria.thematicCluster || activeThematicCluster?.id;
+      const finalMovies = finalPool.slice(0, limit).map((m, idx) => {
+        let score = m.match_rate || Math.max(70, Math.round(globalSimilarityScore * 100) - idx * 2);
+        while (assignedScores.has(score) && score > 60) {
+          score -= 1;
+        }
+        assignedScores.add(score);
+
+        const mId = m.id;
+        let reason = m.ai_match_reason;
+        if (clusterId && mId) {
+          const cached = getCachedJustification(mId, clusterId);
+          if (cached) {
+            reason = cached;
+          } else if (reason) {
+            setCachedJustification(mId, clusterId, reason);
+          }
+        }
+
+        return {
+          ...m,
+          match_rate: score,
+          ai_match_reason: reason || `✨ Sélection Éliciné : Ambiance et immersion thématique`
+        };
+      });
+
+      console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
+
+      const sanitizedCleanQuery = cleanQuery.replace(/^["'«»]+|["'«»]+$/g, '').trim();
+      const moodSummary = criteria.themes.length > 0
+        ? `autour des thèmes « ${criteria.themes.join(', ')} »`
+        : `pour "${sanitizedCleanQuery}"`;
+
+      return {
+        thought: `✨ Analyse Éliciné : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
+        moodDetected: cleanQuery,
+        recommendedMovies: finalMovies,
+        isFallbackMode: false,
+        providerUsed: 'Algorithme Éliciné',
+        suggestedPrompts: [
+          'Un film de braquage haletant avec twist',
+          'Une série policière sombre sous la pluie',
+          'Un chef-d\'œuvre de science-fiction dystopique',
+          'Une comédie feel-good et touchante'
+        ],
+        cascade: {
+          tierReached: 2,
+          criteria,
+          tier1Count: tier1Movies.length,
+          tier2Count: finalMovies.length - tier1Movies.length,
+          tier3Count: 0
+        }
+      };
+    }
+  }
+
+  // ============================================================================
+  // FILET DE SÉCURITÉ DU NIVEAU 2 : TOLÉRANCE SÉMANTIQUE ET VISION ÉLICINÉ
+  // ============================================================================
+  // Filtrer le pool de secours pour exclure rigoureusement les talk-shows,
+  // formats incompatibles et titres parasites.
+  const validRescuePool = candidatePool.filter(m => {
+    if (isDisqualifiedNonFiction(cleanQuery, m)) return false;
+    if (criteria.format !== 'all') {
+      const isSeries = m.media_type === 'SÉRIE' || (m as any).media_type === 'tv';
+      if ((criteria.format === 'serie' && !isSeries) || (criteria.format === 'film' && isSeries)) {
+        return false;
+      }
+    }
+    if (isMovieParasiteWithoutNarrativeLink(cleanQuery, m)) return false;
+    return true;
+  });
+
+  if (validRescuePool.length > 0 && !isGibberishQuery(cleanQuery) && globalSimilarityScore >= 0.25) {
+    const limit = Math.max(specificity.maxResults || 8, 6);
     const assignedScores = new Set<number>();
-    const clusterId = criteria.thematicCluster || activeThematicCluster?.id;
-    const finalMovies = finalPool.slice(0, limit).map((m, idx) => {
-      let score = m.match_rate || Math.max(70, Math.round(globalSimilarityScore * 100) - idx * 2);
-      while (assignedScores.has(score) && score > 60) {
+    const rescuedMovies = validRescuePool.slice(0, limit).map((m, idx) => {
+      let score = m.match_rate || Math.max(68, 80 - idx * 2);
+      while (assignedScores.has(score) && score > 55) {
         score -= 1;
       }
       assignedScores.add(score);
-
-      const mId = m.id;
-      let reason = m.ai_match_reason;
-      if (clusterId && mId) {
-        const cached = getCachedJustification(mId, clusterId);
-        if (cached) {
-          reason = cached;
-        } else if (reason) {
-          setCachedJustification(mId, clusterId, reason);
-        }
-      }
-
       return {
         ...m,
         match_rate: score,
-        ai_match_reason: reason || `✨ Sélection Éliciné : Ambiance et immersion thématique`
+        ai_match_reason: m.ai_match_reason || `✨ Vision Éliciné : Ambiance et tonalité en résonance avec votre recherche`
       };
     });
 
-    console.log(`[Éliciné Cascade] Arrêt au Niveau 2 : ${finalMovies.length} œuvres validées avec similarité ${globalSimilarityScore}`);
-
-
-    const sanitizedCleanQuery = cleanQuery.replace(/^["'«»]+|["'«»]+$/g, '').trim();
-    const moodSummary = criteria.themes.length > 0
-      ? `autour des thèmes « ${criteria.themes.join(', ')} »`
-      : `pour "${sanitizedCleanQuery}"`;
-
+    console.log(`[Éliciné Cascade] Tolérance sémantique activée : ${rescuedMovies.length} œuvres présentées sous Vision Éliciné`);
     return {
-      thought: `✨ Analyse Éliciné : ${finalMovies.length} œuvres trouvées ${moodSummary}${formatFilterSuffix(filters)}`,
+      thought: `✨ Vision Éliciné : Recommandations adaptées à l'atmosphère et à l'esprit de votre recherche${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
-      recommendedMovies: finalMovies,
+      recommendedMovies: rescuedMovies,
       isFallbackMode: false,
       providerUsed: 'Algorithme Éliciné',
       suggestedPrompts: [
@@ -1642,19 +1726,13 @@ export async function executeCinoraSearch(
         tierReached: 2,
         criteria,
         tier1Count: tier1Movies.length,
-        tier2Count: finalMovies.length - tier1Movies.length,
+        tier2Count: rescuedMovies.length,
         tier3Count: 0
       }
     };
   }
 
-  // ============================================================================
-  // FILET DE SÉCURITÉ DU NIVEAU 2 : ANTI-ABERRATIONS STRICT
-  // ============================================================================
-  // Se déclenche si similarité globale < 0.40 ou 0 film pertinent.
-  // INTERDICTION FORMELLE DE SORTIR DES BLOCKBUSTERS (Vaiana, Spider-Man, etc.).
-  // Retourne une liste vide propre et le message explicatif exact.
-  console.log(`[Éliciné Cascade] Filet de sécurité Niveau 2 anti-aberrations activé pour "${cleanQuery}" (similarité: ${globalSimilarityScore} < 0.40).`);
+  console.log(`[Éliciné Cascade] Requête véritablement insensée ou catalogue vide pour "${cleanQuery}" (similarité: ${globalSimilarityScore} < 0.40).`);
 
   return {
     thought: "Aucun film ne correspond précisément à cette description dans notre catalogue",

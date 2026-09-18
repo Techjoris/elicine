@@ -352,12 +352,13 @@ export const PaymentCallbackView: React.FC = () => {
     const isCancelled = params.get('cancel') === 'true' || urlStatus === 'cancelled' || urlStatus === 'canceled';
 
     const hasFailureSignal = 
-      ['failed', 'declined', 'rejected', 'card_declined', 'refused'].includes(urlStatus) ||
+      ['failed', 'declined', 'rejected', 'card_declined', 'refused', 'denied'].includes(urlStatus) ||
       rawError.includes('decline') ||
       rawError.includes('reject') ||
       rawError.includes('fail') ||
       rawError.includes('denied') ||
       rawError.includes('refus') ||
+      rawError.includes('insufficient') ||
       isCancelled;
 
     if (hasFailureSignal) {
@@ -365,68 +366,14 @@ export const PaymentCallbackView: React.FC = () => {
       setState('failed');
       setIsCardDecline(isCard);
       setErrorMessage(
-        isCard 
-          ? "Paiement rejeté par l'émetteur de la carte"
-          : (rawReason || "La transaction a été refusée ou annulée.")
+        "Échec du prélèvement : Solde insuffisant ou transaction refusée par PayPal. Aucun prélèvement n'a été effectué sur votre compte. L'accès au Pass Pro reste verrouillé. Veuillez réapprovisionner votre solde PayPal ou votre carte bancaire, puis retenter l'opération."
       );
       return;
     }
 
-    // 5. Déclenchement synchrone immédiat si le statut URL indique un succès
-    const isExplicitSuccess = ['success', 'completed', 'paid', 'complete', 'active'].includes(urlStatus);
+    // 5. Vérification serveur stricte : En attente de la confirmation par Webhook / API
     const targetEmail = (user?.email || params.get('email') || pendingSub?.email || '').trim().toLowerCase();
-
-    const triggerDirectActivation = async () => {
-      if (isExplicitSuccess && targetEmail) {
-        try {
-          const actRes = await subscriptionService.activateProImmediately({
-            email: targetEmail,
-            userId: user?.id || pendingSub?.userId,
-            customerName: user?.name || pendingSub?.customerName,
-            plan: extractedPlan,
-            amount: Number(params.get('amount') || pendingSub?.amount || (extractedPlan === 'yearly' ? 15.99 : 1.99)),
-            currency: params.get('currency') || pendingSub?.currency || 'USD',
-            gateway: detected,
-            paymentReference: extractedRef,
-            subscriptionId: extractedSubId || pendingSub?.id,
-            isDonation
-          });
-
-          if (actRes.success && actRes.isPro) {
-            setState('active_confirmed');
-            if (actRes.plan) setPlan(actRes.plan);
-            if (actRes.expiresAt) setExpiresAt(actRes.expiresAt);
-
-            confetti({
-              particleCount: 160,
-              spread: 90,
-              origin: { y: 0.55 },
-              colors: ['#f59e0b', '#fbbf24', '#0ea5e9', '#38bdf8', '#ffffff']
-            });
-
-            // Rafraîchissement explicite de la session Supabase Auth et re-fetch du profil
-            try {
-              if (supabase?.auth) {
-                await supabase.auth.refreshSession();
-              }
-            } catch (_) {}
-
-            await refreshUserProStatus();
-            return true;
-          }
-        } catch (e) {
-          console.warn('[PaymentCallbackView] Erreur activation directe synchrone:', e);
-        }
-      }
-      return false;
-    };
-
-    triggerDirectActivation().then((activated) => {
-      if (!activated) {
-        // Démarrage de la boucle de vérification
-        verifyTransaction(extractedSubId, extractedRef, 0, detected, targetEmail, extractedPlan, isDonation);
-      }
-    });
+    verifyTransaction(extractedSubId, extractedRef, 0, detected, targetEmail, extractedPlan, isDonation);
 
     return () => {
       if (pollTimerRef.current) {
@@ -461,22 +408,7 @@ export const PaymentCallbackView: React.FC = () => {
       }, interval);
     };
 
-    const handleSuccess = async (serverPlan, serverExpiresAt, serverEmail) => {
-      const effectiveEmail = serverEmail || clientEmail || user?.email;
-      if (effectiveEmail) {
-        try {
-          await subscriptionService.activateProImmediately({
-            email: effectiveEmail,
-            userId: user?.id,
-            customerName: user?.name,
-            plan: serverPlan || targetPlan,
-            gateway: currentGateway,
-            paymentReference: targetRef,
-            subscriptionId: targetSubId,
-            isDonation
-          });
-        } catch (_) {}
-      }
+    const handleSuccess = async (serverPlan, serverExpiresAt, _serverEmail) => {
       setState('active_confirmed');
       if (serverPlan) setPlan(serverPlan);
       if (serverExpiresAt) setExpiresAt(serverExpiresAt);

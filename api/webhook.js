@@ -32,7 +32,12 @@ export default async function handler(req, res) {
 
     console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
 
-    // 1. Vérification de l'événement et du statut de succès
+    // Si événement PayPal officiel, délégation vers le handler cryptographique dédié
+    if (body?.event_type || req.headers['paypal-auth-algo'] || req.headers['PAYPAL-AUTH-ALGO']) {
+      const paypalHandler = (await import('./paypal.js')).default;
+      req.query = { ...(req.query || {}), action: 'webhook' };
+      return await paypalHandler(req, res);
+    }
     const rawStatus = String(
       body?.status || 
       body?.data?.status || 

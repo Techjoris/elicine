@@ -340,9 +340,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 }}
                 onSuccess={async (details, orderId) => {
                   try {
-                    console.log('[SubscriptionModal Debug] ✅ Succès paiement PayPal reçu, enregistrement...', { orderId, details });
-                    showToast('👑 Paiement validé ! Activation de votre Pass Pro...');
-                    await subscriptionService.recordPayPalPayment({
+                    console.log('[SubscriptionModal Debug] ✅ Capture PayPal signalée, vérification avec le serveur...', { orderId, details });
+                    showToast('Vérification sécurisée du prélèvement PayPal...');
+                    
+                    const recordResult = await subscriptionService.recordPayPalPayment({
                       orderId,
                       userId: user?.id || `usr_${Date.now()}`,
                       email: user?.email || details?.payer?.email_address,
@@ -353,27 +354,36 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                       details
                     });
 
-                    upgradeToPro(billingCycle);
-                    onClose();
-                    if (setIsProSuccessModalOpen) {
-                      setIsProSuccessModalOpen(true);
+                    if (recordResult?.success && !recordResult?.pendingWebhook) {
+                      showToast('👑 Prélèvement validé avec succès ! Votre Pass Pro est actif.');
+                      upgradeToPro(billingCycle);
+                      onClose();
+                      if (setIsProSuccessModalOpen) {
+                        setIsProSuccessModalOpen(true);
+                      }
+                    } else if (recordResult?.pendingWebhook) {
+                      showToast('⏳ Prélèvement en cours de confirmation finale par PayPal. Activation dès confirmation du webhook.');
+                      onClose();
+                    } else {
+                      const errorMsg = recordResult?.error || "Le prélèvement n'a pas pu être validé par PayPal (solde insuffisant ou paiement refusé).";
+                      showToast(`❌ ${errorMsg}`);
+                      alert(errorMsg);
                     }
                   } catch (err: any) {
-                    console.error('[SubscriptionModal Debug] ❌ Erreur activation subscriptionService:', err);
-                    upgradeToPro(billingCycle);
-                    onClose();
-                    if (setIsProSuccessModalOpen) {
-                      setIsProSuccessModalOpen(true);
-                    }
+                    console.error('[SubscriptionModal Debug] ❌ Erreur validation subscriptionService:', err);
+                    const msg = err?.message || "Le prélèvement n'a pas pu être validé par PayPal (solde insuffisant ou paiement refusé). Votre compte reste au statut Gratuit.";
+                    showToast(`❌ ${msg}`);
+                    alert(msg);
                   }
                 }}
                 onError={(err) => {
                   console.error('[SubscriptionModal Debug] ❌ Erreur widget PayPal:', err);
-                  showToast("Échec de la transaction. Vous pouvez réessayer ou utiliser le portail officiel direct.");
+                  const msg = "Échec du prélèvement : Solde insuffisant ou transaction refusée par PayPal. Veuillez réapprovisionner votre solde PayPal ou votre carte bancaire.";
+                  showToast(msg);
                 }}
                 onCancel={() => {
                   console.log('[SubscriptionModal Debug] 🛑 Annulation paiement PayPal.');
-                  showToast("Transaction annulée.");
+                  showToast("Transaction annulée. Aucun prélèvement n'a été effectué.");
                 }}
               />
 
