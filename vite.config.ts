@@ -199,6 +199,23 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 5. ROUTE /api/geo
+            if (pathname === '/api/geo') {
+              adaptResponse();
+              const country =
+                req.headers['x-vercel-ip-country'] ||
+                req.headers['cf-ipcountry'] ||
+                req.headers['x-country-code'] ||
+                null;
+              const countryCode = country ? String(country).toUpperCase().trim() : null;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                countryCode,
+                country: countryCode,
+                source: countryCode ? 'vercel-header' : 'none'
+              }));
+            }
+
             next();
           });
         },

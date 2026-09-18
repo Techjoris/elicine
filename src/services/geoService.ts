@@ -1,3 +1,38 @@
+export const SASPAY_ALLOWED_COUNTRIES: string[] = [
+  'BE', // Belgique
+  'BF', // Burkina Faso
+  'BJ', // Bénin
+  'CD', // RDC
+  'CG', // Congo
+  'CI', // Côte d'Ivoire
+  'CM', // Cameroun
+  'DE', // Allemagne
+  'DK', // Danemark
+  'ES', // Espagne
+  'ET', // Éthiopie
+  'FR', // France
+  'GA', // Gabon
+  'GH', // Ghana
+  'GN', // Guinée
+  'KE', // Kenya
+  'ML', // Mali
+  'MW', // Malawi
+  'MZ', // Mozambique
+  'NE', // Niger
+  'NG', // Nigeria
+  'RW', // Rwanda
+  'SN', // Sénégal
+  'TG', // Togo
+  'TZ', // Tanzanie
+  'UG', // Ouganda
+  'ZM'  // Zambie
+];
+
+export function isSaspayCountry(countryCode: string | null | undefined): boolean {
+  if (!countryCode) return false;
+  return SASPAY_ALLOWED_COUNTRIES.includes(countryCode.toUpperCase().trim());
+}
+
 export const MOBILE_MONEY_COUNTRIES = [
   'CM', 'CI', 'SN', 'BF', 'ML', 'BJ', 'TG', 'GA', 'CD', 'GN',
   'NE', 'MR', 'GW', 'SL', 'LR', 'GH', 'NG', 'TZ', 'KE', 'UG',
@@ -361,5 +396,69 @@ export async function getUserCountryCode(): Promise<string> {
 export async function getUserCountry(): Promise<{ code: string; name: string }> {
   const geo = await getUserGeoData();
   return { code: geo.countryCode, name: geo.country };
+}
+
+/**
+ * Détection chirurgicale de la disponibilité de SasPay ("Mobile Money & Carte Bancaire")
+ * par adresse IP (en-tête Edge Vercel avec fallback ipapi.co et mise en cache sessionStorage).
+ */
+export async function checkSaspayAvailability(): Promise<{
+  isSaspayAvailable: boolean;
+  countryCode: string;
+}> {
+  // 1. Dérogation explicite ou cache sessionStorage
+  if (typeof sessionStorage !== 'undefined') {
+    const cached = sessionStorage.getItem('user_country_code') || sessionStorage.getItem('elicine_user_country');
+    if (cached && cached.length === 2) {
+      const code = cached.toUpperCase().trim();
+      return {
+        isSaspayAvailable: isSaspayCountry(code),
+        countryCode: code
+      };
+    }
+  }
+
+  // 2. En-tête Edge Vercel (x-vercel-ip-country / cf-ipcountry)
+  let code: string | null = null;
+  try {
+    const res = await fetch('/api/geo', { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.countryCode && data.countryCode.length === 2) {
+        code = data.countryCode.toUpperCase().trim();
+      }
+    }
+  } catch (_) {}
+
+  // 3. Fallback client léger vers ipapi.co
+  if (!code) {
+    try {
+      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(2500) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.country_code && data.country_code.length === 2) {
+          code = data.country_code.toUpperCase().trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 4. Fallback timezone
+  if (!code) {
+    code = getCountryFromTimezone() || 'FR';
+  }
+
+  const finalCode = code.toUpperCase().trim();
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.setItem('user_country_code', finalCode);
+      sessionStorage.setItem('elicine_user_country', finalCode);
+    } catch (_) {}
+  }
+
+  return {
+    isSaspayAvailable: isSaspayCountry(finalCode),
+    countryCode: finalCode
+  };
 }
 

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
 import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
+import { checkSaspayAvailability, isSaspayCountry } from '../services/geoService';
 import { Sparkles } from 'lucide-react';
 
 export interface CheckoutPayload {
@@ -105,6 +106,52 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [isCapturingPro, setIsCapturingPro] = useState<boolean>(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
+  // 1 & 2. Ciblage géographique strict pour SasPay ("Mobile Money & Carte Bancaire")
+  const [isSaspayAvailable, setIsSaspayAvailable] = useState<boolean>(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      const cached = sessionStorage.getItem('user_country_code') || sessionStorage.getItem('elicine_user_country');
+      if (cached && cached.length === 2) {
+        return isSaspayCountry(cached);
+      }
+    }
+    return false;
+  });
+  const [isLoadingGeo, setIsLoadingGeo] = useState<boolean>(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      const cached = sessionStorage.getItem('user_country_code') || sessionStorage.getItem('elicine_user_country');
+      if (cached && cached.length === 2) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Détection du pays de l'utilisateur par IP (Edge Vercel + fallback ipapi.co)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    checkSaspayAvailability()
+      .then(({ isSaspayAvailable: available }) => {
+        if (!isMounted) return;
+        setIsSaspayAvailable(available);
+        setIsLoadingGeo(false);
+
+        // Si le pays n'est pas dans la whitelist des 27 pays, forcer PayPal par défaut
+        if (!available) {
+          setPaymentMethod('paypal_card');
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setIsLoadingGeo(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
   // Fermeture sécurisée : strictement bloquée lorsque la capture et validation Pro sont en cours
   const handleSafeClose = () => {
     if (isCapturingPro) {
@@ -141,19 +188,19 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
   }, [isOpen]);
 
-  // Détection automatique de devise par défaut
+  // Détection automatique de devise par défaut et ajustement du mode de paiement
   useEffect(() => {
     if (isOpen) {
       const detected = appCurrency || 'USD';
       setCurrency(detected);
-      // Mode de paiement par défaut adapté à la région
-      if (detected === 'XOF' || detected === 'XAF') {
+      // Mode de paiement par défaut adapté à la région et à la disponibilité de SasPay
+      if (isSaspayAvailable && (detected === 'XOF' || detected === 'XAF')) {
         setPaymentMethod('mobile_money');
-      } else {
+      } else if (!isSaspayAvailable) {
         setPaymentMethod('paypal_card');
       }
     }
-  }, [isOpen, appCurrency]);
+  }, [isOpen, appCurrency, isSaspayAvailable]);
 
   if (!isOpen) return null;
 
@@ -348,69 +395,120 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
         </div>
 
-        {/* 5. Sélection du Mode de Règlement : 2 Options Principales */}
+        {/* 5. Sélection du Mode de Règlement : Rendu conditionnel strict par pays (27 pays SasPay) */}
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Choisissez votre mode de paiement
+            {isSaspayAvailable ? 'Choisissez votre mode de paiement' : 'Mode de paiement sécurisé'}
           </label>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* OPTION 1 : Paiement Mobile (Orange, MTN, Wave, etc.) */}
-            <div
-              onClick={() => setPaymentMethod('mobile_money')}
-              className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
-                paymentMethod === 'mobile_money'
-                  ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">📱</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                    Sans carte
-                  </span>
+          {isLoadingGeo ? (
+            /* Skeleton Placeholder discret évitant tout Layout Shift */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="h-[76px] rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800/60 animate-pulse p-3 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <div className="w-20 h-4 bg-slate-200 dark:bg-slate-700/60 rounded-full"></div>
+                  <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700/60"></div>
                 </div>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                  paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
-                }`}>
-                  {paymentMethod === 'mobile_money' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                </span>
+                <div className="space-y-1.5">
+                  <div className="w-28 h-3 bg-slate-200 dark:bg-slate-700/60 rounded"></div>
+                  <div className="w-36 h-2 bg-slate-200/70 dark:bg-slate-700/40 rounded"></div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-black text-slate-900 dark:text-white">Paiement Mobile</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange, MTN, Wave, etc.</p>
+              <div className="h-[76px] rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800/60 animate-pulse p-3 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <div className="w-20 h-4 bg-slate-200 dark:bg-slate-700/60 rounded-full"></div>
+                  <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700/60"></div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="w-28 h-3 bg-slate-200 dark:bg-slate-700/60 rounded"></div>
+                  <div className="w-36 h-2 bg-slate-200/70 dark:bg-slate-700/40 rounded"></div>
+                </div>
               </div>
             </div>
+          ) : isSaspayAvailable ? (
+            /* Cas 1 : isSaspayAvailable est TRUE -> Afficher les deux modes de paiement côte à côte */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* SasPay (bloc de gauche) */}
+              <div
+                onClick={() => setPaymentMethod('mobile_money')}
+                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
+                  paymentMethod === 'mobile_money'
+                    ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
+                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📱</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                      Recommandé
+                    </span>
+                  </div>
+                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                    paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
+                  }`}>
+                    {paymentMethod === 'mobile_money' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">Mobile Money & Carte Bancaire</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Orange, MTN, Wave, Visa, Mastercard</p>
+                </div>
+              </div>
 
-            {/* OPTION 2 : PayPal & Carte Bancaire */}
-            <div
-              onClick={() => setPaymentMethod('paypal_card')}
-              className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
-                paymentMethod === 'paypal_card'
-                  ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xl">💳</span>
-                  <span className="text-[10px] font-black text-[#0079C1] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
-                    PayPal & CB
+              {/* PayPal (bloc de droite) */}
+              <div
+                onClick={() => setPaymentMethod('paypal_card')}
+                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
+                  paymentMethod === 'paypal_card'
+                    ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
+                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xl">💳</span>
+                    <span className="text-[10px] font-black text-[#0079C1] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
+                      PayPal & CB
+                    </span>
+                  </div>
+                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                    paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
+                  }`}>
+                    {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </span>
                 </div>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                  paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
-                }`}>
-                  {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                </span>
-              </div>
-              <div>
-                <p className="text-xs font-black text-slate-900 dark:text-white">PayPal & Carte Bancaire</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Virtuelles, Solde PayPal</p>
+                <div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">PayPal & Carte Bancaire</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Solde PayPal</p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Cas 2 : isSaspayAvailable est FALSE -> Masquer complètement SasPay, PayPal unique et centré */
+            <div className="w-full">
+              <div
+                onClick={() => setPaymentMethod('paypal_card')}
+                className="w-full p-3.5 rounded-2xl border bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30 flex items-center justify-between relative cursor-default"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">💳</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-black text-slate-900 dark:text-white">PayPal & Carte Bancaire</p>
+                      <span className="text-[10px] font-black text-[#0079C1] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
+                        PayPal & CB
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Compte PayPal & Cartes internationales</p>
+                  </div>
+                </div>
+                <span className="w-4 h-4 rounded-full border border-sky-400 bg-sky-500 flex items-center justify-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 6. Boutons d'action : Appel à l'action Principal dynamique & Lien de don discret */}
@@ -533,7 +631,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
               ) : (
                 <span>
-                  Payer avec Mobile Money ({amountToPay} {currentPrice.symbol}) →
+                  Payer maintenant ({amountToPay} {currentPrice.symbol}) →
                 </span>
               )}
             </button>
