@@ -10,6 +10,7 @@ export interface PayPalButtonProps {
   onError?: (error: any) => void;
   onCancel?: () => void;
   onClick?: () => boolean | void;
+  onValidationStart?: () => void;
   disabled?: boolean;
 }
 
@@ -24,6 +25,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   onError,
   onCancel,
   onClick,
+  onValidationStart,
   disabled = false
 }) => {
   // Normalisation de la devise pour PayPal : si la devise est locale (ex: XOF, XAF), on bascule sur USD pour PayPal
@@ -136,28 +138,39 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
           }}
           onApprove={async (data, actions) => {
             console.log('[PayPal SDK React] 🎯 onApprove déclenché par le SDK ! Données :', data);
+            if (onValidationStart) {
+              try {
+                onValidationStart();
+              } catch (_) {}
+            }
+
+            const orderId = data?.orderID;
+            let details: any = null;
+
             try {
-              if (!actions.order) {
-                throw new Error("L'objet actions.order n'est pas disponible pour la capture.");
+              // Tentative de capture via le SDK client si disponible
+              if (actions.order) {
+                try {
+                  details = await actions.order.capture();
+                  console.log('[PayPal SDK React] ✅ Capture de l\'ordre réussie côté client :', details);
+                } catch (captureErr: any) {
+                  console.warn('[PayPal SDK React] ⚠️ Note capture client (le backend tentera la capture serveur avec l\'orderID) :', captureErr);
+                }
               }
 
-              // Capture autoritaire in-app sans rechargement de page
-              const details = await actions.order.capture();
-              console.log('[PayPal SDK React] ✅ Capture de l\'ordre réussie :', details);
-
-              const orderId = data?.orderID || details?.id || `pp_ord_${Date.now()}`;
-              await onSuccess(details, orderId);
-            } catch (captureErr: any) {
-              console.error('[PayPal SDK React] ❌ Erreur lors de la capture de l\'ordre :', captureErr);
-              if (onError) onError(captureErr);
+              const finalOrderId = orderId || details?.id || `pp_ord_${Date.now()}`;
+              await onSuccess(details, finalOrderId);
+            } catch (err: any) {
+              console.error('[PayPal SDK React] ❌ Erreur critique dans onApprove :', err);
+              if (onError) onError(err);
             }
           }}
           onCancel={(data) => {
             console.log('[PayPal SDK React] 🛑 Annulation transaction par l\'utilisateur :', data);
             if (onCancel) onCancel();
           }}
-          onError={(err) => {
-            console.error('[PayPal SDK React] ❌ Erreur du composant PayPalButtons :', err);
+          onError={(err: any) => {
+            console.error('[PayPal SDK React] ❌ Erreur détaillée remontée par PayPalButtons :', err);
             if (onError) onError(err);
           }}
         />

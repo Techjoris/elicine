@@ -727,7 +727,7 @@ export const subscriptionService = {
     amount: number;
     currency: string;
     details?: any;
-  }): Promise<{ success: boolean; subscriptionId?: string; error?: string; pendingWebhook?: boolean }> {
+  }): Promise<{ success: boolean; isPro?: boolean; subscriptionId?: string; error?: string; message?: string }> {
     const subId = `sub_paypal_${params.orderId}`;
     const email = (params.email || params.details?.payer?.email_address || 'support@elicine.app').trim().toLowerCase();
     const name = (
@@ -765,8 +765,14 @@ export const subscriptionService = {
       localStorage.setItem(PENDING_SUB_STORAGE_KEY, JSON.stringify(pendingSub));
     } catch (_) {}
 
-    // Transmission au backend serverless Vercel /api/paypal
+    // Transmission au backend serverless Vercel /api/paypal pour capture et activation en base
     try {
+      console.log('[subscriptionService] Envoi de l\'ordre PayPal au backend /api/paypal pour capture et activation :', {
+        orderId: params.orderId,
+        email,
+        plan: params.plan
+      });
+
       const res = await fetch('/api/paypal?action=record-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -788,22 +794,54 @@ export const subscriptionService = {
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.success) {
+        console.log('[subscriptionService] ✅ Succès confirmation backend PayPal :', data);
+        
+        // Mise à jour immédiate du cache local de souscription active
+        try {
+          const now = new Date();
+          const expiresAt = new Date(now.getTime() + (params.plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
+          const activeSub: ProSubscription = {
+            id: subId,
+            userId: params.userId || 'usr_paypal',
+            email,
+            customerName: name,
+            plan: params.plan,
+            currency: params.currency || 'USD',
+            amount: params.amount,
+            status: 'active',
+            paymentReference: params.orderId,
+            paymentProvider: 'paypal',
+            gateway,
+            paymentMethod: gateway,
+            termsAccepted: true,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            expiresAt
+          };
+          localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
+          localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
+        } catch (_) {}
+
         return { 
           success: true, 
+          isPro: data.isPro ?? true,
           subscriptionId: data.subscriptionId || subId,
-          pendingWebhook: data.pendingWebhook || false
+          message: data.message || "Pass Pro activé avec succès !"
         };
       }
 
+      console.error('[subscriptionService] ❌ Échec validation backend PayPal :', data);
       return {
         success: false,
-        error: data?.error || "Le prélèvement n'a pas été validé par PayPal (solde insuffisant ou rejet bancaire).",
+        isPro: false,
+        error: data?.error || "Le paiement a été rejeté par PayPal (fonds insuffisants ou carte refusée).",
         subscriptionId: subId
       };
     } catch (err: any) {
-      console.error('[subscriptionService] Erreur appel /api/paypal:', err);
+      console.error('[subscriptionService] ❌ Exception appel /api/paypal:', err);
       return {
         success: false,
+        isPro: false,
         error: err?.message || "Erreur de connexion au serveur de vérification de paiement.",
         subscriptionId: subId
       };

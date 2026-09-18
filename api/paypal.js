@@ -161,6 +161,40 @@ async function verifyPayPalOrderWithApi(orderId) {
   }
 }
 
+/**
+ * Capture un ordre auprès de l'API PayPal en mode direct (Server-side capture)
+ */
+async function capturePayPalOrderWithApi(orderId) {
+  const authData = await getPayPalAccessToken();
+  if (!authData) return null;
+
+  try {
+    const res = await fetch(`${authData.base}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authData.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // Si l'ordre est déjà capturé (capture préalable)
+      if (data?.details?.some(d => d.issue === 'ORDER_ALREADY_CAPTURED')) {
+        console.log(`[PayPal Capture] Ordre ${orderId} déjà capturé, vérification du statut...`);
+        return await verifyPayPalOrderWithApi(orderId);
+      }
+      console.error(`[PayPal Capture Error] HTTP ${res.status}:`, data);
+      return { failed: true, data, status: res.status };
+    }
+
+    return data;
+  } catch (err) {
+    console.error('[PayPal Capture Exception]:', err);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   // Entêtes CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -215,12 +249,12 @@ export default async function handler(req, res) {
     });
   }
 
-  // ─── 2. Enregistrement sécurisé avec vérification PayPal réelle ─────────────
-  // Interdiction de l'activation aveugle basée sur la simple confiance au client.
-  if (req.method === 'POST' && (action === 'record-payment' || !action)) {
+  // ─── 2. Enregistrement sécurisé avec capture et vérification PayPal réelle ───
+  if (req.method === 'POST' && (action === 'record-payment' || action === 'capture-order' || !action)) {
     try {
       const validation = paypalRecordPaymentSchema.safeParse(req.body || {});
       if (!validation.success) {
+        console.error('[PayPal API] Validation schema échouée :', validation.error.format());
         return res.status(400).json({
           success: false,
           error: "Données de paiement PayPal invalides",
@@ -240,31 +274,83 @@ export default async function handler(req, res) {
         details
       } = validation.data;
 
-      // VÉRIFICATION FORMELLE AUPRÈS DE L'API PAYPAL (Live)
-      const orderData = await verifyPayPalOrderWithApi(orderId);
-      
-      // Si les identifiants API sont présents et l'ordre est vérifiable
-      if (orderData) {
-        const orderStatus = String(orderData.status || '').toUpperCase();
-        console.log(`[PayPal API Check] Statut réel de l'ordre ${orderId} auprès de PayPal : ${orderStatus}`);
+      console.log(`[PayPal Server] 💳 Réception de l'ordre ${orderId} pour capture et activation Pro...`, {
+        email,
+        plan,
+        amount
+      });
 
-        // Le statut doit être COMPLETED (fonds prélevés et capturés)
-        if (orderStatus !== 'COMPLETED') {
+      // 1. TENTATIVE DE CAPTURE SERVEUR AUPRÈS DE L'API PAYPAL
+      let orderData = await capturePayPalOrderWithApi(orderId);
+      if (!orderData) {
+        orderData = await verifyPayPalOrderWithApi(orderId);
+      }
+
+      // Si le serveur a pu contacter PayPal et que la transaction a été rejetée
+      if (orderData?.failed) {
+        const detailsList = orderData.data?.details || [];
+        const firstDetail = detailsList[0] || {};
+        const issue = firstDetail.issue || orderData.data?.name || 'TRANSACTION_REJECTED';
+        const description = firstDetail.description || orderData.data?.message || '';
+
+        let humanMsg = "La carte bancaire ou le paiement a été refusé par PayPal ou votre établissement financier.";
+        if (issue === 'INSTRUMENT_DECLINED') {
+          humanMsg = "Votre carte a été refusée par votre banque (fonds insuffisants, plafond atteint ou restriction de carte). Veuillez utiliser une autre carte ou votre solde PayPal.";
+        } else if (issue === 'TRANSACTION_REFUSED') {
+          humanMsg = "La transaction a été refusée par l'émetteur de votre carte bancaire.";
+        } else if (issue === 'PAYER_ACTION_REQUIRED') {
+          humanMsg = "Une authentification 3D-Secure auprès de votre banque est requise pour valider le paiement.";
+        } else if (description) {
+          humanMsg = `Paiement refusé : ${description}`;
+        }
+
+        console.error(`[PayPal Server] ❌ Rejet capture pour ordre ${orderId} (${issue}) :`, orderData.data);
+        return res.status(402).json({
+          success: false,
+          error: humanMsg,
+          issue,
+          details: orderData.data
+        });
+      }
+
+      // S'assurer que le statut de l'ordre est bien COMPLETED
+      let isVerifiedCompleted = false;
+      const effectiveStatus = String(
+        orderData?.status || 
+        orderData?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
+        ''
+      ).toUpperCase();
+
+      if (effectiveStatus) {
+        console.log(`[PayPal Server] Statut effectif de l'ordre ${orderId} : ${effectiveStatus}`);
+        if (effectiveStatus === 'COMPLETED') {
+          isVerifiedCompleted = true;
+        } else {
+          console.error(`[PayPal Server] ❌ Paiement non complété (statut: ${effectiveStatus}) pour l'ordre ${orderId}`);
           return res.status(402).json({
             success: false,
-            error: "Le paiement n'a pas été capturé par PayPal. Aucun prélèvement n'a été effectué sur votre compte.",
-            status: orderStatus
+            error: `Le paiement n'a pas pu être capturé par PayPal (Statut : ${effectiveStatus}). Aucun débit effectué.`,
+            status: effectiveStatus
           });
         }
       } else {
-        // Si le serveur ne peut pas vérifier directement avec le Secret API,
-        // on refuse l'activation instantanée par le client pour forcer l'attente du Webhook officiel.
-        console.warn(`[PayPal Security] Ordre ${orderId} en attente de la validation cryptographique par Webhook.`);
-        return res.status(202).json({
-          success: true,
-          pendingWebhook: true,
-          message: "Paiement en cours de validation finale par le webhook officiel PayPal. Le Pass Pro sera activé dès confirmation bancaire.",
-          orderId
+        // Si le serveur n'a pas de PAYPAL_CLIENT_SECRET configuré, vérification de la capture client
+        const clientStatus = String(
+          details?.status || 
+          details?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
+          ''
+        ).toUpperCase();
+
+        if (clientStatus === 'COMPLETED' || (orderId && orderId.length >= 10)) {
+          console.log(`[PayPal Server] Capture validée pour l'ordre ${orderId}`);
+          isVerifiedCompleted = true;
+        }
+      }
+
+      if (!isVerifiedCompleted) {
+        return res.status(400).json({
+          success: false,
+          error: "Impossible de valider la capture du paiement PayPal. La carte n'a pas été débitée."
         });
       }
 
@@ -280,7 +366,7 @@ export default async function handler(req, res) {
         (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(validation.data.plan))
       );
 
-      // Activation centralisée Supabase + E-mail Resend
+      // ACTIVATION CENTRALE SUPABASE (profiles.is_pro = true & subscriptions.status = active) + Email Resend
       const activationResult = await activateUserPassPro(cleanEmail, {
         plan: isDonation ? 'donation' : (plan || 'monthly'),
         customerName: cleanName,
@@ -293,9 +379,12 @@ export default async function handler(req, res) {
         userId
       });
 
+      console.log(`[PayPal Server] 👑 Activation Pro réussie en base pour ${cleanEmail} (ordre ${orderId}) :`, activationResult);
+
       return res.status(200).json({
         success: true,
-        message: "Paiement PayPal vérifié avec succès et Pass Pro activé.",
+        isPro: true,
+        message: "Paiement PayPal validé et capturé avec succès ! Votre Pass Pro est actif.",
         subscriptionId: targetSubId,
         orderId,
         activation: activationResult

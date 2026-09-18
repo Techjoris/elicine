@@ -11,6 +11,49 @@ export interface PayPalCheckoutModalProps {
   defaultPlan?: PricingBillingCycle;
 }
 
+function parsePayPalErrorMessage(err: any): string {
+  if (!err) return "La transaction a été refusée ou interrompue par votre établissement bancaire ou PayPal.";
+  if (typeof err === 'string') {
+    const lower = err.toLowerCase();
+    if (lower.includes('instrument_declined') || lower.includes('card_declined') || lower.includes('declined') || lower.includes('refus')) {
+      return "Votre carte bancaire a été refusée par votre banque (solde insuffisant, plafond atteint ou restriction bancaire). Veuillez utiliser une autre carte ou votre compte PayPal.";
+    }
+    if (lower.includes('avs') || lower.includes('postal')) {
+      return "Échec de validation de l'adresse de facturation (code postal erroné). Veuillez vérifier vos coordonnées de carte.";
+    }
+    if (lower.includes('cvv') || lower.includes('csc') || lower.includes('security code')) {
+      return "Le code de sécurité CVV est incorrect. Veuillez vérifier les 3 chiffres au dos de votre carte.";
+    }
+    if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
+      return "L'authentification 3D-Secure auprès de votre banque a échoué ou a été annulée.";
+    }
+    return err;
+  }
+
+  const rawMsg = err.message || err.description || err.name || '';
+  const lower = rawMsg.toLowerCase();
+  if (lower.includes('instrument_declined') || lower.includes('card_declined') || lower.includes('declined') || lower.includes('refus')) {
+    return "Votre carte bancaire a été refusée par votre banque (solde insuffisant, plafond atteint ou restriction bancaire). Veuillez utiliser une autre carte ou votre solde PayPal.";
+  }
+  if (lower.includes('avs') || lower.includes('postal')) {
+    return "Échec de vérification du code postal (AVS). Veuillez vérifier vos informations de facturation.";
+  }
+  if (lower.includes('cvv') || lower.includes('csc') || lower.includes('security code')) {
+    return "Code de sécurité (CVV/CVC) invalide. Veuillez vérifier les 3 chiffres au dos de votre carte.";
+  }
+  if (lower.includes('expired') || lower.includes('expiration')) {
+    return "La date d'expiration de votre carte bancaire est invalide ou dépassée.";
+  }
+  if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
+    return "L'authentification bancaire 3D-Secure n'a pas pu être validée. Veuillez réessayer.";
+  }
+  if (lower.includes('popup close') || lower.includes('window closed') || lower.includes('user closed')) {
+    return "La fenêtre de paiement a été fermée avant la finalisation de la transaction.";
+  }
+
+  return rawMsg || "Le paiement n'a pas pu aboutir. Veuillez vérifier vos informations bancaires ou utiliser une autre carte.";
+}
+
 export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   isOpen,
   onClose,
@@ -19,6 +62,8 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   const { user, showToast, upgradeToPro, setIsProSuccessModalOpen } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>(defaultPlan);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCapturingPro, setIsCapturingPro] = useState(false);
+  const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -26,8 +71,21 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   const amount = isYearly ? 15.99 : 1.99;
   const formattedPrice = isYearly ? '15.99 $ / an' : '1.99 $ / mois';
 
+  const handleSafeClose = () => {
+    if (isCapturingPro) {
+      console.warn('[PayPalCheckoutModal] ⛔ Fermeture bloquée : validation et capture PayPal en cours.');
+      showToast('⏳ Validation de votre paiement en cours... Veuillez patienter.');
+      return;
+    }
+    setPaymentErrorMessage(null);
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={handleSafeClose}
+    >
       <div 
         className="relative w-full max-w-md bg-[#0a0d14] border border-slate-800/80 rounded-3xl p-6 shadow-2xl shadow-sky-500/10 text-slate-100 flex flex-col gap-5 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -39,8 +97,11 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
             <span>Pass Pro • Paiement In-App Sécurisé</span>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-800/80 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            onClick={handleSafeClose}
+            disabled={isCapturingPro}
+            className={`p-1.5 rounded-full hover:bg-slate-800/80 text-slate-400 hover:text-white transition-colors cursor-pointer ${
+              isCapturingPro ? 'opacity-30 cursor-not-allowed pointer-events-none' : ''
+            }`}
             aria-label="Fermer"
           >
             <X className="w-5 h-5" />
@@ -57,10 +118,42 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
           </p>
         </div>
 
+        {/* État de chargement 'Validation en cours...' - Bloque visuellement la modale */}
+        {isCapturingPro && (
+          <div className="p-4 rounded-2xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs flex items-center gap-3 animate-in fade-in duration-200">
+            <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+            <div className="flex-1">
+              <p className="font-extrabold text-sm text-white">Validation en cours...</p>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                Sécurisation du prélèvement et activation de votre Pass Pro auprès de PayPal. Veuillez ne pas fermer cette fenêtre.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Bannière d'erreur explicite en cas de rejet */}
+        {paymentErrorMessage && !isCapturingPro && (
+          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+            <span className="text-lg shrink-0 mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="font-bold text-xs text-rose-200">Paiement non validé</p>
+              <p className="text-[11px] mt-0.5 opacity-90 leading-relaxed">{paymentErrorMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentErrorMessage(null)}
+              className="text-slate-400 hover:text-white text-xs font-bold p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Sélecteur de formule (Mensuel / Annuel) */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900/90 rounded-2xl border border-slate-800/60">
           <button
             type="button"
+            disabled={isCapturingPro}
             onClick={() => setBillingCycle('monthly')}
             className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
               !isYearly 
@@ -74,6 +167,7 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
 
           <button
             type="button"
+            disabled={isCapturingPro}
             onClick={() => setBillingCycle('yearly')}
             className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 cursor-pointer relative ${
               isYearly 
@@ -135,11 +229,22 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
             amount={amount}
             currency="USD"
             billingCycle={billingCycle}
-            disabled={isProcessing}
+            disabled={isProcessing || isCapturingPro}
+            onValidationStart={() => {
+              console.log('[PayPalCheckoutModal] ⏳ onApprove démarré : passage en validation');
+              setIsCapturingPro(true);
+              setPaymentErrorMessage(null);
+            }}
+            onClick={() => {
+              setPaymentErrorMessage(null);
+              return true;
+            }}
             onSuccess={async (details, orderId) => {
               try {
-                setIsProcessing(true);
-                showToast('Validation sécurisée de votre transaction en cours...');
+                console.log('[PayPalCheckoutModal] 🎯 onApprove succès client. Envoi orderID au backend...', { orderId, details });
+                setIsCapturingPro(true);
+                setPaymentErrorMessage(null);
+                showToast('⏳ Validation en cours... Sécurisation de votre Pass Pro.');
 
                 const recordResult = await subscriptionService.recordPayPalPayment({
                   orderId,
@@ -152,29 +257,42 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
                   details
                 });
 
-                if (recordResult?.success) {
+                console.log('[PayPalCheckoutModal] Réponse backend :', recordResult);
+
+                if (recordResult?.success && recordResult?.isPro) {
+                  console.log('[PayPalCheckoutModal] 👑 Capture PayPal validée et Pass Pro activé !');
                   showToast('👑 Félicitations ! Votre Pass Pro Éliciné est désormais actif.');
                   upgradeToPro(billingCycle);
+                  setIsCapturingPro(false);
                   onClose();
                   if (setIsProSuccessModalOpen) {
                     setIsProSuccessModalOpen(true);
                   }
                 } else {
-                  const errorMsg = recordResult?.error || "Le paiement n'a pas pu être validé.";
+                  const errorMsg = recordResult?.error || "Le paiement n'a pas pu être capturé par PayPal (fonds insuffisants ou carte refusée).";
+                  console.error('[PayPalCheckoutModal] ❌ Rejet capture :', { orderId, error: errorMsg, recordResult });
+                  setIsCapturingPro(false);
+                  setPaymentErrorMessage(errorMsg);
                   showToast(`❌ ${errorMsg}`);
                 }
               } catch (err: any) {
-                console.error('[PayPalCheckoutModal] Exception validation :', err);
-                showToast(`❌ Erreur validation : ${err?.message || 'Transaction non confirmée'}`);
-              } finally {
-                setIsProcessing(false);
+                console.error('[PayPalCheckoutModal] ❌ Exception validation :', err);
+                const parsedMsg = parsePayPalErrorMessage(err);
+                setIsCapturingPro(false);
+                setPaymentErrorMessage(parsedMsg);
+                showToast(`❌ ${parsedMsg}`);
               }
             }}
             onError={(err) => {
-              console.error('[PayPalCheckoutModal] Erreur PayPal SDK :', err);
-              showToast("Paiement refusé ou interrompu par l'émetteur de carte.");
+              console.error('[PayPalCheckoutModal] ❌ onError remonté par PayPal SDK / Hosted Fields :', err);
+              setIsCapturingPro(false);
+              const parsedMsg = parsePayPalErrorMessage(err);
+              setPaymentErrorMessage(parsedMsg);
+              showToast(`❌ ${parsedMsg}`);
             }}
             onCancel={() => {
+              console.log('[PayPalCheckoutModal] 🛑 Annulation transaction par l\'utilisateur.');
+              setIsCapturingPro(false);
               showToast("Paiement annulé. Aucun montant n'a été prélevé.");
             }}
           />
