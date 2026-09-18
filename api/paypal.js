@@ -435,8 +435,14 @@ export default async function handler(req, res) {
 
       const payerName = customerName || (orderData?.payer?.name?.given_name ? `${orderData.payer.name.given_name} ${orderData.payer.name.surname || ''}`.trim() : 'Cinéphile Pro');
       const captureUnit = orderData?.purchase_units?.[0]?.payments?.captures?.[0] || orderData?.purchase_units?.[0];
-      const numericAmount = captureUnit?.amount?.value ? Number(captureUnit.amount.value) : Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
-      const effectiveCurrency = captureUnit?.amount?.currency_code || currency || 'USD';
+      let numericAmount = captureUnit?.amount?.value ? Number(captureUnit.amount.value) : Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
+      let effectiveCurrency = captureUnit?.amount?.currency_code || currency || 'USD';
+
+      // Sécurité anti-bug conversion FCFA sur le serveur : si le montant en USD est >= 100, il s'agit d'un montant brut en FCFA (ex: 1200)
+      if (effectiveCurrency === 'USD' && numericAmount >= 100) {
+        console.warn(`[PayPal Server] ⚠️ Montant anormalement élevé détecté (${numericAmount} USD). Conversion FCFA -> USD (taux 600)...`);
+        numericAmount = Number((numericAmount / 600).toFixed(2));
+      }
 
       const isDonation = (
         (validation.data.plan === 'donation' || validation.data.plan === 'don') ||

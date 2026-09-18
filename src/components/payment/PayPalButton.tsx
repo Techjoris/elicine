@@ -28,24 +28,42 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   onValidationStart,
   disabled = false
 }) => {
-  // 1. Normalisation stricte de la devise (toujours en majuscules : "EUR", "USD", etc.)
+  // 1. Détection FCFA et normalisation stricte de la devise
   const rawCurrency = (currency || 'USD').toString().trim().toUpperCase();
-  const selectedCurrency = PAYPAL_SUPPORTED_CURRENCIES.includes(rawCurrency)
-    ? rawCurrency
-    : 'USD';
+  const isFcfa = rawCurrency === 'XOF' || rawCurrency === 'XAF';
 
-  // Montant normalisé selon la devise sélectionnée et le cycle
-  const numericValue = useMemo(() => {
-    if (amount && Number(amount) > 0) {
-      return Number(amount);
+  // Si la devise est en FCFA (non supportée par PayPal) ou non supportée, basculer sur USD
+  const selectedCurrency = isFcfa
+    ? 'USD'
+    : (PAYPAL_SUPPORTED_CURRENCIES.includes(rawCurrency) ? rawCurrency : 'USD');
+
+  // Taux de change fixe FCFA -> USD (600 FCFA = 1.00 USD)
+  const FCFA_EXCHANGE_RATE = 600;
+
+  // 2. Interception du montant et conversion en USD si FCFA
+  const amountInUSD = useMemo(() => {
+    const rawVal = Number(amount || 0);
+
+    // Si devise FCFA (XOF/XAF) OU montant manifestement en FCFA (ex: 1200 ou 9600)
+    if (isFcfa || (selectedCurrency === 'USD' && rawVal >= 100)) {
+      const fcfaAmount = rawVal > 0 ? rawVal : (billingCycle === 'yearly' ? 9600 : 1200);
+      const converted = (fcfaAmount / FCFA_EXCHANGE_RATE).toFixed(2); // ex: 1200 / 600 = "2.00"
+      console.log(`[PayPal SDK] 💱 Conversion FCFA -> USD appliquée : ${fcfaAmount} FCFA / ${FCFA_EXCHANGE_RATE} = ${converted} USD`);
+      return converted;
     }
+
+    if (rawVal > 0) {
+      return rawVal.toFixed(2);
+    }
+
     if (selectedCurrency === 'EUR') {
-      return billingCycle === 'yearly' ? 15.00 : 1.85;
+      return (billingCycle === 'yearly' ? 15.00 : 1.85).toFixed(2);
     }
-    return billingCycle === 'yearly' ? 15.99 : 1.99;
-  }, [amount, billingCycle, selectedCurrency]);
 
-  const formattedAmount = numericValue.toFixed(2);
+    return (billingCycle === 'yearly' ? 15.99 : 1.99).toFixed(2);
+  }, [amount, billingCycle, isFcfa, selectedCurrency]);
+
+  const formattedAmount = amountInUSD;
 
   // Récupération stricte et dynamique du Client ID via process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
   const clientId = (
@@ -146,14 +164,28 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             const itemDescription = `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'} (Paiement unique)`;
             const itemRef = `ELICINE_PASS_${isYearly ? '365D' : '30D'}_ONETIME`;
 
+            // 1. Interception du montant de la formule choisie
+            const rawPlanAmount = Number(amount || (isYearly ? 9600 : 1200));
+
+            // 2. Application de la conversion si FCFA (XOF/XAF ou montant brut >= 100)
+            let orderCurrency = selectedCurrency;
+            let finalAmountStr = formattedAmount;
+
+            if (isFcfa || (orderCurrency === 'USD' && rawPlanAmount >= 100)) {
+              const exchangeRate = 600;
+              finalAmountStr = (rawPlanAmount / exchangeRate).toFixed(2); // ex: (1200 / 600).toFixed(2) => "2.00"
+              orderCurrency = 'USD';
+              console.log(`[PayPal SDK] 🛡️ Interception createOrder : ${rawPlanAmount} FCFA converti à ${finalAmountStr} USD (taux: ${exchangeRate})`);
+            }
+
             console.log('[PayPal SDK React] 📦 Création d\'ordre de paiement unique (Orders API - CAPTURE) :', {
-              amount: formattedAmount,
-              currency: selectedCurrency,
+              rawAmount: rawPlanAmount,
+              finalAmount: finalAmountStr,
+              currency: orderCurrency,
               itemRef
             });
 
-            // STRICTEMENT PAIEMENT UNIQUE (Orders API avec intent: 'CAPTURE')
-            // Devise STRICTEMENT synchronisée avec initialOptions.currency
+            // 3. Formatage strict du payload envoyé à PayPal
             return actions.order.create({
               intent: 'CAPTURE',
               purchase_units: [
@@ -161,12 +193,12 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   reference_id: itemRef,
                   description: itemDescription,
                   amount: {
-                    currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE AU SDK SCRIPT (ex: "EUR", "USD")
-                    value: formattedAmount,
+                    currency_code: orderCurrency, // "USD"
+                    value: finalAmountStr,       // "2.00"
                     breakdown: {
                       item_total: {
-                        currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE
-                        value: formattedAmount
+                        currency_code: orderCurrency,
+                        value: finalAmountStr
                       }
                     }
                   },
@@ -175,8 +207,8 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                       name: `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'}`,
                       description: 'Accès numérique instantané - Paiement unique sans engagement',
                       unit_amount: {
-                        currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE
-                        value: formattedAmount
+                        currency_code: orderCurrency,
+                        value: finalAmountStr
                       },
                       quantity: '1',
                       category: 'DIGITAL_GOODS'

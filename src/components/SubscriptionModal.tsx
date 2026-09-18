@@ -425,6 +425,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </span>
                 <span className="font-extrabold text-sky-600 dark:text-sky-400">
                   {amountToPay} {currentPrice.symbol}
+                  {(currency === 'XOF' || currency === 'XAF') && (
+                    <span className="text-[10px] font-normal text-slate-400 ml-1">
+                      (~{(numericAmount / 600).toFixed(2)} $)
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -450,14 +455,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     setPaymentErrorMessage(null);
                     showToast('⏳ Validation en cours... Sécurisation de votre Pass Pro.');
                     
+                    const isFcfa = currency === 'XOF' || currency === 'XAF';
+                    const backendAmount = isFcfa ? Number((numericAmount / 600).toFixed(2)) : numericAmount;
+                    const backendCurrency = isFcfa ? 'USD' : currency;
+
                     const recordResult = await subscriptionService.recordPayPalPayment({
                       orderId,
                       userId: user?.id || `usr_${Date.now()}`,
                       email: user?.email,
                       customerName: user?.name || 'Cinéphile Pro',
                       plan: billingCycle,
-                      amount: numericAmount,
-                      currency
+                      amount: backendAmount,
+                      currency: backendCurrency
                     });
 
                     console.log('[SubscriptionModal Debug] Réponse serveur recordPayPalPayment :', recordResult);

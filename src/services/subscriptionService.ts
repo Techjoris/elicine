@@ -733,6 +733,13 @@ export const subscriptionService = {
     const name = (params.customerName || 'Cinéphile Pro').trim();
     const gateway = 'paypal';
 
+    // Sécurité FCFA -> USD (taux fixe 600)
+    const isFcfa = params.currency === 'XOF' || params.currency === 'XAF';
+    const effectiveCurrency = isFcfa ? 'USD' : (params.currency || 'USD');
+    const effectiveAmount = isFcfa || (effectiveCurrency === 'USD' && params.amount >= 100)
+      ? Number((params.amount / 600).toFixed(2))
+      : params.amount;
+
     try {
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem('checkout_gateway', gateway);
@@ -744,8 +751,8 @@ export const subscriptionService = {
         email,
         customerName: name,
         plan: params.plan,
-        currency: params.currency || 'USD',
-        amount: params.amount,
+        currency: effectiveCurrency,
+        amount: effectiveAmount,
         status: 'pending_payment',
         paymentReference: params.orderId,
         paymentProvider: 'paypal',
@@ -799,8 +806,8 @@ export const subscriptionService = {
               email,
               customerName: name,
               plan: params.plan,
-              currency: params.currency || 'USD',
-              amount: params.amount,
+              currency: effectiveCurrency,
+              amount: effectiveAmount,
               mode: frontendMode
             }
           });
@@ -838,8 +845,8 @@ export const subscriptionService = {
             email,
             customerName: name,
             plan: params.plan,
-            currency: params.currency || 'USD',
-            amount: params.amount,
+            currency: effectiveCurrency,
+            amount: effectiveAmount,
             gateway,
             mode: frontendMode
           })
