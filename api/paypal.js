@@ -286,6 +286,16 @@ export default async function handler(req, res) {
         orderData = await verifyPayPalOrderWithApi(orderId);
       }
 
+      // Si le serveur n'a pas pu joindre PayPal (identifiants serveur manquants ou indisponibilité)
+      if (!orderData) {
+        console.error(`[PayPal Server] ❌ Impossible de vérifier ou capturer l'ordre ${orderId} auprès de l'API PayPal. Identifiants manquants ou service indisponible.`);
+        return res.status(503).json({
+          success: false,
+          error: "Service de validation PayPal indisponible. La capture n'a pas pu être exécutée par le serveur.",
+          orderId
+        });
+      }
+
       // Si le serveur a pu contacter PayPal et que la transaction a été rejetée
       if (orderData?.failed) {
         const detailsList = orderData.data?.details || [];
@@ -313,55 +323,47 @@ export default async function handler(req, res) {
         });
       }
 
-      // S'assurer que le statut de l'ordre est bien COMPLETED
-      let isVerifiedCompleted = false;
+      // VÉRIFICATION STRICTE DU STATUT RÉEL : Doit être obligatoirement COMPLETED
       const effectiveStatus = String(
         orderData?.status || 
         orderData?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
         ''
       ).toUpperCase();
 
-      if (effectiveStatus) {
-        console.log(`[PayPal Server] Statut effectif de l'ordre ${orderId} : ${effectiveStatus}`);
-        if (effectiveStatus === 'COMPLETED') {
-          isVerifiedCompleted = true;
-        } else {
-          console.error(`[PayPal Server] ❌ Paiement non complété (statut: ${effectiveStatus}) pour l'ordre ${orderId}`);
-          return res.status(402).json({
-            success: false,
-            error: `Le paiement n'a pas pu être capturé par PayPal (Statut : ${effectiveStatus}). Aucun débit effectué.`,
-            status: effectiveStatus
-          });
-        }
-      } else {
-        // Si le serveur n'a pas de PAYPAL_CLIENT_SECRET configuré, vérification de la capture client
-        const clientStatus = String(
-          details?.status || 
-          details?.purchase_units?.[0]?.payments?.captures?.[0]?.status || 
-          ''
-        ).toUpperCase();
+      console.log(`[PayPal Server] Statut effectif de capture pour l'ordre ${orderId} : ${effectiveStatus}`);
 
-        if (clientStatus === 'COMPLETED' || (orderId && orderId.length >= 10)) {
-          console.log(`[PayPal Server] Capture validée pour l'ordre ${orderId}`);
-          isVerifiedCompleted = true;
-        }
-      }
-
-      if (!isVerifiedCompleted) {
-        return res.status(400).json({
+      // CONDITION STRICTE ABSOLUE : SI ET SEULEMENT SI le statut est 'COMPLETED'
+      if (effectiveStatus !== 'COMPLETED') {
+        console.error(`[PayPal Server] ⛔ Refus d'activation : statut '${effectiveStatus}' non complété pour l'ordre ${orderId}`);
+        return res.status(402).json({
           success: false,
-          error: "Impossible de valider la capture du paiement PayPal. La carte n'a pas été débitée."
+          error: `Le paiement n'a pas été capturé par PayPal (Statut : ${effectiveStatus || 'NON_CAPTURÉ'}). Aucun débit effectué.`,
+          status: effectiveStatus,
+          orderId
         });
       }
 
       const targetSubId = subscriptionId || `sub_paypal_${orderId}`;
-      const cleanEmail = (email || details?.payer?.email_address || orderData?.payer?.email_address || '').trim().toLowerCase();
-      const cleanName = customerName || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro');
-      const numericAmount = Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
+      let cleanEmail = (email || orderData?.payer?.email_address || '').trim().toLowerCase();
+      
+      // Si email manquant dans la requête, tenter la récupération depuis le profil Supabase
+      if ((!cleanEmail || !cleanEmail.includes('@')) && userId && supabaseAdmin) {
+        try {
+          const { data: userProf } = await supabaseAdmin.from('profiles').select('email').eq('id', userId).maybeSingle();
+          if (userProf?.email) {
+            cleanEmail = userProf.email.trim().toLowerCase();
+          }
+        } catch (_) {}
+      }
+
+      const payerName = customerName || (orderData?.payer?.name?.given_name ? `${orderData.payer.name.given_name} ${orderData.payer.name.surname || ''}`.trim() : 'Cinéphile Pro');
+      const captureUnit = orderData?.purchase_units?.[0]?.payments?.captures?.[0] || orderData?.purchase_units?.[0];
+      const numericAmount = captureUnit?.amount?.value ? Number(captureUnit.amount.value) : Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
+      const effectiveCurrency = captureUnit?.amount?.currency_code || currency || 'USD';
 
       const isDonation = (
         (validation.data.plan === 'donation' || validation.data.plan === 'don') ||
-        String(validation.data.details?.purchase_units?.[0]?.description || '').toLowerCase().includes('don') ||
+        String(orderData?.purchase_units?.[0]?.description || '').toLowerCase().includes('don') ||
         String(req.body?.itemType || req.body?.type || '').toLowerCase() === 'donation' ||
         (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(validation.data.plan))
       );
@@ -369,9 +371,9 @@ export default async function handler(req, res) {
       // ACTIVATION CENTRALE SUPABASE (profiles.is_pro = true & subscriptions.status = active) + Email Resend
       const activationResult = await activateUserPassPro(cleanEmail, {
         plan: isDonation ? 'donation' : (plan || 'monthly'),
-        customerName: cleanName,
+        customerName: payerName,
         amount: numericAmount,
-        currency: currency || 'USD',
+        currency: effectiveCurrency,
         gateway: 'paypal',
         paymentReference: orderId,
         subscriptionId: targetSubId,
@@ -379,11 +381,12 @@ export default async function handler(req, res) {
         userId
       });
 
-      console.log(`[PayPal Server] 👑 Activation Pro réussie en base pour ${cleanEmail} (ordre ${orderId}) :`, activationResult);
+      console.log(`[PayPal Server] 👑 Capture COMPLETED et Activation Pro réussie en base pour ${cleanEmail} (ordre ${orderId}) :`, activationResult);
 
       return res.status(200).json({
         success: true,
         isPro: true,
+        status: 'COMPLETED',
         message: "Paiement PayPal validé et capturé avec succès ! Votre Pass Pro est actif.",
         subscriptionId: targetSubId,
         orderId,

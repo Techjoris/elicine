@@ -434,9 +434,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   setPaymentErrorMessage(null);
                   return true;
                 }}
-                onSuccess={async (details, orderId) => {
+                onSuccess={async (orderId) => {
                   try {
-                    console.log('[SubscriptionModal Debug] 🎯 onApprove avec succès côté PayPal. Envoi orderID au backend...', { orderId, details });
+                    console.log('[SubscriptionModal Debug] 🎯 onApprove avec succès côté PayPal. Transmission orderID au backend pour capture serveur...', { orderId });
                     setIsCapturingPro(true);
                     setPaymentErrorMessage(null);
                     showToast('⏳ Validation en cours... Sécurisation de votre Pass Pro.');
@@ -444,12 +444,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     const recordResult = await subscriptionService.recordPayPalPayment({
                       orderId,
                       userId: user?.id || `usr_${Date.now()}`,
-                      email: user?.email || details?.payer?.email_address,
-                      customerName: user?.name || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro'),
+                      email: user?.email,
+                      customerName: user?.name || 'Cinéphile Pro',
                       plan: billingCycle,
                       amount: numericAmount,
-                      currency,
-                      details
+                      currency
                     });
 
                     console.log('[SubscriptionModal Debug] Réponse serveur recordPayPalPayment :', recordResult);

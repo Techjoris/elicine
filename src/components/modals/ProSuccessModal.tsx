@@ -153,7 +153,7 @@ export const ProSuccessModal: React.FC<ProSuccessModalProps> = ({ isOpen, onClos
 
           {/* Footer reassurance */}
           <p className="text-[10px] text-slate-500 mt-1">
-            ✅ Abonnement actif · Renouvellement automatique · Annulable à tout moment
+            ✅ Pass Pro actif · Paiement unique sans engagement · Accès instantané garanti
           </p>
         </div>
       </div>

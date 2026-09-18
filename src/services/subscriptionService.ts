@@ -729,16 +729,9 @@ export const subscriptionService = {
     details?: any;
   }): Promise<{ success: boolean; isPro?: boolean; subscriptionId?: string; error?: string; message?: string }> {
     const subId = `sub_paypal_${params.orderId}`;
-    const email = (params.email || params.details?.payer?.email_address || 'support@elicine.app').trim().toLowerCase();
-    const name = (
-      params.customerName ||
-      (params.details?.payer?.name?.given_name 
-        ? `${params.details.payer.name.given_name} ${params.details.payer.name.surname || ''}`.trim() 
-        : 'Cinéphile Pro')
-    );
-
-    const isCard = !!(params.details?.payment_source?.card || params.details?.payer?.funding_source === 'card');
-    const gateway = isCard ? 'card' : 'paypal';
+    const email = (params.email || 'support@elicine.app').trim().toLowerCase();
+    const name = (params.customerName || 'Cinéphile Pro').trim();
+    const gateway = 'paypal';
 
     try {
       if (typeof sessionStorage !== 'undefined') {
@@ -765,38 +758,69 @@ export const subscriptionService = {
       localStorage.setItem(PENDING_SUB_STORAGE_KEY, JSON.stringify(pendingSub));
     } catch (_) {}
 
-    // Transmission au backend serverless Vercel /api/paypal pour capture et activation en base
+    // Transmission au backend sécurisé pour capture réelle des fonds et activation Pro
     try {
-      console.log('[subscriptionService] Envoi de l\'ordre PayPal au backend /api/paypal pour capture et activation :', {
+      console.log('[subscriptionService] 🔐 Envoi de l\'orderID au backend pour capture serveur et activation :', {
         orderId: params.orderId,
         email,
         plan: params.plan
       });
 
-      const res = await fetch('/api/paypal?action=record-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: params.orderId,
-          subscriptionId: subId,
-          userId: params.userId,
-          email,
-          customerName: name,
-          plan: params.plan,
-          currency: params.currency || 'USD',
-          amount: params.amount,
-          gateway,
-          paymentMethod: gateway,
-          details: params.details
-        })
-      });
+      let data: any = null;
+      let resOk = false;
 
-      const data = await res.json().catch(() => null);
+      // 1. Tenter d'abord la Supabase Edge Function 'capture-paypal' si disponible
+      if (isSupabaseConfigured() && supabase && (supabase as any).functions) {
+        try {
+          const { data: edgeData, error: edgeError } = await (supabase as any).functions.invoke('capture-paypal', {
+            body: {
+              orderId: params.orderId,
+              subscriptionId: subId,
+              userId: params.userId,
+              email,
+              customerName: name,
+              plan: params.plan,
+              currency: params.currency || 'USD',
+              amount: params.amount
+            }
+          });
+          if (!edgeError && edgeData?.success && edgeData?.isPro) {
+            console.log('[subscriptionService] ✅ Succès capture via Supabase Edge Function :', edgeData);
+            data = edgeData;
+            resOk = true;
+          }
+        } catch (edgeErr) {
+          console.warn('[subscriptionService] Supabase Edge Function notice, repli vers route /api/paypal :', edgeErr);
+        }
+      }
 
-      if (res.ok && data?.success) {
-        console.log('[subscriptionService] ✅ Succès confirmation backend PayPal :', data);
+      // 2. Route Vercel API /api/paypal?action=capture-order (Backend Serverless)
+      if (!resOk) {
+        const res = await fetch('/api/paypal?action=capture-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: params.orderId,
+            subscriptionId: subId,
+            userId: params.userId,
+            email,
+            customerName: name,
+            plan: params.plan,
+            currency: params.currency || 'USD',
+            amount: params.amount,
+            gateway
+          })
+        });
+
+        resOk = res.ok;
+        data = await res.json().catch(() => null);
+      }
+
+      // CONDITION STRICTE : succès SEULEMENT si le serveur a capturé les fonds et renvoie isPro: true
+      if (resOk && data?.success && data?.isPro) {
+        console.log('[subscriptionService] 👑 Capture PayPal confirmée COMPLETED et Pass Pro validé en base :', data);
         
-        // Mise à jour immédiate du cache local de souscription active
+        // Mise à jour du cache local UNIQUEMENT après validation formelle de la capture serveur
         try {
           const now = new Date();
           const expiresAt = new Date(now.getTime() + (params.plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
@@ -824,25 +848,25 @@ export const subscriptionService = {
 
         return { 
           success: true, 
-          isPro: data.isPro ?? true,
+          isPro: true,
           subscriptionId: data.subscriptionId || subId,
           message: data.message || "Pass Pro activé avec succès !"
         };
       }
 
-      console.error('[subscriptionService] ❌ Échec validation backend PayPal :', data);
+      console.error('[subscriptionService] ❌ Échec capture backend PayPal :', data);
       return {
         success: false,
         isPro: false,
-        error: data?.error || "Le paiement a été rejeté par PayPal (fonds insuffisants ou carte refusée).",
+        error: data?.error || "Le paiement n'a pas pu être capturé par PayPal (transaction refusée ou non complétée).",
         subscriptionId: subId
       };
     } catch (err: any) {
-      console.error('[subscriptionService] ❌ Exception appel /api/paypal:', err);
+      console.error('[subscriptionService] ❌ Exception appel backend capture:', err);
       return {
         success: false,
         isPro: false,
-        error: err?.message || "Erreur de connexion au serveur de vérification de paiement.",
+        error: err?.message || "Erreur de connexion au serveur de capture de paiement.",
         subscriptionId: subId
       };
     }

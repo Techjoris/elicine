@@ -239,9 +239,9 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
               setPaymentErrorMessage(null);
               return true;
             }}
-            onSuccess={async (details, orderId) => {
+            onSuccess={async (orderId) => {
               try {
-                console.log('[PayPalCheckoutModal] 🎯 onApprove succès client. Envoi orderID au backend...', { orderId, details });
+                console.log('[PayPalCheckoutModal] 🎯 onApprove succès client. Envoi orderID au backend...', { orderId });
                 setIsCapturingPro(true);
                 setPaymentErrorMessage(null);
                 showToast('⏳ Validation en cours... Sécurisation de votre Pass Pro.');
@@ -249,12 +249,11 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
                 const recordResult = await subscriptionService.recordPayPalPayment({
                   orderId,
                   userId: user?.id || `usr_${Date.now()}`,
-                  email: user?.email || details?.payer?.email_address,
-                  customerName: user?.name || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro'),
+                  email: user?.email,
+                  customerName: user?.name || 'Cinéphile Pro',
                   plan: billingCycle,
                   amount,
-                  currency: 'USD',
-                  details
+                  currency: 'USD'
                 });
 
                 console.log('[PayPalCheckoutModal] Réponse backend :', recordResult);

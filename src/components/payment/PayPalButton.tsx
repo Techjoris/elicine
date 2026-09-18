@@ -6,7 +6,7 @@ export interface PayPalButtonProps {
   amount: number;
   currency?: string;
   billingCycle: PricingBillingCycle;
-  onSuccess: (details: any, orderId: string) => Promise<void> | void;
+  onSuccess: (orderId: string) => Promise<void> | void;
   onError?: (error: any) => void;
   onCancel?: () => void;
   onClick?: () => boolean | void;
@@ -136,32 +136,27 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
               }
             });
           }}
-          onApprove={async (data, actions) => {
-            console.log('[PayPal SDK React] 🎯 onApprove déclenché par le SDK ! Données :', data);
+          onApprove={async (data) => {
+            console.log('[PayPal SDK React] 🎯 onApprove déclenché par le SDK ! Réception orderID :', data?.orderID);
+            const orderId = data?.orderID;
+            if (!orderId) {
+              console.error('[PayPal SDK React] ❌ data.orderID manquant lors de onApprove');
+              if (onError) onError(new Error("Identifiant de commande PayPal manquant."));
+              return;
+            }
+
             if (onValidationStart) {
               try {
                 onValidationStart();
               } catch (_) {}
             }
 
-            const orderId = data?.orderID;
-            let details: any = null;
-
             try {
-              // Tentative de capture via le SDK client si disponible
-              if (actions.order) {
-                try {
-                  details = await actions.order.capture();
-                  console.log('[PayPal SDK React] ✅ Capture de l\'ordre réussie côté client :', details);
-                } catch (captureErr: any) {
-                  console.warn('[PayPal SDK React] ⚠️ Note capture client (le backend tentera la capture serveur avec l\'orderID) :', captureErr);
-                }
-              }
-
-              const finalOrderId = orderId || details?.id || `pp_ord_${Date.now()}`;
-              await onSuccess(details, finalOrderId);
+              // Verrouillage frontend : STRICTEMENT AUCUNE logique d'activation locale, AUCUNE capture client.
+              // Le frontend transmet UNIQUEMENT le data.orderID au backend pour exécution de la capture serveur.
+              await onSuccess(orderId);
             } catch (err: any) {
-              console.error('[PayPal SDK React] ❌ Erreur critique dans onApprove :', err);
+              console.error('[PayPal SDK React] ❌ Erreur critique transmission backend :', err);
               if (onError) onError(err);
             }
           }}
