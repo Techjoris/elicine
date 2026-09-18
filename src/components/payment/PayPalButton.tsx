@@ -3,7 +3,7 @@ import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { PricingBillingCycle } from '../../types';
 
 export interface PayPalButtonProps {
-  amount: number;
+  amount?: number;
   currency?: string;
   billingCycle: PricingBillingCycle;
   onSuccess: (orderId: string) => Promise<void> | void;
@@ -12,10 +12,8 @@ export interface PayPalButtonProps {
   onClick?: () => boolean | void;
   onValidationStart?: () => void;
   disabled?: boolean;
+  disableCard?: boolean; // Optionnel : passer à true pour forcer "disable-funding": "card"
 }
-
-// Devises acceptées nativement par l'API Orders de PayPal
-const PAYPAL_SUPPORTED_CURRENCIES = ['USD', 'EUR', 'CAD', 'GBP', 'AUD', 'JPY', 'CHF'];
 
 export const PayPalButton: React.FC<PayPalButtonProps> = ({
   amount,
@@ -26,53 +24,23 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   onCancel,
   onClick,
   onValidationStart,
-  disabled = false
+  disabled = false,
+  disableCard = false
 }) => {
-  // 1. Détection FCFA et normalisation stricte de la devise
-  const rawCurrency = (currency || 'USD').toString().trim().toUpperCase();
-  const isFcfa = rawCurrency === 'XOF' || rawCurrency === 'XAF';
+  const isYearly = billingCycle === 'yearly';
 
-  // Si la devise est en FCFA (non supportée par PayPal) ou non supportée, basculer sur USD
-  const selectedCurrency = isFcfa
-    ? 'USD'
-    : (PAYPAL_SUPPORTED_CURRENCIES.includes(rawCurrency) ? rawCurrency : 'USD');
+  // Hardcodage strict du montant de l'abonnement Pro : 1.99 USD (ou 15.99 USD si annuel)
+  // Écrase toute conversion FCFA/USD défaillante
+  const orderAmount = isYearly ? '15.99' : '1.99';
 
-  // Taux de change fixe FCFA -> USD (600 FCFA = 1.00 USD)
-  const FCFA_EXCHANGE_RATE = 600;
-
-  // 2. Interception du montant et conversion en USD si FCFA
-  const amountInUSD = useMemo(() => {
-    const rawVal = Number(amount || 0);
-
-    // Si devise FCFA (XOF/XAF) OU montant manifestement en FCFA (ex: 1200 ou 9600)
-    if (isFcfa || (selectedCurrency === 'USD' && rawVal >= 100)) {
-      const fcfaAmount = rawVal > 0 ? rawVal : (billingCycle === 'yearly' ? 9600 : 1200);
-      const converted = (fcfaAmount / FCFA_EXCHANGE_RATE).toFixed(2); // ex: 1200 / 600 = "2.00"
-      console.log(`[PayPal SDK] 💱 Conversion FCFA -> USD appliquée : ${fcfaAmount} FCFA / ${FCFA_EXCHANGE_RATE} = ${converted} USD`);
-      return converted;
-    }
-
-    if (rawVal > 0) {
-      return rawVal.toFixed(2);
-    }
-
-    if (selectedCurrency === 'EUR') {
-      return (billingCycle === 'yearly' ? 15.00 : 1.85).toFixed(2);
-    }
-
-    return (billingCycle === 'yearly' ? 15.99 : 1.99).toFixed(2);
-  }, [amount, billingCycle, isFcfa, selectedCurrency]);
-
-  const formattedAmount = amountInUSD;
-
-  // Récupération stricte et dynamique du Client ID via process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+  // Récupération stricte du Client ID via process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
   const clientId = (
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
     (typeof import.meta !== 'undefined' ? (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID : '') ||
     ''
   )?.trim();
 
-  // Sécurité stricte : si la variable est undefined ou non configurée, bloquer le rendu
+  // Sécurité : bloquer le rendu si Client ID absent
   const isClientIdConfigured = Boolean(
     clientId &&
     clientId !== 'undefined' &&
@@ -80,20 +48,6 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     clientId !== '' &&
     clientId !== 'sb'
   );
-
-  // 2. Nettoyage proactif du DOM lors d'un changement de devise pour éviter tout Currency Mismatch
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      const existingScripts = document.querySelectorAll('script[src*="paypal.com/sdk/js"]');
-      existingScripts.forEach((script) => {
-        const src = (script as HTMLScriptElement).src || '';
-        if (src && !src.includes(`currency=${selectedCurrency}`)) {
-          console.log(`[PayPal SDK] 🔄 Changement de devise détecté (${selectedCurrency}). Remplacement du script PayPal :`, src);
-          script.remove();
-        }
-      });
-    }
-  }, [selectedCurrency]);
 
   if (!isClientIdConfigured) {
     console.error(
@@ -113,26 +67,32 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     );
   }
 
-  // 3. Configuration dynamique du SDK PayPal avec devise synchronisée
-  // intent=capture&commit=true&vault=false bloque le vaulting, currency correspond à createOrder
-  const initialOptions = useMemo(() => ({
-    clientId: clientId,
-    currency: selectedCurrency, // Synchronisé dynamiquement en MAJUSCULES
-    intent: 'capture' as const, // PAIEMENT UNIQUE STRICT (Orders API, pas de souscription récurrente)
-    commit: true,               // Force le mode "Payer maintenant" direct sans création ni enregistrement de carte
-    vault: false,              // DÉSACTIVE STRICTEMENT LE VAULTING (interdit tout enregistrement de carte)
-    components: 'buttons',
-    enableFunding: 'card',     // Active explicitement le bouton Carte Bancaire sans compte
-    dataSdkIntegrationSource: 'react-paypal-js'
-  }), [clientId, selectedCurrency]);
+  // 1. Verrouillage strict du SDK PayPal :
+  // options={{ "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID, currency: "USD", intent: "capture", commit: true }}
+  const initialOptions = useMemo(() => {
+    const opts: any = {
+      clientId: clientId,
+      'client-id': clientId,
+      currency: 'USD',
+      intent: 'capture',
+      commit: true,
+      vault: false,
+      components: 'buttons',
+      // 'disable-funding': 'card', // Préparé pour désactiver le Guest Checkout (bouton noir) si demandé
+      dataSdkIntegrationSource: 'react-paypal-js'
+    };
 
-  const isYearly = billingCycle === 'yearly';
+    if (disableCard) {
+      opts['disable-funding'] = 'card';
+    }
+
+    return opts;
+  }, [clientId, disableCard]);
 
   return (
     <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
-      {/* key dynamique forçant le démontage/remontage immédiat et le retéléchargement du script PayPal lors du changement de devise */}
       <PayPalScriptProvider 
-        key={`paypal-provider-${clientId}-${selectedCurrency}`}
+        key={`paypal-provider-${clientId}-USD${disableCard ? '-nocard' : ''}`}
         options={initialOptions}
       >
         <PayPalButtons
@@ -145,12 +105,12 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             tagline: false
           }}
           disabled={disabled}
-          forceReRender={[formattedAmount, selectedCurrency, billingCycle, clientId]}
+          forceReRender={[orderAmount, 'USD', billingCycle, clientId, disableCard]}
           onClick={(data, actions) => {
             console.log('[PayPal SDK React] 🖱️ Clic utilisateur sur bouton PayPal/CB :', {
               source: data?.fundingSource || 'standard',
-              currency: selectedCurrency,
-              amount: formattedAmount
+              currency: 'USD',
+              amount: orderAmount
             });
             if (onClick) {
               const allow = onClick();
@@ -161,66 +121,27 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             return actions.resolve();
           }}
           createOrder={(data, actions) => {
-            const itemDescription = `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'} (Paiement unique)`;
-            const itemRef = `ELICINE_PASS_${isYearly ? '365D' : '30D'}_ONETIME`;
-
-            // 1. Interception du montant de la formule choisie
-            const rawPlanAmount = Number(amount || (isYearly ? 9600 : 1200));
-
-            // 2. Application de la conversion si FCFA (XOF/XAF ou montant brut >= 100)
-            let orderCurrency = selectedCurrency;
-            let finalAmountStr = formattedAmount;
-
-            if (isFcfa || (orderCurrency === 'USD' && rawPlanAmount >= 100)) {
-              const exchangeRate = 600;
-              finalAmountStr = (rawPlanAmount / exchangeRate).toFixed(2); // ex: (1200 / 600).toFixed(2) => "2.00"
-              orderCurrency = 'USD';
-              console.log(`[PayPal SDK] 🛡️ Interception createOrder : ${rawPlanAmount} FCFA converti à ${finalAmountStr} USD (taux: ${exchangeRate})`);
-            }
-
-            console.log('[PayPal SDK React] 📦 Création d\'ordre de paiement unique (Orders API - CAPTURE) :', {
-              rawAmount: rawPlanAmount,
-              finalAmount: finalAmountStr,
-              currency: orderCurrency,
-              itemRef
+            console.log('[PayPal SDK React] 📦 Création d\'ordre de paiement unique strict :', {
+              currency_code: 'USD',
+              value: orderAmount
             });
 
-            // 3. Formatage strict du payload envoyé à PayPal
+            // 2. Hardcodage strict du montant et suppression des déclencheurs anti-fraude :
+            // - Aucun objet payment_source ni attribut de vault (sauvegarde)
+            // - application_context avec shipping_preference: "NO_SHIPPING"
+            // - Payload purchase_units épuré sans breakdown conflictuel
             return actions.order.create({
               intent: 'CAPTURE',
               purchase_units: [
                 {
-                  reference_id: itemRef,
-                  description: itemDescription,
                   amount: {
-                    currency_code: orderCurrency, // "USD"
-                    value: finalAmountStr,       // "2.00"
-                    breakdown: {
-                      item_total: {
-                        currency_code: orderCurrency,
-                        value: finalAmountStr
-                      }
-                    }
-                  },
-                  items: [
-                    {
-                      name: `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'}`,
-                      description: 'Accès numérique instantané - Paiement unique sans engagement',
-                      unit_amount: {
-                        currency_code: orderCurrency,
-                        value: finalAmountStr
-                      },
-                      quantity: '1',
-                      category: 'DIGITAL_GOODS'
-                    }
-                  ]
+                    currency_code: 'USD',
+                    value: orderAmount
+                  }
                 }
               ],
               application_context: {
-                brand_name: 'Éliciné',
-                landing_page: 'NO_PREFERENCE',      // Évite de forcer l'enregistrement d'un compte PayPal ou de sauvegarder la carte
-                shipping_preference: 'NO_SHIPPING', // Allège les contrôles de risque / anti-fraude de PayPal
-                user_action: 'PAY_NOW'              // Bouton "Payer maintenant" immédiat
+                shipping_preference: 'NO_SHIPPING'
               }
             });
           }}
