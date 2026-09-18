@@ -68,7 +68,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   }
 
   // 1. Verrouillage strict du SDK PayPal :
-  // options={{ "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID, currency: "USD", intent: "capture", commit: true }}
+  // Suppression du Guest Checkout défaillant via "disable-funding": "card" et components: "buttons"
   const initialOptions = useMemo(() => {
     const opts: any = {
       clientId: clientId,
@@ -78,16 +78,13 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
       commit: true,
       vault: false,
       components: 'buttons',
-      // 'disable-funding': 'card', // Préparé pour désactiver le Guest Checkout (bouton noir) si demandé
+      'disable-funding': 'card',
+      disableFunding: 'card',
       dataSdkIntegrationSource: 'react-paypal-js'
     };
 
-    if (disableCard) {
-      opts['disable-funding'] = 'card';
-    }
-
     return opts;
-  }, [clientId, disableCard]);
+  }, [clientId]);
 
   return (
     <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>

@@ -421,7 +421,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Paiement sécurisé par Carte ou Compte PayPal
+                  Paiement sécurisé via PayPal
                 </span>
                 <span className="font-extrabold text-sky-600 dark:text-sky-400">
                   {amountToPay} {currentPrice.symbol}
@@ -514,8 +514,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               />
 
 
-              <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5">
-                Cartes bancaires (Visa, Mastercard, Virtuelles) et comptes PayPal acceptés • Paiement sécurisé • Aucun engagement
+              <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5 leading-relaxed">
+                Réglez via votre compte PayPal (solde ou carte bancaire liée). Pour un débit direct Mobile Money (Orange, MTN, Wave), sélectionnez l'option ci-dessus.
               </p>
             </div>
           ) : (
