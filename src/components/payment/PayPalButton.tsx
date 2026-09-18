@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { PricingBillingCycle } from '../../types';
 
@@ -28,15 +28,22 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   onValidationStart,
   disabled = false
 }) => {
-  // Normalisation de la devise pour PayPal : si la devise est locale (ex: XOF, XAF), on bascule sur USD pour PayPal
-  const normalizedCurrency = PAYPAL_SUPPORTED_CURRENCIES.includes(currency.toUpperCase())
-    ? currency.toUpperCase()
+  // 1. Normalisation stricte de la devise (toujours en majuscules : "EUR", "USD", etc.)
+  const rawCurrency = (currency || 'USD').toString().trim().toUpperCase();
+  const selectedCurrency = PAYPAL_SUPPORTED_CURRENCIES.includes(rawCurrency)
+    ? rawCurrency
     : 'USD';
 
-  // Montant normalisé : tarif Pass Pro ponctuel (Achat unique)
-  const numericValue = normalizedCurrency === 'USD'
-    ? (billingCycle === 'yearly' ? 15.99 : 1.99)
-    : Number(amount || 1.99);
+  // Montant normalisé selon la devise sélectionnée et le cycle
+  const numericValue = useMemo(() => {
+    if (amount && Number(amount) > 0) {
+      return Number(amount);
+    }
+    if (selectedCurrency === 'EUR') {
+      return billingCycle === 'yearly' ? 15.00 : 1.85;
+    }
+    return billingCycle === 'yearly' ? 15.99 : 1.99;
+  }, [amount, billingCycle, selectedCurrency]);
 
   const formattedAmount = numericValue.toFixed(2);
 
@@ -56,6 +63,20 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     clientId !== 'sb'
   );
 
+  // 2. Nettoyage proactif du DOM lors d'un changement de devise pour éviter tout Currency Mismatch
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const existingScripts = document.querySelectorAll('script[src*="paypal.com/sdk/js"]');
+      existingScripts.forEach((script) => {
+        const src = (script as HTMLScriptElement).src || '';
+        if (src && !src.includes(`currency=${selectedCurrency}`)) {
+          console.log(`[PayPal SDK] 🔄 Changement de devise détecté (${selectedCurrency}). Remplacement du script PayPal :`, src);
+          script.remove();
+        }
+      });
+    }
+  }, [selectedCurrency]);
+
   if (!isClientIdConfigured) {
     console.error(
       '[PayPal SDK] ❌ Erreur critique : process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID est indéfini ou non configuré. Le rendu du bouton PayPal est strictement bloqué.'
@@ -74,24 +95,28 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     );
   }
 
-  // Configuration stricte du SDK officiel PayPal : Paiement unique (intent: 'capture'), boutons natifs et CB activée
-  // intent=capture&commit=true&vault=false bloque toute tentative de sauvegarde de carte
+  // 3. Configuration dynamique du SDK PayPal avec devise synchronisée
+  // intent=capture&commit=true&vault=false bloque le vaulting, currency correspond à createOrder
   const initialOptions = useMemo(() => ({
     clientId: clientId,
-    currency: normalizedCurrency,
+    currency: selectedCurrency, // Synchronisé dynamiquement en MAJUSCULES
     intent: 'capture' as const, // PAIEMENT UNIQUE STRICT (Orders API, pas de souscription récurrente)
     commit: true,               // Force le mode "Payer maintenant" direct sans création ni enregistrement de carte
     vault: false,              // DÉSACTIVE STRICTEMENT LE VAULTING (interdit tout enregistrement de carte)
     components: 'buttons',
     enableFunding: 'card',     // Active explicitement le bouton Carte Bancaire sans compte
     dataSdkIntegrationSource: 'react-paypal-js'
-  }), [clientId, normalizedCurrency]);
+  }), [clientId, selectedCurrency]);
 
   const isYearly = billingCycle === 'yearly';
 
   return (
     <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
-      <PayPalScriptProvider options={initialOptions}>
+      {/* key dynamique forçant le démontage/remontage immédiat et le retéléchargement du script PayPal lors du changement de devise */}
+      <PayPalScriptProvider 
+        key={`paypal-provider-${clientId}-${selectedCurrency}`}
+        options={initialOptions}
+      >
         <PayPalButtons
           style={{
             layout: 'vertical',
@@ -102,9 +127,13 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             tagline: false
           }}
           disabled={disabled}
-          forceReRender={[formattedAmount, normalizedCurrency, billingCycle, clientId]}
+          forceReRender={[formattedAmount, selectedCurrency, billingCycle, clientId]}
           onClick={(data, actions) => {
-            console.log('[PayPal SDK React] 🖱️ Clic utilisateur sur bouton PayPal/CB :', data?.fundingSource || 'standard');
+            console.log('[PayPal SDK React] 🖱️ Clic utilisateur sur bouton PayPal/CB :', {
+              source: data?.fundingSource || 'standard',
+              currency: selectedCurrency,
+              amount: formattedAmount
+            });
             if (onClick) {
               const allow = onClick();
               if (allow === false) {
@@ -119,12 +148,12 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
             console.log('[PayPal SDK React] 📦 Création d\'ordre de paiement unique (Orders API - CAPTURE) :', {
               amount: formattedAmount,
-              currency: normalizedCurrency,
+              currency: selectedCurrency,
               itemRef
             });
 
             // STRICTEMENT PAIEMENT UNIQUE (Orders API avec intent: 'CAPTURE')
-            // Aucun objet payment_source.card.attributes.vault ni demande de sauvegarde de carte
+            // Devise STRICTEMENT synchronisée avec initialOptions.currency
             return actions.order.create({
               intent: 'CAPTURE',
               purchase_units: [
@@ -132,11 +161,11 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                   reference_id: itemRef,
                   description: itemDescription,
                   amount: {
-                    currency_code: normalizedCurrency,
+                    currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE AU SDK SCRIPT (ex: "EUR", "USD")
                     value: formattedAmount,
                     breakdown: {
                       item_total: {
-                        currency_code: normalizedCurrency,
+                        currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE
                         value: formattedAmount
                       }
                     }
@@ -146,7 +175,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
                       name: `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'}`,
                       description: 'Accès numérique instantané - Paiement unique sans engagement',
                       unit_amount: {
-                        currency_code: normalizedCurrency,
+                        currency_code: selectedCurrency, // STRICTEMENT IDENTIQUE
                         value: formattedAmount
                       },
                       quantity: '1',

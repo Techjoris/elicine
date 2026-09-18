@@ -71,7 +71,7 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   onClose,
   defaultPlan = 'monthly'
 }) => {
-  const { user, showToast, upgradeToPro, setIsProSuccessModalOpen } = useApp();
+  const { user, currency: appCurrency, showToast, upgradeToPro, setIsProSuccessModalOpen } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>(defaultPlan);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCapturingPro, setIsCapturingPro] = useState(false);
@@ -80,8 +80,10 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   if (!isOpen) return null;
 
   const isYearly = billingCycle === 'yearly';
-  const amount = isYearly ? 15.99 : 1.99;
-  const formattedPrice = isYearly ? '15.99 $ / an' : '1.99 $ / mois';
+  const selectedCurrency = (appCurrency || 'USD').toUpperCase();
+  const amount = selectedCurrency === 'EUR' ? (isYearly ? 15.00 : 1.85) : (isYearly ? 15.99 : 1.99);
+  const currencySymbol = selectedCurrency === 'EUR' ? '€' : '$';
+  const formattedPrice = isYearly ? `${amount} ${currencySymbol} / an` : `${amount} ${currencySymbol} / mois`;
 
   const handleSafeClose = () => {
     if (isCapturingPro) {
@@ -239,7 +241,7 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
         <div className="pt-2 flex flex-col gap-2">
           <PayPalButton
             amount={amount}
-            currency="USD"
+            currency={selectedCurrency}
             billingCycle={billingCycle}
             disabled={isProcessing || isCapturingPro}
             onValidationStart={() => {
