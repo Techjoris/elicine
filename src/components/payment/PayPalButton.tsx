@@ -75,10 +75,12 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   }
 
   // Configuration stricte du SDK officiel PayPal : Paiement unique (intent: 'capture'), boutons natifs et CB activée
+  // vault: false désactive la sauvegarde forcée de la carte (indispensable pour les cartes virtuelles et prépayées)
   const initialOptions = useMemo(() => ({
     clientId: clientId,
     currency: normalizedCurrency,
     intent: 'capture' as const, // PAIEMENT UNIQUE STRICT (Orders API, pas de souscription récurrente)
+    vault: false, // DÉSACTIVE STRICTEMENT LE VAULTING (aucun enregistrement de carte)
     components: 'buttons',
     enableFunding: 'card', // Active explicitement le bouton Carte Bancaire sans compte
     dataSdkIntegrationSource: 'react-paypal-js'
