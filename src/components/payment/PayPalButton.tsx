@@ -196,13 +196,17 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
           }}
         />
 
-        {/* 2 & 3. Bouton UI de substitution factice pour la carte bancaire */}
+        {/* 2 & 3. Bouton factice "Bientôt disponible" pour la carte bancaire */}
         <button
           type="button"
           disabled={true}
           aria-disabled="true"
-          className="w-full h-[44px] rounded flex items-center justify-center gap-2.5 bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-semibold text-xs sm:text-sm border border-gray-300/80 dark:border-gray-700/80 opacity-60 cursor-not-allowed select-none shadow-none"
-          title="Paiement par carte bancaire temporairement indisponible dans cette région"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="w-full h-[44px] rounded-[4px] flex items-center justify-center gap-2 bg-slate-200/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold text-xs sm:text-sm border border-slate-300/80 dark:border-slate-700/80 opacity-60 cursor-not-allowed select-none shadow-none transition-none"
+          title="Carte bancaire (Bientôt disponible)"
         >
           <CreditCard className="w-4 h-4 opacity-75 shrink-0" />
           <span>Carte bancaire (Bientôt disponible)</span>

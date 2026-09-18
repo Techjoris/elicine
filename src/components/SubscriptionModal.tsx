@@ -485,27 +485,16 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
             </div>
           ) : (
-            /* Cas 2 : isSaspayAvailable est FALSE -> Masquer complètement SasPay, PayPal unique et centré */
+            /* Cas 2 : isSaspayAvailable est FALSE -> Mode de paiement unique avec mention carte bientôt disponible */
             <div className="w-full">
-              <div
-                onClick={() => setPaymentMethod('paypal_card')}
-                className="w-full p-3.5 rounded-2xl border bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30 flex items-center justify-between relative cursor-default"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">💳</span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-black text-slate-900 dark:text-white">PayPal & Carte Bancaire</p>
-                      <span className="text-[10px] font-black text-[#0079C1] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
-                        PayPal & CB
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Compte PayPal & Cartes internationales</p>
-                  </div>
+              <div className="w-full p-3.5 rounded-2xl border bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30 flex items-center gap-3 relative cursor-default">
+                <span className="text-2xl shrink-0">💳</span>
+                <div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">Mode de paiement</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    PayPal actif • Paiement direct par carte bientôt disponible
+                  </p>
                 </div>
-                <span className="w-4 h-4 rounded-full border border-sky-400 bg-sky-500 flex items-center justify-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                </span>
               </div>
             </div>
           )}
@@ -613,7 +602,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
 
               <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5 leading-relaxed">
-                Réglez via votre compte PayPal (solde ou carte bancaire liée). Pour un débit direct Mobile Money (Orange, MTN, Wave), sélectionnez l'option ci-dessus.
+                {isSaspayAvailable
+                  ? "Réglez via votre compte PayPal (solde ou carte bancaire liée). Pour un débit direct Mobile Money (Orange, MTN, Wave), sélectionnez l'option ci-dessus."
+                  : "Réglez en toute sécurité via votre compte PayPal (solde ou carte bancaire liée)."}
               </p>
             </div>
           ) : (
