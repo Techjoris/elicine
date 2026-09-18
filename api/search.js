@@ -33,6 +33,14 @@ Directives cinématographiques majeures :
   INTERDICTION FORMELLE DU BLOCAGE SEC sur une recherche formulée avec des négations ou des exclusions (ex: "un film d'action sans super-héros et sans explosion") : le modèle ne doit JAMAIS bloquer s'il existe dans le cinéma des œuvres du genre principal respectant ces critères d'éviction.
 - EXPANSION SÉMANTIQUE & AMBIANCES SENSORIELLES :
   Si la requête contient une métaphore ou une sensation (ex: "un film qui donne l'impression d'être enfermé dans un ascenseur sous la pluie"), ne cherche JAMAIS une correspondance littérale mot-à-mot. Traduis l'intention en sous-genres cinématographiques : Huis clos oppressant, claustrophobie, tension psychologique, esthétique sombre/néo-noir ou polar pluvieux (ex: Devil, Buried, Panic Room, Se7en, Phone Game, Blade Runner).
+- EXPANSION SÉMANTIQUE DES INTENTIONS ÉMOTIONNELLES & D'HUMEUR (RÈGLE OBLIGATOIRE) :
+  Si la requête de l'utilisateur exprime une humeur, un état émotionnel, une sensation ou un besoin affectif (ex: "pour pleurer un bon coup", "qui fait pleurer", "qui remonte le moral", "qui fait peur sans sursaut", "film doudou", "film déchirant", "amour tragique", "adrénaline pure") :
+  * INTERDICTION FORMELLE de faire une recherche littérale mot-à-mot (ex: ne cherche pas un film où un personnage dit "pleurer un bon coup").
+  * TRADUIS IMMÉDIATEMENT CETTE ÉMOTION EN SOUS-GENRES ET CHEFS-D'ŒUVRE EMBLÉMATIQUES :
+    - Tristesse / Larmes cathartiques ("pleurer un bon coup", "faire chialer", "triste à mourir") -> Drames poignants, tragédies humaines, romances dévastatrices, deuils (ex: La Ligne verte / The Green Mile, Le Tombeau des lucioles / Grave of the Fireflies, La Liste de Schindler, Nos étoiles contraires / The Fault in Our Stars, Manchester by the Sea, La vie est belle / Life Is Beautiful, Titanic, Le Pianiste).
+    - Feel-good / Remonte le moral ("qui remonte le moral", "feel good", "baume au cœur", "réconfortant") -> Comédies chaleureuses, fables solaires, récits d'amitié réconfortants (ex: Intouchables, Le Fabuleux Destin d'Amélie Poulain, Little Miss Sunshine, Green Book, The Truman Show, Forrest Gump, Paddington 2, Good Will Hunting, Le Cercle des poètes disparus).
+    - Horreur sans sursaut / Angoisse sourde ("qui fait peur sans sursaut", "sans jump scares") -> Horreur psychologique atmosphérique, malaise sourd, slow burn, tension lente (ex: Hereditary, Midsommar, The Witch, Shining / The Shining, Rosemary's Baby, The Lighthouse, It Follows, Get Out, Les Autres / The Others).
+    - Nostalgie / Douce mélancolie ("nostalgique", "souvenirs d'enfance") -> Chroniques initiatiques, récits d'enfance, coming-of-age doux-amer (ex: Stand by Me, Cinema Paradiso, Les Goonies, Boyhood, Aftersun, Le Cercle des poètes disparus).
 - TOLÉRANCE HISTORIQUE & CROISEMENTS TEMPORELS :
   Pour un croisement temporel (ex: "SF des années 70", "polar des années 80"), comprends qu'il s'agit du cinéma de ce genre sorti au cours de cette décennie (les dystopies et rétro-futurismes des années 70 comme Alien, Solaris, Soleil Vert / Soylent Green, Rencontres du troisième type, Rollerball, Orange Mécanique).
 - CONTRE-EMPLOI & RÔLES SPÉCIFIQUES :
@@ -423,8 +431,14 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '', cluste
   const extractedTitles = candidatesList.map(m => typeof m === 'string' ? m : m?.title || '');
 
   // ── Phase B.1 : Recherche Supabase par mots-clés ────────────────────────
+  const emotionalExpansion = detectEmotionalExpansion(rawQuery);
   if (supabaseServer) {
     const keywords = extractKeywords(rawQuery);
+    if (emotionalExpansion && Array.isArray(emotionalExpansion.emotionalKeywords)) {
+      for (const ek of emotionalExpansion.emotionalKeywords) {
+        if (!keywords.includes(ek)) keywords.push(ek);
+      }
+    }
     for (const title of extractedTitles) {
       for (const w of extractKeywords(title)) {
         if (!keywords.includes(w)) keywords.push(w);
@@ -470,6 +484,15 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '', cluste
 
       if (results.length > 0) {
         return enrichWithBadges(results, matches, 'Recherche par contexte Éliciné', rawQuery);
+      }
+
+      // Si recherche par mots-clés vide mais intention émotionnelle reconnue :
+      if (emotionalExpansion) {
+        console.log(`[API /api/search] [Phase B.1] Intention émotionnelle « ${emotionalExpansion.label} » → Résolution des chefs-d'œuvre`);
+        const emotionalDb = await resolveEmotionalMasterpieces(emotionalExpansion, tmdbApiKey, clusterId);
+        if (emotionalDb.length > 0) {
+          return emotionalDb;
+        }
       }
     }
   }
@@ -654,6 +677,15 @@ async function resolveByKeywords(rawQuery, matches = [], tmdbApiKey = '', cluste
   if (allTmdbResults.length > 0) {
     console.log(`[API /api/search] [Phase B.2] ${allTmdbResults.length} résultat(s) TMDB résolu(s).`);
     return allTmdbResults;
+  }
+
+  // Fallback Phase B : Si 0 résultat TMDB mais émotion détectée, garantir le Zéro Écran Vide
+  if (emotionalExpansion) {
+    console.log(`[API /api/search] [Phase B.2] Repli sur les chefs-d'œuvre émotionnels pour « ${emotionalExpansion.label} »`);
+    const fallbackMasterpieces = await resolveEmotionalMasterpieces(emotionalExpansion, tmdbApiKey, clusterId);
+    if (fallbackMasterpieces.length > 0) {
+      return fallbackMasterpieces;
+    }
   }
 
   return [];
@@ -845,6 +877,93 @@ const THEMATIC_CLUSTERS_RAW = [
       'clueless', 'mamma mia', 'love actually', 'dirty dancing', 'kung fu panda',
       'gang de requins', 'actors on actors'
     ]
+  },
+  {
+    id: 'tearjerker',
+    triggers: [
+      'pleurer', 'chialer', 'larmes', 'mouchoirs', 'tire-larmes', 'tire larmes',
+      'tearjerker', 'triste', 'tristesse', 'bouleversant', 'bouleversante',
+      'émouvant', 'emouvant', 'émouvante', 'emouvante', 'déchirant', 'dechirant',
+      'poignant', 'poignante', 'dévastateur', 'devastateur', 'heartbreaking',
+      'mourir d\'amour', 'amour tragique', 'fin tragique', 'faire pleurer',
+      'verser une larme', 'fend le coeur', 'fend le cœur', 'pour pleurer',
+      'film triste', 'film pour pleurer', 'histoire triste', 'drame déchirant',
+      'drame émouvant', 'film qui fait pleurer', 'pleurer un bon coup'
+    ],
+    primaryKeywords: [
+      'pleurer', 'larmes', 'émouvant', 'bouleversant', 'tristesse', 'deuil',
+      'tragédie', 'drame', 'poignant', 'déchirant', 'mélodrame', 'maladie',
+      'mort', 'sacrifice', 'amour tragique'
+    ],
+    secondaryKeywords: [
+      'séparation', 'adieu', 'souffrance', 'chagrin', 'injustice', 'poignante',
+      'cœur brisé', 'perte'
+    ],
+    expectedGenres: [18, 10749],
+    conflictingGenres: [10767, 10764, 10763],
+    archetypes: [
+      'la ligne verte', 'the green mile', 'le tombeau des lucioles', 'grave of the fireflies',
+      'la liste de schindler', 'schindler\'s list', 'nos étoiles contraires', 'the fault in our stars',
+      'titanic', 'manchester by the sea', 'la vie est belle', 'life is beautiful',
+      'interstellar', 'le pianiste', 'the pianist', 'forrest gump', 'lion', 'brokeback mountain'
+    ],
+    disqualified: [
+      'kung fu panda', 'gang de requins', 'actors on actors', 'the tonight show', 'scary movie'
+    ]
+  },
+  {
+    id: 'feel_good',
+    triggers: [
+      'remonte le moral', 'remonter le moral', 'feel good', 'feel-good', 'feelgood',
+      'baume au coeur', 'baume au cœur', 'réconfortant', 'reconfortant', 'chaleureux',
+      'fait du bien', 'pour se sentir bien', 'bonne humeur', 'envie de vivre', 'sourire',
+      'optimiste', 'bienveillant', 'lumineux', 'film doudou', 'uplifting', 'heartwarming',
+      'redonner le sourire', 'réconfort', 'reconfort'
+    ],
+    primaryKeywords: [
+      'chaleureux', 'réconfortant', 'bonne humeur', 'sourire', 'tendresse', 'optimisme',
+      'amitié', 'bonheur', 'bienveillance', 'comédie', 'solaire', 'feel good'
+    ],
+    secondaryKeywords: [
+      'générosité', 'entraide', 'famille', 'joie', 'rires', 'espérance', 'légèreté', 'renaissance'
+    ],
+    expectedGenres: [35, 18, 10751],
+    conflictingGenres: [27, 53, 10767, 10764],
+    archetypes: [
+      'intouchables', 'le fabuleux destin d\'amélie poulain', 'little miss sunshine', 'green book',
+      'the truman show', 'la la land', 'forrest gump', 'paddington 2', 'good will hunting',
+      'le cercle des poètes disparus', 'dead poets society', 'about time', 'il était temps'
+    ],
+    disqualified: [
+      'saw', 'hostel', 'hereditary', 'the human centipede', 'actors on actors'
+    ]
+  },
+  {
+    id: 'horreur_sans_jumpscare',
+    triggers: [
+      'peur sans sursaut', 'sans sursaut', 'sans sursauts', 'sans jump scare',
+      'sans jump-scare', 'sans jumpscare', 'sans jumpscares', 'angoisse sans sursaut',
+      'angoisse sourde', 'horreur psychologique', 'peur psychologique',
+      'oppressant sans sursaut', 'atmosphère dérangeante', 'atmosphere derangeante',
+      'ambiance dérangeante', 'slow burn', 'dread', 'malaise', 'horreur lente', 'frisson psychologique'
+    ],
+    primaryKeywords: [
+      'psychologique', 'angoisse', 'oppressant', 'malaise', 'paranoïa', 'folie',
+      'atmosphère', 'isolement', 'dérangeant', 'tension', 'terreur sourde'
+    ],
+    secondaryKeywords: [
+      'mystère', 'huis clos', 'hallucinations', 'cauchemar', 'secte', 'occulte', 'suspense'
+    ],
+    expectedGenres: [27, 9648, 53],
+    conflictingGenres: [35, 10751, 10402, 10767, 10764],
+    archetypes: [
+      'hereditary', 'midsommar', 'the witch', 'shining', 'the shining', 'rosemary\'s baby',
+      'the lighthouse', 'it follows', 'get out', 'les autres', 'the others',
+      'sixième sens', 'the sixth sense', 'black swan', 'the babadook'
+    ],
+    disqualified: [
+      'scary movie', 'paranormal activity', 'conjuring', 'annabelle', 'actors on actors'
+    ]
   }
 ];
 
@@ -857,6 +976,246 @@ export function detectThematicClusterId(queryText) {
     }
   }
   return null;
+}
+
+/**
+ * Analyse approfondie de l'intention émotionnelle (Query Expansion & Semantic Translation).
+ * Rôle : traduire toute description de sensation, humeur ou état d'esprit en intention cinématographique.
+ */
+export function detectEmotionalExpansion(queryText) {
+  if (!queryText || typeof queryText !== 'string') return null;
+  const lower = queryText.toLowerCase().trim();
+
+  // 1. Tristesse / Pleurs / Catharsis
+  const isTearjerker = 
+    /\b(pleurer|chialer|larmes|mouchoirs|tire-larmes|tire larmes|tearjerker|triste|tristesse|bouleversant|bouleversante|émouvant|emouvant|émouvante|emouvante|déchirant|dechirant|poignant|poignante|dévastateur|devastateur|heartbreaking|mourir d'amour|amour tragique|fin tragique|faire pleurer|verser une larme|fend le coeur|fend le cœur)\b/i.test(lower) ||
+    /\b(pour pleurer|film triste|film pour pleurer|histoire triste|drame déchirant|drame émouvant|film qui fait pleurer|pleurer un bon coup)\b/i.test(lower);
+
+  if (isTearjerker) {
+    return {
+      category: 'tearjerker',
+      label: 'Émotion intense & Drames poignants',
+      genres: ['Drama', 'Romance'],
+      genreIds: [18, 10749],
+      emotionalKeywords: ['émouvant', 'larmes', 'bouleversant', 'deuil', 'amour tragique', 'heartbreaking', 'tearjerker', 'tragédie', 'poignant', 'mélodrame'],
+      enrichedSemanticQuery: 'drame bouleversant et émouvant histoire tragique et poignante larmes et grand amour triste',
+      archetypeTitles: [
+        'La Ligne verte / The Green Mile', 'Le Tombeau des lucioles / Grave of the Fireflies',
+        'La Liste de Schindler / Schindler\'s List', 'Nos étoiles contraires / The Fault in Our Stars',
+        'Titanic', 'Manchester by the Sea', 'La vie est belle / Life Is Beautiful', 'Interstellar',
+        'Le Pianiste / The Pianist', 'Forrest Gump', 'Lion', 'Brokeback Mountain'
+      ]
+    };
+  }
+
+  // 2. Joie / Réconfort / Feel Good
+  const isFeelGood = 
+    /\b(remonte le moral|remonter le moral|feel[\s-]?good|baume au c[oœ]ur|r[eé]confortant|chaleureux|fait du bien|pour se sentir bien|bonne humeur|envie de vivre|sourire|optimiste|bienveillant|lumineux|film doudou|uplifting|heartwarming|mettre du baume|redonner le sourire|r[eé]confort)\b/i.test(lower);
+
+  if (isFeelGood) {
+    return {
+      category: 'feel_good',
+      label: 'Feel-Good & Réconfort chaleureux',
+      genres: ['Comedy', 'Drama', 'Family'],
+      genreIds: [35, 18, 10751],
+      emotionalKeywords: ['feel-good', 'réconfortant', 'chaleureux', 'bonne humeur', 'tendresse', 'espoir', 'heartwarming', 'optimisme', 'bienveillance', 'amitié'],
+      enrichedSemanticQuery: 'comédie dramatique chaleureuse et réconfortante feel good film qui fait du bien plein d\'espoir et de tendresse',
+      archetypeTitles: [
+        'Intouchables', 'Le Fabuleux Destin d\'Amélie Poulain', 'Little Miss Sunshine', 'Green Book',
+        'The Truman Show', 'La La Land', 'Forrest Gump', 'Paddington 2', 'Good Will Hunting',
+        'Le Cercle des poètes disparus / Dead Poets Society', 'About Time / Il était temps'
+      ]
+    };
+  }
+
+  // 3. Peur sans sursaut / Horreur atmosphérique
+  const isAtmosphericHorror = 
+    /\b(peur sans sursaut|sans sursaut|sans sursauts|sans jump[\s-]?scare|sans jump[\s-]?scares|angoisse sans sursaut|angoisse sourde|horreur psychologique|peur psychologique|oppressant sans sursaut|atmosphère d[eé]rangeante|ambiance d[eé]rangeante|slow burn|dread|malaise|horreur lente|frisson psychologique)\b/i.test(lower);
+
+  if (isAtmosphericHorror) {
+    return {
+      category: 'atmospheric_horror',
+      label: 'Angoisse sourde & Horreur psychologique sans sursaut',
+      genres: ['Horror', 'Mystery', 'Thriller'],
+      genreIds: [27, 9648, 53],
+      emotionalKeywords: ['horreur psychologique', 'angoisse sourde', 'atmosphère dérangeante', 'oppressant', 'malaise', 'slow burn', 'tension lente', 'paranoïa', 'dread', 'sans jump scare'],
+      enrichedSemanticQuery: 'horreur psychologique et angoisse sourde atmosphère dérangeante et oppressante sans jump scare lente montée de tension',
+      archetypeTitles: [
+        'Hereditary', 'Midsommar', 'The Witch', 'Shining / The Shining', 'Rosemary\'s Baby',
+        'The Lighthouse', 'It Follows', 'Get Out', 'Les Autres / The Others', 'Sixième Sens / The Sixth Sense',
+        'Black Swan', 'The Babadook'
+      ]
+    };
+  }
+
+  // 4. Nostalgie / Douce mélancolie
+  const isNostalgia = 
+    /\b(nostalgique|nostalgie|m[eé]lancolie douce|douce m[eé]lancolie|souvenirs d['’]enfance|enfance perdue|coming[\s-]?of[\s-]?age|passage [aà] l['’][aâ]ge adulte|souvenir d['’]enfance|années 80 nostalgie)\b/i.test(lower);
+
+  if (isNostalgia) {
+    return {
+      category: 'nostalgia',
+      label: 'Nostalgie & Douce mélancolie',
+      genres: ['Drama', 'Adventure', 'Comedy'],
+      genreIds: [18, 12, 35],
+      emotionalKeywords: ['nostalgie', 'enfance', 'amitié', 'souvenirs', 'mélancolie douce', 'coming of age', 'passage à l\'âge adulte'],
+      enrichedSemanticQuery: 'chronique nostalgique et émouvante enfance amitié souvenirs doux-amers passage à l\'âge adulte',
+      archetypeTitles: [
+        'Stand by Me', 'Cinema Paradiso', 'Les Goonies / The Goonies', 'Boyhood',
+        'Aftersun', 'Le Cercle des poètes disparus', 'Super 8', 'Moonrise Kingdom', 'Lady Bird'
+      ]
+    };
+  }
+
+  // 5. Adrénaline pure / Tension extrême
+  const isAdrenaline = 
+    /\b(adr[eé]naline|au bord du si[eè]ge|coupe le souffle|prend aux tripes|tension extr[eê]me|pression maximale|cardiaque|ultra tendu|haletant|suspense insoutenable|palpitant)\b/i.test(lower);
+
+  if (isAdrenaline) {
+    return {
+      category: 'adrenaline',
+      label: 'Adrénaline pure & Tension extrême',
+      genres: ['Thriller', 'Action', 'Crime'],
+      genreIds: [53, 28, 80],
+      emotionalKeywords: ['suspense haletant', 'tension extrême', 'adrénaline', 'course contre la montre', 'oppressant', 'palpitant', 'nerveux'],
+      enrichedSemanticQuery: 'thriller ultra tendu et haletant tension maximale course contre la montre suspense suffocant',
+      archetypeTitles: [
+        'Sicario', 'Whiplash', 'Uncut Gems', 'Prisoners', 'Mad Max: Fury Road', 'Heat', 'No Country for Old Men', 'Dunkirk'
+      ]
+    };
+  }
+
+  // 6. Grand amour passionnel
+  const isDeepRomance = 
+    /\b(coup de foudre|grand amour|amour passionnel|passion romantique|qui fait r[eê]ver d['’]amour|papillons dans le ventre|alchimie incroyable|romance intense|amour fusionnel)\b/i.test(lower);
+
+  if (isDeepRomance) {
+    return {
+      category: 'deep_romance',
+      label: 'Passion amoureuse & Romance envoûtante',
+      genres: ['Romance', 'Drama'],
+      genreIds: [10749, 18],
+      emotionalKeywords: ['romance passionnée', 'amour fusionnel', 'coup de foudre', 'alchimie', 'passion', 'émotion amoureuse', 'poésie'],
+      enrichedSemanticQuery: 'grande romance passionnée et poétique alchimie intense amour bouleversant',
+      archetypeTitles: [
+        'Before Sunrise', 'In the Mood for Love', 'Portrait de la jeune fille en feu',
+        'Orgueil et Préjugés / Pride and Prejudice', 'La La Land', 'Eternal Sunshine of the Spotless Mind', 'About Time', 'N\'oublie jamais / The Notebook'
+      ]
+    };
+  }
+
+  // 7. Inspirant / Dépassement de soi
+  const isInspiring = 
+    /\b(qui motive|donne envie de se battre|d[eé]passement de soi|inspirant|donne de la force|ne jamais abandonner|courage et d[eé]termination|triomphe de l['’]esprit)\b/i.test(lower);
+
+  if (isInspiring) {
+    return {
+      category: 'inspiring',
+      label: 'Inspiration, Courage & Dépassement de soi',
+      genres: ['Drama', 'Biography', 'Sport'],
+      genreIds: [18, 36],
+      emotionalKeywords: ['dépassement de soi', 'courage', 'détermination', 'triomphe', 'inspiration', 'persévérance', 'espoir'],
+      enrichedSemanticQuery: 'drame biographique inspirant dépassement de soi courage persévérance triomphe de la volonté',
+      archetypeTitles: [
+        'À la recherche du bonheur / The Pursuit of Happyness', 'Whiplash', 'Billy Elliot', 'Rocky',
+        'Les Figures de l\'ombre / Hidden Figures', 'Le Discours d\'un roi / The King\'s Speech', 'Invictus', 'Gattaca'
+      ]
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Règle contractuelle "Zéro Écran Vide" :
+ * Résout les chefs-d'œuvre incontournables correspondant à l'intention émotionnelle.
+ */
+export async function resolveEmotionalMasterpieces(expansion, tmdbApiKey = '', clusterId = null) {
+  if (!expansion || !Array.isArray(expansion.archetypeTitles) || expansion.archetypeTitles.length === 0) return [];
+
+  // 1. Essai de résolution par titre dans la base Supabase
+  if (supabaseServer) {
+    try {
+      const dbMovies = await resolveByTitles(expansion.archetypeTitles, [], expansion.enrichedSemanticQuery, clusterId || expansion.category);
+      if (Array.isArray(dbMovies) && dbMovies.length >= 4) {
+        return dbMovies.slice(0, 8).map((m, idx) => ({
+          ...m,
+          badge: 'Sélection Éliciné',
+          match_rate: Math.max(75, 96 - idx * 2),
+          ai_match_reason: `✨ Chef-d'œuvre incontournable : ${expansion.label}`
+        }));
+      }
+    } catch (err) {
+      console.warn('[API /api/search] Erreur resolveByTitles pour archetypes :', err?.message);
+    }
+  }
+
+  // 2. Résolution TMDB 1-pour-1
+  const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
+  if (tmdbKey) {
+    const tmdbResults = [];
+    const seenIds = new Set();
+
+    for (const rawTitle of expansion.archetypeTitles.slice(0, 8)) {
+      const cleanTitle = rawTitle.split(/[/|]/)[0].trim();
+      try {
+        const res = await fetchWithTimeout(
+          `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(tmdbKey)}&query=${encodeURIComponent(cleanTitle)}&language=fr-FR&page=1&include_adult=false`,
+          { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+          3000
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const first = (data.results || []).find(m => !seenIds.has(m.id));
+          if (first) {
+            seenIds.add(first.id);
+            tmdbResults.push({
+              ...first,
+              badge: 'Sélection Éliciné',
+              match_rate: Math.max(75, 96 - tmdbResults.length * 2),
+              ai_match_reason: `✨ Chef-d'œuvre incontournable : ${expansion.label}`
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (tmdbResults.length >= 3) {
+      return tmdbResults;
+    }
+
+    // Fallback supplémentaire : discover TMDB par genres dominants
+    if (expansion.genreIds && expansion.genreIds.length > 0) {
+      try {
+        const discRes = await fetchWithTimeout(
+          `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(tmdbKey)}&with_genres=${expansion.genreIds.join(',')}&sort_by=vote_average.desc&vote_count.gte=800&language=fr-FR&page=1&include_adult=false`,
+          { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+          3500
+        );
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          for (const m of (discData.results || [])) {
+            if (!seenIds.has(m.id)) {
+              seenIds.add(m.id);
+              tmdbResults.push({
+                ...m,
+                badge: 'Sélection Éliciné',
+                match_rate: Math.max(75, 96 - tmdbResults.length * 2),
+                ai_match_reason: `✨ Chef-d'œuvre incontournable : ${expansion.label}`
+              });
+              if (tmdbResults.length >= 8) break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (tmdbResults.length > 0) {
+      return tmdbResults;
+    }
+  }
+
+  return [];
 }
 
 /**
@@ -1358,13 +1717,29 @@ export default async function handler(req, res) {
       
       if (supabaseServer && Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
         try {
-          const { data, error } = await supabaseServer.rpc('match_movies', {
+          let currentThreshold = Number(matchThreshold) || 0.40;
+          let { data, error } = await supabaseServer.rpc('match_movies', {
             query_embedding: queryEmbedding,
-            match_threshold: Number(matchThreshold) || 0.40,
+            match_threshold: currentThreshold,
             match_count: Number(matchCount) || 10
           });
 
-          if (!error && Array.isArray(data)) {
+          // Instruction 2 : Abaissement dynamique du seuil si moins de 3 résultats (Relaxed Similarity Fallback)
+          if ((!data || data.length < 3) && currentThreshold > 0.20) {
+            const relaxedThreshold = Math.max(0.20, currentThreshold - 0.20);
+            console.log(`[API /api/search] [Vector] Moins de 3 résultats (${data?.length || 0}) → Abaissement dynamique du seuil de ${currentThreshold} à ${relaxedThreshold}`);
+            const relaxedRes = await supabaseServer.rpc('match_movies', {
+              query_embedding: queryEmbedding,
+              match_threshold: relaxedThreshold,
+              match_count: Number(matchCount) || 10
+            });
+            if (!relaxedRes.error && Array.isArray(relaxedRes.data) && relaxedRes.data.length > (data?.length || 0)) {
+              data = relaxedRes.data;
+              currentThreshold = relaxedThreshold;
+            }
+          }
+
+          if (!error && Array.isArray(data) && data.length > 0) {
             const topScore = data[0]?.similarity || 0;
             return res.status(200).json({
               success: true,
@@ -1631,7 +2006,34 @@ export default async function handler(req, res) {
       }
 
       // ─── ÉTAPE 3 : Filet de sécurité — Zéro résultat absolu ─────────────────
-      // Atteint UNIQUEMENT si Phase A (titres) + Phase B (mots-clés) ont toutes les deux échoué.
+      // Règle contractuelle absolue "Zéro Écran Vide" :
+      // Ne jamais afficher l'écran vide si la requête traduit une intention émotionnelle universelle.
+      const emotionalExpansion = detectEmotionalExpansion(cleanQuery);
+      if (emotionalExpansion) {
+        console.log(`[API /api/search] [Étape 3 - Zéro Écran Vide] Intention émotionnelle « ${emotionalExpansion.label} » → Sauvetage par chefs-d'œuvre`);
+        const rescuedEmotionalMovies = await resolveEmotionalMasterpieces(emotionalExpansion, req.body?.tmdbApiKey || '', activeClusterId);
+        if (rescuedEmotionalMovies.length > 0) {
+          return res.status(200).json({
+            success: true,
+            movies: rescuedEmotionalMovies,
+            count: rescuedEmotionalMovies.length,
+            isEmpty: false,
+            badge: 'Sélection Éliciné',
+            providerUsed: 'Algorithme Éliciné',
+            correctedQuery: correctedQuery || null,
+            thought: `✨ Sélection Éliciné : Les chefs-d'œuvre incontournables pour votre envie d'émotion (« ${emotionalExpansion.label} »)`,
+            extractedTitles,
+            suggestedPrompts: [
+              "Un film de braquage haletant avec twist",
+              "Une série policière sombre sous la pluie",
+              "Un chef-d'œuvre de science-fiction dystopique",
+              "Une comédie feel-good et touchante"
+            ]
+          });
+        }
+      }
+
+      // Atteint UNIQUEMENT si Phase A (titres) + Phase B (mots-clés) ont toutes les deux échoué et requête non-émotionnelle.
       // INTERDIT ABSOLU : aucun film aléatoire ou blockbuster par défaut.
       console.log('[API /api/search] [Étape 3] Phase A + Phase B : 0 résultat. Retour [] strict.');
       return res.status(200).json({

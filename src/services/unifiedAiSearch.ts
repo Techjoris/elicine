@@ -15,7 +15,9 @@ import {
   isYearInEra,
   isGibberishQuery,
   SPATIAL_SETTINGS_MAP,
-  TONE_PATTERNS
+  TONE_PATTERNS,
+  analyzeEmotionalIntent,
+  type EmotionalExpansion
 } from './searchRouterService';
 import { 
   calculateGlobalSemanticSimilarity, 
@@ -1723,12 +1725,72 @@ export async function executeCinoraSearch(
     candidatePool = applyFiltersToMovies(candidatePool, effectiveFilters);
   }
 
+  // Instruction 2 : Abaissement dynamique du seuil et Relaxed Similarity Fallback
+  const emotional = criteria.emotionalExpansion || analyzeEmotionalIntent(cleanQuery);
+  const minSimilarityThreshold = emotional ? 0.20 : 0.40;
+
+  if (candidatePool.length < 3 && emotional) {
+    console.log(`[Éliciné Cascade] Relaxed Similarity Fallback : moins de 3 résultats (${candidatePool.length}) pour « ${emotional.label} » → enrichissement par les genres et chefs-d'œuvre`);
+    const preferredMedia = criteria.format === 'serie' ? 'tv' : (criteria.format === 'film' ? 'movie' : undefined);
+    
+    // 1. Enrichissement via les archetypes incontournables
+    const archetypePromises = emotional.archetypeTitles.slice(0, 8).map(async (rawTitle) => {
+      const cleanTitle = rawTitle.split(/[/|]/)[0].trim();
+      const rawMedia = await resolveTitleToTmdb(cleanTitle, tmdbKey, preferredMedia);
+      if (rawMedia) {
+        const formatted = formatTmdbResults([rawMedia]);
+        return formatted[0] || null;
+      }
+      return null;
+    });
+
+    const archetypeMovies = (await Promise.all(archetypePromises)).filter(Boolean) as Movie[];
+    for (const am of archetypeMovies) {
+      if (!candidatePool.some(c => c.id === am.id)) {
+        candidatePool.push({
+          ...am,
+          match_rate: 88,
+          ai_match_reason: `✨ Chef-d'œuvre incontournable : ${emotional.label}`
+        });
+      }
+    }
+
+    // 2. Si toujours moins de 3, fallback TMDB discover par genres dominants
+    if (candidatePool.length < 3 && emotional.genreIds && emotional.genreIds.length > 0) {
+      try {
+        const discRes = await fetchTmdbEndpoint('discover/movie', {
+          with_genres: emotional.genreIds.join(','),
+          sort_by: 'vote_average.desc',
+          'vote_count.gte': 800,
+          language: 'fr-FR',
+          include_adult: false
+        }, tmdbKey);
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          const genreMovies = formatTmdbResults(discData.results || []);
+          for (const gm of genreMovies) {
+            if (!candidatePool.some(c => c.id === gm.id)) {
+              candidatePool.push({
+                ...gm,
+                match_rate: 82,
+                ai_match_reason: `✨ Chef-d'œuvre du genre : ${emotional.label}`
+              });
+              if (candidatePool.length >= 8) break;
+            }
+          }
+        }
+      } catch (discErr) {
+        console.warn('[Éliciné Cascade] Erreur fallback genres TMDB :', discErr);
+      }
+    }
+  }
+
   // 3. Calcul rigoureux du score de similarité vectorielle globale
   const globalSimilarityScore = calculateGlobalSemanticSimilarity(cleanQuery, candidatePool);
-  console.log(`[Éliciné Cascade] Score de similarité globale Niveau 2 : ${globalSimilarityScore} (seuil minimal: 0.40)`);
+  console.log(`[Éliciné Cascade] Score de similarité globale Niveau 2 : ${globalSimilarityScore} (seuil minimal: ${minSimilarityThreshold})`);
 
-  // VALIDATION NIVEAU 2 : Seuil minimal strict de 40% (0.40)
-  if (globalSimilarityScore >= 0.40 && candidatePool.length > 0) {
+  // VALIDATION NIVEAU 2 : Seuil minimal (0.40 standard, ou 0.20 avec abaissement émotionnel)
+  if (globalSimilarityScore >= minSimilarityThreshold && candidatePool.length > 0) {
     const limit = Math.max(specificity.maxResults || 8, 6);
 
     // Tri qualitatif anti-mockbuster : en cas d'égalité de match_rate, les films
@@ -1882,7 +1944,7 @@ export async function executeCinoraSearch(
     return true;
   });
 
-  if (validRescuePool.length > 0 && !isGibberishQuery(cleanQuery) && (globalSimilarityScore >= 0.25 || criteria.isMetaphorical)) {
+  if (validRescuePool.length > 0 && !isGibberishQuery(cleanQuery) && (globalSimilarityScore >= 0.20 || criteria.isMetaphorical || !!emotional)) {
     const limit = Math.max(specificity.maxResults || 8, 6);
     const assignedScores = new Set<number>();
     const rescuedMovies = validRescuePool.slice(0, limit).map((m, idx) => {
@@ -1894,16 +1956,20 @@ export async function executeCinoraSearch(
       return {
         ...m,
         match_rate: score,
-        ai_match_reason: m.ai_match_reason || (criteria.isMetaphorical ? `Atmosphère : ${criteria.cinematicExpansion || 'Huis clos suffocant et tension psychologique'}` : `✨ Vision Éliciné : Ambiance et tonalité en résonance avec votre recherche`)
+        ai_match_reason: m.ai_match_reason || (emotional ? `✨ Sélection Éliciné : ${emotional.label}` : (criteria.isMetaphorical ? `Atmosphère : ${criteria.cinematicExpansion || 'Huis clos suffocant et tension psychologique'}` : `✨ Vision Éliciné : Ambiance et tonalité en résonance avec votre recherche`))
       };
     });
+
+    const defaultThought = emotional
+      ? `✨ Vision Éliciné : Recommandations choisies pour ${emotional.label.toLowerCase()}${formatFilterSuffix(effectiveFilters)}`
+      : (criteria.isMetaphorical
+          ? `✨ Vision Éliciné : Atmosphère : ${criteria.cinematicExpansion || "Huis clos suffocant sous tension psychologique"}${formatFilterSuffix(effectiveFilters)}`
+          : `✨ Vision Éliciné : Recommandations adaptées à l'atmosphère et à l'esprit de votre recherche${formatFilterSuffix(effectiveFilters)}`);
 
     const formatResult = enforceFormatConstraintAndFallback(
       rescuedMovies,
       effectiveFilters.mediaType,
-      criteria.isMetaphorical
-        ? `✨ Vision Éliciné : Atmosphère : ${criteria.cinematicExpansion || "Huis clos suffocant sous tension psychologique"}${formatFilterSuffix(effectiveFilters)}`
-        : `✨ Vision Éliciné : Recommandations adaptées à l'atmosphère et à l'esprit de votre recherche${formatFilterSuffix(effectiveFilters)}`
+      defaultThought
     );
 
     if (formatResult.movies.length > 0 && !formatResult.isFallback) {
@@ -2020,6 +2086,102 @@ export async function executeCinoraSearch(
           }
         };
       }
+    }
+  }
+
+  // 3. RÈGLE ABSOLUE "ZÉRO ÉCRAN VIDE" :
+  // Ne jamais afficher l'écran "Aucun film ne correspond précisément..." si la requête traduit une émotion universelle.
+  // Renvoyer a minima les chefs-d'œuvre dramatiques/émouvants les plus réputés du catalogue.
+  const emotionalFallback = criteria.emotionalExpansion || analyzeEmotionalIntent(cleanQuery);
+  if (emotionalFallback) {
+    console.log(`[Éliciné Cascade] [Règle Zéro Écran Vide] Intention émotionnelle détectée (« ${emotionalFallback.label} ») → Affichage obligatoire des chefs-d'œuvre`);
+    
+    // A. Chercher dans initialResolved ou allCandidatePool
+    const pool = allCandidatePool.length > 0 ? allCandidatePool : initialResolved;
+    const cleanPool = pool.filter(m => !isDisqualifiedNonFiction(cleanQuery, m) && !isMovieParasiteWithoutNarrativeLink(cleanQuery, m));
+    let rescueList: Movie[] = [...cleanPool];
+
+    // B. Résoudre les archetypes du registre via TMDB
+    if (rescueList.length < 3) {
+      const preferredMedia = criteria.format === 'serie' ? 'tv' : (criteria.format === 'film' ? 'movie' : undefined);
+      const archPromises = emotionalFallback.archetypeTitles.slice(0, 8).map(async (rawTitle) => {
+        const cleanTitle = rawTitle.split(/[/|]/)[0].trim();
+        const rawMedia = await resolveTitleToTmdb(cleanTitle, tmdbKey, preferredMedia);
+        if (rawMedia) {
+          const formatted = formatTmdbResults([rawMedia]);
+          return formatted[0] || null;
+        }
+        return null;
+      });
+      const archMovies = (await Promise.all(archPromises)).filter(Boolean) as Movie[];
+      const seenIds = new Set<number>(rescueList.map(m => m.id));
+      for (const am of archMovies) {
+        if (!seenIds.has(am.id)) {
+          seenIds.add(am.id);
+          rescueList.push({
+            ...am,
+            match_rate: Math.max(75, 96 - rescueList.length * 2),
+            ai_match_reason: `✨ Chef-d'œuvre incontournable : ${emotionalFallback.label}`
+          });
+        }
+      }
+    }
+
+    // C. Si toujours insuffisant, discover TMDB par genres dominants
+    if (rescueList.length < 3 && emotionalFallback.genreIds && emotionalFallback.genreIds.length > 0) {
+      try {
+        const discRes = await fetchTmdbEndpoint('discover/movie', {
+          with_genres: emotionalFallback.genreIds.join(','),
+          sort_by: 'vote_average.desc',
+          'vote_count.gte': 800,
+          language: 'fr-FR',
+          include_adult: false
+        }, tmdbKey);
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          const genreMovies = formatTmdbResults(discData.results || []);
+          const seenIds = new Set<number>(rescueList.map(m => m.id));
+          for (const gm of genreMovies) {
+            if (!seenIds.has(gm.id)) {
+              seenIds.add(gm.id);
+              rescueList.push({
+                ...gm,
+                match_rate: Math.max(75, 96 - rescueList.length * 2),
+                ai_match_reason: `✨ Chef-d'œuvre incontournable : ${emotionalFallback.label}`
+              });
+              if (rescueList.length >= 8) break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (rescueList.length > 0) {
+      const formatResult = enforceFormatConstraintAndFallback(
+        rescueList,
+        effectiveFilters.mediaType,
+        `✨ Sélection Éliciné : Les chefs-d'œuvre incontournables pour votre envie d'émotion (« ${emotionalFallback.label} »)`
+      );
+      return {
+        thought: formatResult.thought,
+        moodDetected: cleanQuery,
+        recommendedMovies: formatResult.movies,
+        isFallbackMode: false,
+        providerUsed: 'Algorithme Éliciné',
+        suggestedPrompts: [
+          'Un drame poignant et bouleversant',
+          'Une comédie feel-good et chaleureuse',
+          'Un film angoissant sans sursaut',
+          'Un voyage cinématographique inoubliable'
+        ],
+        cascade: {
+          tierReached: 2,
+          criteria,
+          tier1Count: 0,
+          tier2Count: formatResult.movies.length,
+          tier3Count: 0
+        }
+      };
     }
   }
 

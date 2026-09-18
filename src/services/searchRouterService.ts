@@ -307,6 +307,16 @@ export function analyzeSearchIntent(queryText: string): SearchIntentResult {
 // EXTRACTION DES CRITÈRES DURS & ENTITÉS CLÉS (NIVEAU 1 & NIVEAU 3)
 // ══════════════════════════════════════════════════════════════════════════════
 
+export interface EmotionalExpansion {
+  category: 'tearjerker' | 'feel_good' | 'atmospheric_horror' | 'nostalgia' | 'adrenaline' | 'deep_romance' | 'inspiring';
+  label: string;
+  genres: string[];              // ex: ["Drama", "Romance"]
+  genreIds: number[];            // ex: [18, 10749]
+  emotionalKeywords: string[];   // ex: ["émouvant", "larmes", "bouleversant", "deuil", "amour tragique", "heartbreaking", "tearjerker"]
+  enrichedSemanticQuery: string; // ex: "drame bouleversant et émouvant histoire tragique et poignante larmes et grand amour triste"
+  archetypeTitles: string[];     // Chefs-d'œuvre de référence incontournables garantis
+}
+
 export interface ExtractedCriteria {
   actors: string[];
   directors: string[];
@@ -322,6 +332,7 @@ export interface ExtractedCriteria {
   exclusions?: string[];       // ex: ['extraterrestre', 'armes', 'romance']
   isMetaphorical?: boolean;    // ex: requêtes sensorielles / métaphoriques
   cinematicExpansion?: string; // ex: 'Huis clos oppressant, thriller psychologique sombre'
+  emotionalExpansion?: EmotionalExpansion; // Traduction conceptuelle de l'intention émotionnelle
   isTwistRequested: boolean;
   hasNarrativeConstraint: boolean;
   hasStructuredIntent: boolean;
@@ -712,6 +723,158 @@ export function parseFormatIntent(rawQuery: string): FormatIntentResult {
 }
 
 /**
+ * ÉTAPE 1 : Traduction Conceptuelle & Query Expansion pour requêtes émotionnelles & figurées.
+ * Analyse l'intention d'humeur/émotion de l'utilisateur (ex: "pour pleurer un bon coup", "qui remonte le moral", "qui fait peur sans sursaut")
+ * et génère automatiquement :
+ * - Genres associés
+ * - Mots-clés émotionnels / Tags
+ * - Requête sémantique enrichie pour la recherche vectorielle / hybride
+ * - Chefs-d'œuvre incontournables du registre pour garantir la règle "Zéro écran vide".
+ */
+export function analyzeEmotionalIntent(queryText: string): EmotionalExpansion | null {
+  if (!queryText || typeof queryText !== 'string') return null;
+  const lower = queryText.toLowerCase().trim();
+
+  // 1. Tristesse / Pleurs / Catharsis ("pour pleurer un bon coup", "faire chialer", "triste", "bouleversant")
+  const isTearjerker = 
+    /\b(pleurer|chialer|larmes|mouchoirs|tire-larmes|tire larmes|tearjerker|triste|tristesse|bouleversant|bouleversante|émouvant|emouvant|émouvante|emouvante|déchirant|dechirant|poignant|poignante|dévastateur|devastateur|heartbreaking|mourir d'amour|amour tragique|fin tragique|faire pleurer|verser une larme|fend le coeur|fend le cœur)\b/i.test(lower) ||
+    /\b(pour pleurer|film triste|film pour pleurer|histoire triste|drame déchirant|drame émouvant|film qui fait pleurer|pleurer un bon coup)\b/i.test(lower);
+
+  if (isTearjerker) {
+    return {
+      category: 'tearjerker',
+      label: 'Émotion intense & Drames poignants',
+      genres: ['Drama', 'Romance'],
+      genreIds: [18, 10749],
+      emotionalKeywords: ['émouvant', 'larmes', 'bouleversant', 'deuil', 'amour tragique', 'heartbreaking', 'tearjerker', 'tragédie', 'poignant', 'mélodrame'],
+      enrichedSemanticQuery: 'drame bouleversant et émouvant histoire tragique et poignante larmes et grand amour triste',
+      archetypeTitles: [
+        'La Ligne verte', 'The Green Mile', 'Le Tombeau des lucioles', 'Grave of the Fireflies',
+        'La Liste de Schindler', 'Nos étoiles contraires', 'The Fault in Our Stars', 'Titanic',
+        'Manchester by the Sea', 'La vie est belle', 'Life Is Beautiful', 'Interstellar',
+        'Le Pianiste', 'Forrest Gump', 'Lion', 'A Ghost Story', 'Your Name', 'Brokeback Mountain'
+      ]
+    };
+  }
+
+  // 2. Joie / Réconfort / Feel Good ("qui remonte le moral", "feel good", "baume au cœur", "réconfortant")
+  const isFeelGood = 
+    /\b(remonte le moral|remonter le moral|feel[\s-]?good|baume au c[oœ]ur|r[eé]confortant|chaleureux|fait du bien|pour se sentir bien|bonne humeur|envie de vivre|sourire|optimiste|bienveillant|lumineux|film doudou|uplifting|heartwarming|mettre du baume|redonner le sourire|r[eé]confort)\b/i.test(lower);
+
+  if (isFeelGood) {
+    return {
+      category: 'feel_good',
+      label: 'Feel-Good & Réconfort chaleureux',
+      genres: ['Comedy', 'Drama', 'Family'],
+      genreIds: [35, 18, 10751],
+      emotionalKeywords: ['feel-good', 'réconfortant', 'chaleureux', 'bonne humeur', 'tendresse', 'espoir', 'heartwarming', 'optimisme', 'bienveillance', 'amitié'],
+      enrichedSemanticQuery: 'comédie dramatique chaleureuse et réconfortante feel good film qui fait du bien plein d\'espoir et de tendresse',
+      archetypeTitles: [
+        'Intouchables', 'Le Fabuleux Destin d\'Amélie Poulain', 'Little Miss Sunshine', 'Green Book',
+        'The Truman Show', 'La La Land', 'Forrest Gump', 'Paddington 2', 'Le Grand Bain',
+        'About Time', 'Il était temps', 'Good Will Hunting', 'Le Cercle des poètes disparus', 'Dead Poets Society', 'Sing Street'
+      ]
+    };
+  }
+
+  // 3. Peur sans sursaut / Horreur atmosphérique ("qui fait peur sans sursaut", "sans jump scare", "angoisse sourde")
+  const isAtmosphericHorror = 
+    /\b(peur sans sursaut|sans sursaut|sans sursauts|sans jump[\s-]?scare|sans jump[\s-]?scares|angoisse sans sursaut|angoisse sourde|horreur psychologique|peur psychologique|oppressant sans sursaut|atmosphère d[eé]rangeante|ambiance d[eé]rangeante|slow burn|dread|malaise|horreur lente|frisson psychologique)\b/i.test(lower);
+
+  if (isAtmosphericHorror) {
+    return {
+      category: 'atmospheric_horror',
+      label: 'Angoisse sourde & Horreur psychologique sans sursaut',
+      genres: ['Horror', 'Mystery', 'Thriller'],
+      genreIds: [27, 9648, 53],
+      emotionalKeywords: ['horreur psychologique', 'angoisse sourde', 'atmosphère dérangeante', 'oppressant', 'malaise', 'slow burn', 'tension lente', 'paranoïa', 'dread', 'sans jump scare'],
+      enrichedSemanticQuery: 'horreur psychologique et angoisse sourde atmosphère dérangeante et oppressante sans jump scare lente montée de tension',
+      archetypeTitles: [
+        'Hereditary', 'Midsommar', 'The Witch', 'Shining', 'The Shining', 'Rosemary\'s Baby',
+        'The Lighthouse', 'It Follows', 'Get Out', 'Les Autres', 'The Others', 'Sixième Sens',
+        'The Sixth Sense', 'Black Swan', 'The Babadook', 'Mise à mort du cerf sacré'
+      ]
+    };
+  }
+
+  // 4. Nostalgie / Douce mélancolie ("nostalgique", "enfance", "coming of age")
+  const isNostalgia = 
+    /\b(nostalgique|nostalgie|m[eé]lancolie douce|douce m[eé]lancolie|souvenirs d['’]enfance|enfance perdue|coming[\s-]?of[\s-]?age|passage [aà] l['’][aâ]ge adulte|souvenir d['’]enfance|années 80 nostalgie)\b/i.test(lower);
+
+  if (isNostalgia) {
+    return {
+      category: 'nostalgia',
+      label: 'Nostalgie & Douce mélancolie',
+      genres: ['Drama', 'Adventure', 'Comedy'],
+      genreIds: [18, 12, 35],
+      emotionalKeywords: ['nostalgie', 'enfance', 'amitié', 'souvenirs', 'mélancolie douce', 'coming of age', 'passage à l\'âge adulte'],
+      enrichedSemanticQuery: 'chronique nostalgique et émouvante enfance amitié souvenirs doux-amers passage à l\'âge adulte',
+      archetypeTitles: [
+        'Stand by Me', 'Cinema Paradiso', 'Les Goonies', 'The Goonies', 'Boyhood',
+        'Aftersun', 'Le Cercle des poètes disparus', 'Super 8', 'Moonrise Kingdom', 'Lady Bird', 'Mid90s'
+      ]
+    };
+  }
+
+  // 5. Adrénaline pure / Tension extrême ("prend aux tripes", "au bord du siège", "ultra tendu")
+  const isAdrenaline = 
+    /\b(adr[eé]naline|au bord du si[eè]ge|coupe le souffle|prend aux tripes|tension extr[eê]me|pression maximale|cardiaque|ultra tendu|haletant|suspense insoutenable|palpitant)\b/i.test(lower);
+
+  if (isAdrenaline) {
+    return {
+      category: 'adrenaline',
+      label: 'Adrénaline pure & Tension extrême',
+      genres: ['Thriller', 'Action', 'Crime'],
+      genreIds: [53, 28, 80],
+      emotionalKeywords: ['suspense haletant', 'tension extrême', 'adrénaline', 'course contre la montre', 'oppressant', 'palpitant', 'nerveux'],
+      enrichedSemanticQuery: 'thriller ultra tendu et haletant tension maximale course contre la montre suspense suffocant',
+      archetypeTitles: [
+        'Sicario', 'Whiplash', 'Uncut Gems', 'Prisoners', 'Mad Max: Fury Road', 'Heat', 'No Country for Old Men', 'Dunkirk'
+      ]
+    };
+  }
+
+  // 6. Grand amour passionnel ("coup de foudre", "papillons dans le ventre", "amour passionnel")
+  const isDeepRomance = 
+    /\b(coup de foudre|grand amour|amour passionnel|passion romantique|qui fait r[eê]ver d['’]amour|papillons dans le ventre|alchimie incroyable|romance intense|amour fusionnel)\b/i.test(lower);
+
+  if (isDeepRomance) {
+    return {
+      category: 'deep_romance',
+      label: 'Passion amoureuse & Romance envoûtante',
+      genres: ['Romance', 'Drama'],
+      genreIds: [10749, 18],
+      emotionalKeywords: ['romance passionnée', 'amour fusionnel', 'coup de foudre', 'alchimie', 'passion', 'émotion amoureuse', 'poésie'],
+      enrichedSemanticQuery: 'grande romance passionnée et poétique alchimie intense amour bouleversant',
+      archetypeTitles: [
+        'Before Sunrise', 'In the Mood for Love', 'Portrait de la jeune fille en feu',
+        'Orgueil et Préjugés', 'La La Land', 'Eternal Sunshine of the Spotless Mind', 'About Time', 'N\'oublie jamais', 'The Notebook'
+      ]
+    };
+  }
+
+  // 7. Inspirant / Dépassement de soi ("qui motive", "qui donne envie de se battre", "dépassement de soi")
+  const isInspiring = 
+    /\b(qui motive|donne envie de se battre|d[eé]passement de soi|inspirant|donne de la force|ne jamais abandonner|courage et d[eé]termination|triomphe de l['’]esprit)\b/i.test(lower);
+
+  if (isInspiring) {
+    return {
+      category: 'inspiring',
+      label: 'Inspiration & Dépassement de soi',
+      genres: ['Drama', 'History'],
+      genreIds: [18, 36],
+      emotionalKeywords: ['inspirant', 'dépassement de soi', 'courage', 'détermination', 'rédemption', 'triomphe', 'persévérance'],
+      enrichedSemanticQuery: 'drame inspirant et motivant histoire de courage de persévérance et de dépassement de soi',
+      archetypeTitles: [
+        'The Pursuit of Happyness', 'À la recherche du bonheur', 'Whiplash', 'Good Will Hunting', 'Gattaca', '127 Heures', 'Invictus'
+      ]
+    };
+  }
+
+  return null;
+}
+
+/**
  * Isole les critères durs (acteur, réalisateur, format, année) et dégage l'entité principale
  * pour alimenter la recherche stricte (Niveau 1) et le recadrage intelligent (Niveau 3).
  */
@@ -996,7 +1159,22 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     if (!themes.includes(sw)) themes.push(sw);
   }
 
-  // Nettoyage des narrativeCues et themes : exclure les termes de contraintes négatives ou de décennies
+  // Détection & Query Expansion d'intention émotionnelle / d'humeur
+  const emotionalIntent = analyzeEmotionalIntent(clean);
+  if (emotionalIntent) {
+    isMetaphorical = true;
+    if (!cinematicExpansion) {
+      cinematicExpansion = emotionalIntent.enrichedSemanticQuery;
+    }
+    for (const g of emotionalIntent.genres) {
+      if (!genres.includes(g)) genres.push(g);
+    }
+    for (const kw of emotionalIntent.emotionalKeywords) {
+      if (!themes.includes(kw)) themes.push(kw);
+      if (!narrativeCues.includes(kw)) narrativeCues.push(kw);
+    }
+  }
+
   const cleanNarrativeCues = narrativeCues.filter(cue => {
     const cueLower = cue.toLowerCase();
     const isExcluded = exclusions.some(ex => cueLower.includes(ex.toLowerCase()) || ex.toLowerCase().includes(cueLower));
@@ -1009,11 +1187,11 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     return !exclusions.some(ex => tLower.includes(ex.toLowerCase()) || ex.toLowerCase().includes(tLower));
   });
 
-  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || cleanThemes.length > 0 || exclusions.length > 0 || isMetaphorical || Boolean(era);
+  let hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || cleanThemes.length > 0 || exclusions.length > 0 || isMetaphorical || Boolean(era) || Boolean(emotionalIntent);
 
   // 10. Calcul de l'intention globale structurée (Niveau 1)
   // Vrai dès qu'une entité humaine, un cadre spatial, une situation, un thème ou un ton/twist est identifié
-  const hasStructuredIntent =
+  let hasStructuredIntent =
     actors.length > 0 ||
     directors.length > 0 ||
     spatialSettings.length > 0 ||
@@ -1023,6 +1201,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     cleanNarrativeCues.length > 0 ||
     isTwistRequested ||
     isMetaphorical ||
+    Boolean(emotionalIntent) ||
     year !== undefined ||
     era !== undefined ||
     format !== 'all';
@@ -1045,6 +1224,8 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     primaryEntity = themes[0];
   } else if (era) {
     primaryEntity = era;
+  } else if (emotionalIntent) {
+    primaryEntity = emotionalIntent.label;
   } else {
     // 2-3 premiers mots signifiants
     const meaningful = clean
@@ -1072,11 +1253,13 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     exclusions,
     isMetaphorical,
     cinematicExpansion,
+    emotionalExpansion: emotionalIntent || undefined,
     isTwistRequested,
     hasNarrativeConstraint,
     hasStructuredIntent,
     primaryEntity,
-    hasHardCriteria
+    hasHardCriteria,
+    thematicCluster: emotionalIntent ? emotionalIntent.category : undefined
   };
 
   const detectedCluster = findActiveThematicCluster(criteriaObj, clean);
@@ -1380,6 +1563,90 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
       'pretty woman', 'le diable s\'habille en prada', 'the devil wears prada',
       'clueless', 'mamma mia', 'love actually', 'dirty dancing', 'kung fu panda',
       'gang de requins', 'actors on actors'
+    ]
+  },
+  {
+    id: 'tearjerker',
+    triggers: [
+      'pour pleurer', 'pleurer un bon coup', 'faire pleurer', 'faire chialer', 'chialer',
+      'larmes', 'mouchoirs', 'tire-larmes', 'tire larmes', 'tearjerker', 'triste',
+      'tristesse', 'bouleversant', 'bouleversante', 'émouvant', 'emouvant', 'émouvante',
+      'déchirant', 'poignant', 'poignante', 'dévastateur', 'heartbreaking', 'amour tragique',
+      'drame déchirant', 'drame émouvant', 'film triste'
+    ],
+    primaryKeywords: [
+      'drame', 'émouvant', 'emouvant', 'larmes', 'bouleversant', 'deuil', 'tragédie',
+      'tragedie', 'amour tragique', 'mort', 'déchirant', 'poignant', 'heartbreaking',
+      'triste', 'chagrin', 'séparation', 'adieu', 'sacrifice', 'mélodrame'
+    ],
+    secondaryKeywords: [
+      'maladie', 'hôpital', 'condamné', 'disparition', 'souvenir', 'perte', 'regret',
+      'destin', 'guerre', 'orphelin', 'famille', 'injustice', 'larmes aux yeux'
+    ],
+    expectedGenres: [18, 10749],
+    conflictingGenres: [35, 10767, 10764],
+    archetypeTitles: [
+      'la ligne verte', 'the green mile', 'le tombeau des lucioles', 'grave of the fireflies',
+      'la liste de schindler', 'schindler\'s list', 'nos étoiles contraires', 'the fault in our stars',
+      'titanic', 'manchester by the sea', 'la vie est belle', 'life is beautiful', 'interstellar',
+      'le pianiste', 'the pianist', 'forrest gump', 'lion', 'a ghost story', 'your name', 'brokeback mountain'
+    ],
+    disqualifiedTitles: [
+      'actors on actors', 'the mask', 'dumb and dumber', 'kung fu panda', 'gang de requins'
+    ]
+  },
+  {
+    id: 'feel_good',
+    triggers: [
+      'qui remonte le moral', 'remonter le moral', 'remonte le moral', 'feel-good', 'feel good', 'feelgood',
+      'baume au cœur', 'baume au coeur', 'réconfortant', 'reconfortant', 'chaleureux', 'qui fait du bien',
+      'pour se sentir bien', 'bonne humeur', 'donne envie de vivre', 'sourire', 'optimiste', 'bienveillant',
+      'lumineux', 'film doudou', 'uplifting', 'heartwarming'
+    ],
+    primaryKeywords: [
+      'feel-good', 'réconfortant', 'chaleureux', 'bonne humeur', 'tendresse', 'espoir',
+      'amitié', 'amitie', 'sourire', 'optimisme', 'bienveillance', 'joie', 'bonheur', 'famille'
+    ],
+    secondaryKeywords: [
+      'comédie', 'comedie', 'entraide', 'fête', 'amour', 'voyage', 'aventure', 'musique',
+      'générosité', 'partage', 'solidarité'
+    ],
+    expectedGenres: [35, 18, 10751, 10749],
+    conflictingGenres: [27, 10767, 10764],
+    archetypeTitles: [
+      'intouchables', 'le fabuleux destin d\'amélie poulain', 'little miss sunshine', 'green book',
+      'the truman show', 'la la land', 'forrest gump', 'paddington 2', 'le grand bain',
+      'about time', 'il était temps', 'good will hunting', 'le cercle des poètes disparus', 'sing street'
+    ],
+    disqualifiedTitles: [
+      'actors on actors', 'saw', 'requiem for a dream', 'se7en', 'martyrs'
+    ]
+  },
+  {
+    id: 'horreur_sans_jumpscare',
+    triggers: [
+      'peur sans sursaut', 'peur sans sursauts', 'sans sursaut', 'sans sursauts', 'sans jump scare',
+      'sans jumpscare', 'sans jump scares', 'sans jumpscares', 'angoisse sans sursaut', 'angoisse sourde',
+      'horreur psychologique', 'peur psychologique', 'oppressant sans sursaut', 'atmosphère dérangeante',
+      'ambiance dérangeante', 'slow burn', 'dread', 'malaise', 'horreur lente'
+    ],
+    primaryKeywords: [
+      'horreur psychologique', 'angoisse sourde', 'atmosphère dérangeante', 'oppressant',
+      'malaise', 'slow burn', 'tension lente', 'paranoïa', 'paranoia', 'dread', 'mystère'
+    ],
+    secondaryKeywords: [
+      'isolement', 'folie', 'fantôme', 'sorcellerie', 'croyance', 'hallucination',
+      'psychose', 'asile', 'silence', 'obscurité', 'menace invisible'
+    ],
+    expectedGenres: [27, 9648, 53],
+    conflictingGenres: [35, 10751, 10402],
+    archetypeTitles: [
+      'hereditary', 'midsommar', 'the witch', 'shining', 'the shining', 'rosemary\'s baby',
+      'the lighthouse', 'it follows', 'get out', 'les autres', 'the others', 'sixième sens',
+      'the sixth sense', 'black swan', 'the babadook'
+    ],
+    disqualifiedTitles: [
+      'actors on actors', 'scary movie', 'paranormal activity', 'the nun', 'annabelle'
     ]
   }
 ];

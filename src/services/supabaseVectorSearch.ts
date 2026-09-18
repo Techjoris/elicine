@@ -72,6 +72,45 @@ const NARRATIVE_CONCEPT_MAP: Record<string, { triggers: string[]; genres: number
     ],
     genres: [80, 53, 27, 9648, 18],
     films: ['Se7en', 'Le Silence des agneaux', 'Zodiac', 'Memories of Murder', 'Monster', 'American Psycho', 'Mindhunter', 'Saw', 'Psychose', 'Prisoners']
+  },
+  tearjerker_catharsis: {
+    triggers: [
+      'pleurer', 'chialer', 'larmes', 'mouchoir', 'mouchoirs', 'tire-larmes', 'tire larmes', 'tearjerker',
+      'triste', 'tristesse', 'bouleversant', 'bouleversante', 'émouvant', 'emouvant', 'émouvante', 'emouvante',
+      'déchirant', 'poignant', 'poignante', 'heartbreaking', 'amour tragique', 'deuil', 'film triste', 'pour pleurer'
+    ],
+    genres: [18, 10749], // Drame, Romance
+    films: [
+      'La Ligne verte', 'The Green Mile', 'Le Tombeau des lucioles', 'Grave of the Fireflies',
+      'La Liste de Schindler', 'Nos étoiles contraires', 'The Fault in Our Stars', 'Titanic',
+      'Manchester by the Sea', 'La vie est belle', 'Interstellar', 'Le Pianiste', 'Forrest Gump', 'Lion'
+    ]
+  },
+  feel_good_uplifting: {
+    triggers: [
+      'remonte le moral', 'remonter le moral', 'feel good', 'feel-good', 'feelgood',
+      'baume au coeur', 'baume au cœur', 'réconfortant', 'reconfortant', 'chaleureux',
+      'fait du bien', 'bonne humeur', 'envie de vivre', 'sourire', 'optimiste', 'film doudou',
+      'uplifting', 'heartwarming', 'mettre du baume'
+    ],
+    genres: [35, 18, 10751, 10749], // Comédie, Drame, Famille, Romance
+    films: [
+      'Intouchables', 'Le Fabuleux Destin d\'Amélie Poulain', 'Little Miss Sunshine', 'Green Book',
+      'The Truman Show', 'La La Land', 'Forrest Gump', 'Paddington 2', 'Le Grand Bain', 'About Time', 'Good Will Hunting'
+    ]
+  },
+  atmospheric_horror_no_jumpscare: {
+    triggers: [
+      'peur sans sursaut', 'sans sursaut', 'sans sursauts', 'sans jump scare', 'sans jumpscare',
+      'sans jump scares', 'sans jumpscares', 'angoisse sans sursaut', 'angoisse sourde',
+      'horreur psychologique', 'peur psychologique', 'oppressant sans sursaut',
+      'atmosphère dérangeante', 'ambiance dérangeante', 'slow burn', 'dread', 'malaise'
+    ],
+    genres: [27, 9648, 53], // Horreur, Mystère, Thriller
+    films: [
+      'Hereditary', 'Midsommar', 'The Witch', 'Shining', 'The Shining', 'Rosemary\'s Baby',
+      'The Lighthouse', 'It Follows', 'Get Out', 'Les Autres', 'The Others', 'Sixième Sens', 'Black Swan', 'The Babadook'
+    ]
   }
 };
 
@@ -99,7 +138,7 @@ export function calculateGlobalSemanticSimilarity(
   let targetConceptFilms: string[] = [];
   let expectedGenres: number[] = [];
 
-  const isMetaphorOrEra = /\b(impression|comme si|sensation|ascenseur|pluie|70s|80s|90s|années 70|années 80|années 90|dramatique|sans )\b/i.test(clean);
+  const isMetaphorOrEra = /\b(impression|comme si|sensation|ascenseur|pluie|70s|80s|90s|années 70|années 80|années 90|dramatique|sans |pleurer|chialer|larmes|mouchoir|triste|tristesse|bouleversant|émouvant|emouvant|déchirant|poignant|remonte le moral|feel[\s-]?good|réconfortant|reconfortant|chaleureux|fait du bien|bonne humeur|sans sursaut|sans jump)\b/i.test(clean);
   if (isMetaphorOrEra) {
     matchedConceptBonus += 0.25;
   }
