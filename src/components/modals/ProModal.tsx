@@ -100,7 +100,7 @@ export const ProModal: React.FC = () => {
         if (isPaypal || isCard) {
           showToast('Redirection vers le paiement sécurisé PayPal & Carte bancaire...');
         } else {
-          showToast('Redirection vers le paiement sécurisé Mobile Money (SasaPay)...');
+          showToast('Redirection vers le paiement sécurisé Mobile Money (SasPay)...');
         }
         if (typeof window !== 'undefined') {
           window.location.href = result.redirectUrl;

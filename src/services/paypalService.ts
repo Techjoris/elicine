@@ -62,16 +62,25 @@ export function getPayPalProCheckoutUrl(options: {
     DEFAULT_BUSINESS_EMAIL
   ).trim();
 
-  const itemName = `Pass Pro Éliciné (${isYearly ? 'Formule Annuelle - 1 an' : 'Formule Mensuelle - 1 mois'})`;
+  // Intitulé et référence configurés explicitement en "Achat Unique" (One-time payment)
+  // Évite que les filtres anti-fraude PayPal ou les banques émettrices (Revolut, Wise, cartes virtuelles)
+  // n'exigent un accord de prélèvement récurrent automatique (Billing Agreement / Preapproved Payment)
+  const itemName = `Pass Pro Éliciné - Accès ${isYearly ? '1 An' : '30 Jours'} (Paiement unique)`;
+  const itemNumber = `ELICINE_PASS_${isYearly ? '365D' : '30D'}_ONETIME`;
 
   const params = new URLSearchParams({
     cmd: '_xclick',
     business: businessEmail,
     item_name: itemName,
-    item_number: `ELICINE_PRO_${plan.toUpperCase()}`,
+    item_number: itemNumber,
     amount: numericAmount,
     currency_code: normalizedCurrency,
-    // Configuration indispensable pour le Paiement par Carte sans compte (PayPal Guest Checkout)
+    // 1. Forcer l'encaissement direct et unique (One-Time Sale)
+    paymentaction: 'sale',
+    src: '0',           // Pas d'abonnement récurrent automatique
+    sra: '0',           // Pas de réessai récurrent
+    no_recurring: '1',   // Produit d'accès numérique ponctuel
+    // 2. Configuration Guest Checkout (Paiement par Carte bancaire sans compte PayPal)
     solution_type: 'Sole',
     landing_page: 'Billing',
     no_shipping: '1',
@@ -79,21 +88,38 @@ export function getPayPalProCheckoutUrl(options: {
     charset: 'utf-8',
     return: returnUrl,
     cancel_return: cancelUrl,
-    // rm=1 : Redirection propre en HTTP GET vers l'application SPA (évite le 405 Method Not Allowed de Vercel causé par rm=2)
+    // 3. Retour propre en GET vers la SPA Éliciné
     rm: '1',
     cbt: 'Retourner sur Éliciné pour activer mon Pass Pro'
   });
 
   if (options.email) {
-    params.set('email', options.email);
+    // IMPORTANT : Ne pas pré-remplir l'email dans PayPal si c'est identique au compte vendeur (businessEmail),
+    // car PayPal interdit strictement l'auto-paiement et affiche l'erreur "Nous n'avons pas pu enregistrer cette carte".
+    // De plus, cela évite de forcer la connexion PayPal si l'utilisateur souhaite régler en Invité (Guest Checkout).
+    if (options.email.trim().toLowerCase() !== businessEmail.trim().toLowerCase()) {
+      params.set('email', options.email.trim());
+    }
     params.set('custom', JSON.stringify({
       email: options.email,
       plan,
-      subId: options.subscriptionId || `sub_paypal_${Date.now()}`
+      type: 'onetime_pass',
+      subId: options.subscriptionId || `pp_one_${Date.now()}`
     }));
   }
 
-  return `https://www.paypal.com/cgi-bin/webscr?${params.toString()}`;
+  const finalUrl = `https://www.paypal.com/cgi-bin/webscr?${params.toString()}`;
+  console.log('[PayPal Service Debug] URL Checkout PayPal générée :', {
+    business: businessEmail,
+    amount: numericAmount,
+    currency: normalizedCurrency,
+    plan,
+    hasCustomerEmail: Boolean(options.email),
+    prefilledEmail: params.get('email') || '(non pré-rempli pour autoriser le Guest Checkout)',
+    url: finalUrl
+  });
+
+  return finalUrl;
 }
 
 /**

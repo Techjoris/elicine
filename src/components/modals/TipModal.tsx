@@ -192,8 +192,8 @@ export const TipModal: React.FC = () => {
 
       // Si la réponse n'est pas un succès
       if (!data || data.success === false) {
-        const exactError = formatPaymentErrorMessage(data?.message || data?.error || data, "Échec de l'initialisation du paiement SasaPay.");
-        console.error('[TipModal] Échec SasaPay :', exactError, data);
+        const exactError = formatPaymentErrorMessage(data?.message || data?.error || data, "Échec de l'initialisation du paiement SasPay.");
+        console.error('[TipModal] Échec SasPay :', exactError, data);
         setErrorMessage(exactError);
         showToast(exactError);
         setIsProcessing(false);
@@ -217,7 +217,7 @@ export const TipModal: React.FC = () => {
         const receivedProps = data && typeof data === 'object' ? Object.keys(data).join(', ') : 'aucune';
         const innerProps = data?.data && typeof data.data === 'object' ? Object.keys(data.data).join(', ') : '';
         const propsDetail = innerProps ? `Propriétés reçues: [${receivedProps}], sous-propriétés data: [${innerProps}]` : `Propriétés reçues: [${receivedProps}]`;
-        const missingLinkError = `Lien de redirection SasaPay introuvable (checkout_url manquant). ${propsDetail}. Réponse reçue : ${typeof data === 'object' ? JSON.stringify(data) : data}`;
+        const missingLinkError = `Lien de redirection SasPay introuvable (checkout_url manquant). ${propsDetail}. Réponse reçue : ${typeof data === 'object' ? JSON.stringify(data) : data}`;
         
         console.error('[TipModal]', missingLinkError);
         setErrorMessage(missingLinkError);
@@ -233,8 +233,8 @@ export const TipModal: React.FC = () => {
         window.location.href = urlTrouvee;
       }
     } catch (err: any) {
-      console.error('[TipModal] Exception initialisation SasaPay :', err);
-      const exactError = formatPaymentErrorMessage(err, "Échec inconnu de l'initialisation du paiement SasaPay.");
+      console.error('[TipModal] Exception initialisation SasPay :', err);
+      const exactError = formatPaymentErrorMessage(err, "Échec inconnu de l'initialisation du paiement SasPay.");
       setErrorMessage(exactError);
       showToast(`Erreur : ${exactError}`);
       setIsProcessing(false);
@@ -472,7 +472,7 @@ export const TipModal: React.FC = () => {
                   <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-fade-in break-words">
                     <span className="text-base flex-shrink-0">⚠️</span>
                     <div className="flex-1">
-                      <p className="font-bold">Erreur de paiement SasaPay :</p>
+                      <p className="font-bold">Erreur de paiement SasPay :</p>
                       <p className="text-[11px] mt-0.5 opacity-90 break-all">{errorMessage}</p>
                     </div>
                   </div>

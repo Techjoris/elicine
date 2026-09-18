@@ -274,7 +274,7 @@ export const subscriptionService = {
       return { success: true, redirectUrl: paypalUrl };
     }
 
-    // Par défaut : SasaPay Mobile Money & Cartes
+    // Par défaut : SasPay Mobile Money & Cartes
     const isYearly = intent.plan === 'yearly';
     const currSymbol = intent.currency === 'USD' ? '$' : (intent.currency === 'EUR' ? '€' : (intent.currency === 'CAD' ? 'CA$' : 'FCFA'));
 
@@ -303,7 +303,7 @@ export const subscriptionService = {
 
     return {
       success: false,
-      error: saspayRes.message || "Impossible de générer le lien de paiement SasaPay."
+      error: saspayRes.message || "Impossible de générer le lien de paiement SasPay."
     };
   },
 

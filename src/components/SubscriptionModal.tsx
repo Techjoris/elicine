@@ -102,6 +102,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     const isPaypalCard = paymentMethod === 'paypal_card';
     const chosenGateway = isPaypalCard ? 'card' : 'mobile_money';
     
+    console.log('[SubscriptionModal Debug] handleCheckoutClick déclenché :', {
+      paymentMethod,
+      chosenGateway,
+      currency,
+      amountToPay,
+      numericAmount,
+      billingCycle
+    });
+
     if (typeof sessionStorage !== 'undefined') {
       try {
         sessionStorage.setItem('checkout_gateway', chosenGateway);
@@ -299,7 +308,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
               <div>
                 <p className="text-xs font-black text-slate-900 dark:text-white">PayPal & Carte Bancaire</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Compte PayPal</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Virtuelles, Solde PayPal</p>
               </div>
             </div>
           </div>
@@ -308,30 +317,80 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         {/* 6. Boutons d'action : Appel à l'action Principal dynamique & Lien de don discret */}
         <div className="flex flex-col gap-3 pt-1">
           {paymentMethod === 'paypal_card' ? (
-            /* Mode PayPal & Carte Bancaire -> Déclencheur PayPal Checkout avec URLs de retour sécurisées */
-            <>
-              <button
-              type="button"
-              onClick={handleCheckoutClick}
-              disabled={isProcessing}
-              className="w-full py-3.5 px-6 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm sm:text-base transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 cursor-pointer text-center group active:scale-[0.98] disabled:opacity-50"
-            >
-              {isProcessing ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Préparation PayPal Checkout...
+            /* Mode PayPal & Carte Bancaire -> Widget PayPal SDK officiel (Bouton CB & Bouton PayPal) */
+            <div className="w-full flex flex-col gap-2.5">
+              <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Paiement sécurisé par Carte ou Compte PayPal
                 </span>
-              ) : (
-                <>
-                  <span>👑 S'abonner par Carte Bancaire ou PayPal ({amountToPay} {currentPrice.symbol})</span>
-                  <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </>
-              )}
-            </button>
-            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 -mt-1">
-              💳 CB acceptées (Visa, Mastercard) sans compte obligatoire • Chiffrement sécurisé PayPal
-            </p>
-          </>
+                <span className="font-extrabold text-sky-600 dark:text-sky-400">
+                  {amountToPay} {currentPrice.symbol}
+                </span>
+              </div>
+
+              <PayPalButton
+                amount={numericAmount}
+                currency={currency}
+                billingCycle={billingCycle}
+                disabled={isProcessing}
+                onClick={() => {
+                  console.log('[SubscriptionModal Debug] 🖱️ Clic utilisateur sur le widget PayPalButton');
+                  return true;
+                }}
+                onSuccess={async (details, orderId) => {
+                  try {
+                    console.log('[SubscriptionModal Debug] ✅ Succès paiement PayPal reçu, enregistrement...', { orderId, details });
+                    showToast('👑 Paiement validé ! Activation de votre Pass Pro...');
+                    await subscriptionService.recordPayPalPayment({
+                      orderId,
+                      userId: user?.id || `usr_${Date.now()}`,
+                      email: user?.email || details?.payer?.email_address,
+                      customerName: user?.name || (details?.payer?.name?.given_name ? `${details.payer.name.given_name} ${details.payer.name.surname || ''}`.trim() : 'Cinéphile Pro'),
+                      plan: billingCycle,
+                      amount: numericAmount,
+                      currency,
+                      details
+                    });
+
+                    upgradeToPro(billingCycle);
+                    onClose();
+                    if (setIsProSuccessModalOpen) {
+                      setIsProSuccessModalOpen(true);
+                    }
+                  } catch (err: any) {
+                    console.error('[SubscriptionModal Debug] ❌ Erreur activation subscriptionService:', err);
+                    upgradeToPro(billingCycle);
+                    onClose();
+                    if (setIsProSuccessModalOpen) {
+                      setIsProSuccessModalOpen(true);
+                    }
+                  }
+                }}
+                onError={(err) => {
+                  console.error('[SubscriptionModal Debug] ❌ Erreur widget PayPal:', err);
+                  showToast("Échec de la transaction. Vous pouvez réessayer ou utiliser le portail officiel direct.");
+                }}
+                onCancel={() => {
+                  console.log('[SubscriptionModal Debug] 🛑 Annulation paiement PayPal.');
+                  showToast("Transaction annulée.");
+                }}
+              />
+
+              <div className="pt-1.5 border-t border-slate-200/70 dark:border-slate-800/70 flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCheckoutClick}
+                  disabled={isProcessing}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <span>🔗 Ou ouvrir le portail web PayPal officiel ({amountToPay} {currentPrice.symbol}) →</span>
+                </button>
+                <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400">
+                  Cartes bancaires (Visa, Mastercard, Virtuelles) et comptes PayPal acceptés • Aucun engagement
+                </p>
+              </div>
+            </div>
           ) : (
             /* Mode Paiement Mobile -> Déclencheur Saspay */
             <button
