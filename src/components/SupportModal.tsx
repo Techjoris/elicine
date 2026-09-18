@@ -30,11 +30,7 @@ export interface SupportModalProps {
   onOpenNotchPay?: (payload: SaspayTipPayload) => void;
 }
 
-declare global {
-  interface Window {
-    paypal?: any;
-  }
-}
+
 
 const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: number }> = {
   XAF: { amounts: [250, 500, 1000, 2500, 5000], defaultAmount: 1000 },

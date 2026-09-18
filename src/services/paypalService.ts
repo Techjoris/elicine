@@ -120,17 +120,7 @@ export function getPayPalDonationUrl(options: {
   email?: string;
   customerName?: string;
 } = {}): string {
-  const customLink = (
-    process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK ||
-    (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK ||
-    (import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK ||
-    process.env.VITE_PAYPAL_SUPPORT_LINK ||
-    ''
-  ).trim();
 
-  if (customLink && !customLink.includes('F5HDRFLUH7YJN') && !customLink.includes('localhost') && customLink.startsWith('https://')) {
-    return customLink;
-  }
 
   const numericAmount = Number(options.amount || 2).toFixed(2);
   const currency = (options.currency || 'USD').toUpperCase();
