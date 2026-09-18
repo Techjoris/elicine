@@ -446,8 +446,8 @@ export const AppContent: React.FC = () => {
 
               {/* 3. SECTION BASSE ("🔥 Tendances populaires") */}
               <MovieGrid
-                title="🔥 Tendances populaires"
-                subtitle="Films et séries les plus visionnés aujourd'hui sur vos plateformes"
+                title={t('sections.trending_title') || t.trendingTitle}
+                subtitle={t('sections.trending_subtitle') || t.trendingSubtitle}
                 movies={homeTrendingMovies}
                 showAiMatch={false}
                 sentinelRef={homeTrendingSentinelRef}

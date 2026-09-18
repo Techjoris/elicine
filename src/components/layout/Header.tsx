@@ -275,7 +275,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div 
               onClick={onGoHome || (() => setActiveView('home'))}
               className="flex items-center space-x-1.5 font-bold text-lg cursor-pointer hover:opacity-90 transition select-none text-black dark:text-white"
-              title="Retour à l'accueil"
+              title={t.navHome || "Accueil"}
             >
               <span className="bg-red-600 px-1.5 py-0.5 rounded text-white text-xs font-black">É</span>
               <span>Éliciné</span>
@@ -289,12 +289,11 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={handleOpenTip}
               className="group relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
-              title="Soutenir le projet Éliciné (Offrir un café)"
-              aria-label="Soutenir le projet Éliciné"
+              title={`${t.supportProject || 'Soutenir le projet'} (${t.tipBadge || 'Don'})`}
+              aria-label={t.supportProject || 'Soutenir le projet Éliciné'}
             >
               <Coffee size={14} className="text-amber-600 dark:text-amber-400 group-hover:rotate-12 transition-transform duration-200 flex-shrink-0" />
               <span className="hidden sm:inline font-semibold tracking-tight">{t.supportBtn || 'Soutenir'}</span>
-              <span className="hidden xl:inline text-amber-600/80 dark:text-amber-400/80 font-normal text-[11px]">le projet</span>
             </button>
 
             {/* Bouton Installer PWA (Masqué si PWA déjà installée) */}
@@ -310,11 +309,11 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/60 ring-2 ring-red-500/50 shadow-md shadow-red-500/20'
                       : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
                   }`}
-                  title="Installer l'application"
-                  aria-label="Installer l'application sur votre appareil"
+                  title={t.installApp || "Installer l'application"}
+                  aria-label={t.installApp || "Installer l'application"}
                 >
                   <Download size={14} className="text-red-500 flex-shrink-0" />
-                  <span>Installer<span className="hidden lg:inline"> l'application</span></span>
+                  <span>{t.installApp || "Installer l'application"}</span>
                 </button>
               </div>
             )}
@@ -357,10 +356,10 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
                       </div>
                       <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug whitespace-normal break-words">
-                        Installer l'application
+                        {t.onboardingInstallTitle || "Installer l'application"}
                       </p>
                       <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-red-300 transition-colors whitespace-normal break-words">
-                        Cliquez ici et suivez les instructions pour installer Éliciné sur votre appareil.
+                        {t.onboardingInstallDesc || "Cliquez ici et suivez les instructions pour installer Éliciné sur votre appareil."}
                       </p>
                     </div>
                   </div>
@@ -386,8 +385,8 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/60 ring-2 ring-amber-400/50 shadow-md shadow-amber-500/20'
                     : 'bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title={effectiveTheme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
-                aria-label={effectiveTheme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+                title={effectiveTheme === 'dark' ? t.themeLight : t.themeDark}
+                aria-label={effectiveTheme === 'dark' ? t.themeLight : t.themeDark}
               >
                 {effectiveTheme === 'dark' ? (
                   <Sun size={15} className="text-amber-400 hover:rotate-45 transition-transform duration-300" />
@@ -417,15 +416,15 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                            Thème
+                            {t.appearance || 'Thème'}
                           </span>
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
                         </div>
                         <p className="text-xs font-semibold text-zinc-100 mt-1 leading-snug">
-                          Vous préférez le mode sombre ?
+                          {t.onboardingThemeTitle || 'Vous préférez le mode sombre ?'}
                         </p>
                         <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed group-hover:text-amber-300 transition-colors flex items-center gap-1">
-                          <span>Cliquez ici pour changer</span>
+                          <span>{t.onboardingThemeDesc || 'Cliquez ici pour changer'}</span>
                           <span className="text-amber-400 font-bold">→</span>
                         </p>
                       </div>
@@ -448,10 +447,10 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={() => openAuthModal('login')}
                 className="flex items-center gap-1.5 bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm flex-shrink-0"
-                title="Se connecter"
+                title={t.loginBtn || 'Se connecter'}
               >
                 <LogIn size={14} className="flex-shrink-0" />
-                <span>Connexion</span>
+                <span>{t.loginBtn || 'Connexion'}</span>
               </button>
             )}
           </div>

@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { translations, Language, TranslationSchema } from '../i18n/translations';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { translations, Language, TranslationSchema, TranslationFunction, createTranslationProxy } from '../i18n/translations';
 import { getUserCountry } from '../services/geoService';
 
 export interface LanguageContextType {
   lang: Language;
   setLanguage: (newLang: Language) => void;
-  t: TranslationSchema;
+  t: TranslationFunction;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -48,6 +48,25 @@ export function detectPreferredLanguage(): Language {
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>(() => detectPreferredLanguage());
 
+  const t = useMemo(() => {
+    const schema = translations[lang] || translations.fr;
+    return createTranslationProxy(schema);
+  }, [lang]);
+
+  // Synchronisation dynamique du tag <title> et des métadonnées selon la locale active
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang;
+      if (t.pageTitle) {
+        document.title = t.pageTitle;
+      }
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && t.metaDescription) {
+        metaDesc.setAttribute('content', t.metaDescription);
+      }
+    }
+  }, [lang, t]);
+
   useEffect(() => {
     async function initLanguage() {
       // 1. Préférence manuelle enregistrée ?
@@ -58,7 +77,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
       if (savedLang && SUPPORTED_LANGUAGES.includes(savedLang)) {
         setLang(savedLang);
-        document.documentElement.lang = savedLang;
         return;
       }
 
@@ -67,7 +85,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         const navLang = navigator.language.slice(0, 2).toLowerCase() as Language;
         if (SUPPORTED_LANGUAGES.includes(navLang)) {
           setLang(navLang);
-          document.documentElement.lang = navLang;
           return;
         }
       }
@@ -79,24 +96,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
         if (code && SPANISH_COUNTRIES.includes(code)) {
           setLang('es');
-          document.documentElement.lang = 'es';
         } else if (code && FRENCH_COUNTRIES.includes(code)) {
           setLang('fr');
-          document.documentElement.lang = 'fr';
         } else if (code && GERMAN_COUNTRIES.includes(code)) {
           setLang('de');
-          document.documentElement.lang = 'de';
         } else if (code && ITALIAN_COUNTRIES.includes(code)) {
           setLang('it');
-          document.documentElement.lang = 'it';
         } else {
           // Reste du monde : anglais par défaut
           setLang('en');
-          document.documentElement.lang = 'en';
         }
       } catch (e) {
         setLang('fr');
-        document.documentElement.lang = 'fr';
       }
     }
 
@@ -118,8 +129,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const t = translations[lang] || translations.fr;
-
   return (
     <LanguageContext.Provider value={{ lang, setLanguage: changeLanguage, t }}>
       {children}
@@ -133,7 +142,7 @@ export const useTranslation = (): LanguageContextType => {
     return {
       lang: 'fr',
       setLanguage: () => {},
-      t: translations.fr
+      t: createTranslationProxy(translations.fr)
     };
   }
   return context;

@@ -1,0 +1,72 @@
+{
+  "tagline": "Le cinéma d'exception, élu pour vous.",
+  "searchPlaceholder": "Décrivez une ambiance, un thème ou un acteur...",
+  "searchPlaceholderShort": "Ambiance, thème, acteur...",
+  "exploreBtn": "Explorer",
+  "featuredBadge": "À L'AFFICHE",
+  "trailerBtn": "Bande-annonce",
+  "myListBtn": "Ma Liste",
+  "alertBtn": "Alerte",
+  "filterAll": "Tous",
+  "filterMovies": "Films",
+  "filterSeries": "Séries TV",
+  "aiAnalysisBadge": "Analyse Éliciné en cours",
+  "resultsTitle": "Sélection & Recommandations Éliciné",
+  "resultsSubtitle": "Sélection sur mesure selon vos critères",
+  "badgeFilm": "FILM",
+  "badgeSerie": "SÉRIE",
+  "streamingSection": "Où regarder en streaming",
+  "availableOn": "Disponible sur",
+  "vpnNeededTitle": "Exclusivité étrangère",
+  "vpnNeededDesc": "Non disponible dans votre pays. Accessible via VPN sur le catalogue",
+  "vpnButton": "Accéder via VPN",
+  "vodSection": "Disponible à la location ou à l'achat (VOD)",
+  "vodOnlyMessage": "Non inclus dans les abonnements de streaming actuels.",
+  "synopsisTitle": "SYNOPSIS",
+  "critiqueTitle": "VISION CRITIQUE ÉLICINÉ",
+  "resetHome": "Accueil",
+  "supportBtn": "Soutenir",
+  "hero": {
+    "subtitle": "L'algorithme intelligent d'Éliciné trouve la perle rare selon vos envies.",
+    "explore": "Explorer"
+  },
+  "nav": {
+    "home": "Accueil",
+    "trending": "Tendances",
+    "catalog": "Catalogue & Genres",
+    "streaming": "Streaming",
+    "my_list": "Ma Liste",
+    "new_search": "+ Nouvelle Recherche",
+    "support": "Soutenir le projet",
+    "settings": "Paramètres",
+    "terms": "Conditions & Confidentialité",
+    "install_app": "Installer l'application"
+  },
+  "history": {
+    "title": "HISTORIQUE",
+    "clear": "Vider",
+    "empty": "Aucune recherche récente",
+    "search_toast": "Recherche"
+  },
+  "pro": {
+    "active": "Éliciné Pro Actif",
+    "unlimited": "ILLIMITÉ",
+    "pass": "Pass Pro"
+  },
+  "theme": {
+    "appearance": "Apparence",
+    "dark": "Sombre",
+    "light": "Clair"
+  },
+  "sections": {
+    "trending_title": "🔥 Tendances populaires",
+    "trending_subtitle": "Films et séries les plus visionnés aujourd'hui sur vos plateformes"
+  },
+  "actions": {
+    "suggest_report": "Suggérer / Signaler"
+  },
+  "meta": {
+    "title": "Éliciné — Le cinéma d'exception, élu pour vous",
+    "description": "Éliciné : moteur de recommandation cinématographique intelligent. Trouvez instantanément les meilleurs films et séries selon votre humeur et vos catalogues de streaming."
+  }
+}

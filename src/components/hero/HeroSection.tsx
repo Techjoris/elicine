@@ -456,7 +456,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           </h1>
         </div>
         <p className="text-xs sm:text-sm md:text-base text-zinc-400 sm:text-zinc-400/90 max-w-lg mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-sm px-2">
-          L'algorithme intelligent d'Éliciné trouve la perle rare selon vos envies.
+          {t('hero.subtitle') || t.heroSubtitle}
         </p>
 
         {/* c) Barre de Recherche Unifiée "Floating Glass" Minimaliste */}
@@ -540,7 +540,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <span>✨</span>
                 )}
                 <span className="hidden sm:inline">
-                  {isAiLoading ? 'Recherche...' : (t.exploreBtn || 'Explorer')}
+                  {isAiLoading ? (t.searching || 'Recherche...') : (t('hero.explore') || t.exploreBtn || 'Explorer')}
                 </span>
               </button>
             </div>
@@ -553,19 +553,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com')) ? (
                 <span className="text-amber-400/90 font-medium flex items-center gap-1 truncate">
                   <span>👑</span>
-                  <span>Pass Pro actif • Recherches illimitées</span>
+                  <span>{t.proActiveBanner || 'Pass Pro actif • Recherches illimitées'}</span>
                 </span>
               ) : quota.remaining > 0 ? (
                 <span className="text-zinc-400 flex items-center gap-1 truncate">
                   <span className="text-amber-400">⚡</span>
                   <span>
-                    Il vous reste <strong className="text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
+                    {t.quotaRemainingText
+                      ? t.quotaRemainingText.replace('{n}', String(quota.remaining))
+                      : `Il vous reste ${quota.remaining} recherche${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} aujourd'hui`}
                   </span>
                 </span>
               ) : (
                 <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                   <span>🔒</span>
-                  <span>Quota gratuit atteint (0 recherche restante) •</span>
+                  <span>{t.quotaExceeded || 'Quota gratuit atteint (0 recherche restante) •'}</span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -574,7 +576,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     }}
                     className="text-amber-400 hover:text-amber-300 underline underline-offset-2 font-semibold cursor-pointer transition-colors"
                   >
-                    Passer au compte Pro (1.99 $)
+                    {t.upgradeToPro || 'Passer au compte Pro (1.99 $)'}
                   </button>
                 </span>
               )}
@@ -601,7 +603,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onClick={() => setErrorMessage(null)}
               className="px-2.5 py-1 rounded-lg bg-red-900/80 hover:bg-red-800 text-white text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer"
             >
-              Fermer
+              {t.close || 'Fermer'}
             </button>
           </div>
         )}

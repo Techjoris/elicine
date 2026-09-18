@@ -3,6 +3,7 @@ import { MovieCard } from './MovieCard';
 import { Movie } from '../../types';
 import { Sparkles, Clapperboard, HelpCircle, Compass, ArrowRight, Film } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useTranslation } from '../../context/LanguageContext';
 
 interface MovieGridProps {
   title?: string;
@@ -45,7 +46,7 @@ const MovieCardSkeleton: React.FC = () => (
 );
 
 export const MovieGrid: React.FC<MovieGridProps> = ({
-  title = '🔥 Tendances populaires',
+  title,
   subtitle,
   movies,
   aiThought,
@@ -58,6 +59,8 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   onSelectPrompt
 }) => {
   const { openFeedbackModal } = useApp();
+  const { t } = useTranslation();
+  const displayTitle = title || t('sections.trending_title') || t.trendingTitle;
 
   const promptsToDisplay = React.useMemo(() => {
     const list: string[] = [];
@@ -136,7 +139,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 pt-2 border-b border-slate-200/80 dark:border-white/[0.06] pb-3">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-            {title}
+            {displayTitle}
           </h2>
           {subtitle && <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">{subtitle}</p>}
         </div>
@@ -147,15 +150,15 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
               type="button"
               onClick={() => openFeedbackModal('ai_bug')}
               className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 font-medium transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Signaler un résultat imprécis ou suggérer un film"
+              title={t.suggestReportTooltip || "Signaler un résultat imprécis ou suggérer un film"}
             >
               <Clapperboard className="w-3 h-3 text-[#e50914]" />
-              <span>Suggérer / Signaler</span>
+              <span>{t('actions.suggest_report') || t.suggestReport}</span>
             </button>
           )}
 
           <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-400 font-medium">
-            {movies.length} titre{movies.length !== 1 ? 's' : ''}
+            {movies.length} {movies.length !== 1 ? (t.titlesPlural || 'titres') : (t.titlesSingular || 'titre')}
           </span>
         </div>
       </div>
@@ -173,11 +176,11 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-              Aucun film ne correspond précisément à votre recherche...
+              {t.noMatchTitle || "Aucun film ne correspond précisément à votre recherche..."}
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto">
-              Aucune œuvre de notre catalogue ne réunit l'ensemble des critères demandés sans compromis sur la pertinence. Essayez d'élargir votre formulation, de dissocier vos critères ou d'explorer nos inspirations cinéphiles ci-dessous.
+              {t.noMatchDesc || "Aucune œuvre de notre catalogue ne réunit l'ensemble des critères demandés sans compromis sur la pertinence. Essayez d'élargir votre formulation, de dissocier vos critères ou d'explorer nos inspirations cinéphiles ci-dessous."}
             </p>
           </div>
 
@@ -185,7 +188,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           <div className="relative z-10 space-y-3.5 max-w-4xl mx-auto text-left">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
               <Compass className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <span>Inspirations cinéphiles à explorer en 1 clic</span>
+              <span>{t.inspirationsTitle || "Inspirations cinéphiles à explorer en 1 clic"}</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -222,10 +225,10 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Votre film ou votre série manque à l'appel ?
+                    {t.missingTitle || "Votre film ou votre série manque à l'appel ?"}
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-zinc-400">
-                    Notre catalogue s'enrichit chaque jour grâce à la communauté. Dites-nous quelle œuvre ajouter en priorité !
+                    {t.missingDesc || "Notre catalogue s'enrichit chaque jour grâce à la communauté. Dites-nous quelle œuvre ajouter en priorité !"}
                   </p>
                 </div>
               </div>
@@ -236,7 +239,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
                 className="w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
               >
                 <Clapperboard className="w-4 h-4" />
-                <span>Proposer ce film à l'équipe</span>
+                <span>{t.proposeMovieBtn || "Proposer ce film à l'équipe"}</span>
               </button>
             </div>
           </div>

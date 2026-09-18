@@ -1,0 +1,72 @@
+{
+  "tagline": "Exceptional cinema, handpicked for you.",
+  "searchPlaceholder": "Describe a mood, theme or actor...",
+  "searchPlaceholderShort": "Mood, theme, actor...",
+  "exploreBtn": "Explore",
+  "featuredBadge": "FEATURED",
+  "trailerBtn": "Trailer",
+  "myListBtn": "My List",
+  "alertBtn": "Alert",
+  "filterAll": "All",
+  "filterMovies": "Movies",
+  "filterSeries": "TV Shows",
+  "aiAnalysisBadge": "Éliciné analysis in progress",
+  "resultsTitle": "Éliciné Recommendations & Matches",
+  "resultsSubtitle": "Selection tailored to your taste",
+  "badgeFilm": "MOVIE",
+  "badgeSerie": "TV SHOW",
+  "streamingSection": "Where to Stream",
+  "availableOn": "Available on",
+  "vpnNeededTitle": "Regional Exclusive",
+  "vpnNeededDesc": "Not available in your local catalog. Accessible via VPN on",
+  "vpnButton": "Access via VPN",
+  "vodSection": "Available to Rent or Buy (VOD)",
+  "vodOnlyMessage": "Not currently included in subscription streaming catalogs.",
+  "synopsisTitle": "SYNOPSIS",
+  "critiqueTitle": "ÉLICINÉ CURATOR'S NOTE",
+  "resetHome": "Home",
+  "supportBtn": "Support",
+  "hero": {
+    "subtitle": "Éliciné's smart algorithm finds the rare gem tailored to your mood.",
+    "explore": "Explore"
+  },
+  "nav": {
+    "home": "Home",
+    "trending": "Trending",
+    "catalog": "Catalog & Genres",
+    "streaming": "Streaming",
+    "my_list": "My List",
+    "new_search": "+ New Search",
+    "support": "Support project",
+    "settings": "Settings",
+    "terms": "Terms & Privacy",
+    "install_app": "Install App"
+  },
+  "history": {
+    "title": "HISTORY",
+    "clear": "Clear",
+    "empty": "No recent searches",
+    "search_toast": "Search"
+  },
+  "pro": {
+    "active": "Éliciné Pro Active",
+    "unlimited": "UNLIMITED",
+    "pass": "Pro Pass"
+  },
+  "theme": {
+    "appearance": "Appearance",
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "sections": {
+    "trending_title": "🔥 Trending Now",
+    "trending_subtitle": "Most viewed movies and series across your platforms today"
+  },
+  "actions": {
+    "suggest_report": "Suggest / Report"
+  },
+  "meta": {
+    "title": "Éliciné — Exceptional cinema, handpicked for you",
+    "description": "Éliciné: intelligent cinema recommendation engine. Instantly find the best movies and TV series tailored to your mood and streaming subscriptions."
+  }
+}

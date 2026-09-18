@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { authService } from '../../services/authService';
 import { supabase } from '../../lib/supabase';
 
@@ -25,6 +26,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   onOpenTip
 }) => {
   const { user, loading, signOut, refreshProfile } = useAuth();
+  const { t } = useTranslation();
   const { user: appUser, setIsAuthModalOpen, openAuthModal, setActiveView, watchlist, setIsTipModalOpen, refreshUserProStatus } = useApp();
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -297,7 +299,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   )}
                 </div>
                 <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
-                  {isConnected ? (activeUser?.email || 'Compte actif') : 'Invité'}
+                  {isConnected ? (activeUser?.email || t.activeAccount || 'Compte actif') : (t.guestUser || 'Invité')}
                 </span>
               </div>
             </div>
@@ -318,7 +320,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-left cursor-pointer"
                 >
                   <User className="w-4 h-4 text-slate-500 dark:text-zinc-400 flex-shrink-0" />
-                  <span className="font-semibold text-xs">Mon Profil</span>
+                  <span className="font-semibold text-xs">{t.myProfile || 'Mon Profil'}</span>
                 </button>
               )}
 
@@ -335,7 +337,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#e50914] hover:bg-[#e50914]/10 transition-colors text-left cursor-pointer font-bold border border-[#e50914]/20"
                 >
                   <Shield className="w-4 h-4 text-[#e50914] flex-shrink-0" />
-                  <span className="text-xs">Console Admin</span>
+                  <span className="text-xs">{t.adminConsole || 'Console Admin'}</span>
                 </button>
               )}
 
@@ -352,7 +354,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <Heart className="w-4 h-4 text-[#e50914] flex-shrink-0" />
-                  <span className="font-medium text-xs">Ma Liste</span>
+                  <span className="font-medium text-xs">{t('nav.my_list') || t.navMyList}</span>
                 </div>
                 {watchlist.length > 0 && (
                   <span className="px-2 py-0.5 rounded-md bg-[#e50914]/15 text-[#e50914] text-[10px] font-bold">
@@ -366,12 +368,12 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 <div className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-300 select-none">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                    <span className="font-bold text-xs truncate">Éliciné Pro Actif</span>
+                    <span className="font-bold text-xs truncate">{t('pro.active') || t.proActive}</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider flex-shrink-0">
                     {((user as any)?.daysRemaining || (appUser as any)?.daysRemaining) && (((user as any)?.daysRemaining ?? 1000) < 999 || ((appUser as any)?.daysRemaining ?? 1000) < 999)
-                      ? `${(user as any)?.daysRemaining || (appUser as any)?.daysRemaining}j restants`
-                      : 'Illimité'}
+                      ? `${(user as any)?.daysRemaining || (appUser as any)?.daysRemaining} ${t.daysRemainingSuffix || 'j restants'}`
+                      : (t('pro.unlimited') || t.proUnlimited)}
                   </span>
                 </div>
               ) : (
@@ -387,7 +389,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 >
                   <div className="flex items-center gap-2.5">
                     <Crown className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-                    <span className="font-bold text-xs">Obtenir un Pass Pro</span>
+                    <span className="font-bold text-xs">{t.getProPass || 'Obtenir un Pass Pro'}</span>
                   </div>
                   <span className="text-[10px] font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
                     1.99$
@@ -408,7 +410,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-left cursor-pointer"
               >
                 <span className="text-sm leading-none flex-shrink-0">☕</span>
-                <span className="font-medium text-xs">Soutenir le projet</span>
+                <span className="font-medium text-xs">{t('nav.support') || t.supportProject}</span>
               </button>
 
               <div className="my-1 border-t border-slate-200 dark:border-white/10" />
@@ -422,7 +424,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-600 dark:text-zinc-400 hover:text-[#e50914] hover:bg-[#e50914]/10 transition-colors text-left cursor-pointer font-semibold"
                 >
                   <LogOut className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs">Se déconnecter</span>
+                  <span className="text-xs">{t.logoutBtn || 'Se déconnecter'}</span>
                 </button>
               ) : (
                 <button
@@ -436,7 +438,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-black font-extrabold hover:bg-slate-800 dark:hover:bg-zinc-200 transition-colors text-left cursor-pointer"
                 >
                   <LogIn className="w-4 h-4 text-white dark:text-black flex-shrink-0" />
-                  <span className="text-xs">Se connecter</span>
+                  <span className="text-xs">{t.loginBtn || 'Se connecter'}</span>
                 </button>
               )}
 
