@@ -61,12 +61,19 @@ Directives cinématographiques majeures :
   Si la requête demande des 'films', ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
 - INTERDICTION ABSOLUE des mockbusters, parodies bon marché, téléfilms obscurs ou films Asylum. Films reconnus ayant au moins 500 votes sur TMDB et note >= 5.5.
 
+- RÔLE DE SEMANTIC QUERY EXPANDER :
+  Lorsque l'utilisateur formule une requête en langage naturel (ex: "histoire d'amour impossible mais réaliste", "film d'action sans super-héros"), tu dois traduire l'intention en genres canoniques normalisés, thèmes cinématographiques précis, titres de référence majeurs et mots-clés de recherche nettoyés.
+
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
-  "corrected_query": "la requête corrigée de l'utilisateur",
+  "canonical_genres": ["Romance", "Drama"],
+  "themes": ["unrequited love", "bittersweet romance", "realistic relationship", "separation"],
+  "similar_reference_titles": ["Past Lives", "La La Land", "Blue Valentine", "In the Mood for Love", "Her", "Marriage Story"],
+  "clean_search_keywords": ["romance dramatique relation amoureuse rupture destin"],
+  "corrected_query": "la requête clarifiée et corrigée",
   "matches": [
-    { "title": "Titre français / Original Title", "reason": "Justification précise montrant le lien direct avec la thématique demandée" },
-    { "title": "Titre 2", "reason": "Justification précise" }
+    { "title": "Past Lives / Nos vies après", "reason": "Justification précise montrant le lien direct avec la thématique demandée" },
+    { "title": "La La Land", "reason": "Justification précise" }
   ]
 }`;
 
@@ -152,8 +159,17 @@ async function fetchWithTimeout(url, options, timeoutMs = 9000) {
  * Supporte le champ optionnel `corrected_query`.
  * Robuste aux balises markdown et aux préfixes de texte.
  */
-function extractMatchesFromJson(rawText) {
-  if (!rawText || typeof rawText !== 'string') return { matches: [], correctedQuery: '' };
+export function extractMatchesFromJson(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return {
+      matches: [],
+      correctedQuery: '',
+      canonicalGenres: [],
+      themes: [],
+      similarReferenceTitles: [],
+      cleanSearchKeywords: []
+    };
+  }
   try {
     const cleaned = rawText
       .replace(/^```(?:json)?\s*/im, '')
@@ -165,7 +181,37 @@ function extractMatchesFromJson(rawText) {
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
       const jsonSub = cleaned.substring(startIdx, endIdx + 1);
       const parsed = JSON.parse(jsonSub);
-      const matches = Array.isArray(parsed.matches)
+
+      // 1. Genres canoniques normalisés
+      const canonicalGenres = Array.isArray(parsed.canonical_genres)
+        ? parsed.canonical_genres.filter(g => typeof g === 'string' && g.trim().length > 0).map(g => g.trim())
+        : (Array.isArray(parsed.genres) ? parsed.genres.filter(g => typeof g === 'string' && g.trim().length > 0).map(g => g.trim()) : []);
+
+      // 2. Thèmes clés
+      const themes = Array.isArray(parsed.themes)
+        ? parsed.themes.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim())
+        : [];
+
+      // 3. Titres de référence similaires
+      const rawRefTitles = Array.isArray(parsed.similar_reference_titles)
+        ? parsed.similar_reference_titles
+        : (Array.isArray(parsed.reference_titles) ? parsed.reference_titles : (Array.isArray(parsed.similar_titles) ? parsed.similar_titles : []));
+      let similarReferenceTitles = rawRefTitles
+        .filter(t => typeof t === 'string' && t.trim().length > 0)
+        .map(t => t.trim());
+
+      // 4. Mots-clés de recherche nettoyés
+      let cleanSearchKeywords = [];
+      if (Array.isArray(parsed.clean_search_keywords)) {
+        cleanSearchKeywords = parsed.clean_search_keywords
+          .filter(k => typeof k === 'string' && k.trim().length > 0)
+          .map(k => k.trim());
+      } else if (typeof parsed.clean_search_keywords === 'string' && parsed.clean_search_keywords.trim().length > 0) {
+        cleanSearchKeywords = [parsed.clean_search_keywords.trim()];
+      }
+
+      // 5. Matches structurés (titre + justification)
+      let matches = Array.isArray(parsed.matches)
         ? parsed.matches
             .filter(m => m && typeof m.title === 'string' && m.title.trim().length > 0)
             .map(m => ({
@@ -173,15 +219,37 @@ function extractMatchesFromJson(rawText) {
               reason: String(m.reason || '').trim() || 'Recommandation cinématographique directe'
             }))
         : [];
+
+      // Interconnexion intelligente entre similar_reference_titles et matches
+      if (matches.length === 0 && similarReferenceTitles.length > 0) {
+        matches = similarReferenceTitles.map(t => ({
+          title: t,
+          reason: 'Recommandation cinématographique pour cette atmosphère'
+        }));
+      } else if (similarReferenceTitles.length === 0 && matches.length > 0) {
+        similarReferenceTitles = matches.map(m => m.title);
+      }
+
       return {
         matches,
-        correctedQuery: typeof parsed.corrected_query === 'string' ? parsed.corrected_query.trim() : ''
+        correctedQuery: typeof parsed.corrected_query === 'string' ? parsed.corrected_query.trim() : '',
+        canonicalGenres,
+        themes,
+        similarReferenceTitles,
+        cleanSearchKeywords
       };
     }
   } catch (err) {
     console.warn('[API /api/search] Erreur parsing JSON LLM :', err?.message);
   }
-  return { matches: [], correctedQuery: '' };
+  return {
+    matches: [],
+    correctedQuery: '',
+    canonicalGenres: [],
+    themes: [],
+    similarReferenceTitles: [],
+    cleanSearchKeywords: []
+  };
 }
 
 /**
@@ -228,8 +296,10 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       }, 4000);
       if (res.ok) {
         const data = await res.json();
-        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (matches.length > 0) return { matches, correctedQuery, provider: 'Groq (Llama 3.3 70B)' };
+        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+          return { ...extracted, provider: 'Groq (Llama 3.3 70B)' };
+        }
       }
     } catch (err) {
       console.warn('[API /api/search] Groq échoué → DeepSeek :', err?.message);
@@ -247,8 +317,10 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       }, 4000);
       if (res.ok) {
         const data = await res.json();
-        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (matches.length > 0) return { matches, correctedQuery, provider: 'DeepSeek (deepseek-chat)' };
+        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+          return { ...extracted, provider: 'DeepSeek (deepseek-chat)' };
+        }
       } else {
         console.warn(`[API /api/search] DeepSeek HTTP ${res.status}`);
       }
@@ -273,8 +345,10 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
         }, 4000);
         if (res.ok) {
           const data = await res.json();
-          const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-          if (matches.length > 0) return { matches, correctedQuery, provider: 'Qwen (qwen-plus)' };
+          const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+          if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+            return { ...extracted, provider: 'Qwen (qwen-plus)' };
+          }
         } else {
           console.warn(`[API /api/search] Qwen HTTP ${res.status} sur ${endpoint}`);
         }
@@ -295,8 +369,10 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       }, 4500);
       if (res.ok) {
         const data = await res.json();
-        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (matches.length > 0) return { matches, correctedQuery, provider: 'Gemini (gemini-2.0-flash)' };
+        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+          return { ...extracted, provider: 'Gemini (gemini-2.0-flash)' };
+        }
       }
     } catch (err) {
       console.warn('[API /api/search] Gemini échoué :', err?.message);
@@ -314,15 +390,25 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       }, 4500);
       if (res.ok) {
         const data = await res.json();
-        const { matches, correctedQuery } = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (matches.length > 0) return { matches, correctedQuery, provider: 'OpenAI (gpt-4o-mini)' };
+        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+          return { ...extracted, provider: 'OpenAI (gpt-4o-mini)' };
+        }
       }
     } catch (err) {
       console.warn('[API /api/search] OpenAI échoué :', err?.message);
     }
   }
 
-  return { matches: [], correctedQuery: '', provider: 'Aucun' };
+  return {
+    matches: [],
+    correctedQuery: '',
+    canonicalGenres: [],
+    themes: [],
+    similarReferenceTitles: [],
+    cleanSearchKeywords: [],
+    provider: 'Aucun'
+  };
 }
 
 // ============================================================================
@@ -416,6 +502,90 @@ async function resolveByTitles(extractedTitles, matches, queryText = '', cluster
   }
 
   return enrichWithBadges(selectedResults, matches, 'Sélection Éliciné', queryText, clusterId);
+}
+
+// ============================================================================
+// ÉTAPE 2 — Requête B : Récupération hybride par Genres + Thèmes avec opérateur OR
+// Interroge la base locale (movies et movies_embeddings) avec les tags, genres et thèmes
+// retournés par le LLM, reliés par un opérateur OR large pour élargir le filet.
+// ============================================================================
+export async function resolveByGenresAndThemes(canonicalGenres = [], themes = [], cleanSearchKeywords = [], matches = [], rawQuery = '', clusterId = null) {
+  if (!supabaseServer) return [];
+
+  const orClauses = [];
+
+  // 1. Genres canoniques (ex: Romance, Drama)
+  for (const g of (canonicalGenres || [])) {
+    const cleanG = String(g).replace(/[,()%"']/g, '').trim();
+    if (cleanG.length >= 3) {
+      orClauses.push(`genres.ilike.%${cleanG}%`);
+    }
+  }
+
+  // 2. Thèmes spécifiques (ex: unrequited love, bittersweet romance, realistic relationship)
+  for (const t of (themes || [])) {
+    const cleanT = String(t).replace(/[,()%"']/g, '').trim();
+    if (cleanT.length >= 3) {
+      orClauses.push(`overview.ilike.%${cleanT}%`);
+      orClauses.push(`genres.ilike.%${cleanT}%`);
+      orClauses.push(`moods.ilike.%${cleanT}%`);
+    }
+  }
+
+  // 3. Mots-clés de recherche nettoyés
+  const kwList = Array.isArray(cleanSearchKeywords)
+    ? cleanSearchKeywords.flatMap(k => String(k).split(/\s+/))
+    : String(cleanSearchKeywords || '').split(/\s+/);
+
+  for (const kw of kwList) {
+    const cleanKw = String(kw).replace(/[,()%"']/g, '').trim();
+    if (cleanKw.length >= 3 && !STOP_WORDS.has(cleanKw.toLowerCase())) {
+      orClauses.push(`overview.ilike.%${cleanKw}%`);
+      orClauses.push(`setting.ilike.%${cleanKw}%`);
+    }
+  }
+
+  if (orClauses.length === 0) return [];
+
+  // PostgREST utilise la virgule ',' pour l'opérateur OR strict entre les filtres
+  const orFilter = orClauses.slice(0, 30).join(',');
+  let results = [];
+
+  try {
+    const { data, error } = await supabaseServer
+      .from('movies')
+      .select('*')
+      .or(orFilter)
+      .order('vote_average', { ascending: false })
+      .limit(20);
+    if (!error && Array.isArray(data) && data.length > 0) {
+      results = data;
+    }
+  } catch (err) {
+    console.warn('[API /api/search] [Requête B] table movies :', err?.message);
+  }
+
+  if (results.length === 0) {
+    try {
+      const { data, error } = await supabaseServer
+        .from('movies_embeddings')
+        .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
+        .or(orFilter)
+        .order('vote_average', { ascending: false })
+        .limit(20);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        results = data;
+      }
+    } catch (err) {
+      console.warn('[API /api/search] [Requête B] table movies_embeddings :', err?.message);
+    }
+  }
+
+  if (results.length === 0) return [];
+
+  // Filtrer les mockbusters et non-fictions
+  const cleanResults = filterMockbusters(results, rawQuery);
+  return enrichWithBadges(cleanResults, matches, 'Recherche par contexte Éliciné', rawQuery, clusterId);
 }
 
 // ============================================================================
@@ -1218,6 +1388,185 @@ export async function resolveEmotionalMasterpieces(expansion, tmdbApiKey = '', c
   return [];
 }
 
+// ============================================================================
+// ÉTAPE 3 — Règle impérative de Fallback : Recommandations Éliciné pour votre atmosphère
+// Règle absolue : Il est formellement INTERDIT de renvoyer le composant "Aucun film
+// ne correspond précisément..." si la requête est identifiable sur un plan émotionnel
+// ou thématique. Affiche les films du genre dominant les mieux notés avec le label
+// d'accompagnement : "Recommandations Éliciné pour votre atmosphère".
+// ============================================================================
+const TMDB_GENRE_NAME_TO_ID = {
+  'romance': 10749, 'amour': 10749,
+  'drama': 18, 'drame': 18,
+  'comedy': 35, 'comédie': 35, 'comedie': 35,
+  'thriller': 53, 'suspense': 53,
+  'action': 28,
+  'science-fiction': 878, 'sci-fi': 878, 'sf': 878,
+  'horror': 27, 'horreur': 27,
+  'mystery': 9648, 'mystère': 9648, 'mystere': 9648,
+  'crime': 80, 'policier': 80,
+  'adventure': 12, 'aventure': 12,
+  'family': 10751, 'famille': 10751,
+  'fantasy': 14, 'fantastique': 14,
+  'animation': 16
+};
+
+export async function resolveDominantGenreAtmosphere(canonicalGenres = [], themes = [], cleanQuery = '', tmdbApiKey = '', clusterId = null) {
+  // 1. Identification du ou des genres dominants
+  let dominantGenres = [];
+  if (Array.isArray(canonicalGenres) && canonicalGenres.length > 0) {
+    dominantGenres = canonicalGenres.map(g => String(g).trim()).filter(Boolean);
+  }
+
+  const emotionalExpansion = detectEmotionalExpansion(cleanQuery);
+  if (dominantGenres.length === 0 && emotionalExpansion && Array.isArray(emotionalExpansion.genres)) {
+    dominantGenres = emotionalExpansion.genres;
+  }
+
+  if (dominantGenres.length === 0) {
+    const qLower = cleanQuery.toLowerCase();
+    if (/\b(?:amour|romance|amoureux|amoureuse|cœur|coeur|sentiment|couple|passion)\b/i.test(qLower)) {
+      dominantGenres = ['Romance', 'Drame'];
+    } else if (/\b(?:peur|angoisse|horreur|terrifi|sombre|d[eé]mon|frisson)\b/i.test(qLower)) {
+      dominantGenres = ['Horreur', 'Thriller'];
+    } else if (/\b(?:espace|robot|futur|dystop|ia|alien|science-fiction|sf|voyage temporel)\b/i.test(qLower)) {
+      dominantGenres = ['Science-Fiction', 'Drame'];
+    } else if (/\b(?:rire|drole|drôle|humour|com[eé]die|amiti[eé]|feel[\s-]?good)\b/i.test(qLower)) {
+      dominantGenres = ['Comédie', 'Drame'];
+    } else if (/\b(?:enqu[eê]te|meurtre|tueur|police|fbi|braquage|crime|polar)\b/i.test(qLower)) {
+      dominantGenres = ['Thriller', 'Crime'];
+    } else {
+      dominantGenres = ['Drame', 'Romance'];
+    }
+  }
+
+  const dominantLabel = dominantGenres.slice(0, 2).join(' / ') || 'Drame & Émotion';
+  console.log(`[API /api/search] [Étape 3 Fallback] Genre dominant identifié : "${dominantLabel}"`);
+
+  // 2. Recherche prioritaire dans le catalogue Supabase local
+  if (supabaseServer) {
+    const genreClauses = [];
+    for (const g of dominantGenres.slice(0, 3)) {
+      const cleanG = g.replace(/[,()%"']/g, '').trim();
+      if (cleanG.length >= 3) {
+        genreClauses.push(`genres.ilike.%${cleanG}%`);
+      }
+    }
+    if (genreClauses.length > 0) {
+      const genreFilter = genreClauses.join(',');
+      try {
+        const { data, error } = await supabaseServer
+          .from('movies')
+          .select('*')
+          .or(genreFilter)
+          .gte('vote_count', 250)
+          .order('vote_average', { ascending: false })
+          .limit(10);
+        if (!error && Array.isArray(data) && data.length >= 3) {
+          const filtered = filterMockbusters(data, cleanQuery);
+          if (filtered.length >= 3) {
+            return filtered.slice(0, 8).map((m, idx) => ({
+              ...m,
+              badge: 'Recommandations Éliciné pour votre atmosphère',
+              ai_badge: 'Recommandations Éliciné pour votre atmosphère',
+              match_rate: Math.max(78, 96 - idx * 2),
+              ai_match_reason: m.ai_match_reason || `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[API /api/search] [Étape 3 Fallback] Supabase movies :', err?.message);
+      }
+    }
+  }
+
+  // 3. Fallback sur archetypes de l'intention émotionnelle si disponibles
+  if (emotionalExpansion && Array.isArray(emotionalExpansion.archetypeTitles) && emotionalExpansion.archetypeTitles.length > 0) {
+    const emotionalMovies = await resolveEmotionalMasterpieces(emotionalExpansion, tmdbApiKey, clusterId);
+    if (emotionalMovies.length > 0) {
+      return emotionalMovies.map((m, idx) => ({
+        ...m,
+        badge: 'Recommandations Éliciné pour votre atmosphère',
+        ai_badge: 'Recommandations Éliciné pour votre atmosphère',
+        ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`,
+        match_rate: Math.max(78, 96 - idx * 2)
+      }));
+    }
+  }
+
+  // 4. Découverte TMDB des chefs-d'œuvre les mieux notés du genre dominant
+  const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
+  if (tmdbKey) {
+    const genreIds = [];
+    for (const g of dominantGenres) {
+      const gKey = g.toLowerCase().trim();
+      if (TMDB_GENRE_NAME_TO_ID[gKey]) {
+        genreIds.push(TMDB_GENRE_NAME_TO_ID[gKey]);
+      }
+    }
+    if (genreIds.length === 0) genreIds.push(18, 10749); // Romance & Drame par défaut
+
+    try {
+      const discRes = await fetchWithTimeout(
+        `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(tmdbKey)}&with_genres=${genreIds.join(',')}&sort_by=vote_average.desc&vote_count.gte=800&language=fr-FR&page=1&include_adult=false`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+        3500
+      );
+      if (discRes.ok) {
+        const discData = await discRes.json();
+        const hits = (discData.results || []).slice(0, 8);
+        if (hits.length > 0) {
+          return hits.map((m, idx) => ({
+            id: m.id,
+            tmdb_id: m.id,
+            title: m.title || m.name || '',
+            original_title: m.original_title || m.original_name || '',
+            overview: m.overview || '',
+            poster_path: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
+            release_date: m.release_date || m.first_air_date || '',
+            vote_average: m.vote_average || 0,
+            vote_count: m.vote_count || 0,
+            genres: Array.isArray(m.genre_ids) ? m.genre_ids.join(',') : '',
+            media_type: 'movie',
+            badge: 'Recommandations Éliciné pour votre atmosphère',
+            ai_badge: 'Recommandations Éliciné pour votre atmosphère',
+            match_rate: Math.max(78, 96 - idx * 2),
+            ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`
+          }));
+        }
+      }
+    } catch (discErr) {
+      console.warn('[API /api/search] [Étape 3 Fallback] TMDB discover :', discErr?.message);
+    }
+  }
+
+  // 5. Ultime filet de secours : chefs-d'œuvre emblématiques de l'atmosphère
+  const isRomanceOrDrama = dominantGenres.some(g => /romance|amour|drame|drama/i.test(g));
+  const fallbackTitles = isRomanceOrDrama
+    ? ['Past Lives', 'La La Land', 'Blue Valentine', 'In the Mood for Love', 'Her', 'Marriage Story', 'Before Sunrise', 'About Time']
+    : ['Interstellar', 'Blade Runner 2049', 'Se7en', 'Le Silence des agneaux', 'Arrival', 'Prisoners', 'Intouchables', 'Whiplash'];
+
+  return fallbackTitles.map((t, idx) => ({
+    id: 990000 + idx,
+    tmdb_id: 990000 + idx,
+    title: t,
+    original_title: t,
+    overview: `Chef-d'œuvre cinématographique célébré pour sa résonance émotionnelle et son atmosphère unique.`,
+    poster_path: null,
+    backdrop_path: null,
+    release_date: '2020',
+    vote_average: 8.4,
+    vote_count: 5000,
+    genres: dominantLabel,
+    media_type: 'movie',
+    badge: 'Recommandations Éliciné pour votre atmosphère',
+    ai_badge: 'Recommandations Éliciné pour votre atmosphère',
+    match_rate: Math.max(78, 95 - idx * 2),
+    ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`
+  }));
+}
+
 /**
  * Détermine formellement si une œuvre doit être disqualifiée car il s'agit d'un contenu
  * non-fictionnel (talk-show, interview d'acteurs, émission de divertissement, télé-réalité)
@@ -1825,8 +2174,16 @@ export default async function handler(req, res) {
 
       console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}" (format: ${requestedMediaType})`);
 
-      // ─── ÉTAPE 1 : Cerveau LLM — Extraction & Correction ─────────────────────
-      const { matches, correctedQuery, provider } = await queryLlmCandidates(cleanQuery, {
+      // ─── ÉTAPE 1 : Cerveau LLM (Semantic Query Expander) — Traduction Sémantique ──
+      const {
+        matches,
+        correctedQuery,
+        canonicalGenres,
+        themes,
+        similarReferenceTitles,
+        cleanSearchKeywords,
+        provider
+      } = await queryLlmCandidates(cleanQuery, {
         groqApiKey:     req.body?.groqApiKey,
         deepseekApiKey: req.body?.deepseekApiKey,
         qwenApiKey:     req.body?.qwenApiKey,
@@ -1834,9 +2191,20 @@ export default async function handler(req, res) {
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
       }, requestedMediaType);
 
-      const extractedTitles = matches.map(m => m.title);
+      // Union des titres de référence pour Requête A
+      const allReferenceTitles = Array.from(new Set([
+        ...(similarReferenceTitles || []),
+        ...matches.map(m => m.title)
+      ])).filter(Boolean);
+
       const effectiveQuery  = correctedQuery || cleanQuery;
-      console.log(`[API /api/search] [Étape 1] ${matches.length} candidat(s) via ${provider} :`, extractedTitles);
+      console.log(`[API /api/search] [Étape 1] ${allReferenceTitles.length} titre(s) de référence via ${provider} :`, allReferenceTitles);
+      if (canonicalGenres?.length > 0) {
+        console.log(`[API /api/search] [Étape 1] Genres canoniques :`, canonicalGenres);
+      }
+      if (themes?.length > 0) {
+        console.log(`[API /api/search] [Étape 1] Thèmes :`, themes);
+      }
       if (correctedQuery && correctedQuery !== cleanQuery) {
         console.log(`[API /api/search] [Étape 1] Requête corrigée : "${cleanQuery}" → "${correctedQuery}"`);
       }
@@ -1849,23 +2217,48 @@ export default async function handler(req, res) {
         console.log(`[API /api/search] Cluster thématique actif pour le cache : "${activeClusterId}"`);
       }
 
-      // ─── ÉTAPE 2 — Phase A : Résolution par titres (ilike souple) ─────────────
+      // ─── ÉTAPE 2 — Requête A : Recherche prioritaire des titres de référence ───
       let resolvedMovies = [];
-      if (extractedTitles.length > 0) {
-        resolvedMovies = await resolveByTitles(extractedTitles, matches, effectiveQuery, activeClusterId);
-        console.log(`[API /api/search] [Étape 2 Phase A] ${resolvedMovies.length} correspondance(s) par titre.`);
+      if (allReferenceTitles.length > 0) {
+        resolvedMovies = await resolveByTitles(allReferenceTitles, matches, effectiveQuery, activeClusterId);
+        console.log(`[API /api/search] [Étape 2 Requête A] ${resolvedMovies.length} film(s) de référence trouvé(s) dans le catalogue.`);
       }
 
-      // ─── ÉTAPE 2 — Phase B : Fallback textuel + TMDB si Phase A vide ─────────
+      // ─── ÉTAPE 2 — Requête B : Genres + Thèmes avec opérateur OR ─────────────
+      // Interroger la base avec les tags et genres retournés, avec un opérateur OR pour élargir le filet
+      if (resolvedMovies.length < 6 && (canonicalGenres?.length > 0 || themes?.length > 0 || cleanSearchKeywords?.length > 0)) {
+        console.log(`[API /api/search] [Étape 2 Requête B] Interrogation hybride OR (genres: ${canonicalGenres?.join(', ')}, thèmes: ${themes?.join(', ')})`);
+        const hybridMatches = await resolveByGenresAndThemes(
+          canonicalGenres,
+          themes,
+          cleanSearchKeywords,
+          matches,
+          effectiveQuery,
+          activeClusterId
+        );
+        console.log(`[API /api/search] [Étape 2 Requête B] ${hybridMatches.length} résultat(s) supplémentaires via OR.`);
+
+        const seenIds = new Set(resolvedMovies.map(m => m.id || m.tmdb_id));
+        for (const hm of hybridMatches) {
+          const mId = hm.id || hm.tmdb_id;
+          if (!seenIds.has(mId)) {
+            seenIds.add(mId);
+            resolvedMovies.push(hm);
+            if (resolvedMovies.length >= 12) break;
+          }
+        }
+      }
+
+      // ─── ÉTAPE 2 — Complément textuel élargi + TMDB si Requêtes A & B vides ──
       if (resolvedMovies.length === 0) {
-        console.log('[API /api/search] [Étape 2 Phase B] Phase A vide → recherche élargie...');
+        console.log('[API /api/search] [Étape 2 Fallback] Requêtes A & B vides → recherche élargie TMDB / mots-clés...');
         resolvedMovies = await resolveByKeywords(
           effectiveQuery,
           matches,
           req.body?.tmdbApiKey || '',
           activeClusterId
         );
-        console.log(`[API /api/search] [Étape 2 Phase B] ${resolvedMovies.length} résultat(s).`);
+        console.log(`[API /api/search] [Étape 2 Fallback] ${resolvedMovies.length} résultat(s).`);
       }
 
       // ─── ÉTAPE 2.5 — Filtre Anti-Mockbuster ─────────────────────────────────
@@ -1996,7 +2389,7 @@ export default async function handler(req, res) {
           providerUsed: 'Algorithme Éliciné',
           correctedQuery: correctedQuery || null,
           thought: thoughtMsg,
-          extractedTitles,
+          extractedTitles: allReferenceTitles,
           suggestedPrompts: [
             'Un film de science-fiction dystopique sombre',
             'Un thriller psychologique avec un twist final',
@@ -2005,27 +2398,46 @@ export default async function handler(req, res) {
         });
       }
 
-      // ─── ÉTAPE 3 : Filet de sécurité — Zéro résultat absolu ─────────────────
-      // Règle contractuelle absolue "Zéro Écran Vide" :
-      // Ne jamais afficher l'écran vide si la requête traduit une intention émotionnelle universelle.
-      const emotionalExpansion = detectEmotionalExpansion(cleanQuery);
-      if (emotionalExpansion) {
-        console.log(`[API /api/search] [Étape 3 - Zéro Écran Vide] Intention émotionnelle « ${emotionalExpansion.label} » → Sauvetage par chefs-d'œuvre`);
-        const rescuedEmotionalMovies = await resolveEmotionalMasterpieces(emotionalExpansion, req.body?.tmdbApiKey || '', activeClusterId);
-        if (rescuedEmotionalMovies.length > 0) {
+      // ─── ÉTAPE 3 : Règle impérative de Fallback — Recommandations d'Atmosphère ─
+      // Règle formelle absolue :
+      // Il est formellement INTERDIT de renvoyer le composant "Aucun film ne correspond précisément..."
+      // si la requête est identifiable sur un plan émotionnel ou thématique.
+      // Si la recherche stricte ne donne aucun résultat exact, afficher les films du genre dominant
+      // ("Romance / Drame", etc.) les mieux notés avec le label d'accompagnement :
+      // "Recommandations Éliciné pour votre atmosphère".
+      const isThematicOrEmotional = 
+        (canonicalGenres && canonicalGenres.length > 0) ||
+        (themes && themes.length > 0) ||
+        (allReferenceTitles && allReferenceTitles.length > 0) ||
+        Boolean(detectEmotionalExpansion(cleanQuery)) ||
+        Boolean(detectThematicClusterId(cleanQuery)) ||
+        cleanQuery.trim().length >= 4;
+
+      if (isThematicOrEmotional) {
+        console.log(`[API /api/search] [Étape 3 Fallback] Requête thématique/émotionnelle sans résultat strict → Recommandations Éliciné pour votre atmosphère`);
+        const atmosphereMovies = await resolveDominantGenreAtmosphere(
+          canonicalGenres,
+          themes,
+          cleanQuery,
+          req.body?.tmdbApiKey || '',
+          activeClusterId
+        );
+
+        if (atmosphereMovies.length > 0) {
           return res.status(200).json({
             success: true,
-            movies: rescuedEmotionalMovies,
-            count: rescuedEmotionalMovies.length,
+            movies: atmosphereMovies,
+            count: atmosphereMovies.length,
             isEmpty: false,
-            badge: 'Sélection Éliciné',
+            isFallbackMode: true,
+            badge: "Recommandations Éliciné pour votre atmosphère",
             providerUsed: 'Algorithme Éliciné',
             correctedQuery: correctedQuery || null,
-            thought: `✨ Sélection Éliciné : Les chefs-d'œuvre incontournables pour votre envie d'émotion (« ${emotionalExpansion.label} »)`,
-            extractedTitles,
+            thought: "Recommandations Éliciné pour votre atmosphère",
+            extractedTitles: allReferenceTitles,
             suggestedPrompts: [
               "Un film de braquage haletant avec twist",
-              "Une série policière sombre sous la pluie",
+              "Une histoire d'amour impossible mais réaliste",
               "Un chef-d'œuvre de science-fiction dystopique",
               "Une comédie feel-good et touchante"
             ]
@@ -2033,9 +2445,9 @@ export default async function handler(req, res) {
         }
       }
 
-      // Atteint UNIQUEMENT si Phase A (titres) + Phase B (mots-clés) ont toutes les deux échoué et requête non-émotionnelle.
-      // INTERDIT ABSOLU : aucun film aléatoire ou blockbuster par défaut.
-      console.log('[API /api/search] [Étape 3] Phase A + Phase B : 0 résultat. Retour [] strict.');
+      // Atteint UNIQUEMENT si la requête est du charabia aléatoire non identifiable.
+      // INTERDIT ABSOLU : aucun film aléatoire ou blockbuster hors-sujet.
+      console.log('[API /api/search] [Étape 3] Requête non-thématique sans résultat. Retour [] strict.');
       return res.status(200).json({
         success: true,
         movies: [],
@@ -2044,7 +2456,7 @@ export default async function handler(req, res) {
         providerUsed: 'Algorithme Éliciné',
         correctedQuery: correctedQuery || null,
         message: "L'algorithme Éliciné a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
-        extractedTitles,
+        extractedTitles: allReferenceTitles,
         suggestedPrompts: [
           "Un voyage dans l'espace avec des trous noirs",
           "Un film de braquage qui tourne mal",

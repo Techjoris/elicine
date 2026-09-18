@@ -469,16 +469,22 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
       if (Array.isArray(parsed)) {
         list = parsed;
       } else if (parsed && typeof parsed === 'object') {
-        list = parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
-        if (parsed.criteria && typeof parsed.criteria === 'object') {
-          criteria = {
-            actors: Array.isArray(parsed.criteria.actors) ? parsed.criteria.actors : [],
-            directors: Array.isArray(parsed.criteria.directors) ? parsed.criteria.directors : [],
-            genres: Array.isArray(parsed.criteria.genres) ? parsed.criteria.genres : [],
-            format: parsed.criteria.format,
-            primaryEntity: parsed.criteria.primary_entity || parsed.criteria.primaryEntity
-          };
-        }
+        list = parsed.similar_reference_titles || parsed.matches || parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
+        const extractedGenres = Array.isArray(parsed.canonical_genres)
+          ? parsed.canonical_genres
+          : (Array.isArray(parsed.genres) ? parsed.genres : (Array.isArray(parsed.criteria?.genres) ? parsed.criteria.genres : []));
+        const extractedThemes = Array.isArray(parsed.themes)
+          ? parsed.themes
+          : (Array.isArray(parsed.criteria?.themes) ? parsed.criteria.themes : []);
+
+        criteria = {
+          actors: Array.isArray(parsed.criteria?.actors) ? parsed.criteria.actors : [],
+          directors: Array.isArray(parsed.criteria?.directors) ? parsed.criteria.directors : [],
+          genres: extractedGenres,
+          themes: extractedThemes,
+          format: parsed.criteria?.format || parsed.format,
+          primaryEntity: parsed.criteria?.primary_entity || parsed.criteria?.primaryEntity
+        };
       }
 
       if (Array.isArray(list) && list.length > 0) {
@@ -1329,12 +1335,12 @@ export async function executeCinoraSearch(
             searchData.thought || `✨ Analyse Éliciné : ${moviesWithCache.length} œuvre(s) correspondante(s) dans notre catalogue`
           );
 
-          if (formatResult.movies.length > 0 && !formatResult.isFallback) {
+          if (formatResult.movies.length > 0) {
             return {
               thought: formatResult.thought,
               moodDetected: cleanQuery,
               recommendedMovies: formatResult.movies,
-              isFallbackMode: false,
+              isFallbackMode: Boolean(searchData.isFallbackMode),
               providerUsed: searchData.providerUsed || 'Algorithme Éliciné',
               suggestedPrompts: searchData.suggestedPrompts || [
                 'Un film de science-fiction dystopique sombre',
@@ -1349,8 +1355,6 @@ export async function executeCinoraSearch(
                 tier3Count: 0
               }
             };
-          } else if (formatResult.isFallback && formatResult.movies.length > 0) {
-            supabaseFallbackResult = { movies: formatResult.movies, thought: formatResult.thought };
           }
         }
 
@@ -2160,7 +2164,7 @@ export async function executeCinoraSearch(
       const formatResult = enforceFormatConstraintAndFallback(
         rescueList,
         effectiveFilters.mediaType,
-        `✨ Sélection Éliciné : Les chefs-d'œuvre incontournables pour votre envie d'émotion (« ${emotionalFallback.label} »)`
+        "Recommandations Éliciné pour votre atmosphère"
       );
       return {
         thought: formatResult.thought,
@@ -2171,7 +2175,147 @@ export async function executeCinoraSearch(
         suggestedPrompts: [
           'Un drame poignant et bouleversant',
           'Une comédie feel-good et chaleureuse',
-          'Un film angoissant sans sursaut',
+          'Une histoire d\'amour impossible mais réaliste',
+          'Un voyage cinématographique inoubliable'
+        ],
+        cascade: {
+          tierReached: 2,
+          criteria,
+          tier1Count: 0,
+          tier2Count: formatResult.movies.length,
+          tier3Count: 0
+        }
+      };
+    }
+  }
+
+  // 4. ÉTAPE 3 : RÈGLE IMPÉRATIVE DE FALLBACK (Recommandations Éliciné pour votre atmosphère)
+  // Il est formellement INTERDIT de renvoyer le composant "Aucun film ne correspond précisément..."
+  // si la requête est identifiable sur un plan émotionnel ou thématique.
+  const isIdentifiableThematicOrEmotional =
+    Boolean(emotionalFallback) ||
+    Boolean(criteria.thematicCluster) ||
+    (criteria.genres && criteria.genres.length > 0) ||
+    (criteria.themes && criteria.themes.length > 0) ||
+    /\b(?:amour|romance|amoureux|amoureuse|coeur|cœur|sentiment|couple|rupture|séparation|drame|triste|peur|angoisse|horreur|rire|comédie|suspense|thriller|action|dystop|sf|science-fiction|nostalgie)\b/i.test(cleanQuery) ||
+    cleanQuery.trim().length >= 4;
+
+  if (isIdentifiableThematicOrEmotional) {
+    console.log(`[Éliciné Cascade] [Règle Fallback Atmosphère] Requête thématique/émotionnelle sans résultat strict → Recommandations Éliciné pour votre atmosphère`);
+
+    // A. Déterminer le ou les genres dominants
+    let dominantGenreNames = criteria.genres && criteria.genres.length > 0 ? criteria.genres : [];
+    if (dominantGenreNames.length === 0 && emotionalFallback?.genres) {
+      dominantGenreNames = emotionalFallback.genres;
+    }
+    if (dominantGenreNames.length === 0) {
+      const qLower = cleanQuery.toLowerCase();
+      if (/\b(?:amour|romance|amoureux|amoureuse|cœur|coeur|sentiment|couple|passion)\b/i.test(qLower)) {
+        dominantGenreNames = ['Romance', 'Drame'];
+      } else if (/\b(?:peur|angoisse|horreur|terrifi|sombre|d[eé]mon)\b/i.test(qLower)) {
+        dominantGenreNames = ['Horreur', 'Thriller'];
+      } else if (/\b(?:espace|robot|futur|dystop|ia|alien|science-fiction|sf)\b/i.test(qLower)) {
+        dominantGenreNames = ['Science-Fiction', 'Drame'];
+      } else if (/\b(?:rire|drole|drôle|humour|com[eé]die|amiti[eé]|feel[\s-]?good)\b/i.test(qLower)) {
+        dominantGenreNames = ['Comédie', 'Drame'];
+      } else if (/\b(?:enqu[eê]te|meurtre|tueur|police|fbi|braquage|crime|polar)\b/i.test(qLower)) {
+        dominantGenreNames = ['Thriller', 'Crime'];
+      } else {
+        dominantGenreNames = ['Romance', 'Drame'];
+      }
+    }
+
+    const dominantLabel = dominantGenreNames.slice(0, 2).join(' / ') || 'Romance / Drame';
+    const genreMap: Record<string, number> = {
+      'romance': 10749, 'amour': 10749,
+      'drama': 18, 'drame': 18,
+      'comedy': 35, 'comédie': 35, 'comedie': 35,
+      'thriller': 53, 'suspense': 53,
+      'action': 28,
+      'science-fiction': 878, 'sci-fi': 878, 'sf': 878,
+      'horror': 27, 'horreur': 27,
+      'mystery': 9648, 'mystère': 9648,
+      'crime': 80, 'policier': 80,
+      'adventure': 12, 'aventure': 12,
+      'family': 10751, 'famille': 10751
+    };
+
+    const targetGenreIds: number[] = [];
+    for (const g of dominantGenreNames) {
+      const id = genreMap[g.toLowerCase().trim()];
+      if (id && !targetGenreIds.includes(id)) targetGenreIds.push(id);
+    }
+    if (targetGenreIds.length === 0) targetGenreIds.push(10749, 18);
+
+    let atmosphereMovies: Movie[] = [];
+
+    // B. Découverte TMDB des chefs-d'œuvre les mieux notés
+    try {
+      const discRes = await fetchTmdbEndpoint('discover/movie', {
+        with_genres: targetGenreIds.join(','),
+        sort_by: 'vote_average.desc',
+        'vote_count.gte': 800,
+        language: 'fr-FR',
+        include_adult: false
+      }, tmdbKey);
+      if (discRes.ok) {
+        const discData = await discRes.json();
+        const formatted = formatTmdbResults(discData.results || []).slice(0, 8);
+        atmosphereMovies = formatted.map((m, idx) => ({
+          ...m,
+          match_rate: Math.max(78, 96 - idx * 2),
+          ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`,
+          badge: 'Recommandations Éliciné pour votre atmosphère'
+        }));
+      }
+    } catch (_) {}
+
+    // C. Si TMDB indisponible ou < 3 films, archetypes intemporels
+    if (atmosphereMovies.length < 3) {
+      const isRomanceOrDrama = dominantGenreNames.some(g => /romance|amour|drame|drama/i.test(g));
+      const fallbackArchetypeTitles = isRomanceOrDrama
+        ? ['Past Lives', 'La La Land', 'Blue Valentine', 'In the Mood for Love', 'Her', 'Marriage Story', 'Before Sunrise', 'About Time']
+        : ['Interstellar', 'Blade Runner 2049', 'Se7en', 'Le Silence des agneaux', 'Arrival', 'Prisoners', 'Intouchables', 'Whiplash'];
+
+      const resolvedArchetypes = await Promise.all(
+        fallbackArchetypeTitles.map(async (title, idx) => {
+          const raw = await resolveTitleToTmdb(title, tmdbKey);
+          if (raw) {
+            const formatted = formatTmdbResults([raw])[0];
+            if (formatted) {
+              return {
+                ...formatted,
+                match_rate: Math.max(78, 96 - idx * 2),
+                ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`,
+                badge: 'Recommandations Éliciné pour votre atmosphère'
+              };
+            }
+          }
+          return null;
+        })
+      );
+      const validArchetypes = resolvedArchetypes.filter(Boolean) as Movie[];
+      if (validArchetypes.length > 0) {
+        atmosphereMovies = validArchetypes;
+      }
+    }
+
+    if (atmosphereMovies.length > 0) {
+      const formatResult = enforceFormatConstraintAndFallback(
+        atmosphereMovies,
+        effectiveFilters.mediaType,
+        "Recommandations Éliciné pour votre atmosphère"
+      );
+      return {
+        thought: formatResult.thought,
+        moodDetected: cleanQuery,
+        recommendedMovies: formatResult.movies,
+        isFallbackMode: false,
+        providerUsed: 'Algorithme Éliciné',
+        suggestedPrompts: [
+          'Un drame poignant et bouleversant',
+          'Une comédie feel-good et chaleureuse',
+          'Une histoire d\'amour impossible mais réaliste',
           'Un voyage cinématographique inoubliable'
         ],
         cascade: {
