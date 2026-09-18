@@ -176,6 +176,7 @@ export async function queryAiTitles(
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
 COHÉRENCE SÉMANTIQUE OBLIGATOIRE : Si la requête associe plusieurs thèmes (ex: "mariage et mort"), chaque œuvre proposée DOIT véritablement articuler cette combinaison dans son intrigue.
+TOURNURES NÉGATIVES & EXCLUSIONS : Si la recherche comporte des exclusions (ex: 'sans super-héros', 'sans explosion'), traduis-les immédiatement en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain, tension psychologique comme Heat, Sicario, Collateral, Drive, Le Fugitif). Ne bloque JAMAIS la recherche si le genre principal existe.
 Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films très proches (Niveau 2 : élargissement souple).
 IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si explicitement demandés), romances de bureau ou comédies sans rapport avec l'ensemble des thèmes, parodies et mockbusters (The Asylum). Si des films sont demandés, ne proposer QUE des films de cinéma de fiction reconnus (>= 6/10 sur TMDB).
 Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
@@ -185,6 +186,7 @@ Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, san
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
 Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
 COHÉRENCE GLOBALE REQUISE : Chaque œuvre doit profondément correspondre à l'intention thématique de la recherche. Si la requête est composite, l'œuvre doit relier ces composantes et non un mot isolé.
+TOURNURES NÉGATIVES & EXCLUSIONS : Traduis toute négation en sous-genres positifs correspondants (ex: action sans super-héros -> polar urbain et action réaliste comme Heat, Sicario, Collateral). Interdiction du blocage sec si le genre principal existe.
 IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si demandés) et mockbusters. Si des films sont demandés, ne proposer QUE des œuvres de cinéma de fiction. Diversité de réalisateurs requise.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 350;
@@ -192,6 +194,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
   } else {
     prompt = `SÉLECTION THÉMATIQUE STRICTE : Propose entre 6 et 8 films ou séries existants pour la recherche thématique : "${query}".
 COHÉRENCE SÉMANTIQUE GLOBALE : Si la requête combine des thèmes (ex: "mariage et mort"), chaque film DOIT relier ces deux dimensions au cœur de son récit (ex: Les Noces funèbres, Melancholia, Amour, Quatre mariages et un enterrement), et non être une simple comédie ou romance banale.
+TOURNURES NÉGATIVES & EXCLUSIONS : Si la requête formule des exclusions (ex: 'sans super-héros et sans explosion'), traduis-les intelligemment en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain, tension psychologique comme Sicario, Heat, Collateral, Drive, Le Fugitif, Ronin). Interdiction formelle du blocage sec si le catalogue contient des chefs-d'œuvre du genre principal respectant l'esprit de la recherche.
 Exclure STRICTEMENT les talk-shows, émissions d'interviews (ex: 'Actors on Actors'), télé-réalités, mockbusters et films hors-sujet. Ne proposer QUE des films de cinéma de fiction pertinents.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 300;
@@ -1263,6 +1266,7 @@ export async function executeCinoraSearch(
       : (offlineCriteria.format !== 'all' ? offlineCriteria.format : (aiCriteria?.format || 'all')),
     themes: Array.from(new Set([...(offlineCriteria.themes || []), ...(aiCriteria?.themes || [])])),
     narrativeCues: Array.from(new Set(rawNarrativeCues)),
+    exclusions: Array.from(new Set([...(offlineCriteria.exclusions || []), ...((aiCriteria as any)?.exclusions || [])])),
     isTwistRequested: isTwistReq,
     hasNarrativeConstraint: offlineCriteria.hasNarrativeConstraint || isTwistReq || rawNarrativeCues.length > 0 || (offlineCriteria.spatialSettings?.length || 0) > 0,
     hasStructuredIntent: offlineCriteria.hasStructuredIntent || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length || (aiCriteria as any)?.spatial_settings?.length),

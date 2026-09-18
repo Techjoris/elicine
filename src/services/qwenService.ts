@@ -24,6 +24,7 @@ export async function fetchMoviesFromQwen(
 
   const systemPrompt = `Tu es l'algorithme cinématographique expert d'Éliciné.
 À partir de la demande de l'utilisateur, recommande entre 6 et 8 films ou séries existants et pertinents.
+TOURNURES NÉGATIVES & EXCLUSIONS : Si la requête formule des exclusions (ex: 'sans super-héros et sans explosion'), traduis-les intelligemment en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain comme Sicario, Heat, Collateral, Drive, Le Fugitif). Ne bloque jamais la recherche si le genre principal existe.
 Réponds STRICTEMENT sous la forme d'un objet JSON pur, sans texte d'introduction ni conclusion.
 Format requis :
 {

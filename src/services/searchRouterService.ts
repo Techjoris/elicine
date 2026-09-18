@@ -776,9 +776,10 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  // 5. Genres
+  // 5. Genres (en écartant formellement les genres exclus par la négation)
   for (const g of BROAD_GENRES) {
-    if (lower.includes(g)) {
+    const isExcludedGenre = exclusions.some(ex => g.toLowerCase().includes(ex.toLowerCase()) || ex.toLowerCase().includes(g.toLowerCase()));
+    if (lower.includes(g) && !isExcludedGenre) {
       const capitalized = g.charAt(0).toUpperCase() + g.slice(1);
       if (!genres.includes(capitalized)) {
         genres.push(capitalized);
@@ -786,11 +787,8 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
-  // 6. Thèmes & Tropes d'ambiance
+  // 6. Thèmes & Tropes d'ambiance (en écartant formellement les termes exclus)
   const themeKeywords = [
-    'huis clos', 'twist', 'espace', 'trou noir', 'boucle temporelle',
-    'braquage', 'paranoïa', 'amnésie', 'sniper', 'intelligence artificielle',
-    'sous-marin', 'cercueil', 'zombie', 'vampire', 'cyberpunk', 'dystopie',
     'enquête', 'infiltration', 'voyage dans le temps',
     'guerre', 'soldat', 'combat', 'bataille', 'tranchée', 'tranchées', 'survie au combat',
     'mariage', 'noces', 'marier', 'mort', 'mourir', 'décès', 'deuil', 'enterrement', 'funérailles',
@@ -901,7 +899,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     if (!themes.includes(sw)) themes.push(sw);
   }
 
-  // Nettoyage des narrativeCues : exclure les termes de contraintes négatives ou de décennies
+  // Nettoyage des narrativeCues et themes : exclure les termes de contraintes négatives ou de décennies
   const cleanNarrativeCues = narrativeCues.filter(cue => {
     const cueLower = cue.toLowerCase();
     const isExcluded = exclusions.some(ex => cueLower.includes(ex.toLowerCase()) || ex.toLowerCase().includes(cueLower));
@@ -909,7 +907,12 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     return !isExcluded && !isEraWord;
   });
 
-  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || themes.length > 0 || isMetaphorical || Boolean(era);
+  const cleanThemes = themes.filter(t => {
+    const tLower = t.toLowerCase();
+    return !exclusions.some(ex => tLower.includes(ex.toLowerCase()) || ex.toLowerCase().includes(tLower));
+  });
+
+  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || cleanThemes.length > 0 || exclusions.length > 0 || isMetaphorical || Boolean(era);
 
   // 10. Calcul de l'intention globale structurée (Niveau 1)
   // Vrai dès qu'une entité humaine, un cadre spatial, une situation, un thème ou un ton/twist est identifié
@@ -967,7 +970,7 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     era,
     year,
     format,
-    themes,
+    themes: cleanThemes,
     narrativeCues: cleanNarrativeCues,
     exclusions,
     isMetaphorical,
@@ -1642,21 +1645,30 @@ function formatClusterDisplayName(clusterId: string): string {
     }
   }
 
-  // F. Prise en compte des contraintes négatives / exclusions ("sans extraterrestre", etc.)
+  // F. Prise en compte des contraintes négatives / exclusions ("sans extraterrestre", "sans super-héros", etc.)
   if (criteria.exclusions && criteria.exclusions.length > 0) {
     let containsExcluded = false;
+    let foundExcluded = '';
     for (const ex of criteria.exclusions) {
       if (overviewLower.includes(ex.toLowerCase()) || titleLower.includes(ex.toLowerCase())) {
         containsExcluded = true;
+        foundExcluded = ex;
         break;
       }
     }
     if (containsExcluded) {
-      thematicScore = Math.min(thematicScore, 30);
-      thematicReason = `Contient un élément expressément exclu (${criteria.exclusions.join(', ')})`;
-    } else if (matchesRequestedGenre || thematicScore >= 70) {
-      thematicScore = Math.max(thematicScore, 88);
-      thematicReason = `Conforme à la demande : sans ${criteria.exclusions.join(', ')}`;
+      thematicScore = Math.min(thematicScore, 25);
+      thematicReason = `Contient un élément expressément exclu (${foundExcluded || criteria.exclusions.join(', ')})`;
+    } else if (matchesRequestedGenre || thematicScore >= 65 || genreIds.includes(28) || genreIds.includes(80) || genreIds.includes(53)) {
+      thematicScore = Math.max(thematicScore, 92);
+      const isActionRealiste = criteria.exclusions.some(ex =>
+        ['super-héros', 'super héros', 'superheros', 'superhero', 'explosion', 'explosions', 'fantastique'].includes(ex.toLowerCase())
+      );
+      if (isActionRealiste && (matchesRequestedGenre || genreIds.includes(28) || genreIds.includes(80) || genreIds.includes(53))) {
+        thematicReason = `Action ancrée dans le réel (sans ${criteria.exclusions.join(', ')})`;
+      } else {
+        thematicReason = `Conforme à la demande : sans ${criteria.exclusions.join(', ')}`;
+      }
     }
   }
 

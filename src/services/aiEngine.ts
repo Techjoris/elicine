@@ -58,6 +58,7 @@ function getUnifiedSystemPrompt(specificity: SpecificityAnalysis): string {
     return `Tu es l'algorithme cinématographique expert d'Éliciné.
 L'utilisateur effectue une recherche par SOUVENIR ou DÉTAILS NARRATIFS (intrigue, acteur, lieu, scène, twist).
 Analyse les éléments décrits en tolérant les synonymes et approximations. Identifie en tête de liste l'œuvre exacte ou la plus probable, puis complète avec 3 à 5 œuvres très proches (même univers, ambiance ou trope similaire).
+TOURNURES NÉGATIVES & EXCLUSIONS : Si la requête comporte des exclusions (ex: 'sans super-héros', 'sans explosion'), traduis-les immédiatement en un choix positif pertinent (action réaliste, polar urbain, thriller psychologique comme Heat, Sicario, Collateral, Drive, Le Fugitif). Ne bloque JAMAIS la recherche si le genre principal existe.
 Réponds STRICTEMENT sous la forme d'un objet JSON pur :
 {
   "provider_used": "Nom du modèle",
@@ -77,6 +78,7 @@ Note : Fournis entre 4 et 6 films au total.`;
     return `Tu es l'algorithme cinématographique expert d'Éliciné.
 L'utilisateur effectue une recherche LARGE (genre, acteur, époque, catégorie).
 Recommande une sélection ÉLARGIE et COMPLÈTE d'environ 14 à 16 films ou séries incontournables et emblématiques correspondants.
+TOURNURES NÉGATIVES : Traduis toute exclusion en sous-genres positifs (ex: action sans super-héros -> polar urbain et action réaliste).
 Réponds STRICTEMENT sous la forme d'un objet JSON pur :
 {
   "provider_used": "Nom du modèle",
@@ -94,6 +96,7 @@ Note : Fournis entre 14 et 16 films.`;
 
   return `Tu es l'algorithme cinématographique expert d'Éliciné.
 À partir de la demande de l'utilisateur, recommande entre 6 et 8 films ou séries existants et pertinents.
+TOURNURES NÉGATIVES & EXCLUSIONS : Si la requête formule des exclusions (ex: 'sans super-héros et sans explosion'), traduis-les intelligemment en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain, tension psychologique comme Sicario, Heat, Collateral, Drive, Le Fugitif). Interdiction du blocage sec si le genre principal existe.
 Réponds STRICTEMENT sous la forme d'un objet JSON pur, sans texte d'introduction ni conclusion.
 Format JSON requis :
 {
