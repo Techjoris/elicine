@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import { CreditCard } from 'lucide-react';
 import { PricingBillingCycle } from '../../types';
 
 export interface PayPalButtonProps {
@@ -67,8 +68,8 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     );
   }
 
-  // 1. Verrouillage strict du SDK PayPal :
-  // Suppression du Guest Checkout défaillant via "disable-funding": "card" et components: "buttons"
+  // 1. Désactivation du bouton natif PayPal défaillant :
+  // Le paramètre "disable-funding": "card,credit,paylater" force le SDK à ne rendre QUE le bouton jaune principal PayPal
   const initialOptions = useMemo(() => {
     const opts: any = {
       clientId: clientId,
@@ -78,8 +79,8 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
       commit: true,
       vault: false,
       components: 'buttons',
-      'disable-funding': 'card',
-      disableFunding: 'card',
+      'disable-funding': 'card,credit,paylater',
+      disableFunding: 'card,credit,paylater',
       dataSdkIntegrationSource: 'react-paypal-js'
     };
 
@@ -194,6 +195,18 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             if (onError) onError(err);
           }}
         />
+
+        {/* 2 & 3. Bouton UI de substitution factice pour la carte bancaire */}
+        <button
+          type="button"
+          disabled={true}
+          aria-disabled="true"
+          className="w-full h-[44px] rounded flex items-center justify-center gap-2.5 bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-semibold text-xs sm:text-sm border border-gray-300/80 dark:border-gray-700/80 opacity-60 cursor-not-allowed select-none shadow-none"
+          title="Paiement par carte bancaire temporairement indisponible dans cette région"
+        >
+          <CreditCard className="w-4 h-4 opacity-75 shrink-0" />
+          <span>Carte bancaire (Bientôt disponible)</span>
+        </button>
       </PayPalScriptProvider>
     </div>
   );
