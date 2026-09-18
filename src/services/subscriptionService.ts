@@ -760,18 +760,37 @@ export const subscriptionService = {
 
     // Transmission au backend sécurisé pour capture réelle des fonds et activation Pro
     try {
+      const envClientId = (
+        (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
+        (import.meta as any).env?.PAYPAL_CLIENT_ID ||
+        ''
+      ).trim();
+
+      const envMode = (
+        (import.meta as any).env?.VITE_PAYPAL_MODE ||
+        (import.meta as any).env?.VITE_PAYPAL_ENV ||
+        (import.meta as any).env?.PAYPAL_MODE ||
+        ''
+      ).toLowerCase().trim();
+
+      const isSandbox = envMode === 'sandbox' || envMode === 'test' || envClientId === 'sb' || envClientId === 'test' || !envClientId;
+      const frontendMode = isSandbox ? 'sandbox' : 'live';
+
       console.log('[subscriptionService] 🔐 Envoi de l\'orderID au backend pour capture serveur et activation :', {
         orderId: params.orderId,
         email,
-        plan: params.plan
+        plan: params.plan,
+        frontendMode
       });
 
       let data: any = null;
       let resOk = false;
+      let lastErrorMessage = '';
 
       // 1. Tenter d'abord la Supabase Edge Function 'capture-paypal' si disponible
       if (isSupabaseConfigured() && supabase && (supabase as any).functions) {
         try {
+          console.log('[subscriptionService] ⚡ Appel de la Edge Function Supabase capture-paypal...');
           const { data: edgeData, error: edgeError } = await (supabase as any).functions.invoke('capture-paypal', {
             body: {
               orderId: params.orderId,
@@ -781,21 +800,34 @@ export const subscriptionService = {
               customerName: name,
               plan: params.plan,
               currency: params.currency || 'USD',
-              amount: params.amount
+              amount: params.amount,
+              mode: frontendMode
             }
           });
-          if (!edgeError && edgeData?.success && edgeData?.isPro) {
-            console.log('[subscriptionService] ✅ Succès capture via Supabase Edge Function :', edgeData);
-            data = edgeData;
-            resOk = true;
+
+          if (edgeError) {
+            console.error('[subscriptionService] ❌ Erreur Supabase Edge Function capture-paypal :', edgeError);
+            lastErrorMessage = edgeError?.message || '';
           }
-        } catch (edgeErr) {
+
+          if (edgeData) {
+            console.log('[subscriptionService] 📋 Réponse Edge Function capture-paypal :', edgeData);
+            if (edgeData.success && edgeData.isPro) {
+              data = edgeData;
+              resOk = true;
+            } else if (edgeData.error) {
+              lastErrorMessage = edgeData.error;
+            }
+          }
+        } catch (edgeErr: any) {
           console.warn('[subscriptionService] Supabase Edge Function notice, repli vers route /api/paypal :', edgeErr);
+          lastErrorMessage = edgeErr?.message || '';
         }
       }
 
       // 2. Route Vercel API /api/paypal?action=capture-order (Backend Serverless)
       if (!resOk) {
+        console.log('[subscriptionService] 🔄 Repli sur l\'API Serverless Vercel /api/paypal?action=capture-order...');
         const res = await fetch('/api/paypal?action=capture-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -808,12 +840,16 @@ export const subscriptionService = {
             plan: params.plan,
             currency: params.currency || 'USD',
             amount: params.amount,
-            gateway
+            gateway,
+            mode: frontendMode
           })
         });
 
         resOk = res.ok;
         data = await res.json().catch(() => null);
+        if (!resOk && data?.error) {
+          lastErrorMessage = data.error;
+        }
       }
 
       // CONDITION STRICTE : succès SEULEMENT si le serveur a capturé les fonds et renvoie isPro: true
@@ -854,11 +890,11 @@ export const subscriptionService = {
         };
       }
 
-      console.error('[subscriptionService] ❌ Échec capture backend PayPal :', data);
+      console.error('[subscriptionService] ❌ Échec capture backend PayPal :', { data, lastErrorMessage });
       return {
         success: false,
         isPro: false,
-        error: data?.error || "Le paiement n'a pas pu être capturé par PayPal (transaction refusée ou non complétée).",
+        error: data?.error || lastErrorMessage || "Le paiement n'a pas pu être capturé par PayPal (transaction refusée ou non complétée).",
         subscriptionId: subId
       };
     } catch (err: any) {

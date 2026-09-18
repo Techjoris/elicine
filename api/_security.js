@@ -176,6 +176,8 @@ export const paypalRecordPaymentSchema = z.object({
   amount: z.union([z.number(), z.string()]).optional(),
   gateway: z.string().max(50).optional(),
   paymentMethod: z.string().max(50).optional(),
+  mode: z.string().max(20).optional(),
+  env: z.string().max(20).optional(),
   details: z.any().optional()
 });
 
