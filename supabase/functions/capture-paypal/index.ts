@@ -41,14 +41,14 @@ serve(async (req: Request) => {
 
     // 1. Récupération des identifiants et variables d'environnement Supabase
     const clientId = (
-      Deno.env.get("PAYPAL_CLIENT_ID") ||
-      Deno.env.get("PAYPAL_ID") ||
-      Deno.env.get("VITE_PAYPAL_CLIENT_ID") ||
       Deno.env.get("NEXT_PUBLIC_PAYPAL_CLIENT_ID") ||
+      Deno.env.get("PAYPAL_CLIENT_ID") ||
+      Deno.env.get("VITE_PAYPAL_CLIENT_ID") ||
+      Deno.env.get("PAYPAL_ID") ||
       ""
     ).trim();
 
-    // Support prioritaire de PAYPAL_SECRET (recommandé) et replis usuels
+    // Support prioritaire de PAYPAL_SECRET (recommandé)
     const clientSecret = (
       Deno.env.get("PAYPAL_SECRET") ||
       Deno.env.get("PAYPAL_CLIENT_SECRET") ||
@@ -56,19 +56,10 @@ serve(async (req: Request) => {
       ""
     ).trim();
 
-    // Détermination de l'environnement (Live vs Sandbox)
-    const envMode = (
-      clientMode ||
-      Deno.env.get("PAYPAL_MODE") ||
-      Deno.env.get("PAYPAL_ENV") ||
-      Deno.env.get("VITE_PAYPAL_MODE") ||
-      "live"
-    ).toLowerCase().trim();
+    // URL de production stricte (LIVE)
+    const base = "https://api-m.paypal.com";
 
-    const isSandbox = envMode === "sandbox" || envMode === "test" || envMode === "sb";
-    let base = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
-
-    console.log(`[Edge Function capture-paypal] Configuration PayPal : Mode=${isSandbox ? 'SANDBOX' : 'LIVE'} (${base}), ClientID=${clientId ? clientId.substring(0, 8) + '...' : 'MANQUANT'}, Secret=${clientSecret ? 'PRÉSENT (' + clientSecret.length + ' chars)' : 'MANQUANT'}`);
+    console.log(`[Edge Function capture-paypal] Configuration PayPal : Mode=LIVE (${base}), ClientID=${clientId ? clientId.substring(0, 8) + '...' : 'MANQUANT'}, Secret=${clientSecret ? 'PRÉSENT (' + clientSecret.length + ' chars)' : 'MANQUANT'}`);
 
     if (!clientId || !clientSecret) {
       console.error("[Edge Function capture-paypal] ❌ Variables d'environnement manquantes : PAYPAL_CLIENT_ID ou PAYPAL_SECRET non trouvé dans Deno.env.");

@@ -5,49 +5,42 @@ import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
  * Récupère l'URL de base de l'API PayPal en fonction du mode configuré
  * Par défaut strict : mode LIVE (Production)
  */
-function getPayPalApiBase(modeOverride = null) {
-  const mode = (
-    modeOverride ||
-    process.env.PAYPAL_MODE ||
-    process.env.NEXT_PUBLIC_PAYPAL_MODE ||
-    process.env.VITE_PAYPAL_MODE ||
-    process.env.VITE_PAYPAL_ENV ||
-    process.env.PAYPAL_ENV ||
-    'live'
-  ).toLowerCase().trim();
+const PAYPAL_LIVE_API_BASE = 'https://api-m.paypal.com';
 
-  return (mode === 'sandbox' || mode === 'test' || mode === 'sb')
-    ? 'https://api-m.sandbox.paypal.com'
-    : 'https://api-m.paypal.com';
+/**
+ * Récupère l'URL de base de l'API PayPal en production stricte (Live)
+ */
+function getPayPalApiBase() {
+  return PAYPAL_LIVE_API_BASE;
 }
 
 /**
  * Obtient un Bearer Token OAuth2 auprès de l'API PayPal
  */
-async function getPayPalAccessToken(modeOverride = null) {
+async function getPayPalAccessToken() {
   const clientId = (
-    process.env.PAYPAL_CLIENT_ID ||
-    process.env.PAYPAL_ID ||
-    process.env.VITE_PAYPAL_CLIENT_ID ||
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
+    process.env.PAYPAL_CLIENT_ID ||
+    process.env.VITE_PAYPAL_CLIENT_ID ||
+    process.env.PAYPAL_ID ||
     ''
   ).trim();
 
-  // Support prioritaire de PAYPAL_SECRET (recommandé) et replis usuels
-  const clientSecret = (
+  // Support prioritaire de PAYPAL_SECRET (recommandé)
+  const secret = (
     process.env.PAYPAL_SECRET ||
     process.env.PAYPAL_CLIENT_SECRET ||
     process.env.PAYPAL_SECRET_KEY ||
     ''
   ).trim();
 
-  if (!clientId || !clientSecret) {
-    console.error('[PayPal API] ❌ Variables d\'environnement manquantes : PAYPAL_CLIENT_ID ou PAYPAL_SECRET absent dans process.env.');
+  if (!clientId || !secret) {
+    console.error('[PayPal API] ❌ Variables d\'environnement manquantes : NEXT_PUBLIC_PAYPAL_CLIENT_ID ou PAYPAL_SECRET absent dans process.env.');
     return null;
   }
 
-  let base = getPayPalApiBase(modeOverride);
-  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const base = getPayPalApiBase();
+  const basicAuth = Buffer.from(`${clientId}:${secret}`).toString('base64');
 
   const fetchToken = async (targetBase) => {
     try {
@@ -283,6 +276,7 @@ export default async function handler(req, res) {
   // ─── 1. Récupération de la configuration publique PayPal ─────────────────────
   if (req.method === 'GET' || action === 'config') {
     const clientId = (
+      process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
       process.env.PAYPAL_CLIENT_ID ||
       process.env.VITE_PAYPAL_CLIENT_ID ||
       ''
@@ -362,9 +356,9 @@ export default async function handler(req, res) {
 
       // Si le serveur n'a pas pu joindre PayPal (identifiants serveur manquants ou indisponibilité)
       if (!orderData) {
-        const hasId = Boolean(process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_ID);
+        const hasId = Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_ID);
         const hasSecret = Boolean(process.env.PAYPAL_SECRET || process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET_KEY);
-        console.error(`[PayPal Server] ❌ Impossible de vérifier ou capturer l'ordre ${orderId} auprès de l'API PayPal. Diagnostic: PAYPAL_CLIENT_ID=${hasId ? 'OK' : 'MANQUANT'}, PAYPAL_SECRET=${hasSecret ? 'OK' : 'MANQUANT'}`);
+        console.error(`[PayPal Server] ❌ Impossible de vérifier ou capturer l'ordre ${orderId} auprès de l'API PayPal. Diagnostic: NEXT_PUBLIC_PAYPAL_CLIENT_ID=${hasId ? 'OK' : 'MANQUANT'}, PAYPAL_SECRET=${hasSecret ? 'OK' : 'MANQUANT'}`);
         return res.status(503).json({
           success: false,
           error: hasSecret 

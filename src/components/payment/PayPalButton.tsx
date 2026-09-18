@@ -40,25 +40,49 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
   const formattedAmount = numericValue.toFixed(2);
 
-  // Récupération de la clé client PayPal ou utilisation du client de secours opérationnel
-  const envClientId = (
-    (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
-    (import.meta as any).env?.PAYPAL_CLIENT_ID ||
+  // Récupération stricte et dynamique du Client ID via process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+  const clientId = (
+    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
+    (typeof import.meta !== 'undefined' ? (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID : '') ||
     ''
-  ).trim();
+  )?.trim();
 
-  // Si pas de Client ID défini ou "sb", on utilise le client ID officiel 'test' pour garantir le rendu immédiat des boutons in-app
-  const activeClientId = (envClientId && envClientId !== 'sb') ? envClientId : 'test';
+  // Sécurité stricte : si la variable est undefined ou non configurée, bloquer le rendu
+  const isClientIdConfigured = Boolean(
+    clientId &&
+    clientId !== 'undefined' &&
+    clientId !== 'null' &&
+    clientId !== '' &&
+    clientId !== 'sb'
+  );
+
+  if (!isClientIdConfigured) {
+    console.error(
+      '[PayPal SDK] ❌ Erreur critique : process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID est indéfini ou non configuré. Le rendu du bouton PayPal est strictement bloqué.'
+    );
+
+    return (
+      <div className="w-full p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs flex flex-col gap-1.5 animate-in fade-in duration-200">
+        <div className="flex items-center gap-2 font-bold text-xs">
+          <span className="text-base">⚠️</span>
+          <span>Module de paiement PayPal indisponible</span>
+        </div>
+        <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+          La variable d'environnement publique <code>NEXT_PUBLIC_PAYPAL_CLIENT_ID</code> n'a pas été détectée. Veuillez configurer votre clé publique PayPal sur Vercel.
+        </p>
+      </div>
+    );
+  }
 
   // Configuration stricte du SDK officiel PayPal : Paiement unique (intent: 'capture'), boutons natifs et CB activée
   const initialOptions = useMemo(() => ({
-    clientId: activeClientId,
+    clientId: clientId,
     currency: normalizedCurrency,
     intent: 'capture' as const, // PAIEMENT UNIQUE STRICT (Orders API, pas de souscription récurrente)
     components: 'buttons',
     enableFunding: 'card', // Active explicitement le bouton Carte Bancaire sans compte
     dataSdkIntegrationSource: 'react-paypal-js'
-  }), [activeClientId, normalizedCurrency]);
+  }), [clientId, normalizedCurrency]);
 
   const isYearly = billingCycle === 'yearly';
 
@@ -75,7 +99,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             tagline: false
           }}
           disabled={disabled}
-          forceReRender={[formattedAmount, normalizedCurrency, billingCycle, activeClientId]}
+          forceReRender={[formattedAmount, normalizedCurrency, billingCycle, clientId]}
           onClick={(data, actions) => {
             console.log('[PayPal SDK React] 🖱️ Clic utilisateur sur bouton PayPal/CB :', data?.fundingSource || 'standard');
             if (onClick) {
