@@ -125,7 +125,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
             </span>
             {aiMood && (
               <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 font-medium">
-                Atmosphère : {aiMood}
+                {aiMood.trim().toLowerCase().startsWith('atmosphère') ? aiMood : `Atmosphère : ${aiMood}`}
               </span>
             )}
           </div>

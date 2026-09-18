@@ -61,19 +61,20 @@ Directives cinématographiques majeures :
   Si la requête demande des 'films', ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
 - INTERDICTION ABSOLUE des mockbusters, parodies bon marché, téléfilms obscurs ou films Asylum. Films reconnus ayant au moins 500 votes sur TMDB et note >= 5.5.
 
-- RÔLE DE SEMANTIC QUERY EXPANDER :
-  Lorsque l'utilisateur formule une requête en langage naturel (ex: "histoire d'amour impossible mais réaliste", "film d'action sans super-héros"), tu dois traduire l'intention en genres canoniques normalisés, thèmes cinématographiques précis, titres de référence majeurs et mots-clés de recherche nettoyés.
+- RÔLE DE SEMANTIC QUERY EXPANDER (ÉTAPE 1) :
+  Lorsque l'utilisateur formule une requête en langage naturel (ex: "comédie légère sans prise de tête", "histoire d'amour impossible mais réaliste", "film pour pleurer un bon coup"), tu dois traduire l'intention selon ce schéma de sortie strict (JSON structuré) :
 
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
-  "canonical_genres": ["Romance", "Drama"],
-  "themes": ["unrequited love", "bittersweet romance", "realistic relationship", "separation"],
-  "similar_reference_titles": ["Past Lives", "La La Land", "Blue Valentine", "In the Mood for Love", "Her", "Marriage Story"],
-  "clean_search_keywords": ["romance dramatique relation amoureuse rupture destin"],
-  "corrected_query": "la requête clarifiée et corrigée",
+  "media_type": "movie",
+  "primary_genres": ["Comedy", "Romance"],
+  "mood_tags": ["feel-good", "légère", "détente", "humour"],
+  "reference_titles": ["Le Dîner de Cons", "SuperGrave", "La Cité de la Peur"],
+  "clean_query": "comédie légère sans prise de tête",
+  "suggested_mood": "Comédie feel-good et détente",
   "matches": [
-    { "title": "Past Lives / Nos vies après", "reason": "Justification précise montrant le lien direct avec la thématique demandée" },
-    { "title": "La La Land", "reason": "Justification précise" }
+    { "title": "Le Dîner de Cons", "reason": "Comédie culte aux dialogues savoureux et au rythme enlevé" },
+    { "title": "SuperGrave", "reason": "Comédie d'amitié délirante et sans prise de tête" }
   ]
 }`;
 
@@ -160,15 +161,30 @@ async function fetchWithTimeout(url, options, timeoutMs = 9000) {
  * Robuste aux balises markdown et aux préfixes de texte.
  */
 export function extractMatchesFromJson(rawText) {
+  const emptyResult = {
+    media_type: 'all',
+    primary_genres: [],
+    mood_tags: [],
+    reference_titles: [],
+    clean_query: '',
+    suggested_mood: '',
+    // Alias rétro-compatibles
+    mediaType: 'all',
+    primaryGenres: [],
+    canonicalGenres: [],
+    moodTags: [],
+    themes: [],
+    referenceTitles: [],
+    similarReferenceTitles: [],
+    cleanQuery: '',
+    cleanSearchKeywords: [],
+    correctedQuery: '',
+    suggestedMood: '',
+    matches: []
+  };
+
   if (!rawText || typeof rawText !== 'string') {
-    return {
-      matches: [],
-      correctedQuery: '',
-      canonicalGenres: [],
-      themes: [],
-      similarReferenceTitles: [],
-      cleanSearchKeywords: []
-    };
+    return emptyResult;
   }
   try {
     const cleaned = rawText
@@ -182,35 +198,58 @@ export function extractMatchesFromJson(rawText) {
       const jsonSub = cleaned.substring(startIdx, endIdx + 1);
       const parsed = JSON.parse(jsonSub);
 
-      // 1. Genres canoniques normalisés
-      const canonicalGenres = Array.isArray(parsed.canonical_genres)
-        ? parsed.canonical_genres.filter(g => typeof g === 'string' && g.trim().length > 0).map(g => g.trim())
-        : (Array.isArray(parsed.genres) ? parsed.genres.filter(g => typeof g === 'string' && g.trim().length > 0).map(g => g.trim()) : []);
-
-      // 2. Thèmes clés
-      const themes = Array.isArray(parsed.themes)
-        ? parsed.themes.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim())
-        : [];
-
-      // 3. Titres de référence similaires
-      const rawRefTitles = Array.isArray(parsed.similar_reference_titles)
-        ? parsed.similar_reference_titles
-        : (Array.isArray(parsed.reference_titles) ? parsed.reference_titles : (Array.isArray(parsed.similar_titles) ? parsed.similar_titles : []));
-      let similarReferenceTitles = rawRefTitles
-        .filter(t => typeof t === 'string' && t.trim().length > 0)
-        .map(t => t.trim());
-
-      // 4. Mots-clés de recherche nettoyés
-      let cleanSearchKeywords = [];
-      if (Array.isArray(parsed.clean_search_keywords)) {
-        cleanSearchKeywords = parsed.clean_search_keywords
-          .filter(k => typeof k === 'string' && k.trim().length > 0)
-          .map(k => k.trim());
-      } else if (typeof parsed.clean_search_keywords === 'string' && parsed.clean_search_keywords.trim().length > 0) {
-        cleanSearchKeywords = [parsed.clean_search_keywords.trim()];
+      // 1. media_type ("movie" | "tv" | "all")
+      let mediaType = 'all';
+      const rawMediaType = String(parsed.media_type || parsed.mediaType || parsed.type || '').toLowerCase().trim();
+      if (rawMediaType === 'movie' || rawMediaType === 'film' || rawMediaType === 'films') {
+        mediaType = 'movie';
+      } else if (rawMediaType === 'tv' || rawMediaType === 'serie' || rawMediaType === 'series' || rawMediaType === 'série' || rawMediaType === 'séries') {
+        mediaType = 'tv';
       }
 
-      // 5. Matches structurés (titre + justification)
+      // 2. primary_genres (Genres canoniques normalisés)
+      const rawGenres = parsed.primary_genres || parsed.primaryGenres || parsed.canonical_genres || parsed.genres;
+      const primaryGenres = Array.isArray(rawGenres)
+        ? rawGenres.filter(g => typeof g === 'string' && g.trim().length > 0).map(g => g.trim())
+        : [];
+
+      // 3. mood_tags (Tags d'ambiance / Thèmes clés)
+      const rawMoods = parsed.mood_tags || parsed.moodTags || parsed.themes || parsed.tags;
+      const moodTags = Array.isArray(rawMoods)
+        ? rawMoods.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim())
+        : [];
+
+      // 4. reference_titles (3 à 5 titres cultes universels)
+      const rawRefTitles = parsed.reference_titles || parsed.referenceTitles || parsed.similar_reference_titles || parsed.similar_titles;
+      let referenceTitles = Array.isArray(rawRefTitles)
+        ? rawRefTitles.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim())
+        : [];
+
+      // 5. clean_query (Requête nettoyée des mots parasites)
+      let cleanQueryStr = '';
+      if (typeof parsed.clean_query === 'string' && parsed.clean_query.trim().length > 0) {
+        cleanQueryStr = parsed.clean_query.trim();
+      } else if (typeof parsed.corrected_query === 'string' && parsed.corrected_query.trim().length > 0) {
+        cleanQueryStr = parsed.corrected_query.trim();
+      } else if (Array.isArray(parsed.clean_search_keywords) && parsed.clean_search_keywords.length > 0) {
+        cleanQueryStr = parsed.clean_search_keywords.join(' ').trim();
+      } else if (typeof parsed.clean_search_keywords === 'string') {
+        cleanQueryStr = parsed.clean_search_keywords.trim();
+      }
+
+      // 6. suggested_mood (Libellé d'ambiance reformulé proprement)
+      let suggestedMoodStr = '';
+      if (typeof parsed.suggested_mood === 'string' && parsed.suggested_mood.trim().length > 0) {
+        suggestedMoodStr = parsed.suggested_mood.trim();
+      } else if (typeof parsed.suggested_atmosphere === 'string' && parsed.suggested_atmosphere.trim().length > 0) {
+        suggestedMoodStr = parsed.suggested_atmosphere.trim();
+      } else if (primaryGenres.length > 0 && moodTags.length > 0) {
+        suggestedMoodStr = `${primaryGenres.slice(0, 2).join(' / ')} (${moodTags.slice(0, 2).join(', ')})`;
+      } else if (primaryGenres.length > 0) {
+        suggestedMoodStr = primaryGenres.slice(0, 2).join(' / ');
+      }
+
+      // 7. Matches structurés (titre + justification)
       let matches = Array.isArray(parsed.matches)
         ? parsed.matches
             .filter(m => m && typeof m.title === 'string' && m.title.trim().length > 0)
@@ -220,36 +259,42 @@ export function extractMatchesFromJson(rawText) {
             }))
         : [];
 
-      // Interconnexion intelligente entre similar_reference_titles et matches
-      if (matches.length === 0 && similarReferenceTitles.length > 0) {
-        matches = similarReferenceTitles.map(t => ({
+      // Interconnexion intelligente entre reference_titles et matches
+      if (matches.length === 0 && referenceTitles.length > 0) {
+        matches = referenceTitles.map(t => ({
           title: t,
-          reason: 'Recommandation cinématographique pour cette atmosphère'
+          reason: `Recommandation cinématographique pour l'ambiance : ${suggestedMoodStr || 'Atmosphère Éliciné'}`
         }));
-      } else if (similarReferenceTitles.length === 0 && matches.length > 0) {
-        similarReferenceTitles = matches.map(m => m.title);
+      } else if (referenceTitles.length === 0 && matches.length > 0) {
+        referenceTitles = matches.map(m => m.title);
       }
 
       return {
-        matches,
-        correctedQuery: typeof parsed.corrected_query === 'string' ? parsed.corrected_query.trim() : '',
-        canonicalGenres,
-        themes,
-        similarReferenceTitles,
-        cleanSearchKeywords
+        media_type: mediaType,
+        primary_genres: primaryGenres,
+        mood_tags: moodTags,
+        reference_titles: referenceTitles,
+        clean_query: cleanQueryStr,
+        suggested_mood: suggestedMoodStr,
+        // Alias rétro-compatibles
+        mediaType,
+        primaryGenres,
+        canonicalGenres: primaryGenres,
+        moodTags,
+        themes: moodTags,
+        referenceTitles,
+        similarReferenceTitles: referenceTitles,
+        cleanQuery: cleanQueryStr,
+        cleanSearchKeywords: cleanQueryStr ? [cleanQueryStr] : [],
+        correctedQuery: cleanQueryStr,
+        suggestedMood: suggestedMoodStr,
+        matches
       };
     }
   } catch (err) {
     console.warn('[API /api/search] Erreur parsing JSON LLM :', err?.message);
   }
-  return {
-    matches: [],
-    correctedQuery: '',
-    canonicalGenres: [],
-    themes: [],
-    similarReferenceTitles: [],
-    cleanSearchKeywords: []
-  };
+  return emptyResult;
 }
 
 /**
@@ -412,6 +457,80 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
 }
 
 // ============================================================================
+// ÉTAPE 2 — Niveau 1 : Matching direct & vectoriel
+// Exécute la recherche vectorielle / sémantique avec la `clean_query`.
+// Interroge directement la base locale (movies et movies_embeddings).
+// ============================================================================
+export async function executeDirectAndVectorSearch(cleanQuery, mediaType = 'all', clusterId = null) {
+  if (!supabaseServer || !cleanQuery || typeof cleanQuery !== 'string') return [];
+
+  const clean = cleanQuery.trim();
+  if (clean.length < 2) return [];
+
+  const keywords = extractKeywords(clean);
+  const orClauses = [];
+
+  // 1. Recherche directe sur titre et synopsis avec cleanQuery
+  const sanitized = clean.replace(/[,()%"']/g, '').trim();
+  if (sanitized.length >= 3) {
+    orClauses.push(`title.ilike.%${sanitized}%`);
+    orClauses.push(`original_title.ilike.%${sanitized}%`);
+    orClauses.push(`overview.ilike.%${sanitized}%`);
+  }
+
+  // 2. Mots-clés discriminants
+  for (const kw of keywords) {
+    const cleanKw = kw.replace(/[,()%"']/g, '').trim();
+    if (cleanKw.length >= 3 && !STOP_WORDS.has(cleanKw.toLowerCase())) {
+      orClauses.push(`overview.ilike.%${cleanKw}%`);
+      orClauses.push(`genres.ilike.%${cleanKw}%`);
+      orClauses.push(`moods.ilike.%${cleanKw}%`);
+      orClauses.push(`setting.ilike.%${cleanKw}%`);
+    }
+  }
+
+  if (orClauses.length === 0) return [];
+
+  const orFilter = orClauses.slice(0, 30).join(',');
+  let hits = [];
+
+  try {
+    const { data, error } = await supabaseServer
+      .from('movies')
+      .select('*')
+      .or(orFilter)
+      .order('vote_average', { ascending: false })
+      .limit(16);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      hits = data;
+    }
+  } catch (err) {
+    console.warn('[API /api/search] [Niveau 1 Direct] table movies :', err?.message);
+  }
+
+  if (hits.length === 0) {
+    try {
+      const { data, error } = await supabaseServer
+        .from('movies_embeddings')
+        .select('id, tmdb_id, title, original_title, overview, poster_path, backdrop_path, release_date, vote_average, vote_count, genres, setting, moods')
+        .or(orFilter)
+        .order('vote_average', { ascending: false })
+        .limit(16);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        hits = data;
+      }
+    } catch (err) {
+      console.warn('[API /api/search] [Niveau 1 Direct] table movies_embeddings :', err?.message);
+    }
+  }
+
+  if (hits.length === 0) return [];
+
+  const cleaned = filterMockbusters(hits, clean);
+  return enrichWithBadges(cleaned, [], 'Sélection Directe & Sémantique', clean, clusterId);
+}
+
 // ============================================================================
 // ÉTAPE 2 — Phase A : Résolution par titre (ilike souple, multi-parties)
 // Ex: "Prisonniers / Prisoners" → cherche "Prisonniers" ET "Prisoners" séparément
@@ -1411,66 +1530,67 @@ const TMDB_GENRE_NAME_TO_ID = {
   'animation': 16
 };
 
-export async function resolveDominantGenreAtmosphere(canonicalGenres = [], themes = [], cleanQuery = '', tmdbApiKey = '', clusterId = null) {
-  // 1. Identification du ou des genres dominants
-  let dominantGenres = [];
-  if (Array.isArray(canonicalGenres) && canonicalGenres.length > 0) {
-    dominantGenres = canonicalGenres.map(g => String(g).trim()).filter(Boolean);
+export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTags = [], cleanQuery = '', tmdbApiKey = '', clusterId = null) {
+  // 1. Identification du genre principal (primary_genres[0])
+  let primaryGenre = null;
+  if (Array.isArray(primaryGenres) && primaryGenres.length > 0 && typeof primaryGenres[0] === 'string' && primaryGenres[0].trim().length > 0) {
+    primaryGenre = primaryGenres[0].trim();
   }
 
+  let dominantGenres = Array.isArray(primaryGenres) ? [...primaryGenres] : [];
   const emotionalExpansion = detectEmotionalExpansion(cleanQuery);
-  if (dominantGenres.length === 0 && emotionalExpansion && Array.isArray(emotionalExpansion.genres)) {
+  if (!primaryGenre && emotionalExpansion && Array.isArray(emotionalExpansion.genres) && emotionalExpansion.genres.length > 0) {
+    primaryGenre = emotionalExpansion.genres[0];
     dominantGenres = emotionalExpansion.genres;
   }
 
-  if (dominantGenres.length === 0) {
-    const qLower = cleanQuery.toLowerCase();
+  if (!primaryGenre) {
+    const qLower = (cleanQuery || '').toLowerCase();
     if (/\b(?:amour|romance|amoureux|amoureuse|cœur|coeur|sentiment|couple|passion)\b/i.test(qLower)) {
+      primaryGenre = 'Romance';
       dominantGenres = ['Romance', 'Drame'];
     } else if (/\b(?:peur|angoisse|horreur|terrifi|sombre|d[eé]mon|frisson)\b/i.test(qLower)) {
+      primaryGenre = 'Horreur';
       dominantGenres = ['Horreur', 'Thriller'];
     } else if (/\b(?:espace|robot|futur|dystop|ia|alien|science-fiction|sf|voyage temporel)\b/i.test(qLower)) {
+      primaryGenre = 'Science-Fiction';
       dominantGenres = ['Science-Fiction', 'Drame'];
-    } else if (/\b(?:rire|drole|drôle|humour|com[eé]die|amiti[eé]|feel[\s-]?good)\b/i.test(qLower)) {
+    } else if (/\b(?:rire|drole|drôle|humour|com[eé]die|amiti[eé]|feel[\s-]?good|l[eé]g[eè]re)\b/i.test(qLower)) {
+      primaryGenre = 'Comédie';
       dominantGenres = ['Comédie', 'Drame'];
     } else if (/\b(?:enqu[eê]te|meurtre|tueur|police|fbi|braquage|crime|polar)\b/i.test(qLower)) {
+      primaryGenre = 'Thriller';
       dominantGenres = ['Thriller', 'Crime'];
     } else {
+      primaryGenre = 'Drame';
       dominantGenres = ['Drame', 'Romance'];
     }
   }
 
-  const dominantLabel = dominantGenres.slice(0, 2).join(' / ') || 'Drame & Émotion';
-  console.log(`[API /api/search] [Étape 3 Fallback] Genre dominant identifié : "${dominantLabel}"`);
+  const dominantLabel = primaryGenre || 'Cinéma';
+  console.log(`[API /api/search] [Étape 3 Fallback] Sélection des 6 meilleurs films du genre principal : "${dominantLabel}"`);
 
-  // 2. Recherche prioritaire dans le catalogue Supabase local
+  // 2. Recherche prioritaire dans le catalogue Supabase local pour primary_genres[0]
   if (supabaseServer) {
-    const genreClauses = [];
-    for (const g of dominantGenres.slice(0, 3)) {
-      const cleanG = g.replace(/[,()%"']/g, '').trim();
-      if (cleanG.length >= 3) {
-        genreClauses.push(`genres.ilike.%${cleanG}%`);
-      }
-    }
-    if (genreClauses.length > 0) {
-      const genreFilter = genreClauses.join(',');
+    const cleanG = primaryGenre.replace(/[,()%"']/g, '').trim();
+    if (cleanG.length >= 3) {
       try {
         const { data, error } = await supabaseServer
           .from('movies')
           .select('*')
-          .or(genreFilter)
+          .ilike('genres', `%${cleanG}%`)
           .gte('vote_count', 250)
           .order('vote_average', { ascending: false })
-          .limit(10);
-        if (!error && Array.isArray(data) && data.length >= 3) {
+          .limit(6);
+        if (!error && Array.isArray(data) && data.length > 0) {
           const filtered = filterMockbusters(data, cleanQuery);
-          if (filtered.length >= 3) {
-            return filtered.slice(0, 8).map((m, idx) => ({
+          if (filtered.length > 0) {
+            return filtered.slice(0, 6).map((m, idx) => ({
               ...m,
               badge: 'Recommandations Éliciné pour votre atmosphère',
               ai_badge: 'Recommandations Éliciné pour votre atmosphère',
               match_rate: Math.max(78, 96 - idx * 2),
-              ai_match_reason: m.ai_match_reason || `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`
+              ai_match_reason: m.ai_match_reason || `Top sélection du genre ${dominantLabel} pour votre atmosphère`
             }));
           }
         }
@@ -1484,7 +1604,7 @@ export async function resolveDominantGenreAtmosphere(canonicalGenres = [], theme
   if (emotionalExpansion && Array.isArray(emotionalExpansion.archetypeTitles) && emotionalExpansion.archetypeTitles.length > 0) {
     const emotionalMovies = await resolveEmotionalMasterpieces(emotionalExpansion, tmdbApiKey, clusterId);
     if (emotionalMovies.length > 0) {
-      return emotionalMovies.map((m, idx) => ({
+      return emotionalMovies.slice(0, 6).map((m, idx) => ({
         ...m,
         badge: 'Recommandations Éliciné pour votre atmosphère',
         ai_badge: 'Recommandations Éliciné pour votre atmosphère',
@@ -1494,14 +1614,18 @@ export async function resolveDominantGenreAtmosphere(canonicalGenres = [], theme
     }
   }
 
-  // 4. Découverte TMDB des chefs-d'œuvre les mieux notés du genre dominant
+  // 4. Découverte TMDB des 6 chefs-d'œuvre les mieux notés du genre principal
   const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
   if (tmdbKey) {
     const genreIds = [];
+    const gKey = primaryGenre.toLowerCase().trim();
+    if (TMDB_GENRE_NAME_TO_ID[gKey]) {
+      genreIds.push(TMDB_GENRE_NAME_TO_ID[gKey]);
+    }
     for (const g of dominantGenres) {
-      const gKey = g.toLowerCase().trim();
-      if (TMDB_GENRE_NAME_TO_ID[gKey]) {
-        genreIds.push(TMDB_GENRE_NAME_TO_ID[gKey]);
+      const k = g.toLowerCase().trim();
+      if (TMDB_GENRE_NAME_TO_ID[k] && !genreIds.includes(TMDB_GENRE_NAME_TO_ID[k])) {
+        genreIds.push(TMDB_GENRE_NAME_TO_ID[k]);
       }
     }
     if (genreIds.length === 0) genreIds.push(18, 10749); // Romance & Drame par défaut
@@ -1514,7 +1638,7 @@ export async function resolveDominantGenreAtmosphere(canonicalGenres = [], theme
       );
       if (discRes.ok) {
         const discData = await discRes.json();
-        const hits = (discData.results || []).slice(0, 8);
+        const hits = (discData.results || []).slice(0, 6);
         if (hits.length > 0) {
           return hits.map((m, idx) => ({
             id: m.id,
@@ -1541,13 +1665,16 @@ export async function resolveDominantGenreAtmosphere(canonicalGenres = [], theme
     }
   }
 
-  // 5. Ultime filet de secours : chefs-d'œuvre emblématiques de l'atmosphère
+  // 5. Ultime filet de secours : 6 chefs-d'œuvre emblématiques de l'atmosphère
+  const isComedy = dominantGenres.some(g => /com[eé]die|comedy|rire|humour|feel[\s-]?good/i.test(g));
   const isRomanceOrDrama = dominantGenres.some(g => /romance|amour|drame|drama/i.test(g));
-  const fallbackTitles = isRomanceOrDrama
-    ? ['Past Lives', 'La La Land', 'Blue Valentine', 'In the Mood for Love', 'Her', 'Marriage Story', 'Before Sunrise', 'About Time']
-    : ['Interstellar', 'Blade Runner 2049', 'Se7en', 'Le Silence des agneaux', 'Arrival', 'Prisoners', 'Intouchables', 'Whiplash'];
+  const fallbackTitles = isComedy
+    ? ['Le Dîner de Cons', 'SuperGrave', 'La Cité de la Peur', 'Intouchables', 'The Big Lebowski', 'OSS 117 : Le Caire, nid d\'espions']
+    : (isRomanceOrDrama
+        ? ['Past Lives', 'La La Land', 'Blue Valentine', 'In the Mood for Love', 'Her', 'Marriage Story']
+        : ['Interstellar', 'Blade Runner 2049', 'Se7en', 'Le Silence des agneaux', 'Arrival', 'Prisoners']);
 
-  return fallbackTitles.map((t, idx) => ({
+  return fallbackTitles.slice(0, 6).map((t, idx) => ({
     id: 990000 + idx,
     tmdb_id: 990000 + idx,
     title: t,
@@ -2174,16 +2301,8 @@ export default async function handler(req, res) {
 
       console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}" (format: ${requestedMediaType})`);
 
-      // ─── ÉTAPE 1 : Cerveau LLM (Semantic Query Expander) — Traduction Sémantique ──
-      const {
-        matches,
-        correctedQuery,
-        canonicalGenres,
-        themes,
-        similarReferenceTitles,
-        cleanSearchKeywords,
-        provider
-      } = await queryLlmCandidates(cleanQuery, {
+      // ─── ÉTAPE 1 : Interprétation sémantique systématique (LLM Semantic Expansion) ──
+      const llmResult = await queryLlmCandidates(cleanQuery, {
         groqApiKey:     req.body?.groqApiKey,
         deepseekApiKey: req.body?.deepseekApiKey,
         qwenApiKey:     req.body?.qwenApiKey,
@@ -2191,81 +2310,132 @@ export default async function handler(req, res) {
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
       }, requestedMediaType);
 
-      // Union des titres de référence pour Requête A
-      const allReferenceTitles = Array.from(new Set([
-        ...(similarReferenceTitles || []),
-        ...matches.map(m => m.title)
-      ])).filter(Boolean);
+      const {
+        media_type: extractedMediaType = 'all',
+        primary_genres: primaryGenres = [],
+        mood_tags: moodTags = [],
+        reference_titles: referenceTitles = [],
+        clean_query: llmCleanQuery = '',
+        suggested_mood: rawSuggestedMood = '',
+        matches = [],
+        provider = 'Algorithme Éliciné'
+      } = llmResult;
 
-      const effectiveQuery  = correctedQuery || cleanQuery;
-      console.log(`[API /api/search] [Étape 1] ${allReferenceTitles.length} titre(s) de référence via ${provider} :`, allReferenceTitles);
-      if (canonicalGenres?.length > 0) {
-        console.log(`[API /api/search] [Étape 1] Genres canoniques :`, canonicalGenres);
+      // Consolidation du format recherché
+      if (extractedMediaType && extractedMediaType !== 'all') {
+        if (extractedMediaType === 'tv' && requestedMediaType === 'Tous') requestedMediaType = 'Séries TV';
+        if (extractedMediaType === 'movie' && requestedMediaType === 'Tous') requestedMediaType = 'Films';
       }
-      if (themes?.length > 0) {
-        console.log(`[API /api/search] [Étape 1] Thèmes :`, themes);
+
+      // Requête nettoyée prioritaire
+      const effectiveCleanQuery = llmCleanQuery || cleanQuery;
+
+      // Libellé d'ambiance reformulé proprement
+      const emotionalExpansion = detectEmotionalExpansion(cleanQuery);
+      let suggestedMood = rawSuggestedMood;
+      if (!suggestedMood) {
+        if (primaryGenres.length > 0 && moodTags.length > 0) {
+          suggestedMood = `${primaryGenres.slice(0, 2).join(' / ')} (${moodTags.slice(0, 2).join(', ')})`;
+        } else if (emotionalExpansion?.label) {
+          suggestedMood = emotionalExpansion.label;
+        } else if (primaryGenres.length > 0) {
+          suggestedMood = primaryGenres.slice(0, 2).join(' / ');
+        } else {
+          suggestedMood = cleanQuery;
+        }
       }
-      if (correctedQuery && correctedQuery !== cleanQuery) {
-        console.log(`[API /api/search] [Étape 1] Requête corrigée : "${cleanQuery}" → "${correctedQuery}"`);
-      }
+
+      console.log(`[API /api/search] [Étape 1 LLM] Provider: ${provider} | Ambiance: "${suggestedMood}" | Genres: [${primaryGenres.join(', ')}] | Moods: [${moodTags.join(', ')}] | Références: [${referenceTitles.join(', ')}] | clean_query: "${effectiveCleanQuery}"`);
 
       // Résolution du cluster thématique (hérité du scoring client ou détecté)
       const explicitThematicCluster = req.body?.thematicCluster || null;
       const detectedThematicCluster = detectThematicClusterId(cleanQuery);
       const activeClusterId = explicitThematicCluster || detectedThematicCluster;
-      if (activeClusterId) {
-        console.log(`[API /api/search] Cluster thématique actif pour le cache : "${activeClusterId}"`);
-      }
 
-      // ─── ÉTAPE 2 — Requête A : Recherche prioritaire des titres de référence ───
       let resolvedMovies = [];
-      if (allReferenceTitles.length > 0) {
-        resolvedMovies = await resolveByTitles(allReferenceTitles, matches, effectiveQuery, activeClusterId);
-        console.log(`[API /api/search] [Étape 2 Requête A] ${resolvedMovies.length} film(s) de référence trouvé(s) dans le catalogue.`);
+      let fallbackTriggered = false;
+
+      // ─── ÉTAPE 2 : Stratégie de récupération hybride multi-niveaux ─────────
+
+      // Niveau 1 (Matching direct & vectoriel) : Exécuter la recherche vectorielle / sémantique avec la `clean_query`
+      console.log(`[API /api/search] [Niveau 1] Matching direct & vectoriel sur : "${effectiveCleanQuery}"`);
+      const directVectorHits = await executeDirectAndVectorSearch(effectiveCleanQuery, requestedMediaType, activeClusterId);
+      if (directVectorHits.length > 0) {
+        resolvedMovies.push(...directVectorHits);
+        console.log(`[API /api/search] [Niveau 1] ${resolvedMovies.length} film(s) trouvé(s) via matching direct/vectoriel.`);
       }
 
-      // ─── ÉTAPE 2 — Requête B : Genres + Thèmes avec opérateur OR ─────────────
-      // Interroger la base avec les tags et genres retournés, avec un opérateur OR pour élargir le filet
-      if (resolvedMovies.length < 6 && (canonicalGenres?.length > 0 || themes?.length > 0 || cleanSearchKeywords?.length > 0)) {
-        console.log(`[API /api/search] [Étape 2 Requête B] Interrogation hybride OR (genres: ${canonicalGenres?.join(', ')}, thèmes: ${themes?.join(', ')})`);
-        const hybridMatches = await resolveByGenresAndThemes(
-          canonicalGenres,
-          themes,
-          cleanSearchKeywords,
-          matches,
-          effectiveQuery,
-          activeClusterId
-        );
-        console.log(`[API /api/search] [Étape 2 Requête B] ${hybridMatches.length} résultat(s) supplémentaires via OR.`);
-
+      // Niveau 2 (Matching par références & genres) : Si le Niveau 1 renvoie moins de 4 films, élargir automatiquement
+      if (resolvedMovies.length < 4) {
+        console.log(`[API /api/search] [Niveau 2] Niveau 1 renvoie ${resolvedMovies.length} (< 4) film(s) → Élargissement par références & genres`);
         const seenIds = new Set(resolvedMovies.map(m => m.id || m.tmdb_id));
-        for (const hm of hybridMatches) {
-          const mId = hm.id || hm.tmdb_id;
-          if (!seenIds.has(mId)) {
-            seenIds.add(mId);
-            resolvedMovies.push(hm);
-            if (resolvedMovies.length >= 12) break;
+
+        // 1. Les titres de reference_titles présents dans la base
+        const allRefTitles = Array.from(new Set([
+          ...(referenceTitles || []),
+          ...matches.map(m => m.title)
+        ])).filter(Boolean);
+
+        if (allRefTitles.length > 0) {
+          const refHits = await resolveByTitles(allRefTitles, matches, effectiveCleanQuery, activeClusterId);
+          console.log(`[API /api/search] [Niveau 2 - Références] ${refHits.length} film(s) de référence trouvé(s) dans la base.`);
+          for (const rm of refHits) {
+            const mId = rm.id || rm.tmdb_id;
+            if (!seenIds.has(mId)) {
+              seenIds.add(mId);
+              resolvedMovies.push(rm);
+            }
+          }
+        }
+
+        // 2. Les films tagués avec primary_genres et mood_tags, triés par popularité / note critique décroissante
+        if (resolvedMovies.length < 8 && (primaryGenres.length > 0 || moodTags.length > 0)) {
+          console.log(`[API /api/search] [Niveau 2 - Genres & Tags] Interrogation OR sur genres [${primaryGenres.join(', ')}] et mood_tags [${moodTags.join(', ')}]`);
+          const genreMoodHits = await resolveByGenresAndThemes(
+            primaryGenres,
+            moodTags,
+            effectiveCleanQuery,
+            matches,
+            effectiveCleanQuery,
+            activeClusterId
+          );
+          console.log(`[API /api/search] [Niveau 2 - Genres & Tags] ${genreMoodHits.length} film(s) correspondant(s).`);
+          for (const gm of genreMoodHits) {
+            const mId = gm.id || gm.tmdb_id;
+            if (!seenIds.has(mId)) {
+              seenIds.add(mId);
+              resolvedMovies.push(gm);
+              if (resolvedMovies.length >= 12) break;
+            }
+          }
+        }
+
+        // 3. Complément TMDB si toujours < 4 films dans Supabase
+        if (resolvedMovies.length < 4) {
+          console.log(`[API /api/search] [Niveau 2 - TMDB] Complément de recherche TMDB 1-pour-1...`);
+          const tmdbKey = req.body?.tmdbApiKey || '';
+          const tmdbHits = await resolveByKeywords(
+            effectiveCleanQuery,
+            matches.length > 0 ? matches : allRefTitles.map(t => ({ title: t })),
+            tmdbKey,
+            activeClusterId
+          );
+          for (const th of tmdbHits) {
+            const mId = th.id || th.tmdb_id;
+            if (!seenIds.has(mId)) {
+              seenIds.add(mId);
+              resolvedMovies.push(th);
+              if (resolvedMovies.length >= 12) break;
+            }
           }
         }
       }
 
-      // ─── ÉTAPE 2 — Complément textuel élargi + TMDB si Requêtes A & B vides ──
-      if (resolvedMovies.length === 0) {
-        console.log('[API /api/search] [Étape 2 Fallback] Requêtes A & B vides → recherche élargie TMDB / mots-clés...');
-        resolvedMovies = await resolveByKeywords(
-          effectiveQuery,
-          matches,
-          req.body?.tmdbApiKey || '',
-          activeClusterId
-        );
-        console.log(`[API /api/search] [Étape 2 Fallback] ${resolvedMovies.length} résultat(s).`);
-      }
-
-      // ─── ÉTAPE 2.5 — Filtre Anti-Mockbuster ─────────────────────────────────
+      // Filtre anti-mockbuster
       if (resolvedMovies.length > 0) {
-        const beforeFilter = resolvedMovies.length;
-        resolvedMovies = filterMockbusters(resolvedMovies, effectiveQuery);
-        console.log(`[API /api/search] [Étape 2.5] Anti-mockbuster : ${beforeFilter} → ${resolvedMovies.length} film(s).`);
+        const beforeCount = resolvedMovies.length;
+        resolvedMovies = filterMockbusters(resolvedMovies, effectiveCleanQuery);
+        console.log(`[API /api/search] [Anti-Mockbuster] ${beforeCount} → ${resolvedMovies.length} film(s) de qualité.`);
       }
 
       // Application des filtres Pro (ex: note minimale) si demandés
@@ -2277,28 +2447,28 @@ export default async function handler(req, res) {
         });
       }
 
-      // Application du filtre strict de format et règle contractuelle de repli (Fallback)
+      // Application du filtre strict de format (Films vs Séries TV)
       if (requestedMediaType && requestedMediaType !== 'Tous' && resolvedMovies.length > 0) {
         if (requestedMediaType === 'Séries TV') {
           const seriesOnly = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
           if (seriesOnly.length > 0) {
             resolvedMovies = seriesOnly;
           } else {
-            // 3. Règle de fallback :
-            // Si le catalogue ne contient aucune série correspondant exactement au critère strict,
-            // renvoyer un message explicite : "Aucune série trouvée pour ce thème. Voici des films similaires :"
             const similarFilms = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie' || !m.media_type);
             if (similarFilms.length > 0) {
               return res.status(200).json({
                 success: true,
+                results: similarFilms,
                 movies: similarFilms,
                 count: similarFilms.length,
+                fallback_triggered: true,
                 isFallbackMode: true,
+                suggested_mood: suggestedMood,
                 badge: 'Sélection Éliciné',
                 providerUsed: 'Algorithme Éliciné',
-                correctedQuery: correctedQuery || null,
+                correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
                 thought: "Aucune série trouvée pour ce thème. Voici des films similaires :",
-                extractedTitles,
+                extractedTitles: referenceTitles,
                 suggestedPrompts: [
                   'Une série policière sombre et addictive',
                   'Une série de science-fiction dystopique',
@@ -2316,14 +2486,17 @@ export default async function handler(req, res) {
             if (similarSeries.length > 0) {
               return res.status(200).json({
                 success: true,
+                results: similarSeries,
                 movies: similarSeries,
                 count: similarSeries.length,
+                fallback_triggered: true,
                 isFallbackMode: true,
+                suggested_mood: suggestedMood,
                 badge: 'Sélection Éliciné',
                 providerUsed: 'Algorithme Éliciné',
-                correctedQuery: correctedQuery || null,
+                correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
                 thought: "Aucun film trouvé pour ce thème. Voici des séries similaires :",
-                extractedTitles,
+                extractedTitles: referenceTitles,
                 suggestedPrompts: [
                   'Un film de braquage haletant avec twist',
                   'Un chef-d\'œuvre de science-fiction dystopique',
@@ -2332,6 +2505,33 @@ export default async function handler(req, res) {
               });
             }
           }
+        }
+      }
+
+      // ─── ÉTAPE 3 : Règle absolue "Zéro Écran Vide" (Smart Fallback) ────────
+      // Il est formellement interdit de renvoyer un tableau vide si un genre ou une humeur identifiable a été extrait.
+      // Si le filtre combiné n'aboutit à aucun film, déclencher un fallback automatique qui sélectionne
+      // les 6 meilleurs films du catalogue appartenant au genre principal identifié (primary_genres[0]).
+      const hasIdentifiableIntent =
+        primaryGenres.length > 0 ||
+        moodTags.length > 0 ||
+        referenceTitles.length > 0 ||
+        Boolean(emotionalExpansion) ||
+        Boolean(detectedThematicCluster) ||
+        cleanQuery.trim().length >= 3;
+
+      if (resolvedMovies.length === 0 && hasIdentifiableIntent) {
+        console.log(`[API /api/search] [Niveau 3 - Smart Fallback] 0 résultat après Niveaux 1 et 2 → Déclenchement automatique Smart Fallback sur genre principal "${primaryGenres[0] || 'Drame'}"`);
+        const fallbackMovies = await resolveDominantGenreAtmosphere(
+          primaryGenres,
+          moodTags,
+          effectiveCleanQuery,
+          req.body?.tmdbApiKey || '',
+          activeClusterId
+        );
+        if (fallbackMovies.length > 0) {
+          resolvedMovies = fallbackMovies.slice(0, 6);
+          fallbackTriggered = true;
         }
       }
 
@@ -2373,76 +2573,37 @@ export default async function handler(req, res) {
         }
       }
 
-      // ─── Résultats trouvés (Phase A ou Phase B) ─────────────────────────────
+      // ─── Renvoyer la réponse JSON ──────────────────────────────────────────
       if (resolvedMovies.length > 0) {
-        const isPhaseB     = resolvedMovies.some(m => m.badge === 'Recherche par contexte Éliciné' || m.badge === 'Recherche par contexte & mots-clés');
-        const badgeLabel   = isPhaseB ? 'Recherche par contexte Éliciné' : 'Sélection Éliciné';
-        const thoughtMsg   = isPhaseB
-          ? `🔍 Recherche élargie : ${resolvedMovies.length} film(s) correspondant à l'ambiance et au contexte`
-          : `✨ Analyse Éliciné : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`;
+        const isPhaseB = resolvedMovies.some(m => m.badge === 'Recherche par contexte Éliciné' || m.badge === 'Recherche par contexte & mots-clés');
+        const badgeLabel = fallbackTriggered
+          ? 'Recommandations Éliciné pour votre atmosphère'
+          : (isPhaseB ? 'Recherche par contexte Éliciné' : 'Sélection Éliciné');
+        const thoughtMsg = fallbackTriggered
+          ? `Vision & Recommandation Éliciné — Atmosphère : ${suggestedMood}`
+          : (isPhaseB
+              ? `🔍 Recherche élargie : ${resolvedMovies.length} film(s) correspondant à l'ambiance et au contexte`
+              : `✨ Analyse Éliciné : ${resolvedMovies.length} film(s) identifié(s) dans notre catalogue`);
 
         return res.status(200).json({
           success: true,
+          results: resolvedMovies,
           movies: resolvedMovies,
           count: resolvedMovies.length,
+          fallback_triggered: fallbackTriggered,
+          isFallbackMode: fallbackTriggered,
+          suggested_mood: suggestedMood,
           badge: badgeLabel,
-          providerUsed: 'Algorithme Éliciné',
-          correctedQuery: correctedQuery || null,
+          providerUsed: provider || 'Algorithme Éliciné',
+          correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
           thought: thoughtMsg,
-          extractedTitles: allReferenceTitles,
+          extractedTitles: referenceTitles,
           suggestedPrompts: [
             'Un film de science-fiction dystopique sombre',
             'Un thriller psychologique avec un twist final',
-            'Un film de braquage haletant qui tourne mal'
+            'Une comédie feel-good et touchante'
           ]
         });
-      }
-
-      // ─── ÉTAPE 3 : Règle impérative de Fallback — Recommandations d'Atmosphère ─
-      // Règle formelle absolue :
-      // Il est formellement INTERDIT de renvoyer le composant "Aucun film ne correspond précisément..."
-      // si la requête est identifiable sur un plan émotionnel ou thématique.
-      // Si la recherche stricte ne donne aucun résultat exact, afficher les films du genre dominant
-      // ("Romance / Drame", etc.) les mieux notés avec le label d'accompagnement :
-      // "Recommandations Éliciné pour votre atmosphère".
-      const isThematicOrEmotional = 
-        (canonicalGenres && canonicalGenres.length > 0) ||
-        (themes && themes.length > 0) ||
-        (allReferenceTitles && allReferenceTitles.length > 0) ||
-        Boolean(detectEmotionalExpansion(cleanQuery)) ||
-        Boolean(detectThematicClusterId(cleanQuery)) ||
-        cleanQuery.trim().length >= 4;
-
-      if (isThematicOrEmotional) {
-        console.log(`[API /api/search] [Étape 3 Fallback] Requête thématique/émotionnelle sans résultat strict → Recommandations Éliciné pour votre atmosphère`);
-        const atmosphereMovies = await resolveDominantGenreAtmosphere(
-          canonicalGenres,
-          themes,
-          cleanQuery,
-          req.body?.tmdbApiKey || '',
-          activeClusterId
-        );
-
-        if (atmosphereMovies.length > 0) {
-          return res.status(200).json({
-            success: true,
-            movies: atmosphereMovies,
-            count: atmosphereMovies.length,
-            isEmpty: false,
-            isFallbackMode: true,
-            badge: "Recommandations Éliciné pour votre atmosphère",
-            providerUsed: 'Algorithme Éliciné',
-            correctedQuery: correctedQuery || null,
-            thought: "Recommandations Éliciné pour votre atmosphère",
-            extractedTitles: allReferenceTitles,
-            suggestedPrompts: [
-              "Un film de braquage haletant avec twist",
-              "Une histoire d'amour impossible mais réaliste",
-              "Un chef-d'œuvre de science-fiction dystopique",
-              "Une comédie feel-good et touchante"
-            ]
-          });
-        }
       }
 
       // Atteint UNIQUEMENT si la requête est du charabia aléatoire non identifiable.
@@ -2456,7 +2617,7 @@ export default async function handler(req, res) {
         providerUsed: 'Algorithme Éliciné',
         correctedQuery: correctedQuery || null,
         message: "L'algorithme Éliciné a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
-        extractedTitles: allReferenceTitles,
+        extractedTitles: referenceTitles,
         suggestedPrompts: [
           "Un voyage dans l'espace avec des trous noirs",
           "Un film de braquage qui tourne mal",

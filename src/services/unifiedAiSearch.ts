@@ -1308,11 +1308,15 @@ export async function executeCinoraSearch(
     if (searchRes.ok) {
       const searchData = await searchRes.json();
       if (searchData.success) {
-        // Cas A : Des correspondances réelles ont été trouvées dans Supabase
-        if (Array.isArray(searchData.movies) && searchData.movies.length > 0) {
-          console.log(`[Éliciné LLM-First] ${searchData.movies.length} films trouvés dans le catalogue Supabase avec badge`);
+        // Cas A : Des correspondances réelles ou de repli intelligent ont été trouvées
+        const returnedList = searchData.results || searchData.movies || [];
+        if (Array.isArray(returnedList) && returnedList.length > 0) {
+          const isFallback = Boolean(searchData.fallback_triggered ?? searchData.isFallbackMode);
+          const interpretedMood = searchData.suggested_mood || searchData.moodDetected || cleanQuery;
+          console.log(`[Éliciné LLM-First] ${returnedList.length} films trouvés (fallback: ${isFallback}, humeur: "${interpretedMood}")`);
+
           const clusterId = offlineCriteria?.thematicCluster;
-          const moviesWithCache = searchData.movies.map((m: any) => {
+          const moviesWithCache = returnedList.map((m: any) => {
             const mId = m.id || m.tmdb_id;
             let reason = m.ai_match_reason;
             if (clusterId && mId) {
@@ -1329,23 +1333,27 @@ export async function executeCinoraSearch(
             };
           });
 
+          const defaultThought = isFallback
+            ? `Vision & Recommandation Éliciné — Atmosphère : ${interpretedMood}`
+            : (searchData.thought || `✨ Vision & Recommandation Éliciné : ${moviesWithCache.length} œuvre(s) correspondante(s) dans notre catalogue`);
+
           const formatResult = enforceFormatConstraintAndFallback(
             moviesWithCache,
             effectiveFilters.mediaType,
-            searchData.thought || `✨ Analyse Éliciné : ${moviesWithCache.length} œuvre(s) correspondante(s) dans notre catalogue`
+            searchData.thought || defaultThought
           );
 
           if (formatResult.movies.length > 0) {
             return {
               thought: formatResult.thought,
-              moodDetected: cleanQuery,
+              moodDetected: interpretedMood,
               recommendedMovies: formatResult.movies,
-              isFallbackMode: Boolean(searchData.isFallbackMode),
+              isFallbackMode: isFallback,
               providerUsed: searchData.providerUsed || 'Algorithme Éliciné',
               suggestedPrompts: searchData.suggestedPrompts || [
                 'Un film de science-fiction dystopique sombre',
                 'Un thriller psychologique avec un twist final',
-                'Un film de braquage haletant qui tourne mal'
+                'Une comédie feel-good et touchante'
               ],
               cascade: {
                 tierReached: 1,
@@ -1359,7 +1367,7 @@ export async function executeCinoraSearch(
         }
 
         // Cas B : Zéro résultat de /api/search → on laisse tomber vers le pipeline TMDB
-        if (searchData.isEmpty || (Array.isArray(searchData.movies) && searchData.movies.length === 0)) {
+        if (searchData.isEmpty || (Array.isArray(returnedList) && returnedList.length === 0)) {
           console.log('[Éliciné LLM-First] 0 correspondance dans /api/search → repli sur pipeline TMDB standard.');
         }
       }
