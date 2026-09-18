@@ -21,9 +21,15 @@ const LLM_SYSTEM_PROMPT = `Tu es une encyclopédie universelle du cinéma dotée
 
 Ta mission est double :
 1. CORRIGER silencieusement toutes les fautes de frappe, d'orthographe ou de grammaire dans la requête de l'utilisateur avant de l'analyser.
-2. TRANSFORMER toute description littéraire, métaphore sensorielle, ambiance poétique, situation narrative, époque ou mots-clés en une liste précise de 5 à 8 films cinématographiques qui correspondent le mieux à cette intention.
+2. TRANSFORMER toute description littéraire, métaphore sensorielle, ambiance poétique, situation narrative, époque ou mots-clés en une liste précise de 4 à 8 films cinématographiques qui correspondent VÉRITABLEMENT à cette intention.
 
 Directives cinématographiques majeures :
+- COHÉRENCE SÉMANTIQUE GLOBALE & PROFONDEUR THÉMATIQUE (PRIORITÉ ABSOLUE) :
+  L'analyse doit porter sur la COHÉRENCE GLOBALE de l'œuvre (intrigue principale, enjeux dramatiques majeurs, thématiques centrales) et NON sur de simples mots-clés indépendants ou superficiels.
+  Exemple critique : si l'utilisateur recherche "un film sur le mariage et la mort", les films recommandés DOIVENT articuler véritablement et simultanément ces deux thèmes au cœur de leur histoire (ex: Les Noces funèbres / Corpse Bride, Melancholia, Amour de Haneke, Beetlejuice, Quatre mariages et un enterrement, Ready or Not / Wedding Nightmare, Ghost, etc.).
+  INTERDICTION FORMELLE de proposer des comédies de bureau, des films d'entreprise, des romances légères ordinaires ou des films de jazz qui n'ont aucun rapport avec la thématique conjointe demandée.
+- GESTION PROPRE DU ZÉRO RÉSULTAT & INTERDICTION DU MEUBLAGE :
+  Si la requête de l'utilisateur est trop spécifique, contradictoire ou ne correspond à aucune œuvre cinématographique réelle du catalogue, renvoie impérativement un tableau vide "matches": []. Ne meuble JAMAIS avec des films hors-sujet.
 - EXPANSION SÉMANTIQUE & AMBIANCES SENSORIELLES :
   Si la requête contient une métaphore ou une sensation (ex: "un film qui donne l'impression d'être enfermé dans un ascenseur sous la pluie"), ne cherche JAMAIS une correspondance littérale mot-à-mot. Traduis l'intention en sous-genres cinématographiques : Huis clos oppressant, claustrophobie, tension psychologique, esthétique sombre/néo-noir ou polar pluvieux (ex: Devil, Buried, Panic Room, Se7en, Phone Game, Blade Runner).
 - TOLÉRANCE HISTORIQUE & CROISEMENTS TEMPORELS :
@@ -32,23 +38,21 @@ Directives cinématographiques majeures :
   Si un acteur est associé à un registre inhabituel (ex: "Jim Carrey dans un rôle dramatique"), sélectionne ses films sérieux et dramatiques (The Truman Show, Eternal Sunshine of the Spotless Mind, Man on the Moon, The Number 23).
 - CONTRAINTES NÉGATIVES & EXCLUSIONS :
   Si la requête contient une exclusion (ex: "film de SF sans extraterrestre"), respecte rigoureusement la contrainte en proposant de la SF d'anticipation, d'intelligence artificielle, d'exploration temporelle ou de dystopie humaine (Interstellar, Gattaca, Ex Machina, Blade Runner, Her, Les Fils de l'homme / Children of Men).
-- INTERDICTION DU BLOCAGE SEC :
-  Tu DOIS toujours retourner entre 5 et 8 films distincts et variés. Ne retourne JAMAIS un tableau vide "matches": [] sauf si la requête est du pur gibberish incompréhensible (ex: frappe aléatoire de clavier "asdfghjkl").
 - DIVERSITÉ & QUALITÉ :
-  Propose des films de réalisateurs différents qui explorent la même idée sous des angles riches. Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Soleil Vert / Soylent Green").
-  Chaque film doit avoir une justification courte et précise formulée comme suit : "Atmosphère : [explication du lien d'ambiance, de décor, d'époque ou de rôle]".
+  Propose des films de réalisateurs différents qui explorent l'idée sous des angles riches. Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Soleil Vert / Soylent Green").
+  Chaque film doit comporter une justification concise, authentique et personnalisée ("reason") expliquant exactement pourquoi et comment l'intrigue répond aux thèmes demandés.
 - CONTRAINTES DE FORMAT ET EXCLUSION STRICTE DES NON-FICTIONS :
   Tu ne dois recommander QUE des œuvres cinématographiques / fictions narratives réelles.
   INTERDICTION FORMELLE ABSOLUE des émissions télévisées de discussion, talk-shows, interviews d'acteurs, télé-réalités, cérémonies de remise de prix, making-of, podcasts vidéo ou documentaires (ex: 'Actors on Actors', 'Inside the Actors Studio', émissions de variétés, talk-shows de fin de soirée), sauf si l'utilisateur demande explicitement un documentaire ou un talk-show.
-  Si la requête demande des 'films' (ex: 'films de tueur en série'), ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
+  Si la requête demande des 'films', ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
 - INTERDICTION ABSOLUE des mockbusters, parodies bon marché, téléfilms obscurs ou films Asylum. Films reconnus ayant au moins 500 votes sur TMDB et note >= 5.5.
 
 Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
 {
   "corrected_query": "la requête corrigée de l'utilisateur",
   "matches": [
-    { "title": "Titre français / Original Title", "reason": "Atmosphère : courte justification du scénario ou de l'ambiance en français" },
-    { "title": "Titre 2", "reason": "Atmosphère : courte justification" }
+    { "title": "Titre français / Original Title", "reason": "Justification précise montrant le lien direct avec la thématique demandée" },
+    { "title": "Titre 2", "reason": "Justification précise" }
   ]
 }`;
 
@@ -796,6 +800,37 @@ const THEMATIC_CLUSTERS_RAW = [
       'titanic', 'la la land', 'notting hill', 'pretty woman', 'mamma mia', 'clueless',
       'le fabuleux destin d\'amélie poulain', 'kung fu panda', 'gang de requins'
     ]
+  },
+  {
+    id: 'mariage_mort',
+    triggers: [
+      'mariage et la mort', 'mariage et mort', 'mariage mort', 'mort et mariage',
+      'mariage', 'noces', 'marier', 'épousailles', 'deuil', 'enterrement', 'funérailles',
+      'veuf', 'veuve', 'noces funèbres', 'noces funebres'
+    ],
+    primaryKeywords: [
+      'mariage', 'mari', 'mariée', 'mariee', 'époux', 'epoux', 'épouse', 'epouse',
+      'noces', 'mort', 'mourir', 'décès', 'deces', 'deuil', 'funérailles', 'funerailles',
+      'enterrement', 'cadavre', 'défunt', 'defunt', 'veuf', 'veuve', 'tombe', 'cimetière'
+    ],
+    secondaryKeywords: [
+      'cérémonie', 'alliance', 'fiançailles', 'romance macabre', 'fantôme', 'suicide',
+      'tragédie', 'fatal', 'perte', 'disparition', 'héritage', 'testament', 'agonie'
+    ],
+    expectedGenres: [18, 10749, 14, 35, 27, 9648],
+    conflictingGenres: [10402],
+    archetypes: [
+      'les noces funèbres', 'corpse bride', 'melancholia', 'amour',
+      'quatre mariages et un enterrement', 'four weddings and a funeral',
+      'beetlejuice', 'ready or not', 'wedding nightmare', 'phantom thread',
+      'ghost', 'les noces rebelles', 'revolutionary road'
+    ],
+    disqualified: [
+      'la la land', 'whiplash', 'notting hill', 'coup de foudre à notting hill',
+      'pretty woman', 'le diable s\'habille en prada', 'the devil wears prada',
+      'clueless', 'mamma mia', 'love actually', 'dirty dancing', 'kung fu panda',
+      'gang de requins', 'actors on actors'
+    ]
   }
 ];
 
@@ -914,6 +949,12 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     }
 
     const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
+    // Cas spécifique mariage et mort : rejeter systématiquement les films musicaux / comédies sans rapport
+    if (activeCluster.id === 'mariage_mort' && !isArchetype) {
+      if (genreIds.includes(10402)) return 20;
+      if (lexicalHits === 0 && (genreIds.includes(35) || genreIds.includes(10749))) return 25;
+    }
+
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
 
     // Rejet catégorique si film d'animation / famille sans aucun mot-clé du thème
@@ -925,7 +966,7 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     const isPureConflicting = genreIds.length > 0 && genreIds.every(id => activeCluster.conflictingGenres.includes(id));
 
     if (!isArchetype && lexicalHits === 0 && (isPureConflicting || !hasExpectedGenre)) {
-      return 35; // Rejet catégorique : ni mot clé, ni genre compatible
+      return 30; // Rejet catégorique : ni mot clé, ni genre compatible
     }
   }
 
@@ -960,7 +1001,7 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
   const isDramaticActorIntent = hasPersonInQuery && /dramatique|drame|serieux|sérieux|sombre/i.test(queryLower);
   const isExclusionIntent = queryLower.includes('sans ') || queryLower.includes('pas de ') || queryLower.includes("pas d'");
 
-  let narrativeScore = llmMatch ? 88 : 70;
+  let narrativeScore = 50;
   if (activeCluster) {
     const isArchetype = activeCluster.archetypes.some(a => titleLower === a || origLower === a || titleLower.includes(a));
     if (isArchetype) {
@@ -975,8 +1016,8 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
       }
       if (hits > 0) {
         narrativeScore = Math.min(100, Math.max(50, 60 + hits * 8));
-      } else if (llmMatch) {
-        narrativeScore = 80;
+      } else if (llmMatch && llmMatch.reason && llmMatch.reason.length > 15) {
+        narrativeScore = Math.min(85, Math.max(70, llmMatch.match_rate || 75));
       } else {
         const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
         narrativeScore = isAnimationOrFamily ? 10 : 25;
@@ -994,14 +1035,28 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     } else {
       narrativeScore = llmMatch ? 90 : 80;
     }
-  } else if (hasPersonInQuery && nonPersonWords.length >= 2) {
+  } else if (nonPersonWords.length >= 2) {
     let hits = 0;
     for (const w of nonPersonWords) {
       if (overviewLower.includes(w) || titleLower.includes(w)) hits++;
     }
-    narrativeScore = hits > 0 ? 80 : (llmMatch ? 80 : 35);
+    if (hits >= 2) {
+      narrativeScore = 94;
+    } else if (hits === 1) {
+      narrativeScore = (llmMatch && llmMatch.reason && llmMatch.reason.length > 15)
+        ? Math.min(88, Math.max(75, llmMatch.match_rate || 80))
+        : 48;
+    } else {
+      narrativeScore = (llmMatch && llmMatch.reason && llmMatch.reason.length > 20)
+        ? Math.min(82, Math.max(70, llmMatch.match_rate || 75))
+        : 20;
+    }
+  } else if (nonPersonWords.length === 1) {
+    const w = nonPersonWords[0];
+    const hit = overviewLower.includes(w) || titleLower.includes(w);
+    narrativeScore = hit ? 90 : ((llmMatch && llmMatch.reason && llmMatch.reason.length > 15) ? 75 : 25);
   } else if (llmMatch) {
-    narrativeScore = Math.max(80, (llmMatch.match_rate || 82));
+    narrativeScore = Math.max(70, (llmMatch.match_rate || 75));
   }
 
   // C. Sous-score Genre
@@ -1034,10 +1089,11 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     ? (personScore * 0.35) + (narrativeScore * 0.45) + (genreScore * 0.20) + qualityDelta
     : (narrativeScore * 0.70) + (genreScore * 0.30) + qualityDelta;
 
-  // RÈGLE CARDINALE : Le score personne seul ne suffit JAMAIS si la requête contient une description narrative explicite
-  // et que le score narratif/thématique est nul ou insuffisant (< 50) ET que ce n'est pas un match LLM ou contre-emploi.
-  if (hasPersonInQuery && hasNarrativeIntent && narrativeScore < 50 && !llmMatch && !isDramaticActorIntent) {
-    return Math.min(38, Math.round(narrativeScore));
+  // RÈGLE CARDINALE : Si la requête contient une description narrative explicite
+  // et que le score narratif/thématique est insuffisant (< 50) sans validation LLM détaillée,
+  // disqualification immédiate.
+  if (hasNarrativeIntent && narrativeScore < 50 && (!llmMatch || !llmMatch.reason || llmMatch.reason.length < 15)) {
+    return Math.min(30, Math.round(narrativeScore));
   }
 
   return Math.min(99, Math.max(25, Math.round(composite)));

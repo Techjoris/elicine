@@ -175,21 +175,24 @@ export async function queryAiTitles(
   if (spec.level === 'ultra_targeted') {
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
+COHÉRENCE SÉMANTIQUE OBLIGATOIRE : Si la requête associe plusieurs thèmes (ex: "mariage et mort"), chaque œuvre proposée DOIT véritablement articuler cette combinaison dans son intrigue.
 Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films très proches (Niveau 2 : élargissement souple).
-IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si explicitement demandés), parodies et mockbusters (The Asylum). Si des films sont demandés, ne proposer QUE des films de cinéma de fiction reconnus (>= 6/10 sur TMDB).
+IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si explicitement demandés), romances de bureau ou comédies sans rapport avec l'ensemble des thèmes, parodies et mockbusters (The Asylum). Si des films sont demandés, ne proposer QUE des films de cinéma de fiction reconnus (>= 6/10 sur TMDB).
 Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 260;
     temperature = 0.35;
   } else if (spec.level === 'broad') {
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
 Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
+COHÉRENCE GLOBALE REQUISE : Chaque œuvre doit profondément correspondre à l'intention thématique de la recherche. Si la requête est composite, l'œuvre doit relier ces composantes et non un mot isolé.
 IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si demandés) et mockbusters. Si des films sont demandés, ne proposer QUE des œuvres de cinéma de fiction. Diversité de réalisateurs requise.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 350;
     temperature = 0.3;
   } else {
-    prompt = `SÉLECTION THÉMATIQUE : Propose entre 6 et 8 films ou séries existants pour : "${query}".
-Tolère les synonymes et variantes sémantiques. Exclure STRICTEMENT les talk-shows, émissions d'interviews (ex: 'Actors on Actors'), télé-réalités, mockbusters et contenus non-fictionnels. Si des films sont demandés, ne proposer QUE des films de cinéma de fiction.
+    prompt = `SÉLECTION THÉMATIQUE STRICTE : Propose entre 6 et 8 films ou séries existants pour la recherche thématique : "${query}".
+COHÉRENCE SÉMANTIQUE GLOBALE : Si la requête combine des thèmes (ex: "mariage et mort"), chaque film DOIT relier ces deux dimensions au cœur de son récit (ex: Les Noces funèbres, Melancholia, Amour, Quatre mariages et un enterrement), et non être une simple comédie ou romance banale.
+Exclure STRICTEMENT les talk-shows, émissions d'interviews (ex: 'Actors on Actors'), télé-réalités, mockbusters et films hors-sujet. Ne proposer QUE des films de cinéma de fiction pertinents.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
     maxTokens = 300;
     temperature = 0.3;
@@ -1414,25 +1417,31 @@ export async function executeCinoraSearch(
 
       // 4. Évaluation de l'intention globale structurée (Acteur + Twist, OU Décor + Ton)
       const structuredEval = evaluateStructuredMovieMatch(movie, criteria, matchingRawItem);
-      const isStrictMatch = matchesPerson && matchesYear && structuredEval.matches;
+      const isStrictMatch = matchesPerson && matchesYear && structuredEval.matches && structuredEval.score >= 70;
 
       if (isStrictMatch) {
-        const strictScore = Math.min(99, Math.max(82, structuredEval.score));
+        const strictScore = Math.min(99, Math.max(75, structuredEval.score));
+        const rawReason = structuredEval.reason || '';
+        const cleanReason = rawReason
+          .replace(/^🎯\s*(Correspondance ciblée\s*:\s*)?/i, '')
+          .replace(/Aucune contrainte narrative.*/i, 'Atmosphère et intrigue en accord avec votre recherche')
+          .trim();
+
         tier1Movies.push({
           ...movie,
           match_rate: strictScore,
-          ai_match_reason: `🎯 Correspondance ciblée : ${primaryPerson ? `${primaryPerson} — ` : ''}${structuredEval.reason}`
+          ai_match_reason: `🎯 Correspondance ciblée : ${primaryPerson ? `${primaryPerson} — ` : ''}${cleanReason}`
         });
       } else {
         // Envoi en réserve pour Niveau 2 UNIQUEMENT si le film n'est pas formellement disqualifié
         const minReserveScore = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
-        if (criteria.hasNarrativeConstraint && structuredEval.score < minReserveScore && !matchingRawItem && !criteria.isMetaphorical && !criteria.era) {
+        if (criteria.hasNarrativeConstraint && (structuredEval.score < minReserveScore || !structuredEval.matches) && !criteria.isMetaphorical && !criteria.era) {
           console.log(`[UnifiedAI] Disqualification narrative (${structuredEval.score}%) : "${movie.title}"`);
           continue;
         }
         tier2Candidates.push({
           ...movie,
-          match_rate: Math.min(85, Math.max(60, structuredEval.score)),
+          match_rate: Math.min(85, Math.max(50, structuredEval.score)),
           ai_match_reason: `✨ Suggestion Éliciné : ${structuredEval.reason || 'Ambiance et intrigue immersive'}`
         });
       }
@@ -1690,6 +1699,15 @@ export async function executeCinoraSearch(
       }
     }
     if (isMovieParasiteWithoutNarrativeLink(cleanQuery, m)) return false;
+
+    // Disqualification stricte du pool de secours si la contrainte narrative n'est pas respectée
+    if (criteria.hasNarrativeConstraint) {
+      const evalRes = evaluateStructuredMovieMatch(m, criteria);
+      const minThreshold = (criteria.actors.length > 0 || criteria.directors.length > 0) ? 55 : 45;
+      if ((evalRes.score < minThreshold || !evalRes.matches) && !criteria.isMetaphorical && !criteria.era) {
+        return false;
+      }
+    }
     return true;
   });
 
@@ -1735,7 +1753,7 @@ export async function executeCinoraSearch(
   console.log(`[Éliciné Cascade] Requête véritablement insensée ou catalogue vide pour "${cleanQuery}" (similarité: ${globalSimilarityScore} < 0.40).`);
 
   return {
-    thought: "Aucun film ne correspond précisément à cette description dans notre catalogue",
+    thought: "Aucun film ne correspond précisément à votre recherche dans notre catalogue",
     moodDetected: cleanQuery,
     recommendedMovies: [],
     isFallbackMode: true,

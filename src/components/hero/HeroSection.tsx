@@ -312,7 +312,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       }
 
       if (res.recommendedMovies.length === 0) {
-        showToast("Aucun film trouvé avec cette description.");
+        showToast("Aucun film ne correspond précisément à votre recherche.");
       } else if (res.isFallbackMode) {
         showToast(`🔍 ${res.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
       } else if (res.recommendedMovies.length <= 2) {

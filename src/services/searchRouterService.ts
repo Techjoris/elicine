@@ -792,20 +792,13 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     'braquage', 'paranoïa', 'amnésie', 'sniper', 'intelligence artificielle',
     'sous-marin', 'cercueil', 'zombie', 'vampire', 'cyberpunk', 'dystopie',
     'enquête', 'infiltration', 'voyage dans le temps',
-    'guerre', 'soldat', 'combat', 'bataille', 'tranchée', 'tranchées', 'survie au combat'
+    'guerre', 'soldat', 'combat', 'bataille', 'tranchée', 'tranchées', 'survie au combat',
+    'mariage', 'noces', 'marier', 'mort', 'mourir', 'décès', 'deuil', 'enterrement', 'funérailles',
+    'amour impossible', 'vengeance', 'maladie', 'solitude', 'folie', 'rédemption', 'secret'
   ];
   for (const t of themeKeywords) {
     if (lower.includes(t) && !themes.includes(t)) {
       themes.push(t);
-    }
-  }
-
-  // Scanner automatiquement tous les déclencheurs des clusters thématiques
-  for (const cluster of THEMATIC_LEXICON_CLUSTERS) {
-    if (cluster.triggers.some(tr => lower.includes(tr))) {
-      if (!themes.includes(cluster.id)) {
-        themes.push(cluster.id);
-      }
     }
   }
 
@@ -832,6 +825,32 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
 
   // 9. Détection approfondie des contraintes narratives & twists
   const narrativeCues: string[] = [];
+
+  // Détection contextuelle de thématiques explicites : "sur X", "qui parle de X", "à propos de X", "autour de X"
+  const topicRegex = /\b(?:sur|qui parle de|à propos de|autour de|avec pour thème|traitant de|ayant pour thème)\s+([^,.]+)/i;
+  const topicMatch = clean.match(topicRegex);
+  if (topicMatch && topicMatch[1]) {
+    const rawTopic = topicMatch[1].toLowerCase().trim();
+    const topicParts = rawTopic
+      .split(/\s+(?:et|ou|avec|sans)\s+|,\s*/)
+      .map(p => p.replace(/^(?:le|la|les|un|une|des|du|de|d'|d’)\s+/i, '').trim())
+      .filter(p => p.length >= 3 && !['film', 'films', 'serie', 'séries', 'histoire', 'oeuvre'].includes(p));
+
+    for (const part of topicParts) {
+      if (!themes.includes(part)) themes.push(part);
+      if (!narrativeCues.includes(part)) narrativeCues.push(part);
+    }
+  }
+
+  // Scanner automatiquement tous les déclencheurs des clusters thématiques
+  for (const cluster of THEMATIC_LEXICON_CLUSTERS) {
+    if (cluster.triggers.some(tr => lower.includes(tr))) {
+      if (!themes.includes(cluster.id)) {
+        themes.push(cluster.id);
+      }
+    }
+  }
+
   let isTwistRequested = false;
 
   if (TWIST_PATTERNS.some(p => p.test(clean))) {
@@ -861,6 +880,27 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
+  // Extraction des mots thématiques signifiants non-stopwords (pour toute requête thématique libre)
+  const genericStopWords = new Set([
+    'film', 'films', 'serie', 'series', 'série', 'séries', 'cherche', 'trouve', 'donne', 'moi',
+    'avec', 'dans', 'pour', 'par', 'sur', 'sous', 'vers', 'chez', 'sans', 'comme',
+    'un', 'une', 'des', 'le', 'la', 'les', 'du', 'de', 'd', 'ce', 'cette', 'ces',
+    'qui', 'que', 'quoi', 'dont', 'où', 'est', 'sont', 'ete', 'été', 'avoir', 'etre', 'être',
+    'tres', 'très', 'plus', 'moins', 'tout', 'tous', 'toute', 'toutes', 'bien', 'aussi',
+    'mon', 'ton', 'son', 'notre', 'votre', 'leur', 'mes', 'tes', 'ses', 'nos', 'vos', 'leurs'
+  ]);
+  const wordsInQuery = lower.split(/[\s,.'’"-]+/).filter(w => w.length >= 3);
+  const significantThematicWords = wordsInQuery.filter(w => 
+    !genericStopWords.has(w) &&
+    !actors.some(a => a.toLowerCase().includes(w)) &&
+    !directors.some(d => d.toLowerCase().includes(w))
+  );
+
+  for (const sw of significantThematicWords) {
+    if (!narrativeCues.includes(sw)) narrativeCues.push(sw);
+    if (!themes.includes(sw)) themes.push(sw);
+  }
+
   // Nettoyage des narrativeCues : exclure les termes de contraintes négatives ou de décennies
   const cleanNarrativeCues = narrativeCues.filter(cue => {
     const cueLower = cue.toLowerCase();
@@ -869,16 +909,18 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     return !isExcluded && !isEraWord;
   });
 
-  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || isMetaphorical || Boolean(era);
+  const hasNarrativeConstraint = isTwistRequested || cleanNarrativeCues.length > 0 || spatialSettings.length > 0 || themes.length > 0 || isMetaphorical || Boolean(era);
 
   // 10. Calcul de l'intention globale structurée (Niveau 1)
-  // Vrai dès qu'une entité humaine, un cadre spatial, une situation ou un ton/twist est identifié
+  // Vrai dès qu'une entité humaine, un cadre spatial, une situation, un thème ou un ton/twist est identifié
   const hasStructuredIntent =
     actors.length > 0 ||
     directors.length > 0 ||
     spatialSettings.length > 0 ||
     situations.length > 0 ||
     tones.length > 0 ||
+    themes.length > 0 ||
+    cleanNarrativeCues.length > 0 ||
     isTwistRequested ||
     isMetaphorical ||
     year !== undefined ||
@@ -1208,6 +1250,37 @@ export const THEMATIC_LEXICON_CLUSTERS: ThematicCluster[] = [
       'titanic', 'la la land', 'notting hill', 'pretty woman', 'mamma mia', 'clueless',
       'le fabuleux destin d\'amélie poulain', 'kung fu panda', 'gang de requins'
     ]
+  },
+  {
+    id: 'mariage_mort',
+    triggers: [
+      'mariage et la mort', 'mariage et mort', 'mariage mort', 'mort et mariage',
+      'mariage', 'noces', 'marier', 'épousailles', 'deuil', 'enterrement', 'funérailles',
+      'veuf', 'veuve', 'noces funèbres', 'noces funebres', 'mariée cadavre'
+    ],
+    primaryKeywords: [
+      'mariage', 'mari', 'mariée', 'mariee', 'époux', 'epoux', 'épouse', 'epouse',
+      'noces', 'mort', 'mourir', 'décès', 'deces', 'deuil', 'funérailles', 'funerailles',
+      'enterrement', 'cadavre', 'défunt', 'defunt', 'veuf', 'veuve', 'tombe', 'cimetière'
+    ],
+    secondaryKeywords: [
+      'cérémonie', 'alliance', 'fiançailles', 'romance macabre', 'fantôme', 'suicide',
+      'tragédie', 'fatal', 'perte', 'disparition', 'héritage', 'testament', 'agonie'
+    ],
+    expectedGenres: [18, 10749, 14, 35, 27, 9648],
+    conflictingGenres: [10402],
+    archetypeTitles: [
+      'les noces funèbres', 'corpse bride', 'melancholia', 'amour',
+      'quatre mariages et un enterrement', 'four weddings and a funeral',
+      'beetlejuice', 'ready or not', 'wedding nightmare', 'phantom thread',
+      'ghost', 'les noces rebelles', 'revolutionary road'
+    ],
+    disqualifiedTitles: [
+      'la la land', 'whiplash', 'notting hill', 'coup de foudre à notting hill',
+      'pretty woman', 'le diable s\'habille en prada', 'the devil wears prada',
+      'clueless', 'mamma mia', 'love actually', 'dirty dancing', 'kung fu panda',
+      'gang de requins', 'actors on actors'
+    ]
   }
 ];
 
@@ -1336,10 +1409,6 @@ export function evaluateMovieNarrativeRelevance(
     }
   }
 
-  if (!criteria.hasNarrativeConstraint && criteria.actors.length === 0 && criteria.directors.length === 0) {
-    return { matches: true, score: 95, reason: 'Aucune contrainte narrative restrictive' };
-  }
-
   const titleLower = (movie.title || '').toLowerCase().trim();
   const origLower = (movie.original_title || '').toLowerCase().trim();
   const overviewLower = (movie.overview || '').toLowerCase();
@@ -1355,7 +1424,7 @@ export function evaluateMovieNarrativeRelevance(
     if (activeCluster.disqualifiedTitles.some(d => titleLower === d || origLower === d || titleLower.includes(d))) {
       return {
         matches: false,
-        score: 28,
+        score: 25,
         reason: `Exclu : "${movie.title}" ne comporte aucun élément lié à « ${activeCluster.id} » (hors-sujet formel)`
       };
     }
@@ -1368,6 +1437,25 @@ export function evaluateMovieNarrativeRelevance(
     }
     for (const kw of activeCluster.secondaryKeywords) {
       if (overviewLower.includes(kw)) clusterHits += 1.5;
+    }
+
+    // Cas spécifique mariage et mort : rejeter systématiquement les comédies légères / jazz sans rapport
+    if (activeCluster.id === 'mariage_mort' && !isArchetype) {
+      const isMusicOrJazz = genreIds.includes(10402);
+      if (isMusicOrJazz) {
+        return {
+          matches: false,
+          score: 20,
+          reason: `Exclu : "${movie.title}" est un film musical sans lien avec le mariage et la mort`
+        };
+      }
+      if (clusterHits === 0 && (genreIds.includes(35) || genreIds.includes(10749))) {
+        return {
+          matches: false,
+          score: 28,
+          reason: `Exclu : "${movie.title}" n'articule pas la thématique conjointe du mariage et de la mort`
+        };
+      }
     }
 
     const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
@@ -1385,8 +1473,8 @@ export function evaluateMovieNarrativeRelevance(
     if (!isArchetype && clusterHits === 0 && (isPureConflicting || (!hasExpectedGenre && genreIds.includes(10749)))) {
       return {
         matches: false,
-        score: 32,
-        reason: `Exclu : genre incompatible (${movie.title} est une romance/drame sans rapport avec « ${activeCluster.id} »)`
+        score: 30,
+        reason: `Exclu : genre incompatible (${movie.title} est sans rapport avec « ${activeCluster.id} »)`
       };
     }
   }
@@ -1423,19 +1511,40 @@ export function evaluateMovieNarrativeRelevance(
     const pLower = primaryPerson.toLowerCase();
     const inOverview = overviewLower.includes(pLower);
     const inTitle = titleLower.includes(pLower);
-    // Si la recherche ciblait cette personne et qu'elle est vérifiée
     personScore = (inOverview || inTitle || (rawItem && rawItem.match_rate && rawItem.match_rate > 70)) ? 100 : 90;
   }
 
   // D. Sous-score Thématique / Narratif (poids 0.45)
-  let thematicScore = 70;
-  let thematicReason = 'Cohérence scénaristique globale';
+  let thematicScore = 50;
+  let thematicReason = 'Affinité thématique générale';
+
+function formatClusterDisplayName(clusterId: string): string {
+  const map: Record<string, string> = {
+    mariage_mort: 'mariage et mort',
+    twist_narratif: 'twist narratif',
+    twist: 'twist',
+    huis_clos: 'huis clos',
+    guerre_tranchees: 'guerre des tranchées',
+    bourse_finance: 'finance et bourse',
+    tueur_en_serie: 'tueur en série',
+    voyage_temporel: 'voyage temporel',
+    intelligence_artificielle: 'intelligence artificielle',
+    braquage: 'braquage',
+    survie: 'survie',
+    vengeance: 'vengeance',
+    espionnage: 'espionnage',
+    cyberpunk: 'cyberpunk',
+    dystopie: 'dystopie'
+  };
+  return map[clusterId] || clusterId.replace(/_/g, ' ');
+}
 
   if (activeCluster) {
+    const clusterDisplayName = formatClusterDisplayName(activeCluster.id);
     const isArchetype = activeCluster.archetypeTitles.some(a => titleLower === a || origLower === a || titleLower.includes(a));
     if (isArchetype) {
       thematicScore = 98;
-      thematicReason = `Chef-d'œuvre de référence du thème « ${activeCluster.id} »`;
+      thematicReason = `Chef-d'œuvre de référence du thème « ${clusterDisplayName} »`;
     } else {
       let hits = 0;
       const matchedTokens: string[] = [];
@@ -1454,41 +1563,58 @@ export function evaluateMovieNarrativeRelevance(
 
       if (hits > 0) {
         thematicScore = Math.min(97, Math.max(72, 70 + Math.round(hits * 7)));
-        thematicReason = `Correspondance scénaristique forte (${matchedTokens.join(', ')})`;
-      } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
-        thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 80));
-        thematicReason = rawItem.reason || `Atmosphère : Recommandation liée à « ${activeCluster.id} »`;
+        thematicReason = `Scénario ancré dans la thématique « ${clusterDisplayName} » (${matchedTokens.join(', ')})`;
+      } else if (rawItem && (rawItem.match_rate || rawItem.reason) && (rawItem.reason || '').length > 10) {
+        thematicScore = Math.min(88, Math.max(72, rawItem.match_rate || 78));
+        thematicReason = rawItem.reason || `Atmosphère : Recommandation liée à « ${clusterDisplayName} »`;
       } else {
-        // Aucun mot clé du cluster présent
         const isAnimationOrFamily = genreIds.includes(16) || genreIds.includes(10751);
-        if (isAnimationOrFamily) {
-          thematicScore = 10;
-          thematicReason = `Thème « ${activeCluster.id} » totalement absent (animation/famille)`;
-        } else {
-          const hasExpected = activeCluster.expectedGenres.some(id => genreIds.includes(id));
-          thematicScore = hasExpected ? 45 : 25;
-          thematicReason = `Thème « ${activeCluster.id} » non explicité dans le court résumé`;
-        }
+        thematicScore = isAnimationOrFamily ? 10 : 25;
+        thematicReason = `Thème « ${clusterDisplayName} » absent du synopsis`;
       }
     }
   } else if (criteria.narrativeCues.length > 0) {
     let cuesHit = 0;
+    const matchedCues: string[] = [];
     for (const cue of criteria.narrativeCues) {
-      if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) cuesHit++;
+      if (overviewLower.includes(cue.toLowerCase()) || titleLower.includes(cue.toLowerCase())) {
+        cuesHit++;
+        matchedCues.push(cue);
+      }
     }
-    if (cuesHit > 0) {
-      thematicScore = 92;
-      thematicReason = 'Correspondance avec les éléments narratifs demandés';
-    } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
-      // Tolérance sémantique : le LLM a validé l'affinité
-      thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 82));
-      thematicReason = rawItem.reason ? `Atmosphère : ${rawItem.reason}` : 'Correspondance thématique validée par l\'analyse cinématographique';
-    } else if (criteria.era && isEraMatched && matchesRequestedGenre) {
-      thematicScore = 90;
-      thematicReason = `Classique marquant de ${criteria.era}`;
+
+    if (criteria.narrativeCues.length >= 2) {
+      if (cuesHit >= 2) {
+        thematicScore = 95;
+        thematicReason = `Intrigue articulant les thèmes de « ${matchedCues.join(' » et « ')} »`;
+      } else if (cuesHit === 1) {
+        if (rawItem && rawItem.reason && rawItem.reason.length > 15) {
+          thematicScore = Math.min(88, Math.max(76, rawItem.match_rate || 80));
+          thematicReason = rawItem.reason;
+        } else {
+          thematicScore = 48;
+          thematicReason = `Thématique partielle (« ${matchedCues[0]} » présent, mais second thème non vérifié)`;
+        }
+      } else {
+        if (rawItem && rawItem.reason && rawItem.reason.length > 20) {
+          thematicScore = Math.min(82, Math.max(70, rawItem.match_rate || 75));
+          thematicReason = rawItem.reason;
+        } else {
+          thematicScore = 20;
+          thematicReason = `Hors-sujet : aucun lien narratif avec « ${criteria.narrativeCues.slice(0, 2).join(' » et « ')} »`;
+        }
+      }
     } else {
-      thematicScore = 35;
-      thematicReason = 'Intrigue demandée non retrouvée directement dans le synopsis';
+      if (cuesHit >= 1) {
+        thematicScore = 92;
+        thematicReason = `Intrigue centrée sur le thème « ${matchedCues[0]} »`;
+      } else if (rawItem && rawItem.reason && rawItem.reason.length > 15) {
+        thematicScore = Math.min(88, Math.max(75, rawItem.match_rate || 80));
+        thematicReason = rawItem.reason;
+      } else {
+        thematicScore = 25;
+        thematicReason = `Thème « ${criteria.narrativeCues[0]} » absent du scénario`;
+      }
     }
   } else if (criteria.era && isEraMatched) {
     thematicScore = matchesRequestedGenre ? 92 : 82;
@@ -1497,11 +1623,14 @@ export function evaluateMovieNarrativeRelevance(
     thematicScore = rawItem?.match_rate ? Math.max(78, rawItem.match_rate) : 80;
     thematicReason = rawItem?.reason ? `Atmosphère : ${rawItem.reason}` : 'Atmosphère immersive et sensorielle';
   } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
-    thematicScore = Math.min(95, Math.max(78, rawItem.match_rate || 80));
+    thematicScore = Math.min(85, Math.max(70, rawItem.match_rate || 75));
     thematicReason = rawItem.reason ? `Atmosphère : ${rawItem.reason}` : 'Recommandation cinématographique';
   } else if (criteria.hasNarrativeConstraint) {
-    thematicScore = 35;
+    thematicScore = 25;
     thematicReason = 'Contrainte narrative demandée non vérifiée';
+  } else {
+    thematicScore = 30;
+    thematicReason = 'Critères d\'affinité thématique insuffisants';
   }
 
   // E. Prise en compte des rôles spécifiques / contre-emploi (ex: Jim Carrey dans un rôle dramatique)
@@ -1567,20 +1696,19 @@ export function evaluateMovieNarrativeRelevance(
   let matches = false;
   if (hasExplicitNarrative) {
     if (thematicScore < 50) {
-      // Si ce n'est NI un match LLM, NI un match d'époque, NI métaphorique
       if (!rawItem && (!criteria.era || !isEraMatched) && !criteria.isMetaphorical) {
         matches = false;
-        finalScore = Math.min(finalScore, 38); // Plafond strict uniquement pour hors-sujet flagrant
+        finalScore = Math.min(finalScore, 32);
       } else {
-        matches = finalScore >= 55;
+        matches = finalScore >= 55 && thematicScore >= 45;
       }
     } else {
-      matches = hasPerson ? (finalScore >= 70 && thematicScore >= 58) : (finalScore >= 55 && thematicScore >= 48);
+      matches = hasPerson ? (finalScore >= 70 && thematicScore >= 58) : (finalScore >= 60 && thematicScore >= 50);
     }
   } else if (hasPerson) {
     matches = (finalScore >= 65);
   } else {
-    matches = (finalScore >= 55 && thematicScore >= 45);
+    matches = (finalScore >= 65 && thematicScore >= 60);
   }
 
   return {

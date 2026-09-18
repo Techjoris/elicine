@@ -98,7 +98,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         suggestedPrompts: result.suggestedPrompts
       });
       if (result.recommendedMovies.length === 0) {
-        showToast("Aucun film trouvé avec cette description.");
+        showToast("Aucun film ne correspond précisément à votre recherche.");
       } else if (result.isFallbackMode) {
         showToast(`🔍 ${result.recommendedMovies.length} suggestions trouvées en recherche élargie !`);
       } else if (result.recommendedMovies.length <= 2) {

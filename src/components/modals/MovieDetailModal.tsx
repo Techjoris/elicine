@@ -491,6 +491,8 @@ export const MovieDetailModal: React.FC = () => {
                     .replace(/Recherche Intelligente LLM/gi, 'Sélection Éliciné')
                     .replace(/Recherche par contexte IA/gi, 'Sélection Éliciné')
                     .replace(/Recherche sémantique vectorielle/gi, 'Algorithme Éliciné')
+                    .replace(/Aucune contrainte narrative.*/gi, 'Intrigue et atmosphère en accord avec votre recherche')
+                    .replace(/Correspondance avec les éléments narratifs demandés/gi, 'Intrigue et atmosphère en accord avec votre recherche')
                     .replace(/\bTMDB\b/gi, 'Éliciné')
                     .replace(/\bLLM\b/gi, 'Éliciné')
                     .replace(/\s*\(Niveau\s*\d+\)/gi, '')}

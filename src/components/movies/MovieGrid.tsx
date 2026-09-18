@@ -173,11 +173,11 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-              L'algorithme Éliciné cherche la perle rare, mais cette description est un peu trop mystérieuse...
+              Aucun film ne correspond précisément à votre recherche...
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto">
-              L'algorithme n'a pas encore déniché l'œuvre exacte correspondant à ces critères. Essayez d'élargir votre formulation, de décrire une émotion dominante ou testez l'une de nos idées ci-dessous en un clic.
+              Aucune œuvre de notre catalogue ne réunit l'ensemble des critères demandés sans compromis sur la pertinence. Essayez d'élargir votre formulation, de dissocier vos critères ou d'explorer nos inspirations cinéphiles ci-dessous.
             </p>
           </div>
 
