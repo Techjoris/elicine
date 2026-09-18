@@ -328,7 +328,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
     }
   };
 
-  // Si aucun SDK n'est chargé
+  // Si aucun SDK n'est chargé — ouvrir PayPal dans une popup pour rester dans l'app
   if (!isLiveSdkAvailable) {
     return (
       <div className={`w-full flex flex-col gap-2 relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -339,6 +339,9 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
         >
           <span>💳 Payer avec PayPal & CB ({formattedAmount} {normalizedCurrency}) →</span>
         </button>
+        <p className="text-[10px] text-center text-slate-400">
+          Le paiement s'ouvre dans une fenêtre sécurisée PayPal • Vous restez sur Éliciné
+        </p>
       </div>
     );
   }

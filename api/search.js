@@ -1041,6 +1041,9 @@ function calculateSemanticMatchScore(movie, queryText, llmMatch) {
     } else {
       narrativeScore = llmMatch ? 90 : 80;
     }
+  } else if (/\b(impression d['e]|comme si|sensation d['e]|ambiance de|atmosphère de|donne l'impression|sentiment d['e])\b/i.test(queryLower) || ((queryLower.includes('ascenseur') || queryLower.includes('enferm')) && (queryLower.includes('pluie') || queryLower.includes('sombre')))) {
+    const isAtmospheric = genreIds.some(id => [53, 27, 9648, 80, 18, 878].includes(id)) || llmMatch;
+    narrativeScore = isAtmospheric ? (llmMatch ? Math.max(88, llmMatch.match_rate || 88) : 90) : 60;
   } else if (nonPersonWords.length >= 2) {
     let hits = 0;
     for (const w of nonPersonWords) {

@@ -176,6 +176,7 @@ export async function queryAiTitles(
     prompt = `RECHERCHE PAR SOUVENIR / SÉMANTIQUE SOUPLE : L'utilisateur recherche une œuvre d'après des détails narratifs : "${query}".
 Analyse les concepts clés, thèmes, personnages et décors décrits en tolérant les synonymes ou approximations.
 COHÉRENCE SÉMANTIQUE OBLIGATOIRE : Si la requête associe plusieurs thèmes (ex: "mariage et mort"), chaque œuvre proposée DOIT véritablement articuler cette combinaison dans son intrigue.
+EXPANSION SÉMANTIQUE & REQUÊTES MÉTAPHORIQUES : Si la recherche contient une métaphore ou une sensation (ex: "impression d'être enfermé dans un ascenseur sous la pluie"), ne cherche JAMAIS au mot-à-mot. Traduis l'intention en critères cinématographiques réels (Huis clos suffocant, claustrophobie, tension psychologique, ambiance sombre/néo-noir comme Devil, Buried, Panic Room, Se7en, Phone Game, Cube, Blade Runner). Propose toujours les films les plus proches de cette atmosphère sans jamais bloquer.
 TOURNURES NÉGATIVES & EXCLUSIONS : Si la recherche comporte des exclusions (ex: 'sans super-héros', 'sans explosion'), traduis-les immédiatement en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain, tension psychologique comme Heat, Sicario, Collateral, Drive, Le Fugitif). Ne bloque JAMAIS la recherche si le genre principal existe.
 Propose en premier le titre le plus probable (Niveau 1 : strict), complété par 3 à 5 films très proches (Niveau 2 : élargissement souple).
 IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si explicitement demandés), romances de bureau ou comédies sans rapport avec l'ensemble des thèmes, parodies et mockbusters (The Asylum). Si des films sont demandés, ne proposer QUE des films de cinéma de fiction reconnus (>= 6/10 sur TMDB).
@@ -186,6 +187,7 @@ Réponds EXCLUSIVEMENT avec 4 à 6 titres exacts séparés par des virgules, san
     prompt = `SÉLECTION ÉLARGIE : L'utilisateur recherche une sélection pour : "${query}".
 Propose une sélection variée de 8 à 12 films ou séries emblématiques et incontournables.
 COHÉRENCE GLOBALE REQUISE : Chaque œuvre doit profondément correspondre à l'intention thématique de la recherche. Si la requête est composite, l'œuvre doit relier ces composantes et non un mot isolé.
+EXPANSION SÉMANTIQUE & REQUÊTES MÉTAPHORIQUES : Traduis toute sensation ou métaphore en critères cinématographiques concrets (Huis clos, tension claustrophobe, ambiance néo-noir) et propose les œuvres majeures de cette ambiance.
 TOURNURES NÉGATIVES & EXCLUSIONS : Traduis toute négation en sous-genres positifs correspondants (ex: action sans super-héros -> polar urbain et action réaliste comme Heat, Sicario, Collateral). Interdiction du blocage sec si le genre principal existe.
 IMPORTANT : Exclure STRICTEMENT les émissions d'interviews, talk-shows (ex: 'Actors on Actors'), télé-réalités, documentaires (sauf si demandés) et mockbusters. Si des films sont demandés, ne proposer QUE des œuvres de cinéma de fiction. Diversité de réalisateurs requise.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
@@ -194,6 +196,7 @@ Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans t
   } else {
     prompt = `SÉLECTION THÉMATIQUE STRICTE : Propose entre 6 et 8 films ou séries existants pour la recherche thématique : "${query}".
 COHÉRENCE SÉMANTIQUE GLOBALE : Si la requête combine des thèmes (ex: "mariage et mort"), chaque film DOIT relier ces deux dimensions au cœur de son récit (ex: Les Noces funèbres, Melancholia, Amour, Quatre mariages et un enterrement), et non être une simple comédie ou romance banale.
+EXPANSION SÉMANTIQUE & REQUÊTES MÉTAPHORIQUES : Si la recherche exprime une ambiance sensorielle ou une métaphore (ex: "impression d'être enfermé dans un ascenseur sous la pluie"), interdiction formelle de chercher au mot-à-mot. Traduis immédiatement l'intention en critères cinématographiques (Huis clos suffocant, claustrophobie, tension psychologique, esthétique sombre/néo-noir comme Devil, Buried, Panic Room, Se7en, Phone Game, Cube, Blade Runner). Propose toujours les films les plus proches de l'atmosphère sans jamais bloquer.
 TOURNURES NÉGATIVES & EXCLUSIONS : Si la requête formule des exclusions (ex: 'sans super-héros et sans explosion'), traduis-les intelligemment en un choix positif pertinent (action ancrée dans le réel, polar réaliste, thriller urbain, tension psychologique comme Sicario, Heat, Collateral, Drive, Le Fugitif, Ronin). Interdiction formelle du blocage sec si le catalogue contient des chefs-d'œuvre du genre principal respectant l'esprit de la recherche.
 Exclure STRICTEMENT les talk-shows, émissions d'interviews (ex: 'Actors on Actors'), télé-réalités, mockbusters et films hors-sujet. Ne proposer QUE des films de cinéma de fiction pertinents.
 Réponds EXCLUSIVEMENT avec les titres exacts séparés par des virgules, sans texte additionnel.`;
@@ -1225,8 +1228,11 @@ export async function executeCinoraSearch(
     console.warn('[Éliciné LLM-First] Backend /api/search indisponible ou erreur, repli sur pipeline unifié :', backendErr?.message);
   }
 
-  // Enrichissement du prompt avec filtres Pro si présents
+  // Enrichissement du prompt avec filtres Pro si présents et expansion sémantique
   let promptWithFilters = cleanQuery;
+  if (offlineCriteria.isMetaphorical && offlineCriteria.cinematicExpansion) {
+    promptWithFilters = `${cleanQuery} [Atmosphère recherchée : ${offlineCriteria.cinematicExpansion}]`;
+  }
   if (filters?.platform && filters.platform !== 'all') {
     promptWithFilters += ` (disponible sur ${filters.platform.toUpperCase()})`;
   }
@@ -1267,6 +1273,8 @@ export async function executeCinoraSearch(
     themes: Array.from(new Set([...(offlineCriteria.themes || []), ...(aiCriteria?.themes || [])])),
     narrativeCues: Array.from(new Set(rawNarrativeCues)),
     exclusions: Array.from(new Set([...(offlineCriteria.exclusions || []), ...((aiCriteria as any)?.exclusions || [])])),
+    isMetaphorical: offlineCriteria.isMetaphorical || Boolean((aiCriteria as any)?.is_metaphorical),
+    cinematicExpansion: offlineCriteria.cinematicExpansion || (aiCriteria as any)?.cinematic_expansion,
     isTwistRequested: isTwistReq,
     hasNarrativeConstraint: offlineCriteria.hasNarrativeConstraint || isTwistReq || rawNarrativeCues.length > 0 || (offlineCriteria.spatialSettings?.length || 0) > 0,
     hasStructuredIntent: offlineCriteria.hasStructuredIntent || Boolean(aiCriteria?.actors?.length || aiCriteria?.directors?.length || (aiCriteria as any)?.spatial_settings?.length),
@@ -1715,7 +1723,7 @@ export async function executeCinoraSearch(
     return true;
   });
 
-  if (validRescuePool.length > 0 && !isGibberishQuery(cleanQuery) && globalSimilarityScore >= 0.25) {
+  if (validRescuePool.length > 0 && !isGibberishQuery(cleanQuery) && (globalSimilarityScore >= 0.25 || criteria.isMetaphorical)) {
     const limit = Math.max(specificity.maxResults || 8, 6);
     const assignedScores = new Set<number>();
     const rescuedMovies = validRescuePool.slice(0, limit).map((m, idx) => {
@@ -1727,13 +1735,15 @@ export async function executeCinoraSearch(
       return {
         ...m,
         match_rate: score,
-        ai_match_reason: m.ai_match_reason || `✨ Vision Éliciné : Ambiance et tonalité en résonance avec votre recherche`
+        ai_match_reason: m.ai_match_reason || (criteria.isMetaphorical ? `Atmosphère : ${criteria.cinematicExpansion || 'Huis clos suffocant et tension psychologique'}` : `✨ Vision Éliciné : Ambiance et tonalité en résonance avec votre recherche`)
       };
     });
 
     console.log(`[Éliciné Cascade] Tolérance sémantique activée : ${rescuedMovies.length} œuvres présentées sous Vision Éliciné`);
     return {
-      thought: `✨ Vision Éliciné : Recommandations adaptées à l'atmosphère et à l'esprit de votre recherche${formatFilterSuffix(filters)}`,
+      thought: criteria.isMetaphorical
+        ? `✨ Vision Éliciné : Atmosphère : ${criteria.cinematicExpansion || "Huis clos suffocant sous tension psychologique"}${formatFilterSuffix(filters)}`
+        : `✨ Vision Éliciné : Recommandations adaptées à l'atmosphère et à l'esprit de votre recherche${formatFilterSuffix(filters)}`,
       moodDetected: cleanQuery,
       recommendedMovies: rescuedMovies,
       isFallbackMode: false,

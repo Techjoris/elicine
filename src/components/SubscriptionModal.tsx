@@ -387,19 +387,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 }}
               />
 
-              <div className="pt-1.5 border-t border-slate-200/70 dark:border-slate-800/70 flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleCheckoutClick}
-                  disabled={isProcessing}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <span>🔗 Ou ouvrir le portail web PayPal officiel ({amountToPay} {currentPrice.symbol}) →</span>
-                </button>
-                <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400">
-                  Cartes bancaires (Visa, Mastercard, Virtuelles) et comptes PayPal acceptés • Aucun engagement
-                </p>
-              </div>
+
+              <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5">
+                Cartes bancaires (Visa, Mastercard, Virtuelles) et comptes PayPal acceptés • Paiement sécurisé • Aucun engagement
+              </p>
             </div>
           ) : (
             /* Mode Paiement Mobile -> Déclencheur Saspay */

@@ -65,14 +65,24 @@ export const ProModal: React.FC = () => {
       return;
     }
 
-    // 2. Utilisateur connecté : Initialisation en base et déclenchement immédiat
+    // 2. Utilisateur connecté : Déclenchement selon la méthode de paiement
+    const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
+    const isCard = payload.paymentMethod === 'card';
+
+    // PayPal & Carte Bancaire : Le paiement est géré directement par le widget PayPalButton
+    // (Smart Payment Buttons SDK) à l'intérieur de la SubscriptionModal.
+    // Aucune redirection externe n'est nécessaire — le flux onApprove du SDK gère tout.
+    if (isPaypal || isCard) {
+      console.log('[ProModal] Mode PayPal/CB intégré : paiement géré par le widget Smart Buttons dans la modale.');
+      return;
+    }
+
+    // Mobile Money (SasPay) : Initialisation en base et redirection vers la passerelle
     setIsProcessing(true);
     showToast('Sécurisation et initialisation de votre abonnement Pro...');
 
     try {
-      const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
-      const isCard = payload.paymentMethod === 'card';
-      const chosenGateway = isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money');
+      const chosenGateway = 'mobile_money';
 
       const result = await subscriptionService.executeCheckoutWithIntent({
         plan: payload.plan,
@@ -80,7 +90,7 @@ export const ProModal: React.FC = () => {
         amount: payload.amount,
         numericAmount: payload.numericAmount,
         paymentMethod: payload.paymentMethod,
-        provider: (isPaypal || isCard) ? 'paypal' : 'saspay',
+        provider: 'saspay',
         gateway: chosenGateway,
         timestamp: Date.now()
       }, user);
@@ -97,11 +107,7 @@ export const ProModal: React.FC = () => {
           }
         } catch (_) {}
 
-        if (isPaypal || isCard) {
-          showToast('Redirection vers le paiement sécurisé PayPal & Carte bancaire...');
-        } else {
-          showToast('Redirection vers le paiement sécurisé Mobile Money (SasPay)...');
-        }
+        showToast('Redirection vers le paiement sécurisé Mobile Money (SasPay)...');
         if (typeof window !== 'undefined') {
           window.location.href = result.redirectUrl;
         }

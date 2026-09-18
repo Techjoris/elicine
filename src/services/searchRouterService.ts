@@ -460,9 +460,9 @@ export const SPATIAL_SETTINGS_MAP: Record<string, SpatialSettingDefinition> = {
     expectedGenres: [53, 9648, 27, 80],
     archetypeFilms: [
       'Devil', 'Buried', '10 Cloverfield Lane', 'Panic Room', 'Saw', 'Phone Game', 'Phone Booth',
-      'Oxygen', 'Exam', 'The Platform', 'La Plateforme', 'Misery', 'Fenêtre sur cour', '12 Hommes en colère', 'Cube'
+      'Oxygen', 'Exam', 'The Platform', 'La Plateforme', 'Misery', 'Fenêtre sur cour', '12 Hommes en colère', 'Cube', 'Se7en'
     ],
-    keywords: ['enfermé', 'piégé', 'pièce', 'ascenseur', 'cercueil', 'bunker', 'huis clos', 'cellule', 'prisonnier', 'survie', 'étouffant', 'claustrophobie']
+    keywords: ['enfermé', 'piégé', 'pièce', 'ascenseur', 'cercueil', 'bunker', 'huis clos', 'cellule', 'prisonnier', 'survie', 'étouffant', 'claustrophobie', 'pluie', 'sombre', 'oppressant']
   },
   abysses_aquatique: {
     id: 'abysses_aquatique',
@@ -697,12 +697,6 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   // 2c. Détection des métaphores sensorielles ou d'ambiance
   let isMetaphorical = false;
   let cinematicExpansion: string | undefined;
-  if (/\b(impression d['e]|comme si|sensation d['e]|ambiance de|atmosphère de|donne l'impression|impression de)\b/i.test(lower)) {
-    isMetaphorical = true;
-    if (lower.includes('ascenseur') || lower.includes('enferm') || lower.includes('pluie')) {
-      cinematicExpansion = 'Huis clos oppressant, thriller psychologique sombre';
-    }
-  }
 
   // 3. Détection des Réalisateurs (Mappage connu + motifs 'réalisé par', 'de [Nom]')
   for (const [canonicalName, aliases] of Object.entries(KNOWN_DIRECTORS_MAP)) {
@@ -818,6 +812,26 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
   for (const [toneKey, toneDef] of Object.entries(TONE_PATTERNS)) {
     if (toneDef.triggers.some(tr => lower.includes(tr))) {
       tones.push(toneKey);
+    }
+  }
+
+  // 8b. Expansion sémantique des métaphores sensorielles & atmosphériques
+  const isMetaphoricalPhrase = /\b(impression d['e]|comme si|sensation d['e]|sentiment d['e]|ambiance de|atmosphère de|donne l'impression|impression de|sentiment de|ressemble à|fait penser à)\b/i.test(lower) ||
+    (/\b(ascenseur|enferm[ée]?|bloqu[ée]?|claustro|cercueil|piég[ée]?|pieg[ée]?)/i.test(lower) && /\b(pluie|orage|sombre|nuit|mouill[ée]?|oppress)/i.test(lower));
+
+  if (isMetaphoricalPhrase) {
+    isMetaphorical = true;
+    if (/\b(ascenseur|enferm[ée]?|bloqu[ée]?|claustro|cercueil|piég[ée]?|pieg[ée]?|piece fermee|pièce fermée)\b/i.test(lower)) {
+      if (!spatialSettings.includes('huis_clos_confine')) spatialSettings.push('huis_clos_confine');
+      if (!situations.includes('claustrophobie')) situations.push('claustrophobie');
+      if (!tones.includes('claustrophobe')) tones.push('claustrophobe');
+      if (!tones.includes('dark_melancholic')) tones.push('dark_melancholic');
+      cinematicExpansion = 'Huis clos suffocant, claustrophobie, tension psychologique et ambiance néo-noir';
+    } else if (/\b(pluie|sombre|nuit|orage|brouillard|mélancol|melancol)\b/i.test(lower)) {
+      if (!tones.includes('dark_melancholic')) tones.push('dark_melancholic');
+      cinematicExpansion = 'Ambiance sombre néo-noir, polar pluvieux et atmosphère mélancolique oppressante';
+    } else {
+      cinematicExpansion = 'Ambiance immersive, tension psychologique et drame sensoriel';
     }
   }
 
@@ -1542,7 +1556,26 @@ function formatClusterDisplayName(clusterId: string): string {
   return map[clusterId] || clusterId.replace(/_/g, ' ');
 }
 
-  if (activeCluster) {
+  if (criteria.isMetaphorical) {
+    const isAtmosphericGenre = genreIds.some(id => [53, 27, 9648, 80, 18, 878].includes(id));
+    const isConfinedOrNoir = overviewLower.includes('enferm') || overviewLower.includes('huis clos') || 
+                             overviewLower.includes('piégé') || overviewLower.includes('piege') ||
+                             overviewLower.includes('ascenseur') || overviewLower.includes('sombre') ||
+                             overviewLower.includes('pluie') || overviewLower.includes('nuit') ||
+                             overviewLower.includes('angoisse') || overviewLower.includes('survie') ||
+                             overviewLower.includes('tension') || overviewLower.includes('meurtre') ||
+                             overviewLower.includes('cercueil') || overviewLower.includes('bunker');
+
+    if (isAtmosphericGenre || isConfinedOrNoir || (rawItem && (rawItem.match_rate || 0) >= 70)) {
+      thematicScore = rawItem?.match_rate ? Math.max(88, rawItem.match_rate) : (isConfinedOrNoir ? 94 : 88);
+      thematicReason = rawItem?.reason && rawItem.reason.length > 15
+        ? (rawItem.reason.startsWith('Atmosphère') ? rawItem.reason : `Atmosphère : ${rawItem.reason}`)
+        : `Atmosphère : ${criteria.cinematicExpansion || 'Huis clos suffocant, tension psychologique et ambiance néo-noir'}`;
+    } else {
+      thematicScore = 55;
+      thematicReason = `Atmosphère partielle : affinité indirecte avec l'ambiance recherchée`;
+    }
+  } else if (activeCluster) {
     const clusterDisplayName = formatClusterDisplayName(activeCluster.id);
     const isArchetype = activeCluster.archetypeTitles.some(a => titleLower === a || origLower === a || titleLower.includes(a));
     if (isArchetype) {
@@ -1622,11 +1655,8 @@ function formatClusterDisplayName(clusterId: string): string {
   } else if (criteria.era && isEraMatched) {
     thematicScore = matchesRequestedGenre ? 92 : 82;
     thematicReason = `Œuvre emblématique des ${criteria.era} (${movieYear || criteria.era})`;
-  } else if (criteria.isMetaphorical) {
-    thematicScore = rawItem?.match_rate ? Math.max(78, rawItem.match_rate) : 80;
-    thematicReason = rawItem?.reason ? `Atmosphère : ${rawItem.reason}` : 'Atmosphère immersive et sensorielle';
   } else if (rawItem && (rawItem.match_rate || rawItem.reason)) {
-    thematicScore = Math.min(85, Math.max(70, rawItem.match_rate || 75));
+    thematicScore = Math.min(88, Math.max(70, rawItem.match_rate || 75));
     thematicReason = rawItem.reason ? `Atmosphère : ${rawItem.reason}` : 'Recommandation cinématographique';
   } else if (criteria.hasNarrativeConstraint) {
     thematicScore = 25;
@@ -1804,10 +1834,12 @@ export function evaluateStructuredMovieMatch(
         }
       } else if (matchesGenre && (criteria.isMetaphorical || rawItem)) {
         // Tolérance atmosphérique pour les requêtes poétiques/sensorielles
-        const calculatedScore = rawItem?.match_rate ? Math.max(78, rawItem.match_rate) : 82;
+        const calculatedScore = rawItem?.match_rate ? Math.max(88, rawItem.match_rate) : 90;
         if (calculatedScore > bestSettingScore) {
           bestSettingScore = calculatedScore;
-          matchReason = rawItem?.reason ? `Atmosphère : ${rawItem.reason}` : `Ambiance ${settingDef.id} et tension psychologique`;
+          matchReason = rawItem?.reason && rawItem.reason.length > 15
+            ? (rawItem.reason.startsWith('Atmosphère') ? rawItem.reason : `Atmosphère : ${rawItem.reason}`)
+            : `Atmosphère : ${criteria.cinematicExpansion || `Ambiance ${settingDef.id} et tension psychologique`}`;
         }
       }
     }
