@@ -59,6 +59,14 @@
       "destination": "/api/admin"
     },
     {
+      "source": "/api/paddle-webhook",
+      "destination": "/api/paddle-webhook"
+    },
+    {
+      "source": "/api/paddle/webhook",
+      "destination": "/api/paddle-webhook"
+    },
+    {
       "source": "/api/webhook",
       "destination": "/api/saspay?action=webhook"
     },

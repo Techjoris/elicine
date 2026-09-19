@@ -61,6 +61,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paddle'>('paddle');
   const [isCapturingPro, setIsCapturingPro] = useState<boolean>(false);
+  const [isPro, setIsPro] = useState<boolean>(() => Boolean(user?.isPro || user?.is_pro));
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
   // Préchargement immédiat du SDK Paddle Billing v2
@@ -189,11 +190,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         priceId: DEFAULT_PADDLE_PRICE_ID,
         userEmail: currentUser?.email,
         userName: currentUser?.name,
+        userId: currentUser?.id,
         onSuccess: async (paddleData) => {
+          // 1. Optimistic UI : mise à jour de l'état local
+          setIsPro(true);
           setIsCapturingPro(false);
-          onClose();
 
-          // Célébration confetti
+          // 2. Notification de succès & Célébration confetti
           confetti({
             particleCount: 150,
             spread: 80,
@@ -206,6 +209,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             setIsProSuccessModalOpen(true);
           }
 
+          // 3. Persistance locale du compte utilisateur avec statut Pro
           if (user) {
             const updated = {
               ...user,
@@ -221,7 +225,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             authService.saveLocalAccount(updated);
           }
 
-          await refreshUserProStatus();
+          // 4. Synchronisation asynchrone avec la base de données
+          refreshUserProStatus().catch(() => {});
+
+          // 5. Fermeture de la fenêtre après notification et feedback
+          onClose();
         },
         onClose: () => {
           console.log('[SubscriptionModal] Overlay Paddle fermé par l\'utilisateur.');

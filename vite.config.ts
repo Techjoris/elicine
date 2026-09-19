@@ -140,6 +140,27 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.5. ROUTE /api/paddle-webhook (et alias /api/paddle/webhook)
+            if (pathname === '/api/paddle-webhook' || pathname === '/api/paddle/webhook') {
+              adaptResponse();
+              if (req.method === 'POST') {
+                (req as any).body = await getBody();
+              }
+              try {
+                process.env.RESEND_API_KEY = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
+                process.env.PADDLE_WEBHOOK_SECRET_KEY = env.PADDLE_WEBHOOK_SECRET_KEY || process.env.PADDLE_WEBHOOK_SECRET_KEY;
+                process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+                process.env.NEXT_PUBLIC_SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+                const module = await server.ssrLoadModule('./api/paddle-webhook.ts');
+                const paddleHandler = module.default;
+                return await paddleHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 3.6. ROUTE /api/admin & /api/feedback
             if (pathname.startsWith('/api/admin') || pathname === '/api/feedback') {
               adaptResponse();

@@ -60,6 +60,8 @@ export interface OpenPaddleCheckoutParams {
   priceId?: string;
   userEmail?: string;
   userName?: string;
+  userId?: string;
+  customData?: Record<string, any>;
   onSuccess?: (data?: any) => void;
   onClose?: () => void;
   onError?: (error: any) => void;
@@ -226,6 +228,8 @@ export async function openPaddleCheckout({
   priceId = DEFAULT_PADDLE_PRICE_ID,
   userEmail,
   userName,
+  userId,
+  customData,
   onSuccess,
   onClose,
   onError
@@ -303,11 +307,17 @@ export async function openPaddleCheckout({
     // Configuration stricte et minimale attendue par Paddle Billing v2 :
     // - items : uniquement priceId ("pri_01m2x2nctwa8k7cqazmebqnxm3") et quantity: 1
     // - customer : { email } si un email valide est fourni, sinon undefined
+    // - customData : user_id et métadonnées associées si disponibles
     // - settings : displayMode "overlay", theme "dark"
-    // - AUCUN paramètre "currency" personnalisé, email undefined ou format altéré
     const validEmail = (typeof userEmail === 'string' && userEmail.trim().includes('@'))
       ? userEmail.trim().toLowerCase()
       : undefined;
+
+    const mergedCustomData: Record<string, any> = {
+      ...(userId ? { user_id: userId, userId } : {}),
+      ...(userName ? { user_name: userName } : {}),
+      ...(customData || {})
+    };
 
     const checkoutOptions: PaddleCheckoutOpenOptions = {
       items: [
@@ -317,6 +327,7 @@ export async function openPaddleCheckout({
         }
       ],
       customer: validEmail ? { email: validEmail } : undefined,
+      customData: Object.keys(mergedCustomData).length > 0 ? mergedCustomData : undefined,
       settings: {
         displayMode: 'overlay',
         theme: 'dark'
