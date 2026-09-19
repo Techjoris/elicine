@@ -300,26 +300,28 @@ export async function openPaddleCheckout({
       }
     });
 
-    // Configuration des paramètres d'ouverture (Overlay sombre v2)
+    // Configuration stricte et minimale attendue par Paddle Billing v2 :
+    // - items : uniquement priceId ("pri_01m2x2nctwa8k7cqazmebqnxm3") et quantity: 1
+    // - customer : { email } si un email valide est fourni, sinon undefined
+    // - settings : displayMode "overlay", theme "dark"
+    // - AUCUN paramètre "currency" personnalisé, email undefined ou format altéré
+    const validEmail = (typeof userEmail === 'string' && userEmail.trim().includes('@'))
+      ? userEmail.trim().toLowerCase()
+      : undefined;
+
     const checkoutOptions: PaddleCheckoutOpenOptions = {
       items: [
         {
-          priceId: priceId || DEFAULT_PADDLE_PRICE_ID,
+          priceId: (priceId && priceId.startsWith('pri_')) ? priceId.trim() : DEFAULT_PADDLE_PRICE_ID,
           quantity: 1
         }
       ],
+      customer: validEmail ? { email: validEmail } : undefined,
       settings: {
         displayMode: 'overlay',
         theme: 'dark'
       }
     };
-
-    // Pré-remplir l'email client si l'utilisateur est connecté
-    if (userEmail && userEmail.includes('@')) {
-      checkoutOptions.customer = {
-        email: userEmail.trim().toLowerCase()
-      };
-    }
 
     console.log('[PaddleService] 🚀 Ouverture du checkout overlay Paddle avec options :', checkoutOptions);
     window.Paddle.Checkout.open(checkoutOptions);

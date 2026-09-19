@@ -240,10 +240,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
 
     try {
+      const currentUser = user || authService.getStoredUser();
       await openPaddleCheckout({
         priceId: DEFAULT_PADDLE_PRICE_ID,
-        userEmail: user?.email,
-        userName: user?.name,
+        userEmail: currentUser?.email,
+        userName: currentUser?.name,
         onSuccess: async (paddleData) => {
           setIsCapturingPro(false);
           onClose();
@@ -679,6 +680,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 <span>•</span>
                 <span>⚡ Overlay Paddle</span>
               </div>
+              {currency !== 'EUR' && (
+                <p className="text-[10px] text-center text-slate-500 dark:text-slate-400">
+                  Tarif de référence : 1,99 € — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
+                </p>
+              )}
             </div>
           ) : paymentMethod === 'paypal_card' ? (
             /* Mode PayPal & Carte Bancaire -> Widget PayPal SDK officiel (Bouton CB & Bouton PayPal) */

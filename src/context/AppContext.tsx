@@ -914,10 +914,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * Déclenche l'ouverture de Paddle Checkout Overlay pour le Pass Pro
    */
   const openPaddleProCheckout = async (priceId?: string): Promise<boolean> => {
+    const currentUser = user || authService.getStoredUser();
     return openPaddleCheckout({
       priceId,
-      userEmail: user?.email,
-      userName: user?.name,
+      userEmail: currentUser?.email,
+      userName: currentUser?.name,
       onSuccess: async () => {
         setIsProModalOpen(false);
         confetti({
