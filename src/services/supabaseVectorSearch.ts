@@ -44,6 +44,11 @@ const NARRATIVE_CONCEPT_MAP: Record<string, { triggers: string[]; genres: number
     genres: [27, 53, 9648], // Horreur, Thriller, Mystère
     films: ['The Descent', 'Cube', 'Buried', 'Catacombes', 'As Above, So Below', 'The Cave', 'Sanctum']
   },
+  space_heist: {
+    triggers: ['braquage dans l\'espace', 'braquage spatial', 'casse dans l\'espace', 'vol dans l\'espace', 'heist spatial', 'pirate de l\'espace', 'braquage qui se passe dans l\'espace', 'braquage espace', 'espace braquage'],
+    genres: [80, 878, 28], // Crime, SF, Action
+    films: ['Lockout', 'Solo: A Star Wars Story', 'Cowboy Bebop: Le Film', 'Outland', 'Rogue One: A Star Wars Story', 'Les Gardiens de la Galaxie']
+  },
   space_black_hole: {
     triggers: ['trou noir', 'espace', 'astronaute', 'station spatiale', 'galaxie', 'relativité', 'temps qui passe plus vite'],
     genres: [878, 12, 18], // SF, Aventure, Drame
@@ -143,7 +148,15 @@ export function calculateGlobalSemanticSimilarity(
     matchedConceptBonus += 0.25;
   }
 
-  for (const [, concept] of Object.entries(NARRATIVE_CONCEPT_MAP)) {
+  const isHeistTerm = /\b(braquage|braquages|braquer|casse|heist|vol|voler|cambriolage)\b/i.test(clean);
+  const isSpaceTerm = /\b(espace|spatial|spatiale|galaxie|vaisseau|station spatiale)\b/i.test(clean);
+  const isSpaceHeistMultiFacet = isHeistTerm && isSpaceTerm;
+
+  for (const [conceptKey, concept] of Object.entries(NARRATIVE_CONCEPT_MAP)) {
+    // Si c'est une requête croisée braquage + espace, ignorer space_black_hole (qui contiendrait Interstellar/Gravity)
+    if (isSpaceHeistMultiFacet && conceptKey === 'space_black_hole') {
+      continue;
+    }
     if (concept.triggers.some(t => clean.includes(t))) {
       matchedConceptBonus += 0.45;
       targetConceptFilms.push(...concept.films.map(f => f.toLowerCase()));
@@ -228,6 +241,35 @@ export function calculateGlobalSemanticSimilarity(
     if (isParasiteTitle && tokenMatches === 0 && !targetConceptFilms.some(tf => titleLower.includes(tf) || origLower.includes(tf))) {
       // Aucun lien narratif réel dans le synopsis : score effondré (rejet strict)
       itemScore = 0.05;
+    }
+
+    // G. Validation croisée multi-facettes (ex: Braquage + Espace)
+    if (isSpaceHeistMultiFacet) {
+      const fullText = overviewLower + ' ' + titleLower + ' ' + origLower;
+      const isForbiddenMismatch =
+        ['interstellar', 'seul sur mars', 'the martian', 'gravity', 'ad astra', 'first man', 'solaris']
+          .some(bad => titleLower === bad || origLower === bad || titleLower.includes(bad)) ||
+        (/\b(survie solitaire|trou noir|relativit[eé]|seul sur|solitude|drame familial)\b/i.test(fullText) &&
+         !/\b(braquage|casse|heist|vol|pillage|pirat)\b/i.test(fullText));
+
+      if (isForbiddenMismatch) {
+        itemScore = 0.20; // Rejet sous le seuil (40%)
+      } else {
+        const hasActionFacet = (genreIds.includes(80) || genreIds.includes(28) || genreIds.includes(53)) ||
+          /\b(braquage|braquer|casse|heist|vol|voler|coffre-fort|butin|pillage|pirate|contrebande)\b/i.test(fullText);
+        const hasSpaceFacet = (genreIds.includes(878) || genreIds.includes(12)) ||
+          /\b(espace|spatial|spatiale|vaisseau|station spatiale|orbite|galaxie|plan[eè]te|alien)\b/i.test(fullText);
+
+        const isHybrid = (hasActionFacet && hasSpaceFacet) ||
+          targetConceptFilms.some(tf => titleLower.includes(tf) || origLower.includes(tf));
+
+        if (isHybrid) {
+          itemScore = Math.max(itemScore, 0.90);
+        } else {
+          // Un film NE PEUT PAS dépasser 70% s'il ne valide qu'une seule des deux composantes
+          itemScore = Math.min(itemScore, 0.65);
+        }
+      }
     }
 
     // Si le film a déjà un score de similarité vectoriel natif Supabase

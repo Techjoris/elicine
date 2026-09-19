@@ -109,27 +109,43 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       .replace(/\bTMDB\b/gi, 'Éliciné')
       .replace(/\bLLM\b/gi, 'Éliciné')
       .replace(/\s*\(Niveau\s*\d+\)/gi, '')
+      .replace(/^Vision\s*&\s*Recommandation\s*Éliciné\s*[—:-]?\s*/i, '')
+      .replace(/^Atmosph[eè]re\s*:\s*/i, '')
       .trim();
   }, [aiThought]);
+
+  const isTransparencyNotice = React.useMemo(() => {
+    return cleanThought.toLowerCase().includes('aucun film') && (cleanThought.toLowerCase().includes('strict') || cleanThought.toLowerCase().includes('catalogue'));
+  }, [cleanThought]);
 
   return (
     <section id="results-section" className="w-full space-y-6">
 
-      {/* Thought Banner Épuré */}
+      {/* Thought Banner Épuré / Transparence IA */}
       {cleanThought && (
-        <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 space-y-2.5 shadow-sm dark:shadow-xl transition-colors">
+        <div className={`p-4 sm:p-6 rounded-2xl border space-y-2.5 shadow-sm dark:shadow-xl transition-all ${
+          isTransparencyNotice
+            ? 'bg-amber-500/[0.07] dark:bg-amber-500/[0.05] border-amber-500/30 dark:border-amber-500/20 text-amber-900 dark:text-amber-200'
+            : 'bg-white dark:bg-[#121212] border-slate-200 dark:border-white/10'
+        }`}>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-[#e50914]" />
-              Vision &amp; Recommandation Éliciné
+            <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${
+              isTransparencyNotice ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'
+            }`}>
+              <Sparkles className={`w-3.5 h-3.5 ${isTransparencyNotice ? 'text-amber-500' : 'text-[#e50914]'}`} />
+              {isTransparencyNotice ? 'Transparence IA Éliciné' : 'Vision & Recommandation Éliciné'}
             </span>
-            {aiMood && (
+            {aiMood && !isTransparencyNotice && (
               <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/10 font-medium">
-                {aiMood.trim().toLowerCase().startsWith('atmosphère') ? aiMood : `Atmosphère : ${aiMood}`}
+                {aiMood.length > 25 || cleanThought.toLowerCase().includes(aiMood.toLowerCase()) || /^(drame|thriller|action|comédie|comedie|romance|horreur|science-fiction|aventure)/i.test(aiMood.trim())
+                  ? 'Curation éditoriale'
+                  : (aiMood.trim().toLowerCase().startsWith('atmosphère') ? aiMood : `Atmosphère : ${aiMood}`)}
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-700 dark:text-zinc-300 leading-relaxed italic">
+          <p className={`text-xs sm:text-sm leading-relaxed ${
+            isTransparencyNotice ? 'font-medium not-italic text-slate-800 dark:text-zinc-200' : 'text-slate-700 dark:text-zinc-300 italic'
+          }`}>
             {cleanThought}
           </p>
         </div>

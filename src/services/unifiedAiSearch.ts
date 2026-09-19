@@ -1,5 +1,5 @@
 import { Movie, ApiSettings } from '../types';
-import { searchMoviesTmdb, formatTmdbResults, searchPersonAndGetWorks, fetchEntityFallbackWorks, fetchTmdbEndpoint } from './tmdb';
+import { searchMoviesTmdb, formatTmdbResults, searchPersonAndGetWorks, fetchEntityFallbackWorks, fetchTmdbEndpoint, getTmdbApiKey } from './tmdb';
 import { 
   analyzeSearchIntent, 
   analyzeQuerySpecificity, 
@@ -137,15 +137,7 @@ export const getApiKey = (provider: 'qwen' | 'deepseek' | 'groq' | 'tmdb', apiSe
   if (provider === 'deepseek') return getDeepSeekKey(apiSettings);
   if (provider === 'groq') return getGroqKey(apiSettings);
   if (provider === 'tmdb') {
-    return (
-      localStorage.getItem('tmdb_api_key') ||
-      localStorage.getItem('elicine_tmdb_key') ||
-      localStorage.getItem('cinora_tmdb_key') ||
-      localStorage.getItem('cinéia_tmdb_key') ||
-      localStorage.getItem('cineia_tmdb_key') ||
-      apiSettings?.tmdbApiKey ||
-      ''
-    ).trim();
+    return getTmdbApiKey(apiSettings?.tmdbApiKey);
   }
   return getQwenKey(apiSettings);
 };
@@ -469,7 +461,7 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
       if (Array.isArray(parsed)) {
         list = parsed;
       } else if (parsed && typeof parsed === 'object') {
-        list = parsed.similar_reference_titles || parsed.matches || parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
+        list = parsed.recommended_titles || parsed.selections || parsed.similar_reference_titles || parsed.matches || parsed.movies || parsed.titles || parsed.films || parsed.results || parsed.recommendations || [];
         const extractedGenres = Array.isArray(parsed.canonical_genres)
           ? parsed.canonical_genres
           : (Array.isArray(parsed.genres) ? parsed.genres : (Array.isArray(parsed.criteria?.genres) ? parsed.criteria.genres : []));
@@ -477,13 +469,22 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
           ? parsed.themes
           : (Array.isArray(parsed.criteria?.themes) ? parsed.criteria.themes : []);
 
+        const atmosphereSummary = String(
+          parsed.atmosphere_summary ||
+          parsed.curated_atmosphere ||
+          parsed.editorial_vision ||
+          parsed.suggested_mood ||
+          ''
+        ).trim();
+
         criteria = {
           actors: Array.isArray(parsed.criteria?.actors) ? parsed.criteria.actors : [],
           directors: Array.isArray(parsed.criteria?.directors) ? parsed.criteria.directors : [],
           genres: extractedGenres,
           themes: extractedThemes,
-          format: parsed.criteria?.format || parsed.format,
-          primaryEntity: parsed.criteria?.primary_entity || parsed.criteria?.primaryEntity
+          format: parsed.media_type || parsed.criteria?.format || parsed.format,
+          primaryEntity: parsed.criteria?.primary_entity || parsed.criteria?.primaryEntity,
+          cinematicExpansion: atmosphereSummary || undefined
         };
       }
 
@@ -496,20 +497,34 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
           let matchRate = 95;
           let tier: 1 | 2 | 3 = 1;
           let reason = '';
+          let itemType: 'film' | 'serie' | string | undefined = undefined;
+          let itemYear: number | undefined = undefined;
 
           if (typeof item === 'string') {
             title = cleanMovieTitle(item);
           } else if (item && typeof item === 'object') {
             title = cleanMovieTitle(item.title || item.titre || item.name || item.nom || '');
             if (typeof item.match_rate === 'number') matchRate = item.match_rate;
+            else if (typeof item.match_percentage === 'number') matchRate = item.match_percentage;
+
             if (item.tier === 1 || item.tier === 2 || item.tier === 3) tier = item.tier;
             if (typeof item.reason === 'string') reason = item.reason;
+
+            const rawType = String(item.type || item.media_type || '').toLowerCase();
+            if (rawType === 'tv' || rawType === 'serie' || rawType === 'series' || rawType === 'série') {
+              itemType = 'serie';
+            } else if (rawType === 'movie' || rawType === 'film') {
+              itemType = 'film';
+            }
+
+            const parsedYear = Number(item.release_year || item.year);
+            if (!isNaN(parsedYear) && parsedYear > 1900 && parsedYear < 2100) {
+              itemYear = parsedYear;
+            }
           }
 
           if (title.length > 1 && !seenTitles.has(title.toLowerCase())) {
             seenTitles.add(title.toLowerCase());
-            // Validation du match_rate : le LLM peut surestimer des films peu connus.
-            // On plafonne à 88 si le synopsis ou les votes sont absents du payload LLM.
             const validatedMatchRate = (typeof matchRate === 'number' && matchRate >= 70 && matchRate <= 100)
               ? matchRate
               : 95;
@@ -517,6 +532,8 @@ export function extractTitlesAndCriteriaFromText(rawText: string): AiParsedRespo
               title,
               match_rate: validatedMatchRate,
               tier,
+              type: itemType,
+              year: itemYear,
               reason: reason || 'Sélectionné par Éliciné AI'
             });
           }
@@ -842,39 +859,38 @@ export async function resolveTitleToTmdb(
   }
 
   const keyParam = tmdbKey ? `&api_key=${encodeURIComponent(tmdbKey)}` : '';
+  const primaryEndpoint = preferredMediaType === 'tv' ? 'search/tv' : (preferredMediaType === 'movie' ? 'search/movie' : 'search/multi');
 
-  // 1. Essai search/multi en français (couvre films, séries et personnes en une seule requête)
+  // 1. Essai de recherche directe (search/tv, search/movie ou search/multi) en français
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2800);
-    const url = `/api/tmdb?endpoint=search/multi&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
+    const url = `/api/tmdb?endpoint=${primaryEndpoint}&query=${encodeURIComponent(title)}&language=fr-FR&include_adult=false${keyParam}`;
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
 
     if (res.ok) {
       const data = await res.json();
       if (data.results && data.results.length > 0) {
+        const hitsWithPoster = (data.results || []).filter((h: any) => h && h.poster_path);
+        const candidates = hitsWithPoster.length > 0 ? hitsWithPoster : data.results;
+
         let media: any = null;
         if (preferredMediaType === 'tv') {
-          media = data.results.find((r: any) => r.media_type === 'tv');
+          media = candidates.find((r: any) => r.media_type === 'tv' || Boolean(r.first_air_date) || Boolean(r.name && !r.title));
         } else if (preferredMediaType === 'movie') {
-          media = data.results.find((r: any) => r.media_type === 'movie');
+          media = candidates.find((r: any) => r.media_type === 'movie' || Boolean(r.title && !r.first_air_date));
         }
         if (!media) {
-          media = data.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
+          media = candidates[0];
         }
 
         if (media) {
+          if (preferredMediaType === 'tv' && !media.media_type) media.media_type = 'tv';
+          if (preferredMediaType === 'movie' && !media.media_type) media.media_type = 'movie';
           tmdbTitleCache.set(cacheKey, media);
           return media;
         }
-        if (data.results[0]?.known_for?.length > 0) {
-          const item = data.results[0].known_for[0];
-          tmdbTitleCache.set(cacheKey, item);
-          return item;
-        }
-        tmdbTitleCache.set(cacheKey, data.results[0]);
-        return data.results[0];
       }
     }
   } catch (_) {}
@@ -1333,9 +1349,9 @@ export async function executeCinoraSearch(
             };
           });
 
-          const defaultThought = isFallback
-            ? `Vision & Recommandation Éliciné — Atmosphère : ${interpretedMood}`
-            : (searchData.thought || `✨ Vision & Recommandation Éliciné : ${moviesWithCache.length} œuvre(s) correspondante(s) dans notre catalogue`);
+          const defaultThought = searchData.thought || (isFallback
+            ? `Vision & Recommandation Éliciné — ${interpretedMood}`
+            : `✨ Vision & Recommandation Éliciné : ${moviesWithCache.length} œuvre(s) correspondante(s) dans notre catalogue`);
 
           const formatResult = enforceFormatConstraintAndFallback(
             moviesWithCache,
@@ -1438,20 +1454,84 @@ export async function executeCinoraSearch(
       ? 'tv' 
       : (effectiveFilters.mediaType === 'Films' ? 'movie' : 'all');
 
-  // Résolution TMDB initiale des titres proposés par l'IA avec format préférentiel
+  // ── PRIORITÉ 1 — Résolution directe des titres recommandés par le LLM ──
   const maxFetchCount = Math.max(titles.length, specificity.maxResults || 6);
   const titlesToFetch = titles.slice(0, Math.min(maxFetchCount, 12));
 
   const moviePromises = titlesToFetch.map(async (title) => {
     try {
-      const rawMedia = await resolveTitleToTmdb(title, tmdbKey, preferredMedia);
-      return rawMedia || null;
+      const matchingRawItem = rawItems.find(
+        r => r.title.toLowerCase() === title.toLowerCase()
+      );
+      const specificMedia: 'movie' | 'tv' | 'all' = matchingRawItem?.type === 'serie'
+        ? 'tv'
+        : (matchingRawItem?.type === 'film' ? 'movie' : preferredMedia);
+
+      const rawMedia = await resolveTitleToTmdb(title, tmdbKey, specificMedia);
+      if (!rawMedia || !rawMedia.poster_path) return null;
+      return { rawMedia, rawItem: matchingRawItem };
     } catch (_) {
       return null;
     }
   });
 
-  const rawTmdbList = (await Promise.all(moviePromises)).filter(Boolean);
+  const resolvedCandidates = (await Promise.all(moviePromises)).filter(Boolean);
+
+  // SI au moins 1 ou 2 titres sont validés par TMDB :
+  // Ces films constituent la réponse FINALE à renvoyer au frontend.
+  // DÉSACTIVER IMMÉDIATEMENT tout appel au fallback de genre.
+  // Conserver les badges exacts (badge: "FILM" ou "SÉRIE").
+  if (resolvedCandidates.length >= 1) {
+    console.log(`[Éliciné Priorité 1] ${resolvedCandidates.length} titre(s) LLM validé(s) directement par TMDB. Réponse finale immédiate.`);
+    const directMovies: Movie[] = resolvedCandidates.map(({ rawMedia, rawItem }: any, idx: number) => {
+      const formatted = formatTmdbResults([rawMedia])[0];
+      const isTv = rawItem?.type === 'serie' || rawMedia.media_type === 'tv' || Boolean(rawMedia.first_air_date) || Boolean(rawMedia.name && !rawMedia.title);
+      const exactBadge = isTv ? 'SÉRIE' : 'FILM';
+      return {
+        ...formatted,
+        badge: exactBadge,
+        ai_badge: exactBadge,
+        media_type: isTv ? 'SÉRIE' : 'FILM',
+        ai_match_reason: rawItem?.reason || `Sélectionné pour sa cohérence parfaite avec "${rawItem?.title || formatted.title}"`,
+        match_rate: rawItem?.match_rate || Math.max(80, 98 - idx * 2)
+      };
+    });
+
+    const editorialSummary = criteria.cinematicExpansion || `Sélection Éliciné pour : "${cleanQuery}"`;
+    const thoughtMsg = editorialSummary.toLowerCase().startsWith('vision') || editorialSummary.toLowerCase().startsWith('atmosphère')
+      ? editorialSummary
+      : `Vision & Recommandation Éliciné — ${editorialSummary}`;
+
+    const formatResult = enforceFormatConstraintAndFallback(
+      directMovies,
+      effectiveFilters.mediaType,
+      thoughtMsg
+    );
+
+    if (formatResult.movies.length > 0) {
+      return {
+        thought: formatResult.thought,
+        moodDetected: editorialSummary,
+        recommendedMovies: formatResult.movies,
+        isFallbackMode: false,
+        providerUsed: provider || 'Algorithme Éliciné',
+        suggestedPrompts: [
+          'Une série policière sombre et addictive',
+          'Un film de science-fiction dystopique',
+          'Une comédie feel-good et touchante'
+        ],
+        cascade: {
+          tierReached: 1,
+          criteria,
+          tier1Count: formatResult.movies.length,
+          tier2Count: 0,
+          tier3Count: 0
+        }
+      };
+    }
+  }
+
+  const rawTmdbList = resolvedCandidates.map((c: any) => c.rawMedia);
   const initialResolved = formatTmdbResults(rawTmdbList);
 
   // Recherche des crédits de la personne si un acteur ou réalisateur est explicite
@@ -2197,9 +2277,11 @@ export async function executeCinoraSearch(
     }
   }
 
-  // 4. ÉTAPE 3 : RÈGLE IMPÉRATIVE DE FALLBACK (Recommandations Éliciné pour votre atmosphère)
-  // Il est formellement INTERDIT de renvoyer le composant "Aucun film ne correspond précisément..."
-  // si la requête est identifiable sur un plan émotionnel ou thématique.
+  // ── PRIORITÉ 2 : Blocage du Fallback Aveugle ──────────────────────────
+  // Le bloc de code qui va chercher le top d'un genre (ex: with_genres=Drame/Thriller) ne doit s'exécuter QUE SI :
+  // - L'appel LLM plante (erreur réseau / quota).
+  // - OU le LLM n'a retourné aucun titre exploitable.
+  // - Ne JAMAIS écraser la liste des titres précis trouvés par ce fallback.
   const isIdentifiableThematicOrEmotional =
     Boolean(emotionalFallback) ||
     Boolean(criteria.thematicCluster) ||
@@ -2208,8 +2290,10 @@ export async function executeCinoraSearch(
     /\b(?:amour|romance|amoureux|amoureuse|coeur|cœur|sentiment|couple|rupture|séparation|drame|triste|peur|angoisse|horreur|rire|comédie|suspense|thriller|action|dystop|sf|science-fiction|nostalgie)\b/i.test(cleanQuery) ||
     cleanQuery.trim().length >= 4;
 
-  if (isIdentifiableThematicOrEmotional) {
-    console.log(`[Éliciné Cascade] [Règle Fallback Atmosphère] Requête thématique/émotionnelle sans résultat strict → Recommandations Éliciné pour votre atmosphère`);
+  const llmHasNoUsableTitles = !titles || titles.length === 0;
+
+  if (llmHasNoUsableTitles && isIdentifiableThematicOrEmotional) {
+    console.log(`[Éliciné Cascade] [Priorité 2 Fallback] Aucun titre LLM exploitable → Recommandations Éliciné pour votre atmosphère`);
 
     // A. Déterminer le ou les genres dominants
     let dominantGenreNames = criteria.genres && criteria.genres.length > 0 ? criteria.genres : [];
@@ -2272,8 +2356,8 @@ export async function executeCinoraSearch(
         atmosphereMovies = formatted.map((m, idx) => ({
           ...m,
           match_rate: Math.max(78, 96 - idx * 2),
-          ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`,
-          badge: 'Recommandations Éliciné pour votre atmosphère'
+          ai_match_reason: `Sélection Éliciné pour votre recherche (${dominantLabel})`,
+          badge: 'Sélection Éliciné'
         }));
       }
     } catch (_) {}
@@ -2309,16 +2393,21 @@ export async function executeCinoraSearch(
     }
 
     if (atmosphereMovies.length > 0) {
+      const editorialSummary = criteria.cinematicExpansion || `Recommandations Éliciné pour votre atmosphère (${dominantLabel})`;
+      const thoughtMsg = editorialSummary.toLowerCase().startsWith('vision') || editorialSummary.toLowerCase().startsWith('atmosphère')
+        ? editorialSummary
+        : `Vision & Recommandation Éliciné — ${editorialSummary}`;
+
       const formatResult = enforceFormatConstraintAndFallback(
         atmosphereMovies,
         effectiveFilters.mediaType,
-        "Recommandations Éliciné pour votre atmosphère"
+        thoughtMsg
       );
       return {
         thought: formatResult.thought,
-        moodDetected: cleanQuery,
+        moodDetected: editorialSummary,
         recommendedMovies: formatResult.movies,
-        isFallbackMode: false,
+        isFallbackMode: true,
         providerUsed: 'Algorithme Éliciné',
         suggestedPrompts: [
           'Un drame poignant et bouleversant',
