@@ -47,9 +47,9 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       formatted: '1,99 € / mois'
     },
     yearly: {
-      amount: 16.70,
-      formatted: '16,70 € / an',
-      monthlyEquivalent: '~1,39 € / mois',
+      amount: 17.90,
+      formatted: '17,90 € / an',
+      monthlyEquivalent: '~1,49 € / mois',
       savings: '-25% (3 mois offerts)'
     }
   },

@@ -68,7 +68,12 @@ export interface OpenPaddleCheckoutParams {
 }
 
 // Constantes officielles Éliciné
-export const DEFAULT_PADDLE_PRICE_ID = 'pri_01m2x2nctwa8k7cqazmebqnxm3';
+export const PADDLE_PRICE_IDS = {
+  monthly: 'pri_01m2x2nctwa8k7cqazmebqnxm3',
+  yearly: 'pri_01m2x8yc8y1k9b5bej81me7dbd'
+} as const;
+
+export const DEFAULT_PADDLE_PRICE_ID = PADDLE_PRICE_IDS.monthly;
 export const DEFAULT_PADDLE_CLIENT_TOKEN = 'live_8a9bd6937131abe8016f6f2a00f';
 export const PADDLE_SCRIPT_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js';
 
@@ -99,14 +104,17 @@ export function getPaddleEnvironment(): 'live' | 'sandbox' {
 }
 
 /**
- * Récupère le Price ID par défaut ou configuré
+ * Récupère le Price ID par défaut ou configuré selon le cycle de facturation
  */
-export function getPaddlePriceId(): string {
+export function getPaddlePriceId(billingCycle: 'monthly' | 'yearly' = 'monthly'): string {
+  if (billingCycle === 'yearly') {
+    return PADDLE_PRICE_IDS.yearly;
+  }
   const priceId =
     (typeof process !== 'undefined' && (process.env?.VITE_PADDLE_PRICE_ID || process.env?.NEXT_PUBLIC_PADDLE_PRICE_ID)) ||
     (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PADDLE_PRICE_ID || (import.meta as any).env?.NEXT_PUBLIC_PADDLE_PRICE_ID)) ||
     '';
-  return (priceId && priceId !== 'undefined' && priceId !== 'null' ? priceId.trim() : '') || DEFAULT_PADDLE_PRICE_ID;
+  return (priceId && priceId !== 'undefined' && priceId !== 'null' ? priceId.trim() : '') || PADDLE_PRICE_IDS.monthly;
 }
 
 /**

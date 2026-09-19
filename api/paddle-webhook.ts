@@ -469,8 +469,22 @@ export async function processPaddleWebhookEvent(eventPayload: any) {
     }
   }
 
+  const priceId = (
+    data?.items?.[0]?.price?.id ||
+    data?.items?.[0]?.price_id ||
+    data?.custom_data?.price_id ||
+    ''
+  ).trim();
+
+  const isYearly =
+    priceId === 'pri_01m2x8yc8y1k9b5bej81me7dbd' ||
+    data?.custom_data?.plan === 'yearly' ||
+    data?.custom_data?.billing_cycle === 'yearly' ||
+    Number(rawTotal) >= 10;
+
+  const durationDays = isYearly ? 365 : 30;
   const nowIso = new Date().toISOString();
-  const expiresAtIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAtIso = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
   // 3. Activation du statut Pro dans Supabase (profiles & subscriptions)
   let dbSuccess = false;
@@ -514,9 +528,9 @@ export async function processPaddleWebhookEvent(eventPayload: any) {
         status: 'active',
         provider: 'paddle',
         payment_provider: 'paddle',
-        plan: 'pass_pro',
-        amount: 1.99,
-        currency: 'EUR',
+        plan: isYearly ? 'pass_pro_yearly' : 'pass_pro_monthly',
+        amount: isYearly ? 17.90 : 1.99,
+        currency: currency || 'EUR',
         payment_reference: transactionId,
         terms_accepted: true,
         expires_at: expiresAtIso,

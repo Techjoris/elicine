@@ -36,7 +36,7 @@ export interface SubscriptionModalProps {
 }
 
 const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: string; perMonthYearly: string; rawMonthly: number; rawYearly: number }> = {
-  EUR: { symbol: '€', monthly: '1,99', yearly: '16,70', perMonthYearly: '1,39', rawMonthly: 1.99, rawYearly: 16.70 },
+  EUR: { symbol: '€', monthly: '1,99', yearly: '17,90', perMonthYearly: '1,49', rawMonthly: 1.99, rawYearly: 17.90 },
   USD: { symbol: '$', monthly: '2,15', yearly: '18,00', perMonthYearly: '1,50', rawMonthly: 2.15, rawYearly: 18.00 },
   CAD: { symbol: 'CA$', monthly: '2,90', yearly: '24,50', perMonthYearly: '2,04', rawMonthly: 2.90, rawYearly: 24.50 },
   XOF: { symbol: 'FCFA', monthly: '1 300', yearly: '11 000', perMonthYearly: '917', rawMonthly: 1300, rawYearly: 11000 },
@@ -187,13 +187,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       return;
     }
 
+    const activePriceId = billingCycle === 'yearly'
+      ? 'pri_01m2x8yc8y1k9b5bej81me7dbd'
+      : 'pri_01m2x2nctwa8k7cqazmebqnxm3';
+
     try {
       const currentUser = user || authService.getStoredUser();
       await openPaddleCheckout({
-        priceId: DEFAULT_PADDLE_PRICE_ID,
+        priceId: activePriceId,
         userEmail: currentUser?.email,
         userName: currentUser?.name,
         userId: currentUser?.id,
+        customData: {
+          plan: billingCycle,
+          billing_cycle: billingCycle,
+          price_id: activePriceId,
+          amount: isYearly ? currentPrice.yearly : currentPrice.monthly,
+          currency
+        },
         onSuccess: async (paddleData) => {
           // 1. Optimistic UI : mise à jour de l'état local
           setIsPro(true);
@@ -571,7 +582,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </span>
                 ) : (
                   <span>
-                    Pass Pro Éliciné - {amountToPay} {currentPrice.symbol} (Paiement Sécurisé) →
+                    {isYearly
+                      ? `Pass Pro Éliciné Annuel - ${amountToPay} ${currentPrice.symbol} (Paiement Sécurisé)`
+                      : `Pass Pro Éliciné - ${amountToPay} ${currentPrice.symbol} (Paiement Sécurisé)`}
                   </span>
                 )}
               </button>
@@ -584,7 +597,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
               {currency !== 'EUR' && (
                 <p className="text-[10px] text-center text-slate-500 dark:text-slate-400">
-                  Tarif de référence : {isYearly ? '16,70 € /an' : '1,99 € /mois'} — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
+                  Tarif de référence : {isYearly ? '17,90 € /an' : '1,99 € /mois'} — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
                 </p>
               )}
             </div>
