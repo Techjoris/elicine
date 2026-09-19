@@ -17,7 +17,7 @@ import {
   convertToSaspayCurrency,
   formatPaymentErrorMessage
 } from '../../services/payment';
-import { getPayPalDonationUrl } from '../../services/paypalService';
+import { getPayPalDonationUrl, getPayPalSupportHostedUrl } from '../../services/paypalService';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -122,7 +122,7 @@ export const TipModal: React.FC = () => {
   const handlePayPalCheckout = () => {
     const rawNum = Number(amount);
     const donationAmount = rawNum > 0 ? rawNum : 5;
-    const supportLink = getPayPalDonationUrl({
+    const supportLink = getPayPalSupportHostedUrl() || getPayPalDonationUrl({
       amount: donationAmount,
       currency: selectedCurrency || currency || 'USD',
       email: user?.email

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
 import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
+import { getPayPalProHostedUrl } from '../services/paypalService';
 import { checkSaspayAvailability, isSaspayCountry } from '../services/geoService';
 import { Sparkles } from 'lucide-react';
 
@@ -603,6 +604,36 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 }}
               />
 
+              {paymentErrorMessage && (
+                <div className="w-full p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex flex-col gap-2 animate-in fade-in">
+                  <p>{paymentErrorMessage}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getPayPalProHostedUrl();
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full py-2 px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <span>💳</span>
+                    <span>Payer via la page officielle hébergée PayPal Pro →</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="w-full flex items-center justify-center pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = getPayPalProHostedUrl();
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 underline font-medium transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>↗</span>
+                  <span>Ou payer directement sur la page hébergée PayPal Pro</span>
+                </button>
+              </div>
 
               <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5 leading-relaxed">
                 {isSaspayAvailable

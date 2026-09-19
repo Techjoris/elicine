@@ -3,50 +3,26 @@ import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
 
 /**
  * URLs de base officielles de l'API PayPal
+ * En production, pointe STRICTEMENT vers api-m.paypal.com (Live)
  */
 const PAYPAL_LIVE_API_BASE = 'https://api-m.paypal.com';
 const PAYPAL_SANDBOX_API_BASE = 'https://api-m.sandbox.paypal.com';
 
 /**
- * Récupère l'URL de base de l'API PayPal en fonction de l'environnement réel
- * Aligne strictement le serveur sur l'environnement du Client ID (Live vs Sandbox)
+ * Récupère l'URL de base de l'API PayPal
+ * L'appel OAuth2 pour générer le Bearer token doit pointer STRICTEMENT vers https://api-m.paypal.com (Live)
  */
 function getPayPalApiBase(modeOverride = null) {
-  const clientId = (
-    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
-    process.env.PAYPAL_CLIENT_ID ||
-    process.env.VITE_PAYPAL_CLIENT_ID ||
-    process.env.PAYPAL_ID ||
-    ''
-  ).trim();
-
-  const mode = (
-    modeOverride ||
-    process.env.PAYPAL_MODE ||
-    process.env.NEXT_PUBLIC_PAYPAL_MODE ||
-    process.env.VITE_PAYPAL_MODE ||
-    process.env.VITE_PAYPAL_ENV ||
-    process.env.PAYPAL_ENV ||
-    ''
-  ).trim().toLowerCase();
-
-  // Détection automatique du mode Sandbox (si le client ID est 'sb', commence par 'sb-', ou mode explicitement sandbox)
-  if (
-    mode === 'sandbox' ||
-    mode === 'test' ||
-    clientId === 'sb' ||
-    clientId.startsWith('sb-') ||
-    clientId.toLowerCase().includes('sandbox')
-  ) {
+  if (modeOverride === 'sandbox') {
     return PAYPAL_SANDBOX_API_BASE;
   }
-
   // Par défaut strict : mode LIVE (Production)
   return PAYPAL_LIVE_API_BASE;
 }
 
 /**
  * Obtient un Bearer Token OAuth2 auprès de l'API PayPal
+ * Pointe STRICTEMENT vers https://api-m.paypal.com/v1/oauth2/token (Live) avec PAYPAL_SECRET et Client ID
  */
 async function getPayPalAccessToken(modeOverride = null) {
   const clientId = (
@@ -54,10 +30,10 @@ async function getPayPalAccessToken(modeOverride = null) {
     process.env.PAYPAL_CLIENT_ID ||
     process.env.VITE_PAYPAL_CLIENT_ID ||
     process.env.PAYPAL_ID ||
-    ''
+    'BAAzWahi5zv0coRbNiOQMDh5EBKJXqVJxgb5R0YOzi-v3sYFSB6H3-NP9704z_ubIenrcf7gIZDdFntwX8'
   ).trim();
 
-  // Support prioritaire de PAYPAL_SECRET (recommandé)
+  // Support de PAYPAL_SECRET (Live Vercel)
   const secret = (
     process.env.PAYPAL_SECRET ||
     process.env.PAYPAL_CLIENT_SECRET ||
@@ -65,11 +41,13 @@ async function getPayPalAccessToken(modeOverride = null) {
     ''
   ).trim();
 
-  if (!clientId || !secret) {
+  if (!secret) {
     const errorMsg = {
-      message: "Variables d'environnement manquantes : NEXT_PUBLIC_PAYPAL_CLIENT_ID ou PAYPAL_SECRET absent dans process.env.",
-      hasClientId: Boolean(clientId),
-      hasSecret: Boolean(secret)
+      error: "Configuration PayPal manquante côté serveur",
+      details: {
+        hasSecret: !!process.env.PAYPAL_SECRET,
+        hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+      }
     };
     console.error("PayPal Error Details:", errorMsg);
     return null;
@@ -78,52 +56,31 @@ async function getPayPalAccessToken(modeOverride = null) {
   const base = getPayPalApiBase(modeOverride);
   const basicAuth = Buffer.from(`${clientId}:${secret}`).toString('base64');
 
-  const fetchToken = async (targetBase) => {
-    try {
-      console.log(`[PayPal API] 🔑 Demande token OAuth2 sur ${targetBase}/v1/oauth2/token...`);
-      const res = await fetch(`${targetBase}/v1/oauth2/token`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${basicAuth}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: 'grant_type=client_credentials'
-      });
+  try {
+    console.log(`[PayPal API] 🔑 Demande token OAuth2 sur ${base}/v1/oauth2/token (Live)...`);
+    const res = await fetch(`${base}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'grant_type=client_credentials'
+    });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        let errData;
-        try { errData = JSON.parse(errText); } catch (_) { errData = { message: errText }; }
-        console.error("PayPal Error Details:", errData);
-        return { ok: false, status: res.status, body: errText, data: errData };
-      }
-
-      const data = await res.json();
-      return { ok: true, token: data.access_token, base: targetBase };
-    } catch (err) {
-      console.error("PayPal Error Details:", err);
-      return { ok: false, status: 500, body: err?.message || String(err) };
+    if (!res.ok) {
+      const errText = await res.text();
+      let errData;
+      try { errData = JSON.parse(errText); } catch (_) { errData = { message: errText }; }
+      console.error("PayPal Error Details:", errData);
+      return null;
     }
-  };
 
-  let tokenRes = await fetchToken(base);
-
-  // Fallback automatique si 401 Unauthorized (inversion sandbox / live des clés)
-  if (!tokenRes.ok && tokenRes.status === 401) {
-    const altBase = base.includes('sandbox') ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE;
-    console.warn(`[PayPal API] ⚠️ Erreur 401 sur ${base}, tentative de repli sur ${altBase}...`);
-    const altRes = await fetchToken(altBase);
-    if (altRes.ok && altRes.token) {
-      tokenRes = altRes;
-      console.log(`[PayPal API] ✅ Authentification réussie sur l'environnement alternatif : ${altBase}`);
-    }
-  }
-
-  if (!tokenRes.ok || !tokenRes.token) {
+    const data = await res.json();
+    return { token: data.access_token, base };
+  } catch (err) {
+    console.error("PayPal Error Details:", err);
     return null;
   }
-
-  return { token: tokenRes.token, base: tokenRes.base };
 }
 
 /**
@@ -230,17 +187,29 @@ async function verifyPayPalOrderWithApi(orderId, modeOverride = null) {
  * et le montant formaté en chaîne avec exactement 2 décimales.
  */
 async function createPayPalOrderWithApi({ plan, amount, currency, description, modeOverride = null }) {
+  if (!process.env.PAYPAL_SECRET || !(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID)) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Configuration PayPal manquante côté serveur",
+      details: {
+        hasSecret: !!process.env.PAYPAL_SECRET,
+        hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+      }
+    };
+  }
+
   const authData = await getPayPalAccessToken(modeOverride);
   if (!authData) {
-    const hasId = Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_ID);
-    const hasSecret = Boolean(process.env.PAYPAL_SECRET || process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET_KEY);
-    const errorDetails = {
-      message: "Variables d'environnement PayPal manquantes ou invalides (OAuth impossible sur le serveur)",
-      hasClientId: hasId,
-      hasSecret: hasSecret
+    return {
+      ok: false,
+      status: 500,
+      error: "Configuration PayPal manquante côté serveur",
+      details: {
+        hasSecret: !!process.env.PAYPAL_SECRET,
+        hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+      }
     };
-    console.error("PayPal Error Details:", errorDetails);
-    return { ok: false, status: 503, error: errorDetails.message, details: errorDetails };
   }
 
   // 1. DEVISE & MONTANT (CRITIQUE) :
@@ -465,6 +434,16 @@ export default async function handler(req, res) {
   // ─── 1.5. Création officielle d'un ordre PayPal v2 (/api/paypal/create-order) ─
   if (req.method === 'POST' && (action === 'create-order' || action === 'create')) {
     try {
+      if (!process.env.PAYPAL_SECRET || !(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID)) {
+        return res.status(500).json({
+          error: "Configuration PayPal manquante côté serveur",
+          details: {
+            hasSecret: !!process.env.PAYPAL_SECRET,
+            hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+          }
+        });
+      }
+
       const { plan, amount, currency, description, mode } = req.body || {};
       const result = await createPayPalOrderWithApi({
         plan,
@@ -475,7 +454,7 @@ export default async function handler(req, res) {
       });
 
       if (!result.ok) {
-        return res.status(result.status || 400).json({
+        return res.status(result.status || 500).json({
           success: false,
           error: result.error,
           details: result.details
@@ -491,8 +470,11 @@ export default async function handler(req, res) {
     } catch (createErr) {
       console.error("PayPal Error Details:", createErr);
       return res.status(500).json({
-        success: false,
-        error: createErr?.message || "Erreur interne lors de la création de l'ordre PayPal."
+        error: "Configuration PayPal manquante côté serveur",
+        details: {
+          hasSecret: !!process.env.PAYPAL_SECRET,
+          hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+        }
       });
     }
   }
@@ -500,6 +482,16 @@ export default async function handler(req, res) {
   // ─── 2. Enregistrement sécurisé avec capture et vérification PayPal réelle ───
   if (req.method === 'POST' && (action === 'record-payment' || action === 'capture-order' || action === 'capture' || !action)) {
     try {
+      if (!process.env.PAYPAL_SECRET || !(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID)) {
+        return res.status(500).json({
+          error: "Configuration PayPal manquante côté serveur",
+          details: {
+            hasSecret: !!process.env.PAYPAL_SECRET,
+            hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+          }
+        });
+      }
+
       const validation = paypalRecordPaymentSchema.safeParse(req.body || {});
       if (!validation.success) {
         console.error('[PayPal API] Validation schema échouée :', validation.error.format());
@@ -541,17 +533,13 @@ export default async function handler(req, res) {
 
       // Si le serveur n'a pas pu joindre PayPal (identifiants serveur manquants ou indisponibilité)
       if (!orderData) {
-        const hasId = Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_ID);
-        const hasSecret = Boolean(process.env.PAYPAL_SECRET || process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET_KEY);
-        console.error(`[PayPal Server] ❌ Impossible de vérifier ou capturer l'ordre ${orderId} auprès de l'API PayPal. Diagnostic: NEXT_PUBLIC_PAYPAL_CLIENT_ID=${hasId ? 'OK' : 'MANQUANT'}, PAYPAL_SECRET=${hasSecret ? 'OK' : 'MANQUANT'}`);
-        return res.status(503).json({
-          success: false,
-          error: hasSecret 
-            ? "Service de validation PayPal indisponible. La capture n'a pas pu être exécutée par le serveur."
-            : "Service de validation PayPal non configuré (PAYPAL_SECRET manquant dans les variables d'environnement Vercel).",
-          hasClientId: hasId,
-          hasSecret: hasSecret,
-          orderId
+        console.error(`[PayPal Server] ❌ Impossible de vérifier ou capturer l'ordre ${orderId} auprès de l'API PayPal.`);
+        return res.status(500).json({
+          error: "Configuration PayPal manquante côté serveur",
+          details: {
+            hasSecret: !!process.env.PAYPAL_SECRET,
+            hasClientId: !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+          }
         });
       }
 

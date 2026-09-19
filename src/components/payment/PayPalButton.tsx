@@ -34,15 +34,21 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   // Écrase toute conversion FCFA/USD défaillante
   const orderAmount = isYearly ? '15.99' : '1.99';
 
-  // Récupération du Client ID via variables d'environnement publiques avec fallback serveur dynamique
+  // Récupération du Client ID via fallback automatique multi-niveaux (Vite / Next.js / Définition de référence)
   const rawClientId = (
-    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
-    process.env.PAYPAL_CLIENT_ID ||
-    (typeof import.meta !== 'undefined' ? (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID || (import.meta as any).env?.PAYPAL_CLIENT_ID : '') ||
-    ''
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID) ||
+    (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PAYPAL_CLIENT_ID || (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID)) ||
+    (typeof process !== 'undefined' && process.env?.PAYPAL_CLIENT_ID) ||
+    "BAAzWahi5zv0coRbNiOQMDh5EBKJXqVJxgb5R0YOzi-v3sYFSB6H3-NP9704z_ubIenrcf7gIZDdFntwX8"
   )?.trim();
 
   const [clientId, setClientId] = React.useState<string>(rawClientId);
+
+  // 2. LOGS DE DIAGNOSTIC AU CHARGEMENT
+  useEffect(() => {
+    console.log("[PayPal Init] Client ID présent :", !!clientId, "| Longueur :", clientId?.length);
+    console.log("[PayPal Init] Mode déduit :", clientId?.startsWith("BA") ? "Live" : "Sandbox");
+  }, [clientId]);
 
   React.useEffect(() => {
     if (!clientId || clientId === 'undefined' || clientId === 'null' || clientId === '') {

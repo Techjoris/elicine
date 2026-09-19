@@ -3,8 +3,46 @@
  * Garantit des URLs de retour conformes en production (https://elicine.app/...) et élimine les erreurs Sandbox/Redirect.
  */
 
+export const PAYPAL_LIVE_CLIENT_ID = 'BAAzWahi5zv0coRbNiOQMDh5EBKJXqVJxgb5R0YOzi-v3sYFSB6H3-NP9704z_ubIenrcf7gIZDdFntwX8';
+export const PAYPAL_PRO_HOSTED_LINK = 'https://www.paypal.com/ncp/payment/HZQ5NGE26WX6Q';
+export const PAYPAL_SUPPORT_HOSTED_LINK = 'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN';
+
 const DEFAULT_BUSINESS_EMAIL = 'ivanjoris959@gmail.com';
 const PRODUCTION_BASE_URL = 'https://elicine.app';
+
+/**
+ * Récupère le Client ID PayPal avec fallback multi-niveaux (Vite / Next.js / Définition statique)
+ * Garantit qu'aucune valeur undefined ou vide n'est renvoyée
+ */
+export function getPayPalClientId(): string {
+  const envVal =
+    (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env?.PAYPAL_CLIENT_ID)) ||
+    (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PAYPAL_CLIENT_ID || (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID)) ||
+    '';
+  return (envVal && envVal !== 'undefined' && envVal !== 'null' ? envVal.trim() : '') || PAYPAL_LIVE_CLIENT_ID;
+}
+
+/**
+ * Récupère l'URL du lien hébergé officiel Pro (Abonnement Éliciné Pro)
+ */
+export function getPayPalProHostedUrl(): string {
+  const envVal =
+    (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_PAYPAL_PRO_LINK || process.env?.PAYPAL_PRO_LINK)) ||
+    (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PAYPAL_PRO_LINK || (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_PRO_LINK)) ||
+    '';
+  return (envVal && envVal !== 'undefined' && envVal !== 'null' ? envVal.trim() : '') || PAYPAL_PRO_HOSTED_LINK;
+}
+
+/**
+ * Récupère l'URL du lien hébergé officiel Support / Don (Soutien libre Éliciné)
+ */
+export function getPayPalSupportHostedUrl(): string {
+  const envVal =
+    (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || process.env?.PAYPAL_SUPPORT_LINK)) ||
+    (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PAYPAL_SUPPORT_LINK || (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK)) ||
+    '';
+  return (envVal && envVal !== 'undefined' && envVal !== 'null' ? envVal.trim() : '') || PAYPAL_SUPPORT_HOSTED_LINK;
+}
 
 /**
  * Récupère l'URL de base dynamique ou de production (évite les redirections localhost en prod)
@@ -113,6 +151,7 @@ export function getPayPalProCheckoutUrl(options: {
 
 /**
  * Construit l'URL officielle de don/soutien libre PayPal
+ * Utilise en priorité le lien hébergé direct officiel NEXT_PUBLIC_PAYPAL_SUPPORT_LINK
  */
 export function getPayPalDonationUrl(options: {
   amount?: number | string;
@@ -120,7 +159,10 @@ export function getPayPalDonationUrl(options: {
   email?: string;
   customerName?: string;
 } = {}): string {
-
+  const hostedUrl = getPayPalSupportHostedUrl();
+  if (hostedUrl) {
+    return hostedUrl;
+  }
 
   const numericAmount = Number(options.amount || 2).toFixed(2);
   const currency = (options.currency || 'USD').toUpperCase();
@@ -143,7 +185,6 @@ export function getPayPalDonationUrl(options: {
     item_name: 'Soutien et Don — Éliciné',
     amount: numericAmount,
     currency_code: normalizedCurrency,
-    // Configuration Guest Checkout pour le don
     solution_type: 'Sole',
     landing_page: 'Billing',
     no_shipping: '1',
@@ -160,3 +201,4 @@ export function getPayPalDonationUrl(options: {
 
   return `https://www.paypal.com/cgi-bin/webscr?${params.toString()}`;
 }
+

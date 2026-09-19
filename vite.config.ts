@@ -254,12 +254,12 @@ export default defineConfig(({ mode }) => {
     ],
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     define: {
-      'process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || env.PAYPAL_CLIENT_ID || env.VITE_PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || ''),
-      'process.env.PAYPAL_CLIENT_ID': JSON.stringify(env.PAYPAL_CLIENT_ID || env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || ''),
+      'process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || env.PAYPAL_CLIENT_ID || env.VITE_PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || 'BAAzWahi5zv0coRbNiOQMDh5EBKJXqVJxgb5R0YOzi-v3sYFSB6H3-NP9704z_ubIenrcf7gIZDdFntwX8'),
+      'process.env.PAYPAL_CLIENT_ID': JSON.stringify(env.PAYPAL_CLIENT_ID || env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'BAAzWahi5zv0coRbNiOQMDh5EBKJXqVJxgb5R0YOzi-v3sYFSB6H3-NP9704z_ubIenrcf7gIZDdFntwX8'),
       'process.env.NEXT_PUBLIC_PAYPAL_MODE': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_MODE || env.PAYPAL_MODE || env.VITE_PAYPAL_MODE || env.VITE_PAYPAL_ENV || 'live'),
       'process.env.PAYPAL_MODE': JSON.stringify(env.PAYPAL_MODE || env.NEXT_PUBLIC_PAYPAL_MODE || env.VITE_PAYPAL_MODE || env.VITE_PAYPAL_ENV || 'live'),
-      'process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_PRO_LINK || env.VITE_PAYPAL_PRO_LINK || process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || process.env.VITE_PAYPAL_PRO_LINK || ''),
-      'process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || env.VITE_PAYPAL_SUPPORT_LINK || process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || process.env.VITE_PAYPAL_SUPPORT_LINK || ''),
+      'process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_PRO_LINK || env.VITE_PAYPAL_PRO_LINK || process.env.NEXT_PUBLIC_PAYPAL_PRO_LINK || process.env.VITE_PAYPAL_PRO_LINK || 'https://www.paypal.com/ncp/payment/HZQ5NGE26WX6Q'),
+      'process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK': JSON.stringify(env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || env.VITE_PAYPAL_SUPPORT_LINK || process.env.NEXT_PUBLIC_PAYPAL_SUPPORT_LINK || process.env.VITE_PAYPAL_SUPPORT_LINK || 'https://www.paypal.com/ncp/payment/F5HDRFLUH7YJN'),
     },
     server: {
       watch: {
