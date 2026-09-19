@@ -183,10 +183,10 @@ export const termsFr: TermsTranslations = {
         {
           type: "subsection",
           title: "6. Modalités de règlement et sécurité bancaire",
-          text: "Les règlements s'opèrent par voie électronique chiffrée via nos partenaires de paiement sécurisés et agréés (PayPal, passerelles régionales et partenaires marchands internationaux) :",
+          text: "Les règlements s'opèrent par voie électronique chiffrée via nos partenaires de paiement sécurisés et agréés (Paddle, passerelles régionales et partenaires marchands internationaux) :",
           items: [
             { label: "Paiement Mobile Money & Cartes (SasaPay)", text: "Passerelle dédiée aux règlements instantanés par Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) ainsi que par cartes bancaires régionales et internationales." },
-            { label: "Paiement International (PayPal & Cartes bancaires)", text: "Règlement sécurisé par cartes bancaires internationales (Visa, Mastercard, American Express) ou solde de compte PayPal." },
+            { label: "Paiement International (Paddle, Apple Pay & Cartes bancaires)", text: "Règlement sécurisé par cartes bancaires internationales (Visa, Mastercard) et Apple Pay via notre partenaire marchand d'enregistrement Paddle." },
             { label: "Sécurité bancaire stricte (Zéro stockage)", text: "Éliciné ne stocke, ne traite et n'archive aucun numéro de carte bancaire, code CVV ou code secret Mobile Money. Les paiements sont cryptés en protocole SSL/TLS 256 bits." }
           ]
         }

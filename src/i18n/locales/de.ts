@@ -177,10 +177,10 @@ export const termsDe: TermsTranslations = {
         {
           type: "subsection",
           title: "6. Zahlungsmodalitäten und Sicherheit",
-          text: "Zahlungen erfolgen über verschlüsselte, autorisierte Zahlungsdienstleister (PayPal, regionale Gateways und internationale Partner):",
+          text: "Zahlungen erfolgen über verschlüsselte, autorisierte Zahlungsdienstleister (Paddle, regionale Gateways und internationale Partner):",
           items: [
             { label: "Mobile Money & Karten (SasaPay)", text: "Zahlung per Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) und Bankkarten." },
-            { label: "Internationale Zahlung (PayPal & Karten)", text: "Sichere Zahlung mit Kreditkarten (Visa, Mastercard, Amex) oder PayPal-Guthaben." },
+            { label: "Internationale Zahlung (Paddle & Karten)", text: "Sichere Zahlung mit Kreditkarten (Visa, Mastercard), Apple Pay oder über Paddle." },
             { label: "Keine Speicherung von Bankdaten", text: "Éliciné speichert keinerlei Bank-, Kreditkarten- oder PIN-Daten. Alle Transaktionen sind mit 256-Bit-SSL/TLS geschützt." }
           ]
         }

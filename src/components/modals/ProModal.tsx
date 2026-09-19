@@ -28,12 +28,10 @@ export const ProModal: React.FC = () => {
 
     // 1. Interception par l'authentification si non connecté
     if (!user) {
-      const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
-      const isCard = payload.paymentMethod === 'card';
-      const isPaddle = payload.paymentMethod === 'paddle';
-      const paymentMethodStr = isPaddle ? 'paddle' : (isCard ? 'card' : (isPaypal ? 'paypal' : 'sasapay'));
-      const chosenGateway = isPaddle ? 'paddle' : (isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money'));
-      const provider = isPaddle ? 'paddle' : ((isPaypal || isCard) ? 'paypal' : 'saspay');
+      const isPaddle = payload.paymentMethod === 'paddle' || payload.paymentMethod === 'card';
+      const paymentMethodStr = isPaddle ? 'paddle' : 'sasapay';
+      const chosenGateway = isPaddle ? 'paddle' : 'mobile_money';
+      const provider = isPaddle ? 'paddle' : 'saspay';
 
       // Sauvegarde dans sessionStorage selon l'instruction technique
       try {
@@ -68,14 +66,11 @@ export const ProModal: React.FC = () => {
     }
 
     // 2. Utilisateur connecté : Déclenchement selon la méthode de paiement
-    const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
-    const isCard = payload.paymentMethod === 'card';
-    const isPaddle = payload.paymentMethod === 'paddle';
+    const isPaddle = payload.paymentMethod === 'paddle' || payload.paymentMethod === 'card';
 
-    // Paddle, PayPal & Carte Bancaire : Le paiement est géré directement par l'Overlay Paddle ou le widget PayPal
-    // à l'intérieur de la SubscriptionModal.
-    if (isPaypal || isCard || isPaddle) {
-      console.log('[ProModal] Mode Paddle/PayPal/CB intégré : paiement géré dans la modale.');
+    // Paddle & Carte Bancaire : Le paiement est géré directement par l'Overlay Paddle à l'intérieur de la SubscriptionModal.
+    if (isPaddle) {
+      console.log('[ProModal] Mode Paddle intégré : paiement géré dans la modale.');
       return;
     }
 
@@ -133,8 +128,8 @@ export const ProModal: React.FC = () => {
     if (user && isProModalOpen) {
       const pendingIntent = subscriptionService.getPendingCheckoutIntent();
       if (pendingIntent) {
-        // Pour Paddle, PayPal et Cartes bancaires, l'utilisateur connecté voit directement les options dans la modale
-        if (pendingIntent.paymentMethod === 'paddle' || pendingIntent.paymentMethod === 'paypal' || pendingIntent.paymentMethod === 'card' || pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal' || pendingIntent.provider === 'paddle') {
+        // Pour Paddle et Cartes bancaires, l'utilisateur connecté voit directement les options dans la modale
+        if (pendingIntent.paymentMethod === 'paddle' || pendingIntent.paymentMethod === 'card' || pendingIntent.provider === 'paddle') {
           subscriptionService.clearPendingCheckoutIntent();
           try {
             if (typeof sessionStorage !== 'undefined') {

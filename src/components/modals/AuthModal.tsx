@@ -606,7 +606,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-700 dark:text-zinc-200 mt-0.5 font-medium leading-relaxed">
-                    Créez votre compte ou connectez-vous pour être redirigé automatiquement vers le paiement {pendingIntent.paymentMethod === 'mobile_money' ? 'SasPay' : 'PayPal'}.
+                    Créez votre compte ou connectez-vous pour être redirigé automatiquement vers le paiement {pendingIntent.paymentMethod === 'mobile_money' ? 'SasPay' : 'Paddle'}.
                   </p>
                 </div>
               </div>

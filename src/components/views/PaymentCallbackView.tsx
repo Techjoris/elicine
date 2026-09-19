@@ -20,7 +20,7 @@ type VerificationState = 'verifying' | 'active_confirmed' | 'pending_operator' |
 
 export type PaymentGatewayType = 
   | 'card' 
-  | 'paypal' 
+  | 'paddle' 
   | 'orangemoney' 
   | 'mtn' 
   | 'wave' 
@@ -180,27 +180,27 @@ const GATEWAY_CONFIGS: Record<PaymentGatewayType, GatewayConfig> = {
     ],
     confirmedSubtitle: 'Votre paiement Mobile Money a été validé avec succès. Votre Pass Pro est immédiatement actif.'
   },
-  paypal: {
-    name: 'PayPal',
-    badgeText: 'Paiement Sécurisé PayPal',
-    badgeClass: 'bg-blue-600/15 border-blue-500/30 text-sky-400',
+  paddle: {
+    name: 'Paddle Billing',
+    badgeText: 'Paiement Sécurisé Paddle',
+    badgeClass: 'bg-emerald-600/15 border-emerald-500/30 text-emerald-400',
     icon: 'card',
     networkBadges: [
-      { label: 'PayPal', bg: 'bg-blue-600/20 border-blue-500/40', text: 'text-sky-300' },
-      { label: 'Protection des Achats', bg: 'bg-emerald-600/20 border-emerald-500/40', text: 'text-emerald-300' }
+      { label: 'Paddle', bg: 'bg-emerald-600/20 border-emerald-500/40', text: 'text-emerald-300' },
+      { label: 'Apple Pay & CB', bg: 'bg-sky-600/20 border-sky-500/40', text: 'text-sky-300' }
     ],
-    verifyingTitle: 'Validation de votre paiement PayPal en cours...',
-    verifyingDescription: 'Nous interrogeons PayPal et validons la capture officielle et la signature de votre ordre...',
-    verifyingStep2: '2. Capture et confirmation cryptographique de l\'ordre...',
-    pendingBadge: 'Confirmation PayPal en Cours',
-    pendingTitle: 'Validation de votre paiement PayPal en cours...',
-    pendingDescription: 'Votre paiement PayPal a été transmis avec succès. La finalisation de l\'autorisation et de la capture est en cours de traitement par PayPal.',
-    pendingNoticeTitle: 'Garantie & Protection PayPal :',
+    verifyingTitle: 'Validation de votre paiement Paddle en cours...',
+    verifyingDescription: 'Nous interrogeons Paddle et validons la confirmation officielle de votre commande...',
+    verifyingStep2: '2. Confirmation cryptographique du paiement...',
+    pendingBadge: 'Confirmation Paddle en Cours',
+    pendingTitle: 'Validation de votre paiement Paddle en cours...',
+    pendingDescription: 'Votre transaction Paddle a été transmise avec succès. La finalisation est en cours de traitement.',
+    pendingNoticeTitle: 'Garantie Paddle :',
     pendingNoticePoints: [
-      'Protection des Achats : Votre transaction bénéficie de l\'intégralité des garanties de sécurité PayPal.',
-      'Validation automatique : Dès la capture de l\'ordre confirmée par PayPal, vos droits Pro sont immédiatement débloqués.'
+      'Sécurité certifiée : Transaction traitée de manière sécurisée par Paddle.',
+      'Validation automatique : Dès confirmation de la commande, vos droits Pro sont immédiatement débloqués.'
     ],
-    confirmedSubtitle: 'Votre paiement PayPal a été validé avec succès. Votre Pass Pro est immédiatement actif.'
+    confirmedSubtitle: 'Votre paiement Paddle a été validé avec succès. Votre Pass Pro est immédiatement actif.'
   },
   generic: {
     name: 'Paiement Sécurisé',
@@ -234,9 +234,9 @@ function detectGatewayType(raw: string | null | undefined): PaymentGatewayType {
     return 'card';
   }
 
-  // PayPal
-  if (['paypal', 'paypal_card', 'paypal_account'].includes(clean)) {
-    return 'paypal';
+  // Paddle
+  if (['paddle', 'paddle_billing'].includes(clean)) {
+    return 'paddle';
   }
 
   // Orange Money
@@ -366,7 +366,7 @@ export const PaymentCallbackView: React.FC = () => {
       setState('failed');
       setIsCardDecline(isCard);
       setErrorMessage(
-        "Échec du prélèvement : Solde insuffisant ou transaction refusée par PayPal. Aucun prélèvement n'a été effectué sur votre compte. L'accès au Pass Pro reste verrouillé. Veuillez réapprovisionner votre solde PayPal ou votre carte bancaire, puis retenter l'opération."
+        "Échec du prélèvement : Transaction refusée ou fonds insuffisants. Aucun prélèvement n'a été effectué sur votre compte. L'accès au Pass Pro reste verrouillé. Veuillez vérifier votre moyen de paiement, puis retenter l'opération."
       );
       return;
     }
@@ -543,7 +543,7 @@ export const PaymentCallbackView: React.FC = () => {
             gatewayType === 'orangemoney' ? 'bg-gradient-to-tr from-orange-500 to-amber-500' :
             gatewayType === 'mtn' ? 'bg-gradient-to-tr from-yellow-500 to-amber-500' :
             gatewayType === 'wave' ? 'bg-gradient-to-tr from-cyan-500 to-blue-500' :
-            gatewayType === 'paypal' ? 'bg-gradient-to-tr from-blue-600 to-sky-500' :
+            gatewayType === 'paddle' ? 'bg-gradient-to-tr from-emerald-600 to-teal-500' :
             'bg-gradient-to-tr from-amber-500 to-orange-500'
           ) :
           'bg-gradient-to-tr from-rose-600 to-red-500'
@@ -620,7 +620,7 @@ export const PaymentCallbackView: React.FC = () => {
         {/* ─── 2. ÉTAT : EN ATTENTE DE L'OPÉRATEUR OU DE LA BANQUE ────────── */}
         {state === 'pending_operator' && (
           <div className="relative space-y-6 animate-fade-in">
-            <div className={`w-20 h-20 mx-auto rounded-3xl border flex items-center justify-center shadow-lg ${
+            <div className={`w-20 h-20 mx-auto rounded-3xl border flex items-center justify-center shadow-lg transition-transform ${
               gatewayType === 'card' 
                 ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 shadow-sky-500/10' :
               gatewayType === 'orangemoney' 
@@ -629,8 +629,8 @@ export const PaymentCallbackView: React.FC = () => {
                 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 shadow-yellow-500/10' :
               gatewayType === 'wave' 
                 ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-cyan-500/10' :
-              gatewayType === 'paypal' 
-                ? 'bg-blue-600/15 border-blue-500/30 text-sky-400 shadow-blue-500/10' :
+              gatewayType === 'paddle' 
+                ? 'bg-emerald-600/15 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10' :
                 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-amber-500/10'
             }`}>
               {config.icon === 'card' ? (

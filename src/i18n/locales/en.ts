@@ -183,10 +183,10 @@ export const termsEn: TermsTranslations = {
         {
           type: "subsection",
           title: "6. Payment Methods and Security",
-          text: "All payments are securely processed through encrypted authorized payment service providers (PayPal, regional gateways, and international merchant partners):",
+          text: "All payments are securely processed through encrypted authorized payment service providers (Paddle, regional gateways, and international merchant partners):",
           items: [
             { label: "Mobile Money & Cards (SasaPay)", text: "Dedicated secure gateway supporting Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) and regional/international debit/credit cards." },
-            { label: "International Payments (PayPal & Cards)", text: "Global secure checkout via PayPal balance or credit cards (Visa, Mastercard, American Express)." },
+            { label: "International Payments (Paddle, Apple Pay & Cards)", text: "Global secure checkout via Paddle Merchant of Record supporting Apple Pay and international credit/debit cards (Visa, Mastercard)." },
             { label: "Strict Zero Financial Storage", text: "Éliciné does not store, process, or archive payment card numbers, CVVs, or mobile money PINs. All transactions are protected via 256-bit SSL/TLS encryption." }
           ]
         }

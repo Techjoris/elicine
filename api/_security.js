@@ -161,26 +161,6 @@ export const authRegisterSchema = z.object({
   username: z.string().max(50).regex(/^[a-zA-Z0-9_ -]*$/, "Nom d'utilisateur invalide").optional()
 });
 
-/**
- * Schéma pour l'enregistrement de paiement PayPal (/api/paypal)
- */
-export const paypalRecordPaymentSchema = z.object({
-  action: z.string().max(50).optional(),
-  orderId: z.string().min(3).max(128, "Identifiant de commande PayPal invalide"),
-  subscriptionId: z.string().max(128).optional(),
-  userId: z.string().max(128).optional(),
-  email: z.string().max(150).optional().nullable(),
-  customerName: z.string().max(100).optional().nullable(),
-  plan: z.string().max(50).optional().default('monthly'),
-  currency: z.string().max(10).optional().default('USD'),
-  amount: z.union([z.number(), z.string()]).optional(),
-  gateway: z.string().max(50).optional(),
-  paymentMethod: z.string().max(50).optional(),
-  mode: z.string().max(20).optional(),
-  env: z.string().max(20).optional(),
-  details: z.any().optional()
-});
-
 // ============================================================================
 // 2. CONTRÔLE D'ACCÈS & VÉRIFICATION DU STATUT PRO (SERVER-SIDE PAYWALL)
 // ============================================================================

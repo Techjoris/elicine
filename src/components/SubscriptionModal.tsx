@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ElicineLogo } from './ElicineLogo';
 import { useApp } from '../context/AppContext';
 import { Currency, PricingBillingCycle } from '../types';
-import { PayPalButton } from './payment/PayPalButton';
 import { subscriptionService } from '../services/subscriptionService';
-import { getPayPalProHostedUrl } from '../services/paypalService';
 import { checkSaspayAvailability, isSaspayCountry } from '../services/geoService';
 import { 
   openPaddleCheckout, 
@@ -21,7 +19,7 @@ export interface CheckoutPayload {
   amount: string;
   numericAmount: number;
   plan: PricingBillingCycle;
-  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card' | 'paddle';
+  paymentMethod: 'mobile_money' | 'card' | 'paddle';
   gateway?: string;
   subscriptionId?: string;
   customerName?: string;
@@ -44,58 +42,6 @@ const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: strin
   XAF: { symbol: 'FCFA', monthly: '1 200', yearly: '9 600', perMonthYearly: '800', rawMonthly: 1200, rawYearly: 9600 },
 };
 
-function parsePayPalErrorMessage(err: any): string {
-  if (!err) return "La transaction a été refusée ou interrompue par votre établissement bancaire ou PayPal.";
-  if (typeof err === 'string') {
-    const lower = err.toLowerCase();
-    if (lower.includes('instrument_declined') || lower.includes('card_declined') || lower.includes('declined') || lower.includes('refus')) {
-      return "Votre carte bancaire a été refusée par votre banque (solde insuffisant, plafond atteint ou restriction bancaire). Veuillez utiliser une autre carte ou votre compte PayPal.";
-    }
-    if (lower.includes('avs') || lower.includes('postal')) {
-      return "Échec de validation de l'adresse de facturation (code postal erroné). Veuillez vérifier vos coordonnées de carte.";
-    }
-    if (lower.includes('cvv') || lower.includes('csc') || lower.includes('security code')) {
-      return "Le code de sécurité CVV est incorrect. Veuillez vérifier les 3 chiffres au dos de votre carte.";
-    }
-    if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
-      return "L'authentification 3D-Secure auprès de votre banque a échoué ou a été annulée.";
-    }
-    if (lower.includes('permission_denied') || lower.includes('not_authorized')) {
-      return "Le compte marchand PayPal n'autorise pas cette transaction ou les cartes invitées. Veuillez payer avec votre compte PayPal.";
-    }
-    if (lower.includes('enregistrer') || lower.includes('vault') || lower.includes('sauvegard')) {
-      return "Impossible d'enregistrer cette carte bancaire. Les cartes virtuelles et à usage unique ne peuvent pas être mémorisées. Veuillez utiliser votre compte PayPal.";
-    }
-    return err;
-  }
-
-  const rawMsg = err.message || err.description || err.name || '';
-  const lower = rawMsg.toLowerCase();
-  if (lower.includes('instrument_declined') || lower.includes('card_declined') || lower.includes('declined') || lower.includes('refus')) {
-    return "Votre carte bancaire a été refusée par votre banque (solde insuffisant, plafond atteint ou restriction bancaire). Veuillez utiliser une autre carte ou votre solde PayPal.";
-  }
-  if (lower.includes('avs') || lower.includes('postal')) {
-    return "Échec de vérification du code postal (AVS). Veuillez vérifier les informations de facturation.";
-  }
-  if (lower.includes('cvv') || lower.includes('csc') || lower.includes('security code')) {
-    return "Code de sécurité (CVV/CVC) invalide. Veuillez vérifier les 3 chiffres au dos de votre carte.";
-  }
-  if (lower.includes('expired') || lower.includes('expiration')) {
-    return "La date d'expiration de votre carte bancaire est invalide ou dépassée.";
-  }
-  if (lower.includes('3d') || lower.includes('authentication') || lower.includes('payer_action_required')) {
-    return "L'authentification bancaire 3D-Secure n'a pas pu être validée. Veuillez réessayer.";
-  }
-  if (lower.includes('permission_denied') || lower.includes('not_authorized')) {
-    return "Le compte marchand PayPal n'autorise pas cette transaction ou les cartes invitées. Veuillez payer avec votre compte PayPal.";
-  }
-  if (lower.includes('enregistrer') || lower.includes('vault') || lower.includes('sauvegard')) {
-    return "Impossible d'enregistrer cette carte bancaire. Les cartes virtuelles et à usage unique ne peuvent pas être mémorisées. Veuillez utiliser votre compte PayPal.";
-  }
-
-  return rawMsg || "Le paiement n'a pas pu aboutir. Veuillez vérifier vos informations bancaires ou utiliser une autre carte.";
-}
-
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
   isOpen, 
   onClose, 
@@ -113,7 +59,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
-  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paypal_card' | 'paddle'>('paddle');
+  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paddle'>('paddle');
   const [isCapturingPro, setIsCapturingPro] = useState<boolean>(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
@@ -155,9 +101,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         setIsSaspayAvailable(available);
         setIsLoadingGeo(false);
 
-        // Si le pays n'est pas dans la whitelist des 27 pays, forcer PayPal par défaut
+        // Si le pays n'est pas dans la whitelist des 27 pays, forcer Paddle par défaut
         if (!available) {
-          setPaymentMethod('paypal_card');
+          setPaymentMethod('paddle');
         }
       })
       .catch(() => {
@@ -173,7 +119,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   // Fermeture sécurisée : strictement bloquée lorsque la capture et validation Pro sont en cours
   const handleSafeClose = () => {
     if (isCapturingPro) {
-      console.warn('[SubscriptionModal] ⛔ Fermeture bloquée : validation et capture PayPal en cours.');
+      console.warn('[SubscriptionModal] ⛔ Fermeture bloquée : validation en cours.');
       showToast('⏳ Validation de votre paiement en cours... Veuillez patienter.');
       return;
     }
@@ -191,9 +137,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
         if (savedMethod === 'sasapay' || savedMethod === 'mobile_money') {
           setPaymentMethod('mobile_money');
-        } else if (savedMethod === 'card' || savedMethod === 'paypal' || savedMethod === 'paypal_card') {
-          setPaymentMethod('paypal_card');
-        } else if (savedMethod === 'paddle') {
+        } else if (savedMethod === 'card' || savedMethod === 'paddle') {
           setPaymentMethod('paddle');
         }
 
@@ -302,8 +246,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       handlePaddleCheckout();
       return;
     }
-    const isPaypalCard = paymentMethod === 'paypal_card';
-    const chosenGateway = isPaypalCard ? 'card' : 'mobile_money';
+    const chosenGateway = 'mobile_money';
     
     console.log('[SubscriptionModal Debug] handleCheckoutClick déclenché :', {
       paymentMethod,
@@ -381,7 +324,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <div className="flex-1">
               <p className="font-extrabold text-sm text-slate-900 dark:text-white">Validation en cours...</p>
               <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                Sécurisation du prélèvement et activation de votre Pass Pro auprès de PayPal. Veuillez ne pas fermer cette fenêtre.
+                Sécurisation du prélèvement et activation de votre Pass Pro. Veuillez ne pas fermer cette fenêtre.
               </p>
             </div>
           </div>
@@ -519,18 +462,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             </div>
           ) : isSaspayAvailable ? (
             /* Cas 1 : isSaspayAvailable est TRUE (Afrique de l'Ouest / Centrale) */
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* SasPay Mobile Money */}
               <div
                 onClick={() => setPaymentMethod('mobile_money')}
-                className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
+                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
                   paymentMethod === 'mobile_money'
                     ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
                     : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg">📱</span>
+                  <span className="text-xl">📱</span>
                   <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
                     paymentMethod === 'mobile_money' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
                   }`}>
@@ -538,22 +481,22 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </span>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-900 dark:text-white">Mobile Money</p>
-                  <p className="text-[9.5px] text-slate-500 dark:text-slate-400">Orange, MTN, Wave</p>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">Mobile Money</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Orange, MTN, Wave (SasPay)</p>
                 </div>
               </div>
 
               {/* Paddle (Carte & Apple Pay) */}
               <div
                 onClick={() => setPaymentMethod('paddle')}
-                className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
+                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
                   paymentMethod === 'paddle'
                     ? 'bg-emerald-500/10 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                     : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg">💳</span>
+                  <span className="text-xl">💳</span>
                   <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
                     paymentMethod === 'paddle' ? 'border-emerald-400 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'
                   }`}>
@@ -561,50 +504,26 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </span>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-900 dark:text-white">Carte Bancaire</p>
-                  <p className="text-[9.5px] text-slate-500 dark:text-slate-400">Visa, Mastercard (Paddle)</p>
-                </div>
-              </div>
-
-              {/* PayPal */}
-              <div
-                onClick={() => setPaymentMethod('paypal_card')}
-                className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
-                  paymentMethod === 'paypal_card'
-                    ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-lg">🅿️</span>
-                  <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
-                    paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
-                  }`}>
-                    {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-[11px] font-black text-slate-900 dark:text-white">PayPal</p>
-                  <p className="text-[9.5px] text-slate-500 dark:text-slate-400">Solde & Cartes</p>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">Carte Bancaire &amp; Apple Pay</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Visa, Mastercard (Paddle)</p>
                 </div>
               </div>
             </div>
           ) : (
-            /* Cas 2 : isSaspayAvailable est FALSE -> Paddle (Carte Bancaire & Apple Pay) + PayPal */
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Paddle (Carte Bancaire & Apple Pay) */}
+            /* Cas 2 : isSaspayAvailable est FALSE -> Paddle (Carte Bancaire & Apple Pay) */
+            <div className="w-full">
               <div
                 onClick={() => setPaymentMethod('paddle')}
-                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2 relative ${
                   paymentMethod === 'paddle'
                     ? 'bg-emerald-500/10 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                     : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <span className="text-xl">💳</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                       Recommandé
                     </span>
                   </div>
@@ -616,42 +535,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </div>
                 <div>
                   <p className="text-xs font-black text-slate-900 dark:text-white">Carte Bancaire &amp; Apple Pay</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Apple Pay (Paddle)</p>
-                </div>
-              </div>
-
-              {/* PayPal */}
-              <div
-                onClick={() => setPaymentMethod('paypal_card')}
-                className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 relative ${
-                  paymentMethod === 'paypal_card'
-                    ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
-                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xl">🅿️</span>
-                    <span className="text-[10px] font-black text-[#0079C1] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
-                      PayPal
-                    </span>
-                  </div>
-                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                    paymentMethod === 'paypal_card' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
-                  }`}>
-                    {paymentMethod === 'paypal_card' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs font-black text-slate-900 dark:text-white">Compte PayPal</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Solde PayPal et cartes liées</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Visa, Mastercard, Apple Pay (Paiement Sécurisé Paddle)</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* 6. Boutons d'action : Appel à l'action Principal dynamique & Lien de don discret */}
+        {/* 6. Boutons d'action : Appel à l'action Principal dynamique */}
         <div className="flex flex-col gap-3 pt-1">
           {paymentMethod === 'paddle' ? (
             /* Mode Paddle -> Overlay Paddle.js v2 */
@@ -685,144 +576,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   Tarif de référence : 1,99 € — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
                 </p>
               )}
-            </div>
-          ) : paymentMethod === 'paypal_card' ? (
-            /* Mode PayPal & Carte Bancaire -> Widget PayPal SDK officiel (Bouton CB & Bouton PayPal) */
-            <div className="w-full flex flex-col gap-2.5">
-              <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Paiement sécurisé via PayPal
-                </span>
-                <span className="font-extrabold text-sky-600 dark:text-sky-400">
-                  {amountToPay} {currentPrice.symbol}
-                  {(currency === 'XOF' || currency === 'XAF') && (
-                    <span className="text-[10px] font-normal text-slate-400 ml-1">
-                      (~{billingCycle === 'yearly' ? '15.99' : '1.99'} $)
-                    </span>
-                  )}
-                </span>
-              </div>
-
-              <PayPalButton
-                amount={billingCycle === 'yearly' ? 15.99 : 1.99}
-                currency="USD"
-                billingCycle={billingCycle}
-                disabled={isProcessing || isCapturingPro}
-                onValidationStart={() => {
-                  console.log('[SubscriptionModal Debug] ⏳ onApprove démarré : blocage de la modale et passage en "Validation en cours..."');
-                  setIsCapturingPro(true);
-                  setPaymentErrorMessage(null);
-                }}
-                onClick={() => {
-                  console.log('[SubscriptionModal Debug] 🖱️ Clic utilisateur sur le widget PayPalButton');
-                  setPaymentErrorMessage(null);
-                  return true;
-                }}
-                onSuccess={async (orderId) => {
-                  try {
-                    console.log('[SubscriptionModal Debug] 🎯 onApprove avec succès côté PayPal. Transmission orderID au backend pour capture serveur...', { orderId });
-                    setIsCapturingPro(true);
-                    setPaymentErrorMessage(null);
-                    showToast('⏳ Validation en cours... Sécurisation de votre Pass Pro.');
-                    
-                    const backendAmount = billingCycle === 'yearly' ? 15.99 : 1.99;
-                    const backendCurrency = 'USD';
-
-                    const recordResult = await subscriptionService.recordPayPalPayment({
-                      orderId,
-                      userId: user?.id || `usr_${Date.now()}`,
-                      email: user?.email,
-                      customerName: user?.name || 'Cinéphile Pro',
-                      plan: billingCycle,
-                      amount: backendAmount,
-                      currency: backendCurrency
-                    });
-
-                    console.log('[SubscriptionModal Debug] Réponse serveur recordPayPalPayment :', recordResult);
-
-                    if (recordResult?.success && recordResult?.isPro) {
-                      console.log('[SubscriptionModal Debug] 👑 Capture PayPal validée et Pass Pro activé en base !');
-                      showToast('👑 Félicitations ! Votre paiement a été validé et votre Pass Pro est actif.');
-                      upgradeToPro(billingCycle);
-                      setIsCapturingPro(false);
-                      onClose();
-                      if (setIsProSuccessModalOpen) {
-                        setIsProSuccessModalOpen(true);
-                      }
-                    } else {
-                      // Échec de la capture serveur (ex: carte refusée, fonds insuffisants)
-                      const errorMsg = recordResult?.error || "Le paiement n'a pas pu être capturé par PayPal (fonds insuffisants ou carte refusée).";
-                      console.error("PayPal Error Details:", recordResult);
-                      console.error('[SubscriptionModal Debug] ❌ Échec capture serveur PayPal :', {
-                        orderId,
-                        error: errorMsg,
-                        recordResult
-                      });
-                      setIsCapturingPro(false);
-                      setPaymentErrorMessage(errorMsg);
-                      showToast(`❌ ${errorMsg}`);
-                    }
-                  } catch (err: any) {
-                    console.error("PayPal Error Details:", err);
-                    console.error('[SubscriptionModal Debug] ❌ Exception critique lors de la validation/capture PayPal :', err);
-                    const msg = parsePayPalErrorMessage(err);
-                    setIsCapturingPro(false);
-                    setPaymentErrorMessage(msg);
-                    showToast(`❌ ${msg}`);
-                  }
-                }}
-                onError={(err) => {
-                  console.error("PayPal Error Details:", err);
-                  console.error('[SubscriptionModal Debug] ❌ onError remonté par le SDK PayPal / Hosted Fields :', err);
-                  setIsCapturingPro(false);
-                  const msg = parsePayPalErrorMessage(err);
-                  setPaymentErrorMessage(msg);
-                  showToast(`❌ ${msg}`);
-                }}
-                onCancel={() => {
-                  console.log('[SubscriptionModal Debug] 🛑 Annulation transaction par l\'utilisateur.');
-                  setIsCapturingPro(false);
-                  showToast("Transaction annulée. Aucun prélèvement n'a été effectué.");
-                }}
-              />
-
-              {paymentErrorMessage && (
-                <div className="w-full p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex flex-col gap-2 animate-in fade-in">
-                  <p>{paymentErrorMessage}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = getPayPalProHostedUrl();
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    }}
-                    className="w-full py-2 px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <span>💳</span>
-                    <span>Payer via la page officielle hébergée PayPal Pro →</span>
-                  </button>
-                </div>
-              )}
-
-              <div className="w-full flex items-center justify-center pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = getPayPalProHostedUrl();
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                  }}
-                  className="text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 underline font-medium transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <span>↗</span>
-                  <span>Ou payer directement sur la page hébergée PayPal Pro</span>
-                </button>
-              </div>
-
-              <p className="text-[10.5px] text-center text-slate-500 dark:text-slate-400 pt-1.5 leading-relaxed">
-                {isSaspayAvailable
-                  ? "Réglez via votre compte PayPal (solde ou carte bancaire liée). Pour un débit direct Mobile Money (Orange, MTN, Wave), sélectionnez l'option ci-dessus."
-                  : "Réglez en toute sécurité via votre compte PayPal (solde ou carte bancaire liée)."}
-              </p>
             </div>
           ) : (
             /* Mode Paiement Mobile -> Déclencheur Saspay */

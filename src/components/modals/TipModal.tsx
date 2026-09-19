@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Coffee, 
-  CreditCard,
   Smartphone, 
   ShieldCheck, 
   Loader2
@@ -17,7 +16,6 @@ import {
   convertToSaspayCurrency,
   formatPaymentErrorMessage
 } from '../../services/payment';
-import { getPayPalDonationUrl, getPayPalSupportHostedUrl } from '../../services/paypalService';
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
@@ -42,7 +40,6 @@ export const TipModal: React.FC = () => {
   } = useApp();
 
   const defaultSaspayCurr = getSaspayDefaultCurrency();
-  const [activeTab, setActiveTab] = useState<'paypal' | 'mobile'>('paypal');
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => (isAfricanCurrency(currency) ? currency : defaultSaspayCurr));
   const [amount, setAmount] = useState<string>('1000');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -59,7 +56,6 @@ export const TipModal: React.FC = () => {
       const suggested = (getSuggestedCurrencyForCountry(geo.countryCode, geo.currency) as Currency) || 'EUR';
       setSelectedCurrency(suggested);
       const isAfr = isAfricanCurrency(suggested);
-      setActiveTab(isAfr ? 'mobile' : 'paypal');
       const defAmt = presetsByCurrency[suggested]?.defaultAmount || (isAfr ? 1000 : 5);
       setAmount(defAmt.toString());
     });
@@ -106,30 +102,6 @@ export const TipModal: React.FC = () => {
     setErrorMessage(null);
     const def = presetsByCurrency[newCurr]?.defaultAmount || (isAfricanCurrency(newCurr) ? 1000 : 5);
     setAmount(def.toString());
-  };
-
-  const handleTabChange = (tab: 'paypal' | 'mobile') => {
-    setActiveTab(tab);
-    setErrorMessage(null);
-    if (tab === 'mobile' && !isAfricanCurrency(selectedCurrency)) {
-      const defCurr = getSaspayDefaultCurrency();
-      setSelectedCurrency(defCurr);
-      setCurrency(defCurr);
-      setAmount('1000');
-    }
-  };
-
-  const handlePayPalCheckout = () => {
-    const rawNum = Number(amount);
-    const donationAmount = rawNum > 0 ? rawNum : 5;
-    const supportLink = getPayPalSupportHostedUrl() || getPayPalDonationUrl({
-      amount: donationAmount,
-      currency: selectedCurrency || currency || 'USD',
-      email: user?.email
-    });
-    window.open(supportLink, '_blank', 'noopener,noreferrer');
-    showToast('Ouverture de la page sécurisée PayPal...');
-    handleClose();
   };
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {
@@ -321,80 +293,14 @@ export const TipModal: React.FC = () => {
               </p>
             </div>
 
-            {/* 2 Onglets Principaux Minimalistes */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-white/10 w-full">
-              <button
-                type="button"
-                onClick={() => handleTabChange('paypal')}
-                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                  activeTab === 'paypal'
-                    ? 'bg-[#0079C1] text-white shadow-md'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span className="truncate">PayPal &amp; Carte bancaire</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabChange('mobile')}
-                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                  activeTab === 'mobile'
-                    ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span className="truncate">Paiement Mobile</span>
-              </button>
-            </div>
-
-            {/* ONGLET 1 : PAYPAL & CARTE BANCAIRE */}
-            {activeTab === 'paypal' && (
-              <div className="w-full flex flex-col items-center text-center space-y-4 pt-1 animate-fade-in">
-                {/* Badges de confiance */}
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 text-[11px] font-semibold flex items-center gap-1">
-                    <span>💳</span>
-                    <span>Carte Visa / Mastercard</span>
-                  </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-semibold flex items-center gap-1">
-                    <span className="font-black italic">P</span>
-                    <span>PayPal</span>
-                  </span>
+            {/* Formulaire de soutien SasPay */}
+            <form onSubmit={handleMobileMoneySubmit} className="w-full space-y-4 pt-1 animate-fade-in">
+              {/* Sélecteur de devises sobre */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <span>Devise</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-bold">{currentConfig.name}</span>
                 </div>
-
-                {/* Explication épurée */}
-                <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 text-center space-y-1.5">
-                  <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white">
-                    Paiement direct sécurisé sur la page officielle PayPal
-                  </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Définissez librement votre montant et réglez par <strong>Carte bancaire</strong> (sans créer de compte) ou via <strong>PayPal</strong>.
-                  </p>
-                </div>
-
-                {/* Bouton d'action direct */}
-                <button
-                  type="button"
-                  onClick={handlePayPalCheckout}
-                  className="w-full py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] text-[#003087] font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-[0.99] transition-all cursor-pointer select-none"
-                >
-                  <span>Continuer vers PayPal ou Carte bancaire →</span>
-                </button>
-              </div>
-            )}
-
-            {/* ONGLET 2 : PAIEMENT MOBILE */}
-            {activeTab === 'mobile' && (
-              <form onSubmit={handleMobileMoneySubmit} className="w-full space-y-4 pt-1 animate-fade-in">
-                {/* Sélecteur de devises sobre */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    <span>Devise</span>
-                    <span className="text-amber-600 dark:text-amber-400 font-bold">{currentConfig.name}</span>
-                  </div>
                   <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 w-full gap-1">
                     {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
                       <button
@@ -500,7 +406,6 @@ export const TipModal: React.FC = () => {
                   Orange Money, MTN MoMo, Wave, Moov • Certifié SasPay
                 </p>
               </form>
-            )}
 
             {/* Pied de boîte : mention de sécurité */}
             <div className="pt-2 border-t border-slate-200/80 dark:border-white/10 text-center w-full">

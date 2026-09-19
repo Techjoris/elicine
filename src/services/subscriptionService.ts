@@ -1,7 +1,6 @@
 import { ProSubscription, SubscriptionStatus, Currency, PricingBillingCycle } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { processSaspayCheckout } from './payment';
-import { getPayPalProCheckoutUrl } from './paypalService';
 
 const PENDING_SUB_STORAGE_KEY = 'cineia_pending_subscription';
 const ACTIVE_SUB_STORAGE_KEY = 'cineia_active_subscription';
@@ -26,8 +25,8 @@ export interface CheckoutIntent {
   currency: Currency;
   amount: string;
   numericAmount: number;
-  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card' | 'paddle';
-  provider: 'saspay' | 'paypal' | 'paddle';
+  paymentMethod: 'mobile_money' | 'card' | 'paddle';
+  provider: 'saspay' | 'paddle';
   gateway?: string;
   phone?: string;
   timestamp: number;
@@ -229,7 +228,7 @@ export const subscriptionService = {
     const name = (user.name || (user as any)?.user_metadata?.full_name || 'Cinéphile Pro').trim();
     const userId = user.id || `usr_pro_${Date.now()}`;
 
-    const chosenGateway = intent.gateway || (intent.paymentMethod === 'card' ? 'card' : (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' ? 'paypal' : 'mobile_money'));
+    const chosenGateway = intent.gateway || (intent.paymentMethod === 'card' ? 'card' : (intent.paymentMethod === 'paddle' ? 'paddle' : 'mobile_money'));
 
     if (typeof sessionStorage !== 'undefined') {
       try {
@@ -262,9 +261,7 @@ export const subscriptionService = {
     this.clearPendingCheckoutIntent();
 
     // 3. Déclencher la passerelle choisie
-    if (intent.paymentMethod === 'paypal' || intent.paymentMethod === 'paypal_card' || intent.provider === 'paypal') {
-      // Pour PayPal, le paiement est intégralement traité dans la modale in-app via les Smart Buttons officiels
-      console.log('[SubscriptionService] Mode PayPal natif : pas de redirection externe, modale native active.');
+    if (intent.paymentMethod === 'paddle' || intent.provider === 'paddle') {
       return { success: true, subscriptionId: subscription.id, subscription, isNativeModal: true };
     }
 
@@ -712,209 +709,6 @@ export const subscriptionService = {
     console.warn('[Security] markSubscriptionPaid appelé. Redirection vers verifySubscriptionStatus sécurisé.');
     const check = await this.verifySubscriptionStatus(subscriptionId, paymentReference);
     return check.subscription || null;
-  },
-
-  /**
-   * Transmet un paiement PayPal complété (onApprove) au serveur backend
-   * pour validation cryptographique et écriture sécurisée en base.
-   */
-  async recordPayPalPayment(params: {
-    orderId: string;
-    userId?: string;
-    email?: string;
-    customerName?: string;
-    plan: PricingBillingCycle;
-    amount: number;
-    currency: string;
-    details?: any;
-  }): Promise<{ success: boolean; isPro?: boolean; subscriptionId?: string; error?: string; message?: string }> {
-    const subId = `sub_paypal_${params.orderId}`;
-    const email = (params.email || 'support@elicine.app').trim().toLowerCase();
-    const name = (params.customerName || 'Cinéphile Pro').trim();
-    const gateway = 'paypal';
-
-    // Sécurité FCFA -> USD (taux fixe 600)
-    const isFcfa = params.currency === 'XOF' || params.currency === 'XAF';
-    const effectiveCurrency = isFcfa ? 'USD' : (params.currency || 'USD');
-    const effectiveAmount = isFcfa || (effectiveCurrency === 'USD' && params.amount >= 100)
-      ? Number((params.amount / 600).toFixed(2))
-      : params.amount;
-
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem('checkout_gateway', gateway);
-        sessionStorage.setItem('payment_method', gateway);
-      }
-      const pendingSub: ProSubscription = {
-        id: subId,
-        userId: params.userId || 'usr_paypal',
-        email,
-        customerName: name,
-        plan: params.plan,
-        currency: effectiveCurrency,
-        amount: effectiveAmount,
-        status: 'pending_payment',
-        paymentReference: params.orderId,
-        paymentProvider: 'paypal',
-        gateway,
-        paymentMethod: gateway,
-        termsAccepted: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      localStorage.setItem(PENDING_SUB_STORAGE_KEY, JSON.stringify(pendingSub));
-    } catch (_) {}
-
-    // Transmission au backend sécurisé pour capture réelle des fonds et activation Pro
-    try {
-      const envClientId = (
-        (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID ||
-        (import.meta as any).env?.PAYPAL_CLIENT_ID ||
-        ''
-      ).trim();
-
-      const envMode = (
-        (import.meta as any).env?.VITE_PAYPAL_MODE ||
-        (import.meta as any).env?.VITE_PAYPAL_ENV ||
-        (import.meta as any).env?.PAYPAL_MODE ||
-        ''
-      ).toLowerCase().trim();
-
-      const isSandbox = envMode === 'sandbox' || envMode === 'test' || envClientId === 'sb' || envClientId === 'test' || !envClientId;
-      const frontendMode = isSandbox ? 'sandbox' : 'live';
-
-      console.log('[subscriptionService] 🔐 Envoi de l\'orderID au backend pour capture serveur et activation :', {
-        orderId: params.orderId,
-        email,
-        plan: params.plan,
-        frontendMode
-      });
-
-      let data: any = null;
-      let resOk = false;
-      let lastErrorMessage = '';
-
-      // 1. Tenter d'abord la Supabase Edge Function 'capture-paypal' si disponible
-      if (isSupabaseConfigured() && supabase && (supabase as any).functions) {
-        try {
-          console.log('[subscriptionService] ⚡ Appel de la Edge Function Supabase capture-paypal...');
-          const { data: edgeData, error: edgeError } = await (supabase as any).functions.invoke('capture-paypal', {
-            body: {
-              orderId: params.orderId,
-              subscriptionId: subId,
-              userId: params.userId,
-              email,
-              customerName: name,
-              plan: params.plan,
-              currency: effectiveCurrency,
-              amount: effectiveAmount,
-              mode: frontendMode
-            }
-          });
-
-          if (edgeError) {
-            console.error('[subscriptionService] ❌ Erreur Supabase Edge Function capture-paypal :', edgeError);
-            lastErrorMessage = edgeError?.message || '';
-          }
-
-          if (edgeData) {
-            console.log('[subscriptionService] 📋 Réponse Edge Function capture-paypal :', edgeData);
-            if (edgeData.success && edgeData.isPro) {
-              data = edgeData;
-              resOk = true;
-            } else if (edgeData.error) {
-              lastErrorMessage = edgeData.error;
-            }
-          }
-        } catch (edgeErr: any) {
-          console.warn('[subscriptionService] Supabase Edge Function notice, repli vers route /api/paypal :', edgeErr);
-          lastErrorMessage = edgeErr?.message || '';
-        }
-      }
-
-      // 2. Route Vercel API /api/paypal?action=capture-order (Backend Serverless)
-      if (!resOk) {
-        console.log('[subscriptionService] 🔄 Repli sur l\'API Serverless Vercel /api/paypal?action=capture-order...');
-        const res = await fetch('/api/paypal?action=capture-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: params.orderId,
-            subscriptionId: subId,
-            userId: params.userId,
-            email,
-            customerName: name,
-            plan: params.plan,
-            currency: effectiveCurrency,
-            amount: effectiveAmount,
-            gateway,
-            mode: frontendMode
-          })
-        });
-
-        resOk = res.ok;
-        data = await res.json().catch(() => null);
-        if (!resOk && data?.error) {
-          lastErrorMessage = data.error;
-        }
-      }
-
-      // CONDITION STRICTE : succès SEULEMENT si le serveur a capturé les fonds et renvoie isPro: true
-      if (resOk && data?.success && data?.isPro) {
-        console.log('[subscriptionService] 👑 Capture PayPal confirmée COMPLETED et Pass Pro validé en base :', data);
-        
-        // Mise à jour du cache local UNIQUEMENT après validation formelle de la capture serveur
-        try {
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + (params.plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
-          const activeSub: ProSubscription = {
-            id: subId,
-            userId: params.userId || 'usr_paypal',
-            email,
-            customerName: name,
-            plan: params.plan,
-            currency: params.currency || 'USD',
-            amount: params.amount,
-            status: 'active',
-            paymentReference: params.orderId,
-            paymentProvider: 'paypal',
-            gateway,
-            paymentMethod: gateway,
-            termsAccepted: true,
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-            expiresAt
-          };
-          localStorage.setItem(ACTIVE_SUB_STORAGE_KEY, JSON.stringify(activeSub));
-          localStorage.removeItem(PENDING_SUB_STORAGE_KEY);
-        } catch (_) {}
-
-        return { 
-          success: true, 
-          isPro: true,
-          subscriptionId: data.subscriptionId || subId,
-          message: data.message || "Pass Pro activé avec succès !"
-        };
-      }
-
-      console.error("PayPal Error Details:", data || lastErrorMessage);
-      console.error('[subscriptionService] ❌ Échec capture backend PayPal :', { data, lastErrorMessage });
-      return {
-        success: false,
-        isPro: false,
-        error: data?.error || lastErrorMessage || "Le paiement n'a pas pu être capturé par PayPal (transaction refusée ou non complétée).",
-        subscriptionId: subId
-      };
-    } catch (err: any) {
-      console.error("PayPal Error Details:", err);
-      console.error('[subscriptionService] ❌ Exception appel backend capture:', err);
-      return {
-        success: false,
-        isPro: false,
-        error: err?.message || "Erreur de connexion au serveur de capture de paiement.",
-        subscriptionId: subId
-      };
-    }
   },
 
   /**

@@ -177,10 +177,10 @@ export const termsIt: TermsTranslations = {
         {
           type: "subsection",
           title: "6. Modalità di pagamento e sicurezza",
-          text: "I pagamenti sono elaborati tramite protocolli crittografati sicuri da gestori autorizzati (PayPal, gateway regionali e partner internazionali):",
+          text: "I pagamenti sono elaborati tramite protocolli crittografati sicuri da gestori autorizzati (Paddle, gateway regionali e partner internazionali):",
           items: [
             { label: "Mobile Money & Carte (SasaPay)", text: "Gateway dedicato per pagamenti tramite Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) e carte bancarie." },
-            { label: "Pagamento Internazionale (PayPal & Carte)", text: "Transazioni sicure tramite carte di credito internazionali (Visa, Mastercard, Amex) o conto PayPal." },
+            { label: "Pagamento Internazionale (Paddle, Apple Pay & Carte)", text: "Transazioni sicure tramite carte di credito internazionali (Visa, Mastercard), Apple Pay o tramite Paddle." },
             { label: "Nessuna archiviazione di dati bancari", text: "Éliciné non archivia né tratta numeri di carte o codici PIN. Tutte le transazioni sono protette da crittografia SSL/TLS a 256 bit." }
           ]
         }

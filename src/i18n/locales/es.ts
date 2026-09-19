@@ -183,10 +183,10 @@ export const termsEs: TermsTranslations = {
         {
           type: "subsection",
           title: "6. Métodos de pago y seguridad",
-          text: "Los pagos se procesan de forma electrónica y cifrada a través de pasarelas de pago seguras y autorizadas (PayPal, pasarelas regionales y socios comerciales internacionales):",
+          text: "Los pagos se procesan de forma electrónica y cifrada a través de pasarelas de pago seguras y autorizadas (Paddle, pasarelas regionales y socios comerciales internacionales):",
           items: [
             { label: "Pago Mobile Money y Tarjetas (SasaPay)", text: "Pasarela dedicada a pagos móviles instantáneos (Orange Money, MTN MoMo, Wave, Moov Money) y tarjetas bancarias regionales e internacionales." },
-            { label: "Pago Internacional (PayPal y Tarjetas)", text: "Pago seguro con tarjetas de crédito/débito internacionales (Visa, Mastercard, American Express) o saldo de PayPal." },
+            { label: "Pago Internacional (Paddle, Apple Pay y Tarjetas)", text: "Pago seguro con tarjetas de crédito/débito internacionales (Visa, Mastercard), Apple Pay o a través de Paddle." },
             { label: "Seguridad estricta (Cero almacenamiento)", text: "Éliciné no almacena, no procesa y no archiva números de tarjetas bancarias, códigos CVV ni claves secretas de Mobile Money. Cifrado SSL/TLS de 256 bits." }
           ]
         }

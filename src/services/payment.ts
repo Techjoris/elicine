@@ -334,7 +334,7 @@ export function formatPaymentErrorMessage(err: any, fallback: string = "Une erre
       const str = JSON.stringify(err);
       if (str && str !== '{}') {
         if (str.includes('A server error has occurred') || str.includes('Bad Gateway') || str.includes('502')) {
-          return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire / PayPal.";
+          return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire (Paddle).";
         }
         return str;
       }
@@ -343,7 +343,7 @@ export function formatPaymentErrorMessage(err: any, fallback: string = "Une erre
 
   const rawStr = String(err || '').trim();
   if (rawStr.includes('A server error has occurred') || rawStr.includes('Bad Gateway') || rawStr.includes('502')) {
-    return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire / PayPal.";
+    return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire (Paddle).";
   }
 
   return rawStr || fallback;

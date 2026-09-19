@@ -241,7 +241,7 @@ export function extractErrorMessage(data, fallback = 'Erreur SasPay') {
 
   const rawStr = String(data || '').trim();
   if (rawStr.includes('A server error has occurred') || rawStr.includes('Bad Gateway') || rawStr.includes('502')) {
-    return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire / PayPal.";
+    return "Les serveurs de paiement mobile SasPay rencontrent une indisponibilité temporaire (maintenance opérateur). Veuillez réessayer dans un instant ou choisir le paiement par Carte bancaire (Paddle).";
   }
 
   return rawStr || fallback;
@@ -444,7 +444,7 @@ export default async function handler(req, res) {
     // Si déjà actif en base, vérifier la date d'expiration
     if (sub.status === 'active') {
       const isExpired = sub.expires_at ? new Date(sub.expires_at).getTime() <= Date.now() : false;
-      const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : (sub.payment_reference?.startsWith('CARD') ? 'card' : null));
+      const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('CARD') ? 'card' : null);
       return res.status(200).json({
         success: true,
         isPro: !isExpired,
@@ -495,7 +495,7 @@ export default async function handler(req, res) {
 
         console.log('[SasPay verify-subscription] 👑 Souscription activée via confirmation autoritaire passerelle:', sub.id);
 
-        const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : null);
+        const subGateway = sub.gateway || sub.payment_method;
         return res.status(200).json({
           success: true,
           isPro: true,
@@ -525,7 +525,7 @@ export default async function handler(req, res) {
     }
 
     // Toujours en attente (attente du webhook ou de l'opérateur)
-    const subGateway = sub.gateway || sub.payment_method || (sub.payment_reference?.startsWith('PAYPAL') ? 'paypal' : null);
+    const subGateway = sub.gateway || sub.payment_method;
     return res.status(200).json({
       success: true,
       isPro: false,
@@ -605,7 +605,7 @@ export default async function handler(req, res) {
   }
 
   // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle
-  if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event || req.body?.event_type || req.headers['paypal-auth-algo'] || req.headers['PAYPAL-AUTH-ALGO']) {
+  if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
     console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
 
     let webhookBody = req.body;
@@ -616,13 +616,6 @@ export default async function handler(req, res) {
       } catch (_) {
         webhookBody = {};
       }
-    }
-
-    // Si événement PayPal officiel, délégation vers le handler cryptographique dédié
-    if (webhookBody?.event_type || req.headers['paypal-auth-algo'] || req.headers['PAYPAL-AUTH-ALGO']) {
-      const paypalHandler = (await import('./paypal.js')).default;
-      req.query = { ...(req.query || {}), action: 'webhook' };
-      return await paypalHandler(req, res);
     }
 
     const event = webhookBody?.event || 'transaction.unknown';

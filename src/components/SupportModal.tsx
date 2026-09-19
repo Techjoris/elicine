@@ -11,7 +11,6 @@ import {
   isAfricanCurrency,
   formatPaymentErrorMessage
 } from '../services/payment';
-import { getPayPalDonationUrl, getPayPalSupportHostedUrl } from '../services/paypalService';
 import { Currency } from '../types';
 
 export interface SaspayTipPayload {
@@ -43,7 +42,6 @@ const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: nu
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onOpenSaspay, onOpenMoneroo, onOpenNotchPay }) => {
   const { user, apiSettings, showToast, setIsThankYouModalOpen } = useApp();
   const defaultSaspayCurr = getSaspayDefaultCurrency();
-  const [activeTab, setActiveTab] = useState<'paypal' | 'momo'>('paypal');
   const [momoCurrency, setMomoCurrency] = useState<Currency>(defaultSaspayCurr);
   const [freeAmount, setFreeAmount] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -98,17 +96,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen]);
-
-  const handlePayPalCheckout = () => {
-    const rawNum = Number(freeAmount);
-    const donationAmount = rawNum > 0 ? rawNum : 2;
-    const url = getPayPalSupportHostedUrl() || getPayPalDonationUrl({
-      amount: donationAmount,
-      currency: 'USD',
-      email: user?.email
-    });
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,89 +281,13 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           </p>
         </div>
 
-        {/* Sélecteur de méthode (PayPal vs Mobile Money) */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 w-full">
-          <button
-            type="button"
-            onClick={() => setActiveTab('paypal')}
-            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'paypal'
-                ? 'bg-[#0079C1] text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <span>💳</span>
-            <span>PayPal &amp; Carte bancaire</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('momo')}
-            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'momo'
-                ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <span>📱</span>
-            <span>Paiement Mobile</span>
-          </button>
-        </div>
-
-        {/* ONGLET 1 : PAYPAL & CARTE (Page officielle hébergée) */}
-        {activeTab === 'paypal' && (
-          <div className="w-full flex flex-col items-center text-center animate-in fade-in duration-150 py-1">
-            {/* Badges des moyens de paiement acceptés */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              <span className="px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-700 dark:text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                <span>💳</span>
-                <span>Carte bancaire (Visa, Mastercard, etc.)</span>
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-[#ffc439]/15 border border-[#ffc439]/40 text-[#a06800] dark:text-[#ffc439] text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                <span className="italic font-black">P</span>
-                <span>PayPal</span>
-              </span>
-            </div>
-
-            {/* Explication claire pour le donateur */}
-            <div className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 mb-4 text-center">
-              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-2 leading-snug">
-                Paiement direct et sécurisé sur la page officielle PayPal d'Éliciné
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
-                Sur la page suivante, vous pourrez <strong>choisir librement votre montant</strong> de soutien et régler au choix par <strong>Carte bancaire</strong> (sans obligation de créer un compte) ou via <strong>PayPal</strong>.
-              </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Votre contribution permet de financer directement les coûts des serveurs et l'infrastructure de recommandation haute performance.
-              </p>
-            </div>
-
-            {/* Bouton d'action principal */}
-            <div className="w-full flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={handlePayPalCheckout}
-                className="w-full max-w-md py-3.5 px-4 bg-[#ffc439] hover:bg-[#f2ba32] active:scale-[0.99] text-[#003087] font-black text-sm sm:text-base rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/15 transition-all cursor-pointer select-none"
-              >
-                <span>Continuer vers le paiement sécurisé (PayPal ou Carte) →</span>
-              </button>
-
-              <p className="w-full text-center text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
-                <span>🔒</span>
-                <span>Paiement sécurisé et crypté SSL via les serveurs officiels certifiés PayPal.</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ONGLET 2 : MOBILE MONEY (Moneroo) */}
-        {activeTab === 'momo' && (
-          <form onSubmit={handleMobileMoneySubmit} className="flex flex-col gap-4 animate-in fade-in duration-150 w-full">
-            {/* Choix de la devise pour Mobile Money */}
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Devise du paiement Mobile Money
-              </label>
+        {/* Formulaire de don libre SasPay (Mobile Money & Cartes) */}
+        <form onSubmit={handleMobileMoneySubmit} className="flex flex-col gap-4 animate-in fade-in duration-150 w-full">
+          {/* Choix de la devise */}
+          <div className="flex flex-col gap-1.5 w-full">
+            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Devise du don
+            </label>
               <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 w-full justify-center gap-1">
                 {(['XOF', 'XAF', 'EUR', 'USD', 'CAD'] as Currency[]).map((c) => (
                   <button
@@ -480,7 +391,6 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
               Orange Money, MTN MoMo, Wave, Moov • Sécurisé par SasPay
             </p>
           </form>
-        )}
 
         {/* Pied de boîte de dialogue */}
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 text-center w-full">

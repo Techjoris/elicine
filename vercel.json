@@ -59,26 +59,6 @@
       "destination": "/api/admin"
     },
     {
-      "source": "/api/paypal/create-order",
-      "destination": "/api/paypal?action=create-order"
-    },
-    {
-      "source": "/api/paypal/capture-order",
-      "destination": "/api/paypal?action=capture-order"
-    },
-    {
-      "source": "/api/paypal/webhook",
-      "destination": "/api/paypal?action=webhook"
-    },
-    {
-      "source": "/api/paypal/:action*",
-      "destination": "/api/paypal?action=:action*"
-    },
-    {
-      "source": "/api/paypal",
-      "destination": "/api/paypal"
-    },
-    {
       "source": "/api/webhook",
       "destination": "/api/saspay?action=webhook"
     },
