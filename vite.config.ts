@@ -90,17 +90,18 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            // 2. ROUTE /api/tmdb
+            // 2. ROUTE /api/tmdb (redirigé vers api/search.js?action=tmdb)
             if (pathname === '/api/tmdb' && req.method === 'GET') {
               adaptResponse();
               const query: Record<string, string> = {};
               url.searchParams.forEach((v, k) => { query[k] = v; });
+              query.action = 'tmdb';
               (req as any).query = query;
               try {
                 process.env.TMDB_API_KEY = env.TMDB_API_KEY || process.env.TMDB_API_KEY;
-                const fileUrl = pathToFileURL(path.resolve('./api/tmdb.js')).href;
-                const tmdbHandler = (await import(/* @vite-ignore */ fileUrl)).default;
-                return await tmdbHandler(req, res);
+                const fileUrl = pathToFileURL(path.resolve('./api/search.js')).href;
+                const searchHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await searchHandler(req, res);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
@@ -108,11 +109,12 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            // 3. ROUTE /api/saspay (et alias /api/moneroo, /api/notchpay)
+            // 3. ROUTE /api/saspay (et alias /api/moneroo, /api/notchpay, /api/webhook)
             if (
               pathname === '/api/saspay' || 
               pathname === '/api/saspay/verify' || 
               pathname === '/api/saspay/webhook' ||
+              pathname === '/api/webhook' ||
               pathname === '/api/moneroo' || 
               pathname === '/api/moneroo/verify' || 
               pathname === '/api/notchpay' || 
@@ -121,6 +123,7 @@ export default defineConfig(({ mode }) => {
               adaptResponse();
               const query: Record<string, string> = {};
               url.searchParams.forEach((v, k) => { query[k] = v; });
+              if (pathname.includes('webhook')) query.action = 'webhook';
               (req as any).query = query;
               if (req.method === 'POST') {
                 (req as any).body = await getBody();
@@ -161,19 +164,43 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            // 3.6. ROUTE /api/webhook
-            if (pathname.startsWith('/api/webhook')) {
+            // 3.6. ROUTE /api/admin & /api/feedback
+            if (pathname.startsWith('/api/admin') || pathname === '/api/feedback') {
               adaptResponse();
               const query: Record<string, string> = {};
               url.searchParams.forEach((v, k) => { query[k] = v; });
+              if (pathname.includes('feedback')) query.action = 'feedback';
+              else if (pathname.includes('users')) query.action = 'users';
               (req as any).query = query;
-              if (req.method === 'POST') {
+              if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE') {
                 (req as any).body = await getBody();
               }
               try {
-                const fileUrl = pathToFileURL(path.resolve('./api/webhook.js')).href;
-                const webhookHandler = (await import(/* @vite-ignore */ fileUrl)).default;
-                return await webhookHandler(req, res);
+                const fileUrl = pathToFileURL(path.resolve('./api/admin.js')).href;
+                const adminHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await adminHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
+            // 3.7. ROUTE /api/activate-pro & /api/movie-alerts
+            if (pathname === '/api/activate-pro' || pathname === '/api/movie-alerts' || pathname === '/api/send-thank-you-email') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              if (pathname === '/api/movie-alerts') query.action = 'movie-alerts';
+              if (pathname === '/api/send-thank-you-email') query.action = 'thank-you-email';
+              (req as any).query = query;
+              if (req.method === 'POST' || req.method === 'DELETE') {
+                (req as any).body = await getBody();
+              }
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/activate-pro.js')).href;
+                const activateHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await activateHandler(req, res);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

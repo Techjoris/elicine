@@ -5,7 +5,7 @@
       "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/movie-alerts?action=cron",
+      "path": "/api/activate-pro?action=movie-alerts-cron",
       "schedule": "0 9 * * *"
     }
   ],
@@ -31,6 +31,34 @@
       "destination": "/api/activate-pro?action=cron"
     },
     {
+      "source": "/api/movie-alerts",
+      "destination": "/api/activate-pro?action=movie-alerts"
+    },
+    {
+      "source": "/api/tmdb",
+      "destination": "/api/search?action=tmdb"
+    },
+    {
+      "source": "/api/geo",
+      "destination": "/api/saspay?action=geo"
+    },
+    {
+      "source": "/api/feedback",
+      "destination": "/api/admin?action=feedback"
+    },
+    {
+      "source": "/api/admin/users",
+      "destination": "/api/admin?action=users"
+    },
+    {
+      "source": "/api/admin/:action*",
+      "destination": "/api/admin?action=:action*"
+    },
+    {
+      "source": "/api/admin",
+      "destination": "/api/admin"
+    },
+    {
       "source": "/api/paypal/create-order",
       "destination": "/api/paypal?action=create-order"
     },
@@ -49,6 +77,10 @@
     {
       "source": "/api/paypal",
       "destination": "/api/paypal"
+    },
+    {
+      "source": "/api/webhook",
+      "destination": "/api/saspay?action=webhook"
     },
     {
       "source": "/api/saspay/webhook",

@@ -498,7 +498,7 @@ export default async function handler(req, res) {
   }
 
   // ─── 2. Enregistrement sécurisé avec capture et vérification PayPal réelle ───
-  if (req.method === 'POST' && (action === 'record-payment' || action === 'capture-order' || !action)) {
+  if (req.method === 'POST' && (action === 'record-payment' || action === 'capture-order' || action === 'capture' || !action)) {
     try {
       const validation = paypalRecordPaymentSchema.safeParse(req.body || {});
       if (!validation.success) {

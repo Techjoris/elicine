@@ -21,6 +21,36 @@ const supabase = supabaseAdmin || ((supabaseUrl && supabaseAnonKey && supabaseAn
 // Mémoire globale des souscriptions pour le runtime Serverless
 const globalSubscriptions = (globalThis.__elicine_subscriptions = globalThis.__elicine_subscriptions || new Map());
 
+export const SASPAY_ALLOWED_COUNTRIES = [
+  'BE', // Belgique
+  'BF', // Burkina Faso
+  'BJ', // Bénin
+  'CD', // RDC
+  'CG', // Congo
+  'CI', // Côte d'Ivoire
+  'CM', // Cameroun
+  'DE', // Allemagne
+  'DK', // Danemark
+  'ES', // Espagne
+  'ET', // Éthiopie
+  'FR', // France
+  'GA', // Gabon
+  'GH', // Ghana
+  'GN', // Guinée
+  'KE', // Kenya
+  'ML', // Mali
+  'MW', // Malawi
+  'MZ', // Mozambique
+  'NE', // Niger
+  'NG', // Nigeria
+  'RW', // Rwanda
+  'SN', // Sénégal
+  'TG', // Togo
+  'TZ', // Tanzanie
+  'UG', // Ouganda
+  'ZM'  // Zambie
+];
+
 /**
  * Récupère les identifiants SasPay depuis les variables d'environnement Vercel.
  * Supporte la variable spécifiée `saspay_Backend` (clé brute ou JSON avec sous-clés).
@@ -234,6 +264,26 @@ export default async function handler(req, res) {
 
   const { apiKey } = getSaspayCredentials(req);
   const action = req.query?.action || '';
+
+  // 1.0. Résolution de géolocalisation IP (/api/geo ou action=geo)
+  if (action === 'geo') {
+    const country =
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['cf-ipcountry'] ||
+      req.headers['x-country-code'] ||
+      null;
+
+    const countryCode = country ? String(country).toUpperCase().trim() : null;
+    const isSaspayAvailable = countryCode ? SASPAY_ALLOWED_COUNTRIES.includes(countryCode) : null;
+
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    return res.status(200).json({
+      countryCode,
+      country: countryCode,
+      isSaspayAvailable,
+      source: countryCode ? 'vercel-header' : 'none'
+    });
+  }
 
   // 1.5. Initialisation formelle d'une souscription Pro (Prérequis obligatoire)
   if (action === 'init-subscription' || action === 'create-subscription') {
@@ -555,7 +605,7 @@ export default async function handler(req, res) {
   }
 
   // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle
-  if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
+  if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event || req.body?.event_type || req.headers['paypal-auth-algo'] || req.headers['PAYPAL-AUTH-ALGO']) {
     console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
 
     let webhookBody = req.body;
@@ -566,6 +616,13 @@ export default async function handler(req, res) {
       } catch (_) {
         webhookBody = {};
       }
+    }
+
+    // Si événement PayPal officiel, délégation vers le handler cryptographique dédié
+    if (webhookBody?.event_type || req.headers['paypal-auth-algo'] || req.headers['PAYPAL-AUTH-ALGO']) {
+      const paypalHandler = (await import('./paypal.js')).default;
+      req.query = { ...(req.query || {}), action: 'webhook' };
+      return await paypalHandler(req, res);
     }
 
     const event = webhookBody?.event || 'transaction.unknown';

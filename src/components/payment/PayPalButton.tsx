@@ -152,9 +152,9 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
 
             console.log('[PayPal SDK React] 📦 Création d\'ordre v2 strict :', orderPayload);
 
-            // Tentative prioritaire de création d'ordre sécurisée via le serveur backend (/api/paypal/create-order)
+            // Tentative prioritaire de création d'ordre sécurisée via le serveur backend (/api/paypal?action=create-order)
             try {
-              const res = await fetch('/api/paypal/create-order', {
+              const res = await fetch('/api/paypal?action=create-order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
