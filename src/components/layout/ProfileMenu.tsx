@@ -392,7 +392,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
                     <span className="font-bold text-xs">{t.getProPass || 'Obtenir un Pass Pro'}</span>
                   </div>
                   <span className="text-[10px] font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
-                    1.99$
+                    {t.proPrice || '1.99€'}
                   </span>
                 </button>
               )}

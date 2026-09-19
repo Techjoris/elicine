@@ -50,7 +50,7 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       amount: 16.70,
       formatted: '16,70 € / an',
       monthlyEquivalent: '~1,39 € / mois',
-      savings: '-30% (4 mois offerts)'
+      savings: '-25% (3 mois offerts)'
     }
   },
   USD: {
@@ -62,7 +62,7 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       amount: 18.00,
       formatted: '$18.00 / year',
       monthlyEquivalent: '~$1.50 / month',
-      savings: '-30% (4 months free)'
+      savings: '-25% (3 months free)'
     }
   },
   CAD: {
@@ -74,7 +74,7 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       amount: 24.50,
       formatted: '24,50 CA$ / an',
       monthlyEquivalent: '~2,04 CA$ / mois',
-      savings: '-30% (4 mois offerts)'
+      savings: '-25% (3 mois offerts)'
     }
   },
   XAF: {
@@ -86,7 +86,7 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       amount: 11000,
       formatted: '11 000 FCFA / an',
       monthlyEquivalent: '~917 FCFA / mois',
-      savings: '-30% (4 mois offerts)'
+      savings: '-25% (3 mois offerts)'
     }
   },
   XOF: {
@@ -98,7 +98,7 @@ export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
       amount: 11000,
       formatted: '11 000 FCFA / an',
       monthlyEquivalent: '~917 FCFA / mois',
-      savings: '-30% (4 mois offerts)'
+      savings: '-25% (3 mois offerts)'
     }
   }
 };

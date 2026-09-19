@@ -443,7 +443,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-colors">{t('pro.pass') || t.proPass}</span>
             </div>
             <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-              1.99$
+              {t('pro.price') || t.proPrice || '1.99€'}
             </span>
           </div>
         )}

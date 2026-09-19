@@ -576,7 +576,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     }}
                     className="text-amber-400 hover:text-amber-300 underline underline-offset-2 font-semibold cursor-pointer transition-colors"
                   >
-                    {t.upgradeToPro || 'Passer au compte Pro (1.99 $)'}
+                    {t.upgradeToPro || 'Passer au compte Pro (1.99€)'}
                   </button>
                 </span>
               )}
@@ -649,7 +649,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onSelectMinRating={handleMinRatingSelect}
               isPro={Boolean(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com'))}
               onTriggerProModal={() => {
-                showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+                showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99€).");
                 setIsProModalOpen(true);
               }}
             />

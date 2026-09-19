@@ -233,7 +233,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
                   }}
                   className="text-amber-600 dark:text-amber-400 hover:underline underline-offset-2 font-semibold cursor-pointer transition-colors"
                 >
-                  Passer au compte Pro (1.99 $)
+                  Passer au compte Pro (1.99€)
                 </button>
               </span>
             )}
@@ -257,7 +257,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             onSelectMinRating={(r) => setSelectedMinRating(r)}
             isPro={Boolean(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com'))}
             onTriggerProModal={() => {
-              showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99$).");
+              showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99€).");
               setIsProModalOpen(true);
             }}
           />

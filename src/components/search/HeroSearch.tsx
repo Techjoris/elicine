@@ -187,7 +187,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
                 }}
                 className="text-amber-400 hover:text-amber-300 underline underline-offset-2 font-semibold cursor-pointer transition-colors"
               >
-                Passer au compte Pro (1.99 $)
+                Passer au compte Pro (1.99€)
               </button>
             </span>
           )}

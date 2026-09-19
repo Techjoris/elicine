@@ -158,6 +158,7 @@ export const ProModal: React.FC = () => {
       onClose={() => setIsProModalOpen(false)}
       onPay={handlePay}
       isProcessing={isProcessing}
+      defaultCurrency="EUR"
     />
   );
 };

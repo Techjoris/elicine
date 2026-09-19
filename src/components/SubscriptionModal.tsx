@@ -32,6 +32,7 @@ export interface SubscriptionModalProps {
   onClose: () => void;
   onPay: (payload: CheckoutPayload) => void;
   isProcessing?: boolean;
+  defaultCurrency?: Currency;
 }
 
 const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: string; perMonthYearly: string; rawMonthly: number; rawYearly: number }> = {
@@ -46,7 +47,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   isOpen, 
   onClose, 
   onPay,
-  isProcessing = false
+  isProcessing = false,
+  defaultCurrency = 'EUR'
 }) => {
   const { 
     currency: appCurrency, 
@@ -58,18 +60,19 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     setActiveView
   } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
-  const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'EUR'));
+  const [currency, setCurrency] = useState<Currency>(() => defaultCurrency || 'EUR');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paddle'>('paddle');
   const [isCapturingPro, setIsCapturingPro] = useState<boolean>(false);
   const [isPro, setIsPro] = useState<boolean>(() => Boolean(user?.isPro || user?.is_pro));
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
-  // Préchargement immédiat du SDK Paddle Billing v2
+  // Préchargement immédiat du SDK Paddle Billing v2 & initialisation de la devise par défaut (EUR) à l'ouverture
   useEffect(() => {
     if (isOpen) {
+      setCurrency(defaultCurrency || 'EUR');
       initPaddle().catch(() => {});
     }
-  }, [isOpen]);
+  }, [isOpen, defaultCurrency]);
 
   // 1 & 2. Ciblage géographique strict pour SasPay ("Mobile Money & Carte Bancaire")
   const [isSaspayAvailable, setIsSaspayAvailable] = useState<boolean>(() => {
@@ -376,7 +379,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         <div className="flex flex-col gap-2.5 pt-0.5">
           {/* Devises chips */}
           <div className="flex items-center justify-between gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-            {(['USD', 'EUR', 'XOF', 'XAF', 'CAD'] as Currency[]).map((c) => (
+            {(['EUR', 'USD', 'CAD', 'XOF', 'XAF'] as Currency[]).map((c) => (
               <button
                 key={c}
                 type="button"
@@ -412,7 +415,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             >
               <span>Annuel</span>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded-md">
-                -30%
+                -25%
               </span>
             </button>
           </div>
@@ -432,7 +435,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
           {isYearly && (
             <div className="text-right">
-              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block">4 mois offerts</span>
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block">3 mois offerts</span>
               <span className="text-[10px] text-slate-400">{currentPrice.perMonthYearly} {currentPrice.symbol}/mois</span>
             </div>
           )}

@@ -69,7 +69,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
           ? 'bg-zinc-950/40 border border-white/10 hover:border-white/15 shadow-sm' 
           : 'bg-zinc-950/40 border border-white/10 hover:border-amber-500/30 shadow-sm cursor-pointer group'
       }`}
-      title={!isPro ? "Filtres avancés réservés aux abonnés Pro (1.99$). Cliquez pour débloquer." : undefined}
+      title={!isPro ? "Filtres avancés réservés aux abonnés Pro (1.99€). Cliquez pour débloquer." : undefined}
     >
       {/* En-tête ultra-compact : Badge PRO & Réinitialiser/Débloquer */}
       <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
@@ -84,7 +84,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
             ) : (
               <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-0.5 group-hover:bg-amber-500/20 transition-colors">
                 <Lock className="w-2.5 h-2.5" />
-                <span>1.99$</span>
+                <span>1.99€</span>
               </span>
             )}
           </span>
@@ -158,7 +158,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl sm:rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]">
           <div className="px-2.5 py-1 rounded-full bg-amber-500 text-black font-bold text-[10px] sm:text-[11px] shadow-md flex items-center gap-1.5 transform scale-95 group-hover:scale-100 transition-transform">
             <Crown className="w-3 h-3 fill-current" />
-            <span>Débloquer avec le Pass Pro (1.99 $)</span>
+            <span>Débloquer avec le Pass Pro (1.99€)</span>
           </div>
         </div>
       )}

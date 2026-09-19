@@ -64,6 +64,7 @@ export interface TranslationSchema {
   proActive: string;
   proUnlimited: string;
   proPass: string;
+  proPrice: string;
   daysRemainingSuffix: string;
   supportProject: string;
   tipBadge: string;
@@ -171,6 +172,8 @@ export const I18N_KEY_MAP: Record<string, keyof TranslationSchema> = {
   'nav.settings': 'settings',
   'pro.active': 'proActive',
   'pro.unlimited': 'proUnlimited',
+  'pro.pass': 'proPass',
+  'pro.price': 'proPrice',
   'hero.subtitle': 'heroSubtitle',
   'hero.explore': 'exploreBtn',
   'sections.trending_title': 'trendingTitle',
@@ -220,7 +223,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActiveBanner: "Pass Pro actif • Recherches illimitées",
     quotaRemainingText: "Il vous reste {n} recherche{s} gratuite{s} aujourd'hui",
     quotaExceeded: "Quota gratuit atteint (0 recherche restante) •",
-    upgradeToPro: "Passer au compte Pro (1.99 $)",
+    upgradeToPro: "Passer au compte Pro (1.99€)",
     close: "Fermer",
 
     navHome: "Accueil",
@@ -237,6 +240,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActive: "Éliciné Pro Actif",
     proUnlimited: "ILLIMITÉ",
     proPass: "Pass Pro",
+    proPrice: "1.99€",
     daysRemainingSuffix: "j restants",
     supportProject: "Soutenir le projet",
     tipBadge: "Don",
@@ -356,7 +360,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActiveBanner: "Pro Pass active • Unlimited searches",
     quotaRemainingText: "You have {n} free search{s} remaining today",
     quotaExceeded: "Free quota reached (0 searches remaining) •",
-    upgradeToPro: "Upgrade to Pro ($1.99)",
+    upgradeToPro: "Upgrade to Pro (1.99€)",
     close: "Close",
 
     navHome: "Home",
@@ -373,6 +377,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActive: "Éliciné Pro Active",
     proUnlimited: "UNLIMITED",
     proPass: "Pro Pass",
+    proPrice: "1.99€",
     daysRemainingSuffix: "d left",
     supportProject: "Support project",
     tipBadge: "Tip",
@@ -492,7 +497,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActiveBanner: "Pase Pro activo • Búsquedas ilimitadas",
     quotaRemainingText: "Te queda{n} {n} búsqueda{s} gratuita{s} hoy",
     quotaExceeded: "Cuota gratuita alcanzada (0 búsquedas restantes) •",
-    upgradeToPro: "Pasar a cuenta Pro (1.99 $)",
+    upgradeToPro: "Pasar a cuenta Pro (1.99€)",
     close: "Cerrar",
 
     navHome: "Inicio",
@@ -509,6 +514,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActive: "Éliciné Pro Activo",
     proUnlimited: "ILIMITADO",
     proPass: "Pase Pro",
+    proPrice: "1.99€",
     daysRemainingSuffix: "d restantes",
     supportProject: "Apoyar el proyecto",
     tipBadge: "Donación",
@@ -628,7 +634,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActiveBanner: "Pro Pass aktiv • Unbegrenzte Suchen",
     quotaRemainingText: "Sie haben heute noch {n} kostenlose Suche{n}",
     quotaExceeded: "Kostenloses Kontingent erreicht (0 verbleibende Suchen) •",
-    upgradeToPro: "Auf Pro upgraden (1.99 $)",
+    upgradeToPro: "Auf Pro upgraden (1.99€)",
     close: "Schließen",
 
     navHome: "Startseite",
@@ -645,6 +651,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActive: "Éliciné Pro Aktiv",
     proUnlimited: "UNBEGRENZT",
     proPass: "Pro Pass",
+    proPrice: "1.99€",
     daysRemainingSuffix: "T verbleibend",
     supportProject: "Projekt unterstützen",
     tipBadge: "Spende",
@@ -764,7 +771,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActiveBanner: "Pass Pro attivo • Ricerche illimitate",
     quotaRemainingText: "Ti rimangono {n} ricerch{e} gratuit{e} oggi",
     quotaExceeded: "Quota gratuita raggiunta (0 ricerche rimanenti) •",
-    upgradeToPro: "Passa a Pro (1.99 $)",
+    upgradeToPro: "Passa a Pro (1.99€)",
     close: "Chiudi",
 
     navHome: "Home",
@@ -781,6 +788,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     proActive: "Éliciné Pro Attivo",
     proUnlimited: "ILLIMITATO",
     proPass: "Pass Pro",
+    proPrice: "1.99€",
     daysRemainingSuffix: "g rimasti",
     supportProject: "Sostieni il progetto",
     tipBadge: "Donazione",

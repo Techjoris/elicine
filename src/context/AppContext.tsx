@@ -658,7 +658,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if ((user as any)?.isPro || isMasterAdmin) return true;
 
     if (quota.remaining <= 0) {
-      showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99$) pour continuer !");
+      showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99€) pour continuer !");
       setIsProModalOpen(true);
       return false;
     }
