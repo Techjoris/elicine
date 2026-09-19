@@ -30,8 +30,10 @@ export const ProModal: React.FC = () => {
     if (!user) {
       const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
       const isCard = payload.paymentMethod === 'card';
-      const paymentMethodStr = isCard ? 'card' : (isPaypal ? 'paypal' : 'sasapay');
-      const chosenGateway = isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money');
+      const isPaddle = payload.paymentMethod === 'paddle';
+      const paymentMethodStr = isPaddle ? 'paddle' : (isCard ? 'card' : (isPaypal ? 'paypal' : 'sasapay'));
+      const chosenGateway = isPaddle ? 'paddle' : (isCard ? 'card' : (isPaypal ? 'paypal' : 'mobile_money'));
+      const provider = isPaddle ? 'paddle' : ((isPaypal || isCard) ? 'paypal' : 'saspay');
 
       // Sauvegarde dans sessionStorage selon l'instruction technique
       try {
@@ -54,7 +56,7 @@ export const ProModal: React.FC = () => {
         amount: payload.amount,
         numericAmount: payload.numericAmount,
         paymentMethod: payload.paymentMethod,
-        provider: (isPaypal || isCard) ? 'paypal' : 'saspay',
+        provider,
         gateway: chosenGateway,
         timestamp: Date.now()
       });
@@ -68,12 +70,12 @@ export const ProModal: React.FC = () => {
     // 2. Utilisateur connecté : Déclenchement selon la méthode de paiement
     const isPaypal = payload.paymentMethod === 'paypal' || payload.paymentMethod === 'paypal_card';
     const isCard = payload.paymentMethod === 'card';
+    const isPaddle = payload.paymentMethod === 'paddle';
 
-    // PayPal & Carte Bancaire : Le paiement est géré directement par le widget PayPalButton
-    // (Smart Payment Buttons SDK) à l'intérieur de la SubscriptionModal.
-    // Aucune redirection externe n'est nécessaire — le flux onApprove du SDK gère tout.
-    if (isPaypal || isCard) {
-      console.log('[ProModal] Mode PayPal/CB intégré : paiement géré par le widget Smart Buttons dans la modale.');
+    // Paddle, PayPal & Carte Bancaire : Le paiement est géré directement par l'Overlay Paddle ou le widget PayPal
+    // à l'intérieur de la SubscriptionModal.
+    if (isPaypal || isCard || isPaddle) {
+      console.log('[ProModal] Mode Paddle/PayPal/CB intégré : paiement géré dans la modale.');
       return;
     }
 
@@ -89,7 +91,7 @@ export const ProModal: React.FC = () => {
         currency: payload.currency,
         amount: payload.amount,
         numericAmount: payload.numericAmount,
-        paymentMethod: payload.paymentMethod,
+        paymentMethod: payload.paymentMethod as any,
         provider: 'saspay',
         gateway: chosenGateway,
         timestamp: Date.now()
@@ -131,8 +133,8 @@ export const ProModal: React.FC = () => {
     if (user && isProModalOpen) {
       const pendingIntent = subscriptionService.getPendingCheckoutIntent();
       if (pendingIntent) {
-        // Pour PayPal et Cartes bancaires, l'utilisateur connecté voit directement les Smart Buttons dans la modale
-        if (pendingIntent.paymentMethod === 'paypal' || pendingIntent.paymentMethod === 'card' || pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal') {
+        // Pour Paddle, PayPal et Cartes bancaires, l'utilisateur connecté voit directement les options dans la modale
+        if (pendingIntent.paymentMethod === 'paddle' || pendingIntent.paymentMethod === 'paypal' || pendingIntent.paymentMethod === 'card' || pendingIntent.paymentMethod === 'paypal_card' || pendingIntent.provider === 'paypal' || pendingIntent.provider === 'paddle') {
           subscriptionService.clearPendingCheckoutIntent();
           try {
             if (typeof sessionStorage !== 'undefined') {

@@ -26,8 +26,8 @@ export interface CheckoutIntent {
   currency: Currency;
   amount: string;
   numericAmount: number;
-  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card';
-  provider: 'saspay' | 'paypal';
+  paymentMethod: 'mobile_money' | 'card' | 'paypal' | 'paypal_card' | 'paddle';
+  provider: 'saspay' | 'paypal' | 'paddle';
   gateway?: string;
   phone?: string;
   timestamp: number;

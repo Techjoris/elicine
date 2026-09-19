@@ -18,6 +18,7 @@ import { useAuth } from './AuthContext';
 import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 import { subscriptionService } from '../services/subscriptionService';
 import { movieAlertsService } from '../services/movieAlertsService';
+import { initPaddle, openPaddleCheckout } from '../services/paddleService';
 
 interface AppContextType {
   // Quota & AI
@@ -38,6 +39,7 @@ interface AppContextType {
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
+  openPaddleProCheckout: (priceId?: string) => Promise<boolean>;
   refreshUserProStatus: () => Promise<boolean>;
   refetchProfile: () => Promise<boolean>;
 
@@ -908,6 +910,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  /**
+   * Déclenche l'ouverture de Paddle Checkout Overlay pour le Pass Pro
+   */
+  const openPaddleProCheckout = async (priceId?: string): Promise<boolean> => {
+    return openPaddleCheckout({
+      priceId,
+      userEmail: user?.email,
+      userName: user?.name,
+      onSuccess: async () => {
+        setIsProModalOpen(false);
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#0ea5e9', '#10b981', '#f59e0b', '#ffffff']
+        });
+        showToast('👑 Félicitations ! Votre Pass Pro Éliciné est maintenant actif.');
+        setIsProSuccessModalOpen(true);
+        if (user) {
+          const updated: UserProfile = {
+            ...user,
+            isPro: true,
+            is_pro: true,
+            pass_status: 'pro',
+            proPlanType: 'monthly',
+            proPlanExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          };
+          setUser(updated);
+          setAuthUser(updated);
+          try {
+            localStorage.setItem('cineia_user', JSON.stringify(updated));
+          } catch (_) {}
+          authService.saveLocalAccount(updated);
+        }
+        await refreshUserProStatus();
+      },
+      onClose: () => {
+        console.log('[AppContext] Overlay Paddle fermé par l\'utilisateur.');
+      },
+      onError: (err) => {
+        console.error('[AppContext] Erreur Paddle :', err);
+        showToast(`⚠️ ${err?.message || 'Erreur paiement Paddle'}`);
+      }
+    });
+  };
+
   // API Settings update & clear
   const updateApiSettings = (settings: Partial<ApiSettings>) => {
     setApiSettings(prev => ({ ...prev, ...settings }));
@@ -1079,6 +1127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithGoogle,
         logout,
         upgradeToPro,
+        openPaddleProCheckout,
         refreshUserProStatus,
         refetchProfile: refreshUserProStatus,
         apiSettings,
