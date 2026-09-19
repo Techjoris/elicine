@@ -168,10 +168,10 @@ export const termsDe: TermsTranslations = {
         {
           type: "subsection",
           title: "5. Offizielle Preise und Währungen",
-          text: "Der offizielle Referenzpreis für das Monatsabonnement beträgt 1.99 $ USD pro Monat (oder Gegenwert in lokaler Währung):",
+          text: "Der offizielle Referenzpreis für das Pass Pro Abonnement beträgt 1,99 € EUR pro Monat (oder Gegenwert in lokaler Währung):",
           items: [
-            { label: "Monatsabonnement", text: "1.99 $ USD / Monat (oder 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
-            { label: "Jahresabonnement", text: "15.99 $ USD / Jahr (~1.33 $ USD / Monat mit 30% Rabatt, oder 9 600 FCFA, 15,00 € EUR, 21,50 CA$ CAD)." }
+            { label: "Monatsabonnement", text: "1,99 € EUR / Monat (oder 2,15 $ USD, 2,90 CA$ CAD, 1 300 FCFA [XOF / XAF])." },
+            { label: "Jahresabonnement", text: "16,70 € EUR / Jahr (~1,39 € EUR / Monat mit 30% Rabatt, oder 18,00 $ USD, 24,50 CA$ CAD, 11 000 FCFA [XOF / XAF])." }
           ]
         },
         {

@@ -35,11 +35,11 @@ export interface SubscriptionModalProps {
 }
 
 const PRICING: Record<Currency, { symbol: string; monthly: string; yearly: string; perMonthYearly: string; rawMonthly: number; rawYearly: number }> = {
-  USD: { symbol: '$', monthly: '1.99', yearly: '15.99', perMonthYearly: '1.33', rawMonthly: 1.99, rawYearly: 15.99 },
-  EUR: { symbol: '€', monthly: '1,85', yearly: '15,00', perMonthYearly: '1,25', rawMonthly: 1.85, rawYearly: 15.00 },
-  CAD: { symbol: 'CA$', monthly: '2.70', yearly: '21.50', perMonthYearly: '1.79', rawMonthly: 2.70, rawYearly: 21.50 },
-  XOF: { symbol: 'FCFA', monthly: '1 200', yearly: '9 600', perMonthYearly: '800', rawMonthly: 1200, rawYearly: 9600 },
-  XAF: { symbol: 'FCFA', monthly: '1 200', yearly: '9 600', perMonthYearly: '800', rawMonthly: 1200, rawYearly: 9600 },
+  EUR: { symbol: '€', monthly: '1,99', yearly: '16,70', perMonthYearly: '1,39', rawMonthly: 1.99, rawYearly: 16.70 },
+  USD: { symbol: '$', monthly: '2,15', yearly: '18,00', perMonthYearly: '1,50', rawMonthly: 2.15, rawYearly: 18.00 },
+  CAD: { symbol: 'CA$', monthly: '2,90', yearly: '24,50', perMonthYearly: '2,04', rawMonthly: 2.90, rawYearly: 24.50 },
+  XOF: { symbol: 'FCFA', monthly: '1 300', yearly: '11 000', perMonthYearly: '917', rawMonthly: 1300, rawYearly: 11000 },
+  XAF: { symbol: 'FCFA', monthly: '1 300', yearly: '11 000', perMonthYearly: '917', rawMonthly: 1300, rawYearly: 11000 },
 };
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ 
@@ -58,7 +58,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     setActiveView
   } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
-  const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
+  const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'EUR'));
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'paddle'>('paddle');
   const [isCapturingPro, setIsCapturingPro] = useState<boolean>(false);
   const [isPro, setIsPro] = useState<boolean>(() => Boolean(user?.isPro || user?.is_pro));
@@ -156,7 +156,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   // Détection automatique de devise par défaut et ajustement du mode de paiement
   useEffect(() => {
     if (isOpen) {
-      const detected = appCurrency || 'USD';
+      const detected = appCurrency || 'EUR';
       setCurrency(detected);
       // Mode de paiement par défaut adapté à la région et à la disponibilité de SasPay
       if (isSaspayAvailable && (detected === 'XOF' || detected === 'XAF')) {
@@ -169,7 +169,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentPrice = PRICING[currency] || PRICING.USD;
+  const currentPrice = PRICING[currency] || PRICING.EUR;
   const isYearly = billingCycle === 'yearly';
   const amountToPay = isYearly ? currentPrice.yearly : currentPrice.monthly;
   const numericAmount = isYearly ? currentPrice.rawYearly : currentPrice.rawMonthly;
@@ -568,7 +568,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </span>
                 ) : (
                   <span>
-                    Pass Pro Éliciné - 1,99 € (Paiement Sécurisé) →
+                    Pass Pro Éliciné - {amountToPay} {currentPrice.symbol} (Paiement Sécurisé) →
                   </span>
                 )}
               </button>
@@ -581,7 +581,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
               {currency !== 'EUR' && (
                 <p className="text-[10px] text-center text-slate-500 dark:text-slate-400">
-                  Tarif de référence : 1,99 € — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
+                  Tarif de référence : {isYearly ? '16,70 € /an' : '1,99 € /mois'} — Paddle applique automatiquement la conversion dans votre devise bancaire locale ({currency}).
                 </p>
               )}
             </div>

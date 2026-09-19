@@ -504,7 +504,7 @@ export const subscriptionService = {
             customerName: params.customerName || cleanEmail.split('@')[0] || 'Cinéphile Pro',
             plan: (data.plan || params.plan || 'monthly') as any,
             currency: (params.currency || 'USD').toUpperCase() as any,
-            amount: Number(params.amount || (params.plan === 'yearly' ? 15.99 : 1.99)),
+            amount: Number(params.amount || (params.plan === 'yearly' ? 16.70 : 1.99)),
             status: 'active',
             gateway: (params.gateway || 'saspay') as any,
             paymentMethod: (params.gateway || 'saspay') as any,

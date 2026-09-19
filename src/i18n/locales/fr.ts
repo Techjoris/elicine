@@ -174,10 +174,10 @@ export const termsFr: TermsTranslations = {
         {
           type: "subsection",
           title: "5. Tarification officielle et devises acceptées",
-          text: "Le tarif officiel de référence de l'abonnement Pass Pro est fixé à 1.99 $ USD par mois (ou son équivalent en devises locales au moment du règlement). L'utilisateur dispose du choix entre deux formules de facturation :",
+          text: "Le tarif officiel de référence de l'abonnement Pass Pro est fixé à 1,99 € EUR par mois (ou son équivalent en devises locales au moment du règlement). L'utilisateur dispose du choix entre deux formules de facturation :",
           items: [
-            { label: "Formule Mensuelle standard", text: "1.99 $ USD par mois (ou 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
-            { label: "Formule Annuelle avantageuse", text: "15.99 $ USD par an (soit environ 1.33 $ USD / mois avec 30% d'économie, ou 9 600 FCFA [XOF / XAF], 15,00 € EUR, 21,50 CA$ CAD)." }
+            { label: "Formule Mensuelle standard", text: "1,99 € EUR par mois (ou 2,15 $ USD, 2,90 CA$ CAD, 1 300 FCFA [XOF / XAF])." },
+            { label: "Formule Annuelle avantageuse", text: "16,70 € EUR par an (soit environ 1,39 € EUR / mois avec 30% d'économie, ou 18,00 $ USD, 24,50 CA$ CAD, 11 000 FCFA [XOF / XAF])." }
           ]
         },
         {

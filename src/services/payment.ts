@@ -41,64 +41,64 @@ export const CURRENCY_CONFIGS: Record<Currency, CurrencyConfig> = {
 };
 
 export const PLANS_PRICING: Record<Currency, CurrencyPricing> = {
-  XAF: {
-    monthly: {
-      amount: 1200,
-      formatted: '1 200 FCFA / mois'
-    },
-    yearly: {
-      amount: 9600,
-      formatted: '9 600 FCFA / an',
-      monthlyEquivalent: '~800 FCFA / mois',
-      savings: '-33% (4 mois offerts)'
-    }
-  },
-  XOF: {
-    monthly: {
-      amount: 1200,
-      formatted: '1 200 FCFA / mois'
-    },
-    yearly: {
-      amount: 9600,
-      formatted: '9 600 FCFA / an',
-      monthlyEquivalent: '~800 FCFA / mois',
-      savings: '-33% (4 mois offerts)'
-    }
-  },
   EUR: {
     monthly: {
-      amount: 1.85,
-      formatted: '1,85 € / mois'
+      amount: 1.99,
+      formatted: '1,99 € / mois'
     },
     yearly: {
-      amount: 15.00,
-      formatted: '15,00 € / an',
-      monthlyEquivalent: '~1,25 € / mois',
-      savings: '-34% (4 mois offerts)'
+      amount: 16.70,
+      formatted: '16,70 € / an',
+      monthlyEquivalent: '~1,39 € / mois',
+      savings: '-30% (4 mois offerts)'
     }
   },
   USD: {
     monthly: {
-      amount: 1.99,
-      formatted: '$1.99 / month'
+      amount: 2.15,
+      formatted: '$2.15 / month'
     },
     yearly: {
-      amount: 15.99,
-      formatted: '$15.99 / year',
-      monthlyEquivalent: '~$1.33 / month',
-      savings: '-33% (4 months free)'
+      amount: 18.00,
+      formatted: '$18.00 / year',
+      monthlyEquivalent: '~$1.50 / month',
+      savings: '-30% (4 months free)'
     }
   },
   CAD: {
     monthly: {
-      amount: 2.70,
-      formatted: '2,70 CA$ / mois'
+      amount: 2.90,
+      formatted: '2,90 CA$ / mois'
     },
     yearly: {
-      amount: 21.50,
-      formatted: '21,50 CA$ / an',
-      monthlyEquivalent: '~1,79 CA$ / mois',
-      savings: '-33% (4 mois offerts)'
+      amount: 24.50,
+      formatted: '24,50 CA$ / an',
+      monthlyEquivalent: '~2,04 CA$ / mois',
+      savings: '-30% (4 mois offerts)'
+    }
+  },
+  XAF: {
+    monthly: {
+      amount: 1300,
+      formatted: '1 300 FCFA / mois'
+    },
+    yearly: {
+      amount: 11000,
+      formatted: '11 000 FCFA / an',
+      monthlyEquivalent: '~917 FCFA / mois',
+      savings: '-30% (4 mois offerts)'
+    }
+  },
+  XOF: {
+    monthly: {
+      amount: 1300,
+      formatted: '1 300 FCFA / mois'
+    },
+    yearly: {
+      amount: 11000,
+      formatted: '11 000 FCFA / an',
+      monthlyEquivalent: '~917 FCFA / mois',
+      savings: '-30% (4 mois offerts)'
     }
   }
 };
@@ -164,28 +164,28 @@ export function convertToSaspayCurrency(
     };
   }
 
-  // Pour le Pass Pro, appliquer le tarif officiel selon la devise demandée (1.99 $ USD de référence)
+  // Pour le Pass Pro, appliquer le tarif officiel selon la devise demandée (1,99 € EUR de référence)
   if (isProPlan) {
     if (cleanCurr === 'USD') {
       return {
-        amount: isYearly ? 15.99 : 1.99,
+        amount: isYearly ? 18.00 : 2.15,
         currency: 'USD'
       };
     }
     if (cleanCurr === 'EUR') {
       return {
-        amount: isYearly ? 15.00 : 1.85,
+        amount: isYearly ? 16.70 : 1.99,
         currency: 'EUR'
       };
     }
     if (cleanCurr === 'CAD') {
       return {
-        amount: isYearly ? 21.50 : 2.70,
+        amount: isYearly ? 24.50 : 2.90,
         currency: 'CAD'
       };
     }
     return {
-      amount: isYearly ? 9600 : 1200,
+      amount: isYearly ? 11000 : 1300,
       currency: (targetCurrency === 'XAF' || targetCurrency === 'XOF') ? targetCurrency : 'XOF'
     };
   }

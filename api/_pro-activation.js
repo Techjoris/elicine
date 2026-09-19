@@ -90,7 +90,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
 
   const now = new Date().toISOString();
   const cleanName = (customerName || rawEmail.split('@')[0] || 'Cinéphile').trim();
-  const numericAmount = Number(amount || (plan === 'yearly' ? 15.99 : 1.99));
+  const numericAmount = Number(amount || (plan === 'yearly' ? 16.70 : 1.99));
   const currency = (rawCurrency 
     ? String(rawCurrency).trim() 
     : ((gateway === 'saspay' || numericAmount >= 100) ? 'FCFA' : 'USD')).toUpperCase();

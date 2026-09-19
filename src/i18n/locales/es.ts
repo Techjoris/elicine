@@ -174,10 +174,10 @@ export const termsEs: TermsTranslations = {
         {
           type: "subsection",
           title: "5. Tarifa oficial y monedas aceptadas",
-          text: "El precio oficial de referencia del plan mensual Pass Pro es de 1.99 $ USD al mes (o su equivalente en moneda local al momento del pago). El usuario puede elegir entre dos modalidades:",
+          text: "El precio oficial de referencia del plan Pass Pro es de 1,99 € EUR al mes (o su equivalente en moneda local al momento del pago). El usuario puede elegir entre dos modalidades:",
           items: [
-            { label: "Plan Mensual estándar", text: "1.99 $ USD al mes (o 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
-            { label: "Plan Anual económico", text: "15.99 $ USD al año (~1.33 $ USD / mes con 30% de ahorro, o 9 600 FCFA [XOF / XAF], 15,00 € EUR, 21,50 CA$ CAD)." }
+            { label: "Plan Mensual estándar", text: "1,99 € EUR al mes (o 2,15 $ USD, 2,90 CA$ CAD, 1 300 FCFA [XOF / XAF])." },
+            { label: "Plan Anual económico", text: "16,70 € EUR al año (~1,39 € EUR / mes con 30% de ahorro, o 18,00 $ USD, 24,50 CA$ CAD, 11 000 FCFA [XOF / XAF])." }
           ]
         },
         {

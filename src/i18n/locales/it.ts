@@ -168,10 +168,10 @@ export const termsIt: TermsTranslations = {
         {
           type: "subsection",
           title: "5. Tariffe ufficiali e valute accettate",
-          text: "La tariffa ufficiale di riferimento per l'abbonamento mensile Pass Pro è fissata a 1.99 $ USD al mese (o l'equivalente in valuta locale al momento del pagamento):",
+          text: "La tariffa ufficiale di riferimento per l'abbonamento Pass Pro è fissata a 1,99 € EUR al mese (o l'equivalente in valuta locale al momento del pagamento):",
           items: [
-            { label: "Piano Mensile standard", text: "1.99 $ USD / mese (o 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
-            { label: "Piano Annuale conveniente", text: "15.99 $ USD / anno (~1.33 $ USD / mese con il 30% di sconto, o 9 600 FCFA, 15,00 € EUR, 21,50 CA$ CAD)." }
+            { label: "Piano Mensile standard", text: "1,99 € EUR / mese (o 2,15 $ USD, 2,90 CA$ CAD, 1 300 FCFA [XOF / XAF])." },
+            { label: "Piano Annuale conveniente", text: "16,70 € EUR / anno (~1,39 € EUR / mese con il 30% di sconto, o 18,00 $ USD, 24,50 CA$ CAD, 11 000 FCFA [XOF / XAF])." }
           ]
         },
         {

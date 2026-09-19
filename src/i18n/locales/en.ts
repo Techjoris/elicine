@@ -174,10 +174,10 @@ export const termsEn: TermsTranslations = {
         {
           type: "subsection",
           title: "5. Official Pricing and Supported Currencies",
-          text: "The official benchmark price of the Pass Pro monthly subscription is set at $1.99 USD per month (or equivalent in local currencies at checkout). Users may choose between two billing cycles:",
+          text: "The official benchmark price of the Pass Pro subscription is set at €1.99 EUR per month (or equivalent in local currencies at checkout). Users may choose between two billing cycles:",
           items: [
-            { label: "Standard Monthly Plan", text: "$1.99 USD / month (or 1,200 FCFA [XOF / XAF], €1.85 EUR, $2.70 CAD)." },
-            { label: "Discounted Annual Plan", text: "$15.99 USD / year (~$1.33 USD / month with 30% savings, or 9,600 FCFA [XOF / XAF], €15.00 EUR, $21.50 CAD)." }
+            { label: "Standard Monthly Plan", text: "€1.99 EUR / month (or $2.15 USD, $2.90 CAD, 1,300 FCFA [XOF / XAF])." },
+            { label: "Discounted Annual Plan", text: "€16.70 EUR / year (~€1.39 EUR / month with 30% savings, or $18.00 USD, $24.50 CAD, 11,000 FCFA [XOF / XAF])." }
           ]
         },
         {
