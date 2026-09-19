@@ -9,10 +9,12 @@ export const TermsView: React.FC = () => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const hash = window.location.hash.replace('#', '');
+      const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash) {
         setTimeout(() => {
-          const el = document.getElementById(hash) || (hash === 'contact' ? document.getElementById('article-1') : null);
+          const el = document.getElementById(hash) || 
+            (hash === 'contact' ? document.getElementById('article-1') : null) ||
+            (['refund', 'refund-policy', 'remboursement', 'cgu', 'cgv', 'pass-pro', 'pro'].includes(hash) ? document.getElementById('article-5') : null);
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;

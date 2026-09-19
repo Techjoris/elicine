@@ -141,21 +141,39 @@ export const termsEs: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTÍCULO 5: OFERTA «PASS PRO», CONDICIONES DE PRECIO Y MODALIDADES DE PAGO",
+      title: "ARTÍCULO 5: MODALIDADES DE SUSCRIPCIÓN PASS PRO Y POLÍTICA DE REEMBOLSO",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Naturaleza y alcance de la oferta Pass Pro",
-          text: "El usuario tiene la opción de suscribirse al plan de pago Pass Pro de Éliciné. Esta opción desbloquea un conjunto exclusivo de funciones avanzadas:",
+          title: "1. Naturaleza del servicio",
+          text: "El acceso a Éliciné Pass Pro es un servicio digital de activación instantánea que otorga acceso inmediato a funciones avanzadas (búsquedas ilimitadas, alertas instantáneas, filtros multiplataforma)."
+        },
+        {
+          type: "subsection",
+          title: "2. Derecho de desistimiento y Reembolso",
           items: [
-            { label: "Búsquedas Éliciné ilimitadas", text: "Acceso continuo y sin restricciones diarias al motor de recomendación Éliciné para análisis y selecciones personalizadas." },
-            { label: "Filtros avanzados posteriores a la búsqueda", text: "Filtrado instantáneo según plataformas de streaming activas (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) y mejores valoraciones críticas." },
-            { label: "Alertas personalizadas de disponibilidad", text: "Seguimiento proactivo y notificaciones automáticas cuando las películas o series monitoreadas estén disponibles." }
+            { text: "De conformidad con las normas aplicables a contenidos y servicios digitales suministrados de inmediato, el usuario acepta que la ejecución del servicio comience tras la validación del pago." },
+            { text: "Sin embargo, ofrecemos una garantía de satisfacción de 14 días: si el servicio experimenta un fallo técnico demostrado o si no ha utilizado sus funciones Pro y desea cancelar, puede solicitar un reembolso completo en un plazo de 14 días a partir de la suscripción inicial." },
+            { text: "Transcurrido este plazo o en caso de uso sustancial del servicio, los periodos iniciados no son reembolsables." }
           ]
         },
         {
           type: "subsection",
-          title: "5.2. Tarifa oficial y monedas aceptadas",
+          title: "3. Cancelación de la suscripción",
+          text: "El usuario puede cancelar la renovación automática de su suscripción Pass Pro en cualquier momento desde su espacio de cuenta. La cancelación entrará en vigor al final del periodo de facturación en curso, sin costes adicionales."
+        },
+        {
+          type: "subsection",
+          title: "4. Procedimiento de reclamación",
+          text: "Para cualquier solicitud de reembolso o asistencia sobre una transacción, el usuario puede contactar a soporte a través del correo de contacto del sitio indicando el correo electrónico asociado a la cuenta y la referencia de pago:",
+          items: [
+            { label: "Correo de soporte oficial", text: "support@elicine.app", email: "support@elicine.app" },
+            { label: "Datos requeridos", text: "Correo electrónico de la cuenta Éliciné y referencia o ID de la transacción." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5. Tarifa oficial y monedas aceptadas",
           text: "El precio oficial de referencia del plan mensual Pass Pro es de 1.99 $ USD al mes (o su equivalente en moneda local al momento del pago). El usuario puede elegir entre dos modalidades:",
           items: [
             { label: "Plan Mensual estándar", text: "1.99 $ USD al mes (o 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
@@ -164,23 +182,13 @@ export const termsEs: TermsTranslations = {
         },
         {
           type: "subsection",
-          title: "5.3. Métodos de pago y pasarelas autorizadas",
-          text: "Los pagos se procesan de forma electrónica y cifrada a través de pasarelas de pago seguras y autorizadas:",
+          title: "6. Métodos de pago y seguridad",
+          text: "Los pagos se procesan de forma electrónica y cifrada a través de pasarelas de pago seguras y autorizadas (PayPal, pasarelas regionales y socios comerciales internacionales):",
           items: [
             { label: "Pago Mobile Money y Tarjetas (SasaPay)", text: "Pasarela dedicada a pagos móviles instantáneos (Orange Money, MTN MoMo, Wave, Moov Money) y tarjetas bancarias regionales e internacionales." },
             { label: "Pago Internacional (PayPal y Tarjetas)", text: "Pago seguro con tarjetas de crédito/débito internacionales (Visa, Mastercard, American Express) o saldo de PayPal." },
-            { label: "Seguridad estricta (Cero almacenamiento)", text: "Éliciné no almacena, no visualiza y no archiva números de tarjetas de pago, códigos CVV ni datos bancarios confidenciales. Únicamente se utiliza un token técnico seguro (webhook) para activar los privilegios Pro en la cuenta." }
+            { label: "Seguridad estricta (Cero almacenamiento)", text: "Éliciné no almacena, no procesa y no archiva números de tarjetas bancarias, códigos CVV ni claves secretas de Mobile Money. Cifrado SSL/TLS de 256 bits." }
           ]
-        },
-        {
-          type: "subsection",
-          title: "5.4. Ejecución inmediata del servicio digital y derecho de desistimiento",
-          text: "De conformidad con la normativa relativa a la prestación de contenidos y servicios digitales online sin soporte material, el acceso completo a los beneficios del Pass Pro se activa inmediatamente tras la confirmación del pago. El usuario acepta expresamente el inicio de la prestación en el momento de la confirmación y renuncia a su derecho de desistimiento una vez el servicio se encuentre disponible con su previo consentimiento."
-        },
-        {
-          type: "subsection",
-          title: "5.5. Facturación, renovación y cancelación sin compromiso",
-          text: "La suscripción Pass Pro no requiere compromiso de permanencia. El usuario puede cancelar o deshabilitar la renovación en cualquier momento con un clic desde los ajustes de su cuenta o contactando a soporte (support@elicine.app). Los privilegios Pro permanecerán activos hasta la finalización del período ya abonado."
         }
       ]
     },

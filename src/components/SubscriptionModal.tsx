@@ -99,7 +99,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     user, 
     upgradeToPro, 
     setIsProSuccessModalOpen, 
-    showToast 
+    showToast,
+    setActiveView
   } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>('monthly');
   const [currency, setCurrency] = useState<Currency>(() => (appCurrency || 'USD'));
@@ -669,6 +670,25 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <span>⚡ Activation immédiate</span>
             <span>•</span>
             <span>✕ Sans engagement</span>
+          </div>
+
+          {/* Garantie & Lien CGU / Politique de Remboursement */}
+          <div className="text-center pt-1 border-t border-slate-200/60 dark:border-white/5">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/terms#article-5');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                setActiveView('terms');
+              }}
+              className="text-[10px] sm:text-[11px] text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 underline transition-colors cursor-pointer inline-flex items-center gap-1"
+              title="Consulter les CGU et la Politique de Remboursement 14 jours"
+            >
+              <span>🛡️ Garantie de satisfaction 14 jours • CGU &amp; Politique de Remboursement</span>
+            </button>
           </div>
 
 

@@ -72,7 +72,7 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
   onClose,
   defaultPlan = 'monthly'
 }) => {
-  const { user, currency: appCurrency, showToast, upgradeToPro, setIsProSuccessModalOpen } = useApp();
+  const { user, currency: appCurrency, showToast, upgradeToPro, setIsProSuccessModalOpen, setActiveView } = useApp();
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>(defaultPlan);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCapturingPro, setIsCapturingPro] = useState(false);
@@ -344,9 +344,26 @@ export const PayPalCheckoutModal: React.FC<PayPalCheckoutModalProps> = ({
         </div>
 
         {/* Mentions de sécurité et réassurance */}
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Cryptage SSL 256 bits • Traitement officiel PayPal & Carte Bancaire</span>
+        <div className="pt-2 border-t border-slate-800/80 flex flex-col items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <div className="flex items-center justify-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Cryptage SSL 256 bits • Traitement officiel PayPal &amp; Carte Bancaire</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/terms#article-5');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+              setActiveView('terms');
+            }}
+            className="text-[10px] text-slate-400 hover:text-slate-200 underline transition-colors cursor-pointer"
+            title="Consulter les CGU et la Politique de Remboursement 14 jours"
+          >
+            🛡️ Garantie satisfaction 14 jours • CGU / CGV &amp; Politique de Remboursement
+          </button>
         </div>
       </div>
     </div>

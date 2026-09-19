@@ -135,21 +135,39 @@ export const termsDe: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTIKEL 5: «PASS PRO»-ANGEBOT, PREISE UND ZAHLUNGSBEDINGUNGEN",
+      title: "ARTIKEL 5: PASS PRO-ABONNEMENT UND RÜCKERSTATTUNGSRICHTLINIE",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Leistungsumfang des Pass Pro",
-          text: "Das Pass Pro-Abonnement schaltet folgende exklusive Funktionen frei:",
+          title: "1. Art der Dienstleistung",
+          text: "Der Zugang zum Éliciné Pass Pro ist ein digitaler Dienst mit sofortiger Aktivierung, der sofortigen Zugriff auf erweiterte Funktionen gewährt (unbegrenzte Suchen, Sofortbenachrichtigungen, Multi-Plattform-Filter)."
+        },
+        {
+          type: "subsection",
+          title: "2. Widerrufsrecht und Rückerstattung",
           items: [
-            { label: "Unbegrenzte Éliciné-Suchen", text: "Kontinuierlicher, unbegrenzter Zugriff auf die Éliciné-Engine für personalisierte Empfehlungen." },
-            { label: "Erweiterte Filter", text: "Verfeinerung von Suchergebnissen nach aktiven Streaming-Abonnements (Netflix, Prime Video, Disney+, Canal+, Apple TV+) und Bestnoten." },
-            { label: "Verfügbarkeits-Benachrichtigungen", text: "Automatische Benachrichtigungen bei Verfügbarkeit beobachteter Filme und Serien." }
+            { text: "Gemäß den Vorschriften für sofort bereitgestellte digitale Inhalte stimmt der Nutzer zu, dass die Bereitstellung des Dienstes unmittelbar mit der Zahlungsbestätigung beginnt." },
+            { text: "Wir bieten jedoch eine 14-tägige Zufriedenheitsgarantie: Sollte der Dienst eine nachweisbare Fehlfunktion aufweisen oder haben Sie Ihre Pro-Funktionen nicht genutzt und möchten stornieren, können Sie innerhalb von 14 Tagen nach der ersten Buchung eine vollständige Rückerstattung anfordern." },
+            { text: "Nach Ablauf dieser Frist oder bei erheblicher Nutzung des Dienstes sind begonnene Zeiträume nicht erstattungsfähig." }
           ]
         },
         {
           type: "subsection",
-          title: "5.2. Offizielle Preise und Währungen",
+          title: "3. Kündigung des Abonnements",
+          text: "Der Nutzer kann die automatische Verlängerung des Pass Pro-Abonnements jederzeit im Kontobereich kündigen. Die Kündigung wird zum Ende des aktuellen Abrechnungszeitraums ohne Zusatzkosten wirksam."
+        },
+        {
+          type: "subsection",
+          title: "4. Reklamations- und Erstattungsverfahren",
+          text: "Für Rückerstattungsanfragen oder Transaktionsfragen wenden Sie sich bitte an unseren Support unter Angabe Ihrer registrierten E-Mail-Adresse und Transaktionsnummer:",
+          items: [
+            { label: "Offizielle Support-E-Mail", text: "support@elicine.app", email: "support@elicine.app" },
+            { label: "Erforderliche Angaben", text: "E-Mail-Adresse des Éliciné-Kontos und Transaktions-ID/Zahlungsreferenz." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5. Offizielle Preise und Währungen",
           text: "Der offizielle Referenzpreis für das Monatsabonnement beträgt 1.99 $ USD pro Monat (oder Gegenwert in lokaler Währung):",
           items: [
             { label: "Monatsabonnement", text: "1.99 $ USD / Monat (oder 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
@@ -158,18 +176,13 @@ export const termsDe: TermsTranslations = {
         },
         {
           type: "subsection",
-          title: "5.3. Zahlungsmodalitäten und sichere Zahlungsdienstleister",
-          text: "Zahlungen erfolgen über verschlüsselte, autorisierte Zahlungsdienstleister:",
+          title: "6. Zahlungsmodalitäten und Sicherheit",
+          text: "Zahlungen erfolgen über verschlüsselte, autorisierte Zahlungsdienstleister (PayPal, regionale Gateways und internationale Partner):",
           items: [
             { label: "Mobile Money & Karten (SasaPay)", text: "Zahlung per Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) und Bankkarten." },
             { label: "Internationale Zahlung (PayPal & Karten)", text: "Sichere Zahlung mit Kreditkarten (Visa, Mastercard, Amex) oder PayPal-Guthaben." },
-            { label: "Keine Speicherung von Bankdaten", text: "Éliciné speichert keinerlei Bank-, Kreditkarten- oder PIN-Daten. Die Aktivierung erfolgt über sichere Webhook-Tokens." }
+            { label: "Keine Speicherung von Bankdaten", text: "Éliciné speichert keinerlei Bank-, Kreditkarten- oder PIN-Daten. Alle Transaktionen sind mit 256-Bit-SSL/TLS geschützt." }
           ]
-        },
-        {
-          type: "subsection",
-          title: "5.4. Sofortiger Zugriff und Kündigung ohne Mindestlaufzeit",
-          text: "Der Zugang zum Pass Pro wird sofort nach Zahlungsbestätigung freigeschaltet. Das Abonnement ist jederzeit ohne Mindestlaufzeit kündbar (support@elicine.app)."
         }
       ]
     },

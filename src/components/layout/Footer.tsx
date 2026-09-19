@@ -86,9 +86,21 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
             type="button"
             onClick={() => handleGoToTerms()}
             className="text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer select-none flex items-center gap-1.5"
+            title="Consulter les Conditions Générales d'Utilisation et de Vente"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-400" />
-            <span>Conditions &amp; Confidentialité</span>
+            <span>CGU / CGV</span>
+          </button>
+
+          <span className="text-slate-300 dark:text-zinc-700">•</span>
+
+          <button
+            type="button"
+            onClick={() => handleGoToTerms('article-5')}
+            className="text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer select-none flex items-center gap-1"
+            title="Consulter la Politique de Remboursement et Garantie 14 jours (Article 5)"
+          >
+            <span>Politique de Remboursement</span>
           </button>
 
           <span className="text-slate-300 dark:text-zinc-700">•</span>

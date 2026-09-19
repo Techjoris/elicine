@@ -135,21 +135,39 @@ export const termsIt: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTICOLO 5: ABBONAMENTO «PASS PRO», TARIFFE E MODALITÀ DI PAGAMENTO",
+      title: "ARTICOLO 5: TERMINI DELL'ABBONAMENTO PASS PRO E POLITICA DI RIMBORSO",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Oggetto e vantaggi dell'offerta Pass Pro",
-          text: "L'opzione Pass Pro sblocca i seguenti vantaggi esclusivi:",
+          title: "1. Natura del servizio",
+          text: "L'accesso a Éliciné Pass Pro è un servizio digitale ad attivazione istantanea che conferisce accesso immediato alle funzionalità avanzate (ricerche illimitate, avvisi istantanei, filtri multipiattaforma)."
+        },
+        {
+          type: "subsection",
+          title: "2. Diritto di recesso e Rimborso",
           items: [
-            { label: "Ricerche Éliciné illimitate", text: "Accesso continuativo senza limiti giornalieri al motore di raccomandazione Éliciné per ricerche e analisi su misura." },
-            { label: "Filtri avanzati", text: "Perfezionamento immediato dei risultati in base agli abbonamenti di streaming attivi (Netflix, Prime Video, Disney+, Canal+, Apple TV+) e ai punteggi della critica." },
-            { label: "Avvisi personalizzati di disponibilità", text: "Notifiche automatiche non appena i film o le serie monitorate diventano disponibili sulle piattaforme preferite." }
+            { text: "In conformità alle norme applicabili a contenuti e servizi digitali forniti immediatamente, l'utente accetta che l'esecuzione del servizio inizi subito dopo la convalida del pagamento." },
+            { text: "Tuttavia, offriamo una garanzia di soddisfazione di 14 giorni: se il servizio riscontra un malfunzionamento tecnico comprovato o se non avete utilizzato le funzionalità Pro e desiderate annullare, potete richiedere un rimborso completo entro 14 giorni dalla sottoscrizione iniziale." },
+            { text: "Oltre tale termine o in caso di utilizzo sostanziale del servizio, i periodi già iniziati non sono rimborsabili." }
           ]
         },
         {
           type: "subsection",
-          title: "5.2. Tariffe ufficiali e valute accettate",
+          title: "3. Disdetta dell'abbonamento",
+          text: "L'utente può annullare il rinnovo automatico dell'abbonamento Pass Pro in qualsiasi momento dalla propria area account. La disdetta avrà effetto alla scadenza del periodo di fatturazione in corso, senza costi aggiuntivi."
+        },
+        {
+          type: "subsection",
+          title: "4. Procedura di reclamo e rimborso",
+          text: "Per qualsiasi richiesta di rimborso o assistenza relativa a una transazione, l'utente può contattare il supporto all'indirizzo email di contatto del sito specificando l'indirizzo email associato all'account e il codice di riferimento del pagamento:",
+          items: [
+            { label: "Email ufficiale del supporto", text: "support@elicine.app", email: "support@elicine.app" },
+            { label: "Informazioni necessarie", text: "Indirizzo email dell'account Éliciné e ID riferimento transazione." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5. Tariffe ufficiali e valute accettate",
           text: "La tariffa ufficiale di riferimento per l'abbonamento mensile Pass Pro è fissata a 1.99 $ USD al mese (o l'equivalente in valuta locale al momento del pagamento):",
           items: [
             { label: "Piano Mensile standard", text: "1.99 $ USD / mese (o 1 200 FCFA [XOF / XAF], 1,85 € EUR, 2,70 CA$ CAD)." },
@@ -158,18 +176,13 @@ export const termsIt: TermsTranslations = {
         },
         {
           type: "subsection",
-          title: "5.3. Modalità di pagamento e gestori autorizzati",
-          text: "I pagamenti sono elaborati tramite protocolli crittografati sicuri da gestori autorizzati:",
+          title: "6. Modalità di pagamento e sicurezza",
+          text: "I pagamenti sono elaborati tramite protocolli crittografati sicuri da gestori autorizzati (PayPal, gateway regionali e partner internazionali):",
           items: [
             { label: "Mobile Money & Carte (SasaPay)", text: "Gateway dedicato per pagamenti tramite Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) e carte bancarie." },
             { label: "Pagamento Internazionale (PayPal & Carte)", text: "Transazioni sicure tramite carte di credito internazionali (Visa, Mastercard, Amex) o conto PayPal." },
-            { label: "Nessuna archiviazione di dati bancari", text: "Éliciné non archivia, non visualizza e non tratta numeri di carte o codici PIN. L'attivazione avviene mediante token crittografici sicuri (webhook)." }
+            { label: "Nessuna archiviazione di dati bancari", text: "Éliciné non archivia né tratta numeri di carte o codici PIN. Tutte le transazioni sono protette da crittografia SSL/TLS a 256 bit." }
           ]
-        },
-        {
-          type: "subsection",
-          title: "5.4. Esecuzione immediata e recesso",
-          text: "L'accesso al Pass Pro è erogato immediatamente dopo la conferma del pagamento. L'abbonamento non prevede alcun vincolo di durata e può essere interrotto in qualsiasi momento (support@elicine.app)."
         }
       ]
     },

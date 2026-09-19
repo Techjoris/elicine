@@ -141,21 +141,39 @@ export const termsEn: TermsTranslations = {
     },
     {
       id: "article-5",
-      title: "ARTICLE 5: \"PASS PRO\" OFFER, PRICING, AND PAYMENT TERMS",
+      title: "ARTICLE 5: PASS PRO MEMBERSHIP TERMS AND REFUND POLICY",
       blocks: [
         {
           type: "subsection",
-          title: "5.1. Nature and Scope of Pass Pro Offer",
-          text: "Users may subscribe to Éliciné's optional Pass Pro upgrade, unlocking premium features:",
+          title: "1. Nature of the Service",
+          text: "Access to Éliciné Pass Pro is an instantly activated digital service granting immediate access to advanced features (unlimited searches, instant alerts, multi-platform filters)."
+        },
+        {
+          type: "subsection",
+          title: "2. Right of Withdrawal and Refund Policy",
           items: [
-            { label: "Unlimited Éliciné Searches", text: "Continuous, unrestricted access to the Éliciné recommendation engine for tailor-made cinematic discovery." },
-            { label: "Advanced Post-Search Filters", text: "Instantly refine results by active streaming subscriptions (Netflix, Prime Video, Disney+, Canal+, Apple TV+, etc.) and top critical ratings." },
-            { label: "Personalized Availability Alerts", text: "Automated tracking and notifications when monitored movies or series become available on streaming platforms." }
+            { text: "In accordance with rules applicable to immediately delivered digital content and services, the user agrees that service delivery begins upon payment validation." },
+            { text: "However, we offer a 14-day satisfaction guarantee: if the service experiences a verified technical malfunction, or if you have not used your Pro features and wish to cancel, you may request a full refund within 14 days of the initial subscription date." },
+            { text: "Beyond this 14-day period or in the event of substantial use of the service, started billing periods are non-refundable." }
           ]
         },
         {
           type: "subsection",
-          title: "5.2. Official Pricing and Supported Currencies",
+          title: "3. Subscription Cancellation",
+          text: "The user may cancel the automatic renewal of their Pass Pro subscription at any time directly from their account area. The cancellation will take effect at the end of the current billing cycle, with no additional fees."
+        },
+        {
+          type: "subsection",
+          title: "4. Claims and Refund Procedure",
+          text: "For any refund request or transaction inquiry, the user can reach our support team at the contact email address below, providing the email address associated with the account and the payment reference number:",
+          items: [
+            { label: "Official Support Email", text: "support@elicine.app", email: "support@elicine.app" },
+            { label: "Required Information", text: "Account email address and payment transaction reference ID." }
+          ]
+        },
+        {
+          type: "subsection",
+          title: "5. Official Pricing and Supported Currencies",
           text: "The official benchmark price of the Pass Pro monthly subscription is set at $1.99 USD per month (or equivalent in local currencies at checkout). Users may choose between two billing cycles:",
           items: [
             { label: "Standard Monthly Plan", text: "$1.99 USD / month (or 1,200 FCFA [XOF / XAF], €1.85 EUR, $2.70 CAD)." },
@@ -164,23 +182,13 @@ export const termsEn: TermsTranslations = {
         },
         {
           type: "subsection",
-          title: "5.3. Payment Methods and Authorized Gateways",
-          text: "All payments are securely processed through encrypted authorized payment service providers:",
+          title: "6. Payment Methods and Security",
+          text: "All payments are securely processed through encrypted authorized payment service providers (PayPal, regional gateways, and international merchant partners):",
           items: [
             { label: "Mobile Money & Cards (SasaPay)", text: "Dedicated secure gateway supporting Mobile Money (Orange Money, MTN MoMo, Wave, Moov Money) and regional/international debit/credit cards." },
             { label: "International Payments (PayPal & Cards)", text: "Global secure checkout via PayPal balance or credit cards (Visa, Mastercard, American Express)." },
-            { label: "Strict Zero Financial Storage", text: "Éliciné does not store, process, or archive payment card numbers, CVVs, or mobile money PINs. Only encrypted technical webhook tokens are used to activate account privileges." }
+            { label: "Strict Zero Financial Storage", text: "Éliciné does not store, process, or archive payment card numbers, CVVs, or mobile money PINs. All transactions are protected via 256-bit SSL/TLS encryption." }
           ]
-        },
-        {
-          type: "subsection",
-          title: "5.4. Immediate Service Delivery and Right of Withdrawal",
-          text: "In accordance with standards applicable to digital content and online services, full access to Pass Pro benefits is granted immediately upon transaction confirmation. By completing payment, the user expressly requests immediate performance of the service and acknowledges that the right of withdrawal is waived once digital delivery has begun with their consent."
-        },
-        {
-          type: "subsection",
-          title: "5.5. Billing, Renewal, and Cancellation",
-          text: "The Pass Pro membership carries no minimum lock-in period. Users may cancel or disable renewal at any time directly through their account settings or via customer support (support@elicine.app). Pro privileges remain fully active until the end of the paid billing period (monthly or yearly)."
         }
       ]
     },
