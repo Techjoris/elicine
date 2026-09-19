@@ -6,8 +6,8 @@ import { Resend } from 'resend';
 
 // Initialisation du client SDK Resend
 const resendApiKey = (
-  process.env.RESEND_API_KEY || 
-  process.env.VITE_RESEND_API_KEY || 
+  process.env.RESEND_API_KEY ||
+  process.env.VITE_RESEND_API_KEY ||
   ''
 ).trim();
 
@@ -18,14 +18,14 @@ export const resend = resendApiKey ? new Resend(resendApiKey) : null;
  */
 export async function sendEmailWithResend({ to, subject, html, text }) {
   const fromEmail = (
-    process.env.RESEND_FROM_EMAIL || 
-    process.env.RESEND_EMAIL || 
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
     'Éliciné <support@elicine.app>'
   ).trim();
 
   const apiKey = (
-    process.env.RESEND_API_KEY || 
-    process.env.VITE_RESEND_API_KEY || 
+    process.env.RESEND_API_KEY ||
+    process.env.VITE_RESEND_API_KEY ||
     resendApiKey ||
     ''
   ).trim();
@@ -98,9 +98,15 @@ export function formatEmailCurrency(amount, currency = '') {
     targetCurr = (isNumeric && num >= 100) ? 'FCFA' : 'USD';
   }
 
-  // Formatage des nombres avec séparateur d'espace insécable français standard
+  // Formatage des nombres avec gestion automatique des centimes (ex: 199 -> 1,99)
   const formatNumber = (val, minDec = 0, maxDec = 2) => {
-    return val.toLocaleString('fr-FR', {
+    let num = Number(val);
+    if (isNaN(num)) return '0';
+    // Si la valeur est supérieure à 50 sans décimales, il s'agit de centimes renvoyés par Paddle
+    if (num > 50 && Number.isInteger(num)) {
+      num = num / 100;
+    }
+    return num.toLocaleString('fr-FR', {
       minimumFractionDigits: minDec,
       maximumFractionDigits: maxDec
     }).replace(/\u202F/g, ' ').replace(/\s/g, ' ');
@@ -138,8 +144,8 @@ export function formatEmailCurrency(amount, currency = '') {
  * Template HTML Dark Theme Responsive pour la confirmation d'activation Pass Pro
  * Design élégant Dark Cinema avec accent Rouge Éliciné (#e50914) et hiérarchie en blocs
  */
-export function getProWelcomeEmailHtml({ 
-  customerName = 'Cinéphile', 
+export function getProWelcomeEmailHtml({
+  customerName = 'Cinéphile',
   plan = 'monthly',
   amount = null,
   currency = '',
@@ -432,8 +438,8 @@ export function getProWelcomeEmailHtml({
  * Template HTML Dark Theme Responsive pour le remerciement suite à un Don / Soutien
  * Utilise la devise réelle de la transaction (FCFA, EUR, USD, etc.) et le slogan officiel d'Éliciné
  */
-export function getDonationThankYouEmailHtml({ 
-  customerName = 'Généreux Donateur', 
+export function getDonationThankYouEmailHtml({
+  customerName = 'Généreux Donateur',
   amount = '2',
   currency = ''
 } = {}) {
@@ -657,8 +663,8 @@ export function getDonationThankYouEmailHtml({
 /**
  * Déclenche l'envoi de l'email de remerciement pour un don / soutien
  */
-export async function sendDonationThankYouEmail(email, { 
-  customerName = 'Généreux Donateur', 
+export async function sendDonationThankYouEmail(email, {
+  customerName = 'Généreux Donateur',
   amount = '2',
   currency = ''
 } = {}) {
@@ -676,15 +682,15 @@ export async function sendDonationThankYouEmail(email, {
 /**
  * Déclenche l'envoi de l'email de bienvenue Pro
  */
-export async function sendProWelcomeEmail(email, { 
-  customerName = 'Cinéphile', 
+export async function sendProWelcomeEmail(email, {
+  customerName = 'Cinéphile',
   plan = 'monthly',
   amount = null,
   currency = '',
   expiresAt = null
 } = {}) {
-  const formattedAmount = (amount !== null && amount !== undefined && amount !== '') 
-    ? formatEmailCurrency(amount, currency) 
+  const formattedAmount = (amount !== null && amount !== undefined && amount !== '')
+    ? formatEmailCurrency(amount, currency)
     : null;
   const planLabel = plan === 'yearly' ? 'Formule Annuelle' : 'Formule Mensuelle';
   const html = getProWelcomeEmailHtml({ customerName, plan, amount, currency, expiresAt });
@@ -701,20 +707,20 @@ export async function sendProWelcomeEmail(email, {
  * Template HTML Dark Theme Responsive pour la relance avant expiration du Pass Pro (J-3 ou J-1)
  * Utilise la devise réelle de renouvellement et supprime tout jargon technique
  */
-export function getProRenewalReminderEmailHtml({ 
-  customerName = 'Cinéphile', 
-  daysRemaining = 3, 
+export function getProRenewalReminderEmailHtml({
+  customerName = 'Cinéphile',
+  daysRemaining = 3,
   expiresAt = null,
   renewalUrl = 'https://elicine.app?upgrade=pro',
   amount = null,
   currency = ''
 } = {}) {
-  const formattedDate = expiresAt 
+  const formattedDate = expiresAt
     ? new Date(expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'très prochainement';
 
-  const daysLabel = daysRemaining <= 1 
-    ? "demain (moins de 24h)" 
+  const daysLabel = daysRemaining <= 1
+    ? "demain (moins de 24h)"
     : `dans ${daysRemaining} jours (${formattedDate})`;
 
   const priceFormatted = (amount !== null && amount !== undefined && amount !== '')
@@ -968,9 +974,9 @@ export function getProRenewalReminderEmailHtml({
 /**
  * Déclenche l'envoi de l'email de relance avant expiration Pro (J-3 ou J-1)
  */
-export async function sendProRenewalReminderEmail(email, { 
-  customerName = 'Cinéphile', 
-  daysRemaining = 3, 
+export async function sendProRenewalReminderEmail(email, {
+  customerName = 'Cinéphile',
+  daysRemaining = 3,
   expiresAt = null,
   renewalUrl = 'https://elicine.app?upgrade=pro',
   amount = null,
@@ -1015,7 +1021,7 @@ function formatMovieReleaseDate(dateStr) {
 /**
  * Template HTML Dark Theme Responsive pour l'alerte J-2 avant la sortie d'un film/série
  */
-export function getMovieAlertJMinus2EmailHtml({ 
+export function getMovieAlertJMinus2EmailHtml({
   customerName = 'Cinéphile',
   movieTitle = 'Film à venir',
   moviePoster = null,
@@ -1267,7 +1273,7 @@ export function getMovieAlertJMinus2EmailHtml({
 /**
  * Template HTML Dark Theme Responsive pour l'alerte Jour J (Jour de la sortie)
  */
-export function getMovieAlertReleaseDayEmailHtml({ 
+export function getMovieAlertReleaseDayEmailHtml({
   customerName = 'Cinéphile',
   movieTitle = 'Film du jour',
   moviePoster = null,

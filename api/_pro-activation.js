@@ -7,24 +7,24 @@ import { sendProWelcomeEmail, sendDonationThankYouEmail, sendProRenewalReminderE
 
 // Configuration Supabase multi-environnements avec priorité Service Role Key
 const supabaseUrl = (
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
   'https://xwhrxtzbxvakqjlajjlc.supabase.co'
 ).trim();
 
 const supabaseKey = (
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 
-  process.env.SUPABASE_ANON_KEY || 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   ''
 ).trim();
 
 export const supabaseAdmin = (supabaseUrl && supabaseKey && supabaseKey.length > 20)
   ? createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    })
+    auth: { persistSession: false, autoRefreshToken: false }
+  })
   : null;
 
 /**
@@ -35,7 +35,15 @@ export function computePlanExpiry(plan = 'monthly', baseDate = null) {
   const startTime = (baseDate && !isNaN(new Date(baseDate).getTime()))
     ? new Date(baseDate).getTime()
     : Date.now();
-  const durationDays = (plan === 'yearly') ? 365 : 30;
+
+  // Détection du plan annuel : gère la chaîne 'yearly', les libellés avec 'annuel' ou l'ID Paddle annuel
+  const isYearly =
+    plan === 'yearly' ||
+    plan === 'annual' ||
+    plan === 'pri_01m2x8yc8y1k9b5bej81me7dbd' ||
+    (typeof plan === 'string' && plan.toLowerCase().includes('annu'));
+
+  const durationDays = isYearly ? 365 : 30;
   const expiresTimestamp = startTime + (durationDays * 24 * 60 * 60 * 1000);
   return new Date(expiresTimestamp).toISOString();
 }
@@ -91,14 +99,14 @@ export async function activateUserPassPro(email, planDetails = {}) {
   const now = new Date().toISOString();
   const cleanName = (customerName || rawEmail.split('@')[0] || 'Cinéphile').trim();
   const numericAmount = Number(amount || (plan === 'yearly' ? 16.70 : 1.99));
-  const currency = (rawCurrency 
-    ? String(rawCurrency).trim() 
+  const currency = (rawCurrency
+    ? String(rawCurrency).trim()
     : ((gateway === 'saspay' || numericAmount >= 100) ? 'FCFA' : 'USD')).toUpperCase();
 
   // Détection don vs abonnement Pro
   const isDonation = explicitDonation === true || (
-    plan === 'donation' || 
-    plan === 'don' || 
+    plan === 'donation' ||
+    plan === 'don' ||
     String(paymentReference).toLowerCase().includes('don') ||
     (numericAmount > 0 && numericAmount < 1.50 && !['monthly', 'yearly'].includes(plan))
   );
@@ -120,7 +128,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
         baseExpiry = currentExpiry;
         console.log(`[Activation Pro Supabase] 🔄 Prolongation de l'abonnement existant pour ${rawEmail} depuis le ${currentExpiry}`);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Calcul exact : now + 30 jours (ou 365 jours)
@@ -306,7 +314,7 @@ export async function downgradeExpiredSubscriptions() {
           downgradedSubscriptions: rpcData[0].downgraded_subscriptions_count
         };
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 2. Repli direct via requêtes Supabase REST
     const { data: expiredProfiles, error: fetchErr } = await supabaseAdmin
@@ -429,7 +437,7 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
             subAmount = subData.amount;
             subCurrency = subData.currency;
           }
-        } catch (_) {}
+        } catch (_) { }
 
         console.log(`[Cron Reminders] ✉️ Envoi relance expiration (J-${daysRemaining}) à ${email} (${subCurrency || 'défaut'})...`);
         const emailRes = await sendProRenewalReminderEmail(email, {
