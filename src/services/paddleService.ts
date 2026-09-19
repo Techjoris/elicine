@@ -67,6 +67,7 @@ export interface OpenPaddleCheckoutParams {
 
 // Constantes officielles Éliciné
 export const DEFAULT_PADDLE_PRICE_ID = 'pri_01m2x2nctwa8k7cqazmebqnxm3';
+export const DEFAULT_PADDLE_CLIENT_TOKEN = 'live_8a9bd6937131abe8016f6f2a00f';
 export const PADDLE_SCRIPT_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js';
 
 let isPaddleInitialized = false;
@@ -77,10 +78,11 @@ let activeEventCallbacks: Set<(event: PaddleEvent) => void> = new Set();
  */
 export function getPaddleClientToken(): string {
   const token =
-    (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || process.env?.PADDLE_CLIENT_TOKEN || process.env?.VITE_PADDLE_CLIENT_TOKEN)) ||
-    (typeof import.meta !== 'undefined' && ((import.meta as any).env?.VITE_PADDLE_CLIENT_TOKEN || (import.meta as any).env?.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN)) ||
-    '';
-  return (token && token !== 'undefined' && token !== 'null' ? token.trim() : '');
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_PADDLE_CLIENT_TOKEN) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN) ||
+    DEFAULT_PADDLE_CLIENT_TOKEN;
+  return (token && token !== 'undefined' && token !== 'null' ? String(token).trim() : DEFAULT_PADDLE_CLIENT_TOKEN);
 }
 
 /**
@@ -142,7 +144,7 @@ export async function ensurePaddleScriptLoaded(): Promise<boolean> {
 }
 
 /**
- * Initialise Paddle.js v2 en mode Live avec le Client-side Token
+ * Initialise Paddle.js v2 avec le Client-side Token
  */
 export async function initPaddle(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -157,19 +159,31 @@ export async function initPaddle(): Promise<boolean> {
     return false;
   }
 
+  // Protection contre l'appel Paddle.Environment.set("live") :
+  // Dans le SDK Paddle.js v2, "production" est l'environnement live par défaut.
+  // Si "live" est passé à Paddle.Environment.set(), le SDK v2 tente de résoudre l'hôte "https://live/paddlejs/v2"
+  // ce qui provoque immédiatement le crash DNS "L'adresse IP du serveur live est introuvable".
+  if (window.Paddle.Environment && typeof window.Paddle.Environment.set === 'function') {
+    const originalSet = window.Paddle.Environment.set.bind(window.Paddle.Environment);
+    window.Paddle.Environment.set = (env: any) => {
+      if (env === 'live') {
+        console.warn('[PaddleService] Paddle.Environment.set("live") ignoré : en v2 le mode production est actif par défaut pour éviter le crash DNS "serveur live introuvable".');
+        return;
+      }
+      originalSet(env);
+    };
+  }
+
   const token = getPaddleClientToken();
   const environment = getPaddleEnvironment();
 
-  if (!token) {
-    console.info('[PaddleService] ℹ️ VITE_PADDLE_CLIENT_TOKEN n\'est pas encore défini dans l\'environnement. Initialisation reportée.');
-    return false;
-  }
-
   try {
-    // 1. Définition de l'environnement (live par défaut)
-    window.Paddle.Environment.set(environment);
+    // Si et seulement si sandbox est spécifié, on configure sandbox
+    if (environment === 'sandbox') {
+      window.Paddle.Environment.set('sandbox');
+    }
 
-    // 2. Initialisation avec le token client et dispatcher d'événements
+    // 2. Initialisation avec le token client officiel
     window.Paddle.Initialize({
       token,
       eventCallback: (event: PaddleEvent) => {
@@ -187,7 +201,7 @@ export async function initPaddle(): Promise<boolean> {
     });
 
     isPaddleInitialized = true;
-    console.log(`[PaddleService] Initialisé avec succès en mode [${environment}].`);
+    console.log(`[PaddleService] Initialisé avec succès (mode: ${environment}).`);
     return true;
   } catch (err) {
     console.error('[PaddleService] Erreur lors de l\'initialisation de Paddle.js v2 :', err);
@@ -286,7 +300,7 @@ export async function openPaddleCheckout({
       }
     });
 
-    // Configuration des paramètres d'ouverture
+    // Configuration des paramètres d'ouverture (Overlay sombre v2)
     const checkoutOptions: PaddleCheckoutOpenOptions = {
       items: [
         {
@@ -296,8 +310,7 @@ export async function openPaddleCheckout({
       ],
       settings: {
         displayMode: 'overlay',
-        theme: 'dark',
-        successUrl
+        theme: 'dark'
       }
     };
 
