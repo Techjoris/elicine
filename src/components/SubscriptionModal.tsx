@@ -521,8 +521,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
 
               <PayPalButton
-                amount={numericAmount}
-                currency={currency}
+                amount={billingCycle === 'yearly' ? 15.99 : 1.99}
+                currency="USD"
                 billingCycle={billingCycle}
                 disabled={isProcessing || isCapturingPro}
                 onValidationStart={() => {
@@ -569,6 +569,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     } else {
                       // Échec de la capture serveur (ex: carte refusée, fonds insuffisants)
                       const errorMsg = recordResult?.error || "Le paiement n'a pas pu être capturé par PayPal (fonds insuffisants ou carte refusée).";
+                      console.error("PayPal Error Details:", recordResult);
                       console.error('[SubscriptionModal Debug] ❌ Échec capture serveur PayPal :', {
                         orderId,
                         error: errorMsg,
@@ -579,6 +580,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                       showToast(`❌ ${errorMsg}`);
                     }
                   } catch (err: any) {
+                    console.error("PayPal Error Details:", err);
                     console.error('[SubscriptionModal Debug] ❌ Exception critique lors de la validation/capture PayPal :', err);
                     const msg = parsePayPalErrorMessage(err);
                     setIsCapturingPro(false);
@@ -587,6 +589,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   }
                 }}
                 onError={(err) => {
+                  console.error("PayPal Error Details:", err);
                   console.error('[SubscriptionModal Debug] ❌ onError remonté par le SDK PayPal / Hosted Fields :', err);
                   setIsCapturingPro(false);
                   const msg = parsePayPalErrorMessage(err);

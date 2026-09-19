@@ -897,6 +897,7 @@ export const subscriptionService = {
         };
       }
 
+      console.error("PayPal Error Details:", data || lastErrorMessage);
       console.error('[subscriptionService] ❌ Échec capture backend PayPal :', { data, lastErrorMessage });
       return {
         success: false,
@@ -905,6 +906,7 @@ export const subscriptionService = {
         subscriptionId: subId
       };
     } catch (err: any) {
+      console.error("PayPal Error Details:", err);
       console.error('[subscriptionService] ❌ Exception appel backend capture:', err);
       return {
         success: false,

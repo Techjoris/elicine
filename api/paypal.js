@@ -2,22 +2,53 @@ import { paypalRecordPaymentSchema } from './_security.js';
 import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
 
 /**
- * Récupère l'URL de base de l'API PayPal en fonction du mode configuré
- * Par défaut strict : mode LIVE (Production)
+ * URLs de base officielles de l'API PayPal
  */
 const PAYPAL_LIVE_API_BASE = 'https://api-m.paypal.com';
+const PAYPAL_SANDBOX_API_BASE = 'https://api-m.sandbox.paypal.com';
 
 /**
- * Récupère l'URL de base de l'API PayPal en production stricte (Live)
+ * Récupère l'URL de base de l'API PayPal en fonction de l'environnement réel
+ * Aligne strictement le serveur sur l'environnement du Client ID (Live vs Sandbox)
  */
-function getPayPalApiBase() {
+function getPayPalApiBase(modeOverride = null) {
+  const clientId = (
+    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
+    process.env.PAYPAL_CLIENT_ID ||
+    process.env.VITE_PAYPAL_CLIENT_ID ||
+    process.env.PAYPAL_ID ||
+    ''
+  ).trim();
+
+  const mode = (
+    modeOverride ||
+    process.env.PAYPAL_MODE ||
+    process.env.NEXT_PUBLIC_PAYPAL_MODE ||
+    process.env.VITE_PAYPAL_MODE ||
+    process.env.VITE_PAYPAL_ENV ||
+    process.env.PAYPAL_ENV ||
+    ''
+  ).trim().toLowerCase();
+
+  // Détection automatique du mode Sandbox (si le client ID est 'sb', commence par 'sb-', ou mode explicitement sandbox)
+  if (
+    mode === 'sandbox' ||
+    mode === 'test' ||
+    clientId === 'sb' ||
+    clientId.startsWith('sb-') ||
+    clientId.toLowerCase().includes('sandbox')
+  ) {
+    return PAYPAL_SANDBOX_API_BASE;
+  }
+
+  // Par défaut strict : mode LIVE (Production)
   return PAYPAL_LIVE_API_BASE;
 }
 
 /**
  * Obtient un Bearer Token OAuth2 auprès de l'API PayPal
  */
-async function getPayPalAccessToken() {
+async function getPayPalAccessToken(modeOverride = null) {
   const clientId = (
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
     process.env.PAYPAL_CLIENT_ID ||
@@ -35,11 +66,16 @@ async function getPayPalAccessToken() {
   ).trim();
 
   if (!clientId || !secret) {
-    console.error('[PayPal API] ❌ Variables d\'environnement manquantes : NEXT_PUBLIC_PAYPAL_CLIENT_ID ou PAYPAL_SECRET absent dans process.env.');
+    const errorMsg = {
+      message: "Variables d'environnement manquantes : NEXT_PUBLIC_PAYPAL_CLIENT_ID ou PAYPAL_SECRET absent dans process.env.",
+      hasClientId: Boolean(clientId),
+      hasSecret: Boolean(secret)
+    };
+    console.error("PayPal Error Details:", errorMsg);
     return null;
   }
 
-  const base = getPayPalApiBase();
+  const base = getPayPalApiBase(modeOverride);
   const basicAuth = Buffer.from(`${clientId}:${secret}`).toString('base64');
 
   const fetchToken = async (targetBase) => {
@@ -56,14 +92,16 @@ async function getPayPalAccessToken() {
 
       if (!res.ok) {
         const errText = await res.text();
-        console.error(`[PayPal API] ❌ Échec OAuth2 token (HTTP ${res.status}) sur ${targetBase}/v1/oauth2/token:`, errText);
-        return { ok: false, status: res.status, body: errText };
+        let errData;
+        try { errData = JSON.parse(errText); } catch (_) { errData = { message: errText }; }
+        console.error("PayPal Error Details:", errData);
+        return { ok: false, status: res.status, body: errText, data: errData };
       }
 
       const data = await res.json();
       return { ok: true, token: data.access_token, base: targetBase };
     } catch (err) {
-      console.error(`[PayPal API] ❌ Erreur réseau token sur ${targetBase}:`, err);
+      console.error("PayPal Error Details:", err);
       return { ok: false, status: 500, body: err?.message || String(err) };
     }
   };
@@ -72,7 +110,7 @@ async function getPayPalAccessToken() {
 
   // Fallback automatique si 401 Unauthorized (inversion sandbox / live des clés)
   if (!tokenRes.ok && tokenRes.status === 401) {
-    const altBase = base.includes('sandbox') ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+    const altBase = base.includes('sandbox') ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE;
     console.warn(`[PayPal API] ⚠️ Erreur 401 sur ${base}, tentative de repli sur ${altBase}...`);
     const altRes = await fetchToken(altBase);
     if (altRes.ok && altRes.token) {
@@ -187,6 +225,104 @@ async function verifyPayPalOrderWithApi(orderId, modeOverride = null) {
 }
 
 /**
+ * Crée un ordre de paiement auprès de l'API PayPal v2 (/v2/checkout/orders)
+ * Respecte rigoureusement le schéma v2 officiel de PayPal, la devise autorisée (USD/EUR)
+ * et le montant formaté en chaîne avec exactement 2 décimales.
+ */
+async function createPayPalOrderWithApi({ plan, amount, currency, description, modeOverride = null }) {
+  const authData = await getPayPalAccessToken(modeOverride);
+  if (!authData) {
+    const hasId = Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || process.env.PAYPAL_ID);
+    const hasSecret = Boolean(process.env.PAYPAL_SECRET || process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET_KEY);
+    const errorDetails = {
+      message: "Variables d'environnement PayPal manquantes ou invalides (OAuth impossible sur le serveur)",
+      hasClientId: hasId,
+      hasSecret: hasSecret
+    };
+    console.error("PayPal Error Details:", errorDetails);
+    return { ok: false, status: 503, error: errorDetails.message, details: errorDetails };
+  }
+
+  // 1. DEVISE & MONTANT (CRITIQUE) :
+  // PayPal NE SUPPORTE PAS le FCFA / XAF / XOF.
+  // Le payload doit impérativement déclarer une devise acceptée (ex: "USD" ou "EUR").
+  const isYearly = plan === 'yearly';
+  let targetCurrency = (currency || 'USD').toUpperCase().trim();
+  const supportedCurrencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+  if (!supportedCurrencies.includes(targetCurrency) || targetCurrency === 'XOF' || targetCurrency === 'XAF') {
+    targetCurrency = 'USD';
+  }
+
+  // La valeur (value) doit être une chaîne formatée avec exactement 2 décimales (ex: "1.99").
+  // Ne jamais envoyer de valeur entière en FCFA (comme 1200) ni de float non arrondi.
+  let numericVal = Number(amount);
+  if (isNaN(numericVal) || numericVal <= 0) {
+    numericVal = isYearly ? 15.99 : 1.99;
+  } else if (numericVal >= 100 && targetCurrency === 'USD') {
+    // Si un montant en FCFA (ex: 1200 ou 9600) a été envoyé par erreur avec USD
+    numericVal = Number((numericVal / 600).toFixed(2));
+    if (numericVal < 1.0) {
+      numericVal = isYearly ? 15.99 : 1.99;
+    }
+  }
+  const formattedValue = numericVal.toFixed(2);
+
+  // 4. CODE ATTENDU DANS createOrder :
+  // Schéma v2 strict attendu par PayPal
+  const orderPayload = {
+    intent: "CAPTURE",
+    purchase_units: [
+      {
+        amount: {
+          currency_code: targetCurrency,
+          value: formattedValue
+        },
+        description: description || "Abonnement Éliciné Pro"
+      }
+    ]
+  };
+
+  try {
+    console.log(`[PayPal API] 🚀 Création d'ordre sur ${authData.base}/v2/checkout/orders :`, JSON.stringify(orderPayload));
+    const res = await fetch(`${authData.base}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authData.token}`,
+        'Content-Type': 'application/json',
+        'PayPal-Request-Id': `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      },
+      body: JSON.stringify(orderPayload)
+    });
+
+    const rawText = await res.text();
+    let data = {};
+    try {
+      data = JSON.parse(rawText);
+    } catch (_) {
+      data = { raw: rawText };
+    }
+
+    if (!res.ok) {
+      // 3. GESTION DES LOGS D'ERREUR :
+      // Logger la réponse exacte de l'API PayPal (notamment details ou message)
+      console.error("PayPal Error Details:", data);
+      return {
+        ok: false,
+        status: res.status,
+        error: data?.message || data?.name || "Échec de création de l'ordre PayPal",
+        details: data
+      };
+    }
+
+    console.log(`[PayPal API] ✅ Ordre créé avec succès (${data.id}) sur ${authData.base}`);
+    return { ok: true, status: 200, data };
+  } catch (err) {
+    console.error("PayPal Error Details:", err);
+    return { ok: false, status: 500, error: err?.message || String(err) };
+  }
+}
+
+/**
  * Capture un ordre auprès de l'API PayPal en mode direct (Server-side capture)
  */
 async function capturePayPalOrderWithApi(orderId, modeOverride = null) {
@@ -212,7 +348,7 @@ async function capturePayPalOrderWithApi(orderId, modeOverride = null) {
     }
 
     if (!res.ok) {
-      console.error(`[PayPal Server] ❌ Échec capture pour ordre ${orderId} (HTTP ${res.status}) sur ${authData.base}:`, rawText);
+      console.error("PayPal Error Details:", data);
 
       // Si l'ordre est déjà capturé (capture préalable)
       if (data?.details?.some(d => d.issue === 'ORDER_ALREADY_CAPTURED') || data?.name === 'ORDER_ALREADY_CAPTURED') {
@@ -239,10 +375,12 @@ async function capturePayPalOrderWithApi(orderId, modeOverride = null) {
               console.log(`[PayPal Capture] ✅ Capture réussie sur l'environnement alternatif : ${altAuth.base}`);
               return JSON.parse(altRaw);
             } else {
-              console.error(`[PayPal Capture Error] ❌ Échec également sur ${altAuth.base} :`, altRaw);
+              let altData;
+              try { altData = JSON.parse(altRaw); } catch (_) { altData = { message: altRaw }; }
+              console.error("PayPal Error Details:", altData);
             }
           } catch (altErr) {
-            console.error(`[PayPal Capture Error] ❌ Exception alternative :`, altErr);
+            console.error("PayPal Error Details:", altErr);
           }
         }
       }
@@ -252,7 +390,7 @@ async function capturePayPalOrderWithApi(orderId, modeOverride = null) {
 
     return data;
   } catch (err) {
-    console.error('[PayPal Capture Exception]:', err);
+    console.error("PayPal Error Details:", err);
     return null;
   }
 }
@@ -271,7 +409,18 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const action = req.query?.action || (req.body?.action) || '';
+  // Extraction intelligente de l'action (support query param, body param et sous-chemin d'URL)
+  let action = req.query?.action || (req.body?.action) || '';
+  if (!action && req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const pathname = parsedUrl.pathname;
+      const subpath = pathname.replace(/^\/api\/paypal\/?/, '').split('/')[0];
+      if (subpath) {
+        action = subpath;
+      }
+    } catch (_) {}
+  }
 
   // ─── 1. Récupération de la configuration publique PayPal ─────────────────────
   if (req.method === 'GET' || action === 'config') {
@@ -311,6 +460,41 @@ export default async function handler(req, res) {
         supportedCurrencies: ['USD', 'EUR', 'CAD', 'GBP', 'AUD']
       }
     });
+  }
+
+  // ─── 1.5. Création officielle d'un ordre PayPal v2 (/api/paypal/create-order) ─
+  if (req.method === 'POST' && (action === 'create-order' || action === 'create')) {
+    try {
+      const { plan, amount, currency, description, mode } = req.body || {};
+      const result = await createPayPalOrderWithApi({
+        plan,
+        amount,
+        currency,
+        description,
+        modeOverride: mode
+      });
+
+      if (!result.ok) {
+        return res.status(result.status || 400).json({
+          success: false,
+          error: result.error,
+          details: result.details
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        id: result.data.id,
+        orderId: result.data.id,
+        status: result.data.status
+      });
+    } catch (createErr) {
+      console.error("PayPal Error Details:", createErr);
+      return res.status(500).json({
+        success: false,
+        error: createErr?.message || "Erreur interne lors de la création de l'ordre PayPal."
+      });
+    }
   }
 
   // ─── 2. Enregistrement sécurisé avec capture et vérification PayPal réelle ───
@@ -391,6 +575,7 @@ export default async function handler(req, res) {
           humanMsg = `Paiement refusé : ${description}`;
         }
 
+        console.error("PayPal Error Details:", orderData.data);
         console.error(`[PayPal Server] ❌ Rejet capture pour ordre ${orderId} (${issue}) :`, orderData.data);
         return res.status(402).json({
           success: false,

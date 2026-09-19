@@ -34,25 +34,40 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
   // Écrase toute conversion FCFA/USD défaillante
   const orderAmount = isYearly ? '15.99' : '1.99';
 
-  // Récupération stricte du Client ID via process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
-  const clientId = (
+  // Récupération du Client ID via variables d'environnement publiques avec fallback serveur dynamique
+  const rawClientId = (
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
-    (typeof import.meta !== 'undefined' ? (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID : '') ||
+    process.env.PAYPAL_CLIENT_ID ||
+    (typeof import.meta !== 'undefined' ? (import.meta as any).env?.NEXT_PUBLIC_PAYPAL_CLIENT_ID || (import.meta as any).env?.VITE_PAYPAL_CLIENT_ID || (import.meta as any).env?.PAYPAL_CLIENT_ID : '') ||
     ''
   )?.trim();
+
+  const [clientId, setClientId] = React.useState<string>(rawClientId);
+
+  React.useEffect(() => {
+    if (!clientId || clientId === 'undefined' || clientId === 'null' || clientId === '') {
+      fetch('/api/paypal?action=config')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.clientId && typeof data.clientId === 'string' && data.clientId.trim()) {
+            setClientId(data.clientId.trim());
+          }
+        })
+        .catch(() => {});
+    }
+  }, [clientId]);
 
   // Sécurité : bloquer le rendu si Client ID absent
   const isClientIdConfigured = Boolean(
     clientId &&
     clientId !== 'undefined' &&
     clientId !== 'null' &&
-    clientId !== '' &&
-    clientId !== 'sb'
+    clientId !== ''
   );
 
   if (!isClientIdConfigured) {
     console.error(
-      '[PayPal SDK] ❌ Erreur critique : process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID est indéfini ou non configuré. Le rendu du bouton PayPal est strictement bloqué.'
+      '[PayPal SDK] ❌ Erreur critique : NEXT_PUBLIC_PAYPAL_CLIENT_ID est indéfini ou non configuré.'
     );
 
     return (
@@ -118,30 +133,59 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             }
             return actions.resolve();
           }}
-          createOrder={(data, actions) => {
-            console.log('[PayPal SDK React] 📦 Création d\'ordre de paiement unique strict :', {
-              currency_code: 'USD',
-              value: orderAmount
-            });
-
-            // 2. Hardcodage strict du montant et suppression des déclencheurs anti-fraude :
-            // - Aucun objet payment_source ni attribut de vault (sauvegarde)
-            // - application_context avec shipping_preference: "NO_SHIPPING"
-            // - Payload purchase_units épuré sans breakdown conflictuel
-            return actions.order.create({
+          createOrder={async (data, actions) => {
+            // 1. DEVISE & MONTANT (CRITIQUE) :
+            // Toujours déclarer USD, valeur string avec exactement 2 décimales ("1.99" ou "15.99")
+            // 4. CODE ATTENDU DANS createOrder : Schéma v2 strict officiel PayPal
+            const orderPayload = {
               intent: 'CAPTURE',
               purchase_units: [
                 {
                   amount: {
                     currency_code: 'USD',
                     value: orderAmount
-                  }
+                  },
+                  description: 'Abonnement Éliciné Pro'
                 }
-              ],
-              application_context: {
-                shipping_preference: 'NO_SHIPPING'
+              ]
+            };
+
+            console.log('[PayPal SDK React] 📦 Création d\'ordre v2 strict :', orderPayload);
+
+            // Tentative prioritaire de création d'ordre sécurisée via le serveur backend (/api/paypal/create-order)
+            try {
+              const res = await fetch('/api/paypal/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plan: billingCycle,
+                  currency: 'USD',
+                  amount: orderAmount,
+                  description: 'Abonnement Éliciné Pro'
+                })
+              });
+
+              if (res.ok) {
+                const serverOrder = await res.json();
+                if (serverOrder?.id || serverOrder?.orderId) {
+                  const targetId = serverOrder.id || serverOrder.orderId;
+                  console.log('[PayPal SDK React] ✅ Ordre créé avec succès via le serveur :', targetId);
+                  return targetId;
+                }
+              } else {
+                const serverErr = await res.json().catch(() => ({}));
+                console.warn('[PayPal SDK React] ⚠️ Échec création serveur, repli sur actions.order.create:', serverErr);
               }
-            });
+            } catch (netErr) {
+              console.warn('[PayPal SDK React] ⚠️ Erreur réseau API serveur, repli sur actions.order.create:', netErr);
+            }
+
+            // Repli client-side standard via actions.order.create avec le schéma v2 strict
+            if (actions?.order?.create) {
+              return actions.order.create(orderPayload as any);
+            }
+
+            throw new Error("Impossible d'initialiser la commande PayPal.");
           }}
           onApprove={async (data) => {
             console.log('[PayPal SDK React] 🎯 onApprove déclenché par le SDK ! Réception orderID :', data?.orderID);
@@ -171,19 +215,23 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
             console.log('[PayPal SDK React] 🛑 Annulation transaction par l\'utilisateur :', data);
             if (onCancel) onCancel();
           }}
-          onError={(err: any) => {
+          onError={(error: any) => {
+            // 3. GESTION DES LOGS D'ERREUR :
+            // Logger la réponse exacte de l'API PayPal (notamment details ou message)
+            console.error("PayPal Error Details:", error);
+
             const errDetails = {
-              message: err?.message,
-              name: err?.name,
-              details: err?.details,
-              stack: err?.stack,
-              raw: String(err),
-              full: err
+              message: error?.message,
+              name: error?.name,
+              details: error?.details,
+              stack: error?.stack,
+              raw: String(error),
+              full: error
             };
             console.error('[PayPal SDK React] ❌ Échec bouton PayPal / Carte bancaire (Payload complète) :', errDetails);
 
             // Diagnostic précis pour déceler INSTRUMENT_DECLINED ou PERMISSION_DENIED
-            const errStr = (JSON.stringify(err || {}) + ' ' + (err?.message || '') + ' ' + (err?.name || '')).toUpperCase();
+            const errStr = (JSON.stringify(error || {}) + ' ' + (error?.message || '') + ' ' + (error?.name || '')).toUpperCase();
             if (errStr.includes('PERMISSION_DENIED')) {
               console.error('[PayPal SDK React] 🚫 PERMISSION_DENIED détecté : Le compte PayPal marchand restreint les paiements par carte invité (Guest Checkout) ou exige une validation d\'identité.');
             } else if (errStr.includes('INSTRUMENT_DECLINED')) {
@@ -192,7 +240,7 @@ export const PayPalButton: React.FC<PayPalButtonProps> = ({
               console.error('[PayPal SDK React] 🔒 Erreur d\'enregistrement de carte (Vaulting) détectée.');
             }
 
-            if (onError) onError(err);
+            if (onError) onError(error);
           }}
         />
 

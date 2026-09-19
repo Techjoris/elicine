@@ -142,6 +142,10 @@ export default defineConfig(({ mode }) => {
               adaptResponse();
               const query: Record<string, string> = {};
               url.searchParams.forEach((v, k) => { query[k] = v; });
+              const subpath = pathname.replace(/^\/api\/paypal\/?/, '').split('/')[0];
+              if (subpath && !query.action) {
+                query.action = subpath;
+              }
               (req as any).query = query;
               if (req.method === 'POST') {
                 (req as any).body = await getBody();
