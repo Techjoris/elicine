@@ -692,7 +692,9 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
     similarReferenceTitles: heuristicRefs,
     cleanSearchKeywords: [cleanQuery],
     clean_query: cleanQuery,
-    suggested_mood: heuristicSummary || heuristicMood,
+    // The no-provider fallback has an array of moods, not a singular
+    // heuristicMood variable. Keep the historical empty-summary behaviour.
+    suggested_mood: heuristicSummary || heuristicMoods[0] || '',
     facets: heuristicFacets,
     provider: 'Algorithme Éliciné'
   };
