@@ -74,6 +74,17 @@ test('null media type accepts both types but does not choose ambiguous exact mat
   assert.equal(result.metrics.entityResolutionAmbiguousCount, 1);
 });
 
+test('ambiguous reference fixtures It and Utopia follow media type deterministically', async () => {
+  const itResult = await resolveKnownTitles({ mediaType: 'tv', knownTitles: ['It'] }, {
+    searchCandidates: async () => [movie(22, 'It'), tv(23, 'It')]
+  });
+  const utopiaResult = await resolveKnownTitles({ mediaType: 'tv', knownTitles: ['Utopia'] }, {
+    searchCandidates: async () => [movie(24, 'Utopia'), tv(25, 'Utopia')]
+  });
+  assert.deepEqual(itResult.resolvedTitles.map(item => item.tmdbId), [23]);
+  assert.deepEqual(utopiaResult.resolvedTitles.map(item => item.tmdbId), [25]);
+});
+
 test('original title and case/accents resolve deterministically', async () => {
   const result = await resolveKnownTitles({ mediaType: 'movie', knownTitles: ['parasite'] }, {
     searchCandidates: async () => [movie(30, 'Parasite', { original_title: 'Gisaengchung', original_language: 'ko' })]
