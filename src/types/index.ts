@@ -217,3 +217,5 @@ export interface SearchHistoryItem {
 }
 
 export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password' | 'payment-callback';
+
+export * from './canonicalIntent';

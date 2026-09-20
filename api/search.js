@@ -1,4 +1,12 @@
 import { checkRateLimit } from './_rateLimit.js';
+import {
+  addSearchTelemetryPath,
+  createSearchTelemetry,
+  finalizeSearchTelemetry,
+  getSearchEngineMode,
+  recordSearchCandidateCount,
+  recordSearchLlmAttempt
+} from './searchPhase0.js';
 import { 
   searchQuotaQuerySchema, 
   verifyServerSession, 
@@ -440,7 +448,7 @@ function buildChatBody(messages, useJsonFormat = true) {
 // ============================================================================
 // ÉTAPE 1 : Cascade LLM — DeepSeek → Qwen → Groq → Gemini → OpenAI
 // ============================================================================
-async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType = 'Tous') {
+async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType = 'Tous', telemetry = null) {
   let userPrompt = `Requête de l'utilisateur : "${cleanQuery}"`;
   if (targetMediaType === 'Séries TV') {
     userPrompt += `\n\nCONTRAINTE STRICTE DE FORMAT : L'utilisateur recherche EXCLUSIVEMENT des SÉRIES TÉLÉVISÉES (TV Shows / mini-séries). Tu dois recommander UNIQUEMENT des séries télévisées réelles, AUCUN film !`;
@@ -463,6 +471,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
   // ── 1. Groq Cloud (llama-3.3-70b-versatile) — Ultra-rapide (~300ms sur LPU)
   if (groqKey) {
     try {
+      recordSearchLlmAttempt(telemetry, 'groq', 'llama-3.3-70b-versatile');
       console.log('[API /api/search] [LLM] Groq (llama-3.3-70b-versatile)...');
       const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -484,6 +493,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
   // ── 2. DeepSeek (deepseek-chat) — Secondaire
   if (deepseekKey) {
     try {
+      recordSearchLlmAttempt(telemetry, 'deepseek', 'deepseek-chat');
       console.log('[API /api/search] [LLM] DeepSeek (deepseek-chat)...');
       const res = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -512,6 +522,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
     ];
     for (const endpoint of endpoints) {
       try {
+        recordSearchLlmAttempt(telemetry, 'qwen', 'qwen-plus');
         console.log(`[API /api/search] [LLM] Qwen (qwen-plus) via ${endpoint}...`);
         const res = await fetchWithTimeout(endpoint, {
           method: 'POST',
@@ -536,6 +547,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
   // ── 4. Google Gemini (gemini-2.0-flash) — SANS response_format (bug "empty output")
   if (geminiKey) {
     try {
+      recordSearchLlmAttempt(telemetry, 'gemini', 'gemini-2.0-flash');
       console.log('[API /api/search] [LLM] Gemini (gemini-2.0-flash)...');
       const res = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
@@ -557,6 +569,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
   // ── 5. OpenAI (gpt-4o-mini) — Dernier recours
   if (openAiKey) {
     try {
+      recordSearchLlmAttempt(telemetry, 'openai', 'gpt-4o-mini');
       console.log('[API /api/search] [LLM] OpenAI (gpt-4o-mini)...');
       const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -2497,6 +2510,24 @@ function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éli
 }
 
 export default async function handler(req, res) {
+  // Phase 0: response-boundary telemetry only. It never changes search inputs,
+  // ranking, fallbacks, or the response body, and never performs network I/O.
+  const telemetry = createSearchTelemetry({
+    rawQuery: req.body?.query || req.body?.searchQuery || req.body?.prompt || '',
+    locale: req.body?.locale || req.headers?.['accept-language'] || null
+  });
+  res.setHeader('x-elicine-search-query-id', telemetry.queryId);
+  res.setHeader('x-elicine-search-engine', getSearchEngineMode());
+  const originalJson = res.json.bind(res);
+  res.json = (payload) => {
+    try {
+      finalizeSearchTelemetry(telemetry, payload, res.statusCode || 200);
+    } catch (_) {
+      // Observability must never affect the current engine.
+    }
+    return originalJson(payload);
+  };
+
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -2507,6 +2538,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    addSearchTelemetryPath(telemetry, 'handler_started');
     // Limiteur de requêtes : 20 requêtes par minute par IP
     const limiter = checkRateLimit(req, res, { max: 20, windowMs: 60 * 1000 });
     if (!limiter.allowed) {
@@ -2737,7 +2769,7 @@ export default async function handler(req, res) {
         qwenApiKey:     req.body?.qwenApiKey,
         geminiApiKey:   req.body?.geminiApiKey,
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
-      }, requestedMediaType);
+      }, requestedMediaType, telemetry);
 
       const {
         media_type: extractedMediaType = 'all',
@@ -2758,6 +2790,13 @@ export default async function handler(req, res) {
         if (extractedMediaType === 'tv' && requestedMediaType === 'Tous') requestedMediaType = 'Séries TV';
         if (extractedMediaType === 'movie' && requestedMediaType === 'Tous') requestedMediaType = 'Films';
       }
+      telemetry.detectedConstraints = {
+        requestedMediaType,
+        primaryGenres: Array.isArray(primaryGenres) ? primaryGenres : [],
+        moods: Array.isArray(moodTags) ? moodTags : [],
+        references: Array.isArray(referenceTitles) ? referenceTitles.length : 0
+      };
+      addSearchTelemetryPath(telemetry, 'llm_completed', { provider });
 
       // Requête nettoyée prioritaire
       const effectiveCleanQuery = llmCleanQuery || cleanQuery;
@@ -2799,6 +2838,7 @@ export default async function handler(req, res) {
       const seenTitles = new Set();
 
       if (tmdbKey && candidateList.length > 0) {
+        addSearchTelemetryPath(telemetry, 'tmdb_direct_resolution_started', { titleCount: candidateList.length });
         console.log(`[API /api/search] [Priorité 1 Direct TMDB] Résolution chirurgicale de ${candidateList.length} titre(s) LLM...`);
         const resolvedList = await Promise.all(
           candidateList.slice(0, 10).map(async (item) => {
@@ -2841,6 +2881,7 @@ export default async function handler(req, res) {
             }
           }
         }
+        recordSearchCandidateCount(telemetry, 'tmdbDirect', directTmdbMovies.length);
       }
 
       // SI au moins 1 ou 2 titres sont validés par TMDB :
@@ -2903,6 +2944,7 @@ export default async function handler(req, res) {
       // Niveau 1 (Matching direct & vectoriel) : Exécuter la recherche vectorielle / sémantique avec la `clean_query`
       console.log(`[API /api/search] [Niveau 1] Matching direct & vectoriel sur : "${effectiveCleanQuery}"`);
       const directVectorHits = await executeDirectAndVectorSearch(effectiveCleanQuery, requestedMediaType, activeClusterId, activeFacets);
+      recordSearchCandidateCount(telemetry, 'supabaseDirect', directVectorHits.length);
       if (directVectorHits.length > 0) {
         resolvedMovies.push(...directVectorHits);
         console.log(`[API /api/search] [Niveau 1] ${resolvedMovies.length} film(s) trouvé(s) via matching direct/vectoriel.`);
@@ -2921,6 +2963,7 @@ export default async function handler(req, res) {
 
         if (allRefTitles.length > 0) {
           const refHits = await resolveByTitles(allRefTitles, matches, effectiveCleanQuery, activeClusterId, activeFacets);
+          recordSearchCandidateCount(telemetry, 'supabaseTitles', refHits.length);
           console.log(`[API /api/search] [Niveau 2 - Références] ${refHits.length} film(s) de référence trouvé(s) dans la base.`);
           for (const rm of refHits) {
             const mId = rm.id || rm.tmdb_id;
@@ -2943,6 +2986,7 @@ export default async function handler(req, res) {
             activeClusterId,
             activeFacets
           );
+          recordSearchCandidateCount(telemetry, 'supabaseGenresThemes', genreMoodHits.length);
           console.log(`[API /api/search] [Niveau 2 - Genres & Tags] ${genreMoodHits.length} film(s) correspondant(s).`);
           for (const gm of genreMoodHits) {
             const mId = gm.id || gm.tmdb_id;
