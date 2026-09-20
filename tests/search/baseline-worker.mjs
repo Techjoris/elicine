@@ -8,7 +8,7 @@ for (const key of Object.keys(process.env)) {
   if (/API_KEY|SUPABASE|DASHSCOPE|SEARCH_OBSERVABILITY/i.test(key)) delete process.env[key];
 }
 if (mode === 'canonical') process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'true';
-else delete process.env.CANONICAL_SEARCH_ENGINE_ENABLED;
+else process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'false';
 console.log = console.info = console.warn = console.error = () => {};
 const { default: handler } = await import('../../api/search.js');
 const { getBufferedSearchTelemetry } = await import('../../api/searchPhase0.js');

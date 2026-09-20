@@ -29,16 +29,18 @@ const canonicalInput = {
   themes: ['legacy mood alias']
 };
 
-test('feature flag is server-only and disabled by default', () => {
+test('feature flag is server-only and canonical is enabled by default', () => {
   assert.equal(CANONICAL_SEARCH_ENGINE_FLAG, 'CANONICAL_SEARCH_ENGINE_ENABLED');
-  assert.equal(isCanonicalSearchEngineEnabled({}), false);
+  assert.equal(isCanonicalSearchEngineEnabled({}), true);
   assert.equal(isCanonicalSearchEngineEnabled({ [CANONICAL_SEARCH_ENGINE_FLAG]: 'TRUE' }), true);
+  assert.equal(isCanonicalSearchEngineEnabled({ [CANONICAL_SEARCH_ENGINE_FLAG]: 'false' }), false);
 });
 
 test('legacy path leaves historical interpretation untouched', () => {
   const telemetry = {};
   const result = orchestrateSearch({
-    interpreted: canonicalInput, cleanQuery: 'comme Gone Girl', telemetry, env: {}
+    interpreted: canonicalInput, cleanQuery: 'comme Gone Girl', telemetry,
+    env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'false' }
   });
   assert.equal(result.path, 'legacy');
   assert.equal(result.interpreted, canonicalInput);

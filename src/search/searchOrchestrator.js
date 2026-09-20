@@ -6,7 +6,9 @@ import {
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
 export function isCanonicalSearchEngineEnabled(env = process.env) {
-  return String(env?.[CANONICAL_SEARCH_ENGINE_FLAG] || '').toLowerCase() === 'true';
+  // Canonical is the safe default after Phase 3 parity verification. An
+  // explicit false keeps the legacy path as an immediate operational switch.
+  return String(env?.[CANONICAL_SEARCH_ENGINE_FLAG] ?? 'true').toLowerCase() !== 'false';
 }
 
 function updateTelemetry(telemetry, values) {

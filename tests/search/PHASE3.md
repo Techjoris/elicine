@@ -3,7 +3,9 @@
 api/search.js remains the HTTP, authentication, quota, and public-response
 boundary. It interprets a query once, then calls orchestrateSearch.
 
-With CANONICAL_SEARCH_ENGINE_ENABLED=true in the server environment:
+Canonical orchestration is enabled by default. Setting
+CANONICAL_SEARCH_ENGINE_ENABLED=false in the server environment forces the
+legacy path. An explicit true also selects canonical:
 
 LLM parser -> legacy adapter -> normalizer/Zod -> CanonicalIntent -> orchestrator -> existing retrieval
 
@@ -12,8 +14,8 @@ the compatibility shape used by the existing retrieval functions. LLM
 recommendations and matches remain candidate hints, not intent constraints.
 There is no additional LLM, TMDB, quota, database, or network operation.
 
-The flag is disabled by default. With it disabled, Phase 2 still calculates the
-shadow intent for telemetry and the legacy input stays untouched. Canonical
+With the flag explicitly disabled, Phase 2 still calculates the shadow intent
+for telemetry and the legacy input stays untouched. Canonical
 validation/orchestration failure yields the original interpretation through the
 legacy path and fixed non-PII telemetry codes. It does not repeat providers.
 
