@@ -82,6 +82,16 @@ test('original title and case/accents resolve deterministically', async () => {
   assert.equal(scoreEntityCandidate('Gisaengchung', movie(30, 'Parasite', { original_title: 'Gisaengchung' })), 0.86);
 });
 
+test('an exact canonical year breaks an otherwise identical title tie', async () => {
+  const result = await resolveKnownTitles({
+    mediaType: 'movie', knownTitles: ['Dune'], yearMin: 2021, yearMax: 2021
+  }, {
+    searchCandidates: async () => [movie(31, 'Dune', { release_date: '1984-01-01' }),
+      movie(32, 'Dune', { release_date: '2021-01-01' })]
+  });
+  assert.deepEqual(result.resolvedTitles.map(item => item.tmdbId), [32]);
+});
+
 test('weak, absent, timeout, and provider errors remain unresolved', async () => {
   const result = await resolveKnownTitles({
     mediaType: 'movie', knownTitles: ['Missing', 'Timeout', 'Broken', 'Weak']

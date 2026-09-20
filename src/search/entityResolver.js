@@ -130,6 +130,8 @@ export async function resolveKnownTitles(intent, { searchCandidates, limit = ENT
   }
 
   const expectedMediaType = intent?.mediaType || null;
+  const expectedYear = Number.isInteger(intent?.yearMin) && intent.yearMin === intent?.yearMax
+    ? intent.yearMin : null;
   const resolvedTitles = [];
   const unresolvedTitles = [];
   const seenEntities = new Set();
@@ -139,7 +141,9 @@ export async function resolveKnownTitles(intent, { searchCandidates, limit = ENT
   for (const inputTitle of uniqueTitles) {
     try {
       const candidates = await searchCandidates(inputTitle, expectedMediaType);
-      const selection = selectEntityCandidate(inputTitle, Array.isArray(candidates) ? candidates : [], expectedMediaType);
+      const selection = selectEntityCandidate(
+        inputTitle, Array.isArray(candidates) ? candidates : [], expectedMediaType, expectedYear
+      );
       if (!selection.candidate) {
         unresolvedTitles.push(inputTitle);
         if (selection.ambiguous) ambiguousCount += 1;
