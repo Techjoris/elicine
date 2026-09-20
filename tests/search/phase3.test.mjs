@@ -36,9 +36,9 @@ test('feature flag is server-only and canonical is enabled by default', () => {
   assert.equal(isCanonicalSearchEngineEnabled({ [CANONICAL_SEARCH_ENGINE_FLAG]: 'false' }), false);
 });
 
-test('legacy path leaves historical interpretation untouched', () => {
+test('legacy path leaves historical interpretation untouched', async () => {
   const telemetry = {};
-  const result = orchestrateSearch({
+  const result = await orchestrateSearch({
     interpreted: canonicalInput, cleanQuery: 'comme Gone Girl', telemetry,
     env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'false' }
   });
@@ -52,9 +52,9 @@ test('legacy path leaves historical interpretation untouched', () => {
   assert.equal(telemetry.canonicalIntentValid, true);
 });
 
-test('canonical path passes a validated CanonicalIntent and keeps candidate hints', () => {
+test('canonical path passes a validated CanonicalIntent and keeps candidate hints', async () => {
   const telemetry = {};
-  const result = orchestrateSearch({
+  const result = await orchestrateSearch({
     interpreted: canonicalInput, cleanQuery: 'un thriller comme Gone Girl', telemetry,
     env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'true' }
   });
@@ -84,9 +84,9 @@ for (const [label, field, value] of [
   ['rating', 'min_rating', 8], ['adult', 'adult', true],
   ['sort', 'sort_preference', 'popularity']
 ]) {
-  test('canonical intent accepts ' + label, () => {
+  test('canonical intent accepts ' + label, async () => {
     const interpreted = { ...canonicalInput, [field]: value };
-    const result = orchestrateSearch({
+    const result = await orchestrateSearch({
       interpreted, cleanQuery: 'Gone Girl',
       env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'true' }
     });
@@ -94,10 +94,10 @@ for (const [label, field, value] of [
   });
 }
 
-test('canonical failure falls back to the unchanged legacy input without provider retries', () => {
+test('canonical failure falls back to the unchanged legacy input without provider retries', async () => {
   const telemetry = {};
   let calls = 0;
-  const result = orchestrateSearch({
+  const result = await orchestrateSearch({
     interpreted: canonicalInput, cleanQuery: 'query', telemetry,
     env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'true' },
     createIntent() { calls += 1; throw new Error('provider data'); }
@@ -112,8 +112,8 @@ test('canonical failure falls back to the unchanged legacy input without provide
   assert.equal(telemetry.canonicalIntentError, 'CANONICAL_ORCHESTRATION_FAILED');
 });
 
-test('malformed legacy output follows the deterministic canonical fallback', () => {
-  const result = orchestrateSearch({
+test('malformed legacy output follows the deterministic canonical fallback', async () => {
+  const result = await orchestrateSearch({
     interpreted: { ...canonicalInput, media_type: 'documentary' },
     cleanQuery: 'query', telemetry: {},
     env: { [CANONICAL_SEARCH_ENGINE_FLAG]: 'true' }

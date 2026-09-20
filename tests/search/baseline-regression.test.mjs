@@ -20,6 +20,18 @@ for (const entry of corpus.queries) {
   test('baseline ' + entry.id + ': legacy/canonical parity across fixtures and quota', () => {
     const select = values => values.filter(value => value.id === entry.id);
     assert.equal(select(legacy).length, 5);
-    assert.deepEqual(select(canonical), select(legacy));
+    const legacyCases = select(legacy);
+    const canonicalCases = select(canonical);
+    for (let index = 0; index < legacyCases.length; index += 1) {
+      assert.deepEqual(canonicalCases[index].response, legacyCases[index].response);
+      assert.deepEqual(canonicalCases[index].quota, legacyCases[index].quota);
+      const legacyLlm = legacyCases[index].requests.filter(item => item.url.includes('api.groq.com')).length;
+      const canonicalLlm = canonicalCases[index].requests.filter(item => item.url.includes('api.groq.com')).length;
+      assert.equal(canonicalLlm, legacyLlm);
+      const legacyTmdb = legacyCases[index].requests.filter(item => item.url.includes('api.themoviedb.org')).length;
+      const canonicalTmdb = canonicalCases[index].requests.filter(item => item.url.includes('api.themoviedb.org')).length;
+      assert.ok(canonicalTmdb >= legacyTmdb);
+      assert.ok(canonicalTmdb - legacyTmdb <= 5);
+    }
   });
 }

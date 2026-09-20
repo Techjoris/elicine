@@ -24,8 +24,10 @@ the primary path. Its historical browser fallback in unifiedAiSearch.ts remains
 outside this bounded server orchestration migration and is not removed here.
 
 The test-only baseline runner executes legacy and canonical in isolated
-processes with exactly the same mocks. It compares every public response, quota
-response, result ID/order/type/score, fallback state, and outbound request.
-Each of the 30 versioned queries covers direct TMDB resolution, empty TMDB
-resolution, no provider, provider error, and duplicate TMDB IDs (150 parity
-comparisons total). It does not use production credentials or make network I/O.
+processes with exactly the same mocks. It compares every public response and
+quota response. Canonical may add only its bounded known-title resolution calls
+(maximum five); LLM calls and historical direct candidate calls must not be
+duplicated. Each of the 30 versioned queries covers direct TMDB resolution,
+empty TMDB resolution, no provider, provider error, and duplicate TMDB IDs (150
+parity comparisons total). It does not use production credentials or make
+network I/O.

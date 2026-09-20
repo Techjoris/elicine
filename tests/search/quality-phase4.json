@@ -1,0 +1,8 @@
+{
+  "id": "modern-war-series-air-combat",
+  "query": "une série de guerre moderne avec des avions de combat",
+  "mediaType": "tv",
+  "themes": ["guerre moderne", "aviation militaire", "avions de combat"],
+  "phase": "future-quality-corpus",
+  "note": "Reserved for retrieval/ranking validation in later phases; Phase 4 does not force result quality."
+}

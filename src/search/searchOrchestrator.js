@@ -2,6 +2,7 @@ import {
   createCanonicalIntentFromLegacy,
   generateCanonicalIntentShadow
 } from './canonicalIntentShadow.js';
+import { createResolvedIntentContext } from './resolvedIntentContext.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -21,13 +22,14 @@ function updateTelemetry(telemetry, values) {
  * Provider recommendations remain candidate hints, deliberately separate from
  * intent constraints, so this migration does not alter historical retrieval.
  */
-export function orchestrateSearch({
+export async function orchestrateSearch({
   interpreted,
   cleanQuery,
   requestedMediaType,
   telemetry,
   env = process.env,
-  createIntent = createCanonicalIntentFromLegacy
+  createIntent = createCanonicalIntentFromLegacy,
+  resolveEntities = null
 }) {
   const legacy = (error = null) => {
     updateTelemetry(telemetry, {
@@ -42,7 +44,7 @@ export function orchestrateSearch({
       orchestrationFallbackToLegacy: error !== null,
       orchestrationError: error
     });
-    return { path: 'legacy', interpreted, canonicalIntent: null };
+    return { path: 'legacy', interpreted, canonicalIntent: null, resolvedIntentContext: createResolvedIntentContext() };
   };
 
   if (!isCanonicalSearchEngineEnabled(env)) {
@@ -67,6 +69,15 @@ export function orchestrateSearch({
       themes: canonicalIntent.themes.length ? canonicalIntent.themes : interpreted.themes,
       canonicalIntent
     };
+    let resolvedIntentContext = createResolvedIntentContext();
+    if (typeof resolveEntities === 'function') {
+      // Entity failures are isolated per reference by the resolver. A provider
+      // adapter failure still leaves the already validated intent usable.
+      resolvedIntentContext = await resolveEntities(canonicalIntent);
+      const metrics = resolvedIntentContext?.metrics || {};
+      updateTelemetry(telemetry, metrics);
+    }
+    projectedInterpretation.resolvedIntentContext = resolvedIntentContext;
     updateTelemetry(telemetry, {
       canonicalIntentGenerated: true,
       canonicalIntentValid: true,
@@ -78,7 +89,8 @@ export function orchestrateSearch({
     return {
       path: 'canonical',
       interpreted: projectedInterpretation,
-      canonicalIntent
+      canonicalIntent,
+      resolvedIntentContext
     };
   } catch {
     // Fixed code only: exception text can include provider output.

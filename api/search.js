@@ -1,5 +1,6 @@
 import { checkRateLimit } from './_rateLimit.js';
 import { orchestrateSearch } from '../src/search/searchOrchestrator.js';
+import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
@@ -957,8 +958,11 @@ export async function resolveByGenresAndThemes(canonicalGenres = [], themes = []
 // - Fallback automatique si l'année est absente ou trop restrictive
 // - Requiert impérativement un poster_path valide
 // ============================================================================
-export async function fetchExactTmdbCandidate(title, type = 'movie', year = null, tmdbKey = '') {
-  if (!title || typeof title !== 'string' || !tmdbKey) return null;
+export async function searchTmdbCandidates(title, type = 'movie', year = null, tmdbKey = '', requestCache = null) {
+  if (!title || typeof title !== 'string' || !tmdbKey) return [];
+
+  const cacheKey = `${String(title).trim().toLocaleLowerCase()}|${type || 'multi'}|${year || ''}`;
+  if (requestCache?.has(cacheKey)) return requestCache.get(cacheKey);
 
   const isBearer = tmdbKey.startsWith('eyJ');
   const headers = isBearer 
@@ -973,8 +977,10 @@ export async function fetchExactTmdbCandidate(title, type = 'movie', year = null
 
   const cleanYear = year && !isNaN(Number(year)) ? Number(year) : null;
   const isTv = type === 'tv' || type === 'series' || type === 'série';
+  const isMovie = type === 'movie' || type === 'film' || type === 'films';
 
-  for (const term of variants) {
+  const lookup = (async () => {
+    for (const term of variants) {
     const q = encodeURIComponent(term);
     const urlsToTry = [];
 
@@ -985,12 +991,14 @@ export async function fetchExactTmdbCandidate(title, type = 'movie', year = null
       urlsToTry.push(`https://api.themoviedb.org/3/search/tv?query=${q}&language=fr-FR&include_adult=false${authQuery}`);
       urlsToTry.push(`https://api.themoviedb.org/3/search/tv?query=${q}&language=en-US&include_adult=false${authQuery}`);
       urlsToTry.push(`https://api.themoviedb.org/3/search/multi?query=${q}&language=fr-FR&include_adult=false${authQuery}`);
-    } else {
+    } else if (isMovie) {
       if (cleanYear) {
         urlsToTry.push(`https://api.themoviedb.org/3/search/movie?query=${q}&primary_release_year=${cleanYear}&language=fr-FR&include_adult=false${authQuery}`);
       }
       urlsToTry.push(`https://api.themoviedb.org/3/search/movie?query=${q}&language=fr-FR&include_adult=false${authQuery}`);
       urlsToTry.push(`https://api.themoviedb.org/3/search/movie?query=${q}&language=en-US&include_adult=false${authQuery}`);
+      urlsToTry.push(`https://api.themoviedb.org/3/search/multi?query=${q}&language=fr-FR&include_adult=false${authQuery}`);
+    } else {
       urlsToTry.push(`https://api.themoviedb.org/3/search/multi?query=${q}&language=fr-FR&include_adult=false${authQuery}`);
     }
 
@@ -1000,25 +1008,30 @@ export async function fetchExactTmdbCandidate(title, type = 'movie', year = null
         if (!res.ok) continue;
         const data = await res.json();
         const hits = (data.results || []).filter(h => h && h.poster_path);
-        if (hits.length === 0) continue;
-
-        hits.sort((a, b) => {
-          const aTitle = (a.title || a.name || '').toLowerCase().trim();
-          const bTitle = (b.title || b.name || '').toLowerCase().trim();
-          const termLower = term.toLowerCase().trim();
-          const aExact = aTitle === termLower || (a.original_title || a.original_name || '').toLowerCase().trim() === termLower;
-          const bExact = bTitle === termLower || (b.original_title || b.original_name || '').toLowerCase().trim() === termLower;
-          if (aExact && !bExact) return -1;
-          if (!aExact && bExact) return 1;
-          return Number(b.vote_count || 0) - Number(a.vote_count || 0);
-        });
-
-        return hits[0];
+        if (hits.length > 0) return hits;
       } catch (_) {}
     }
-  }
+    }
+    return [];
+  })();
+  if (requestCache) requestCache.set(cacheKey, lookup);
+  return lookup;
+}
 
-  return null;
+export async function fetchExactTmdbCandidate(title, type = 'movie', year = null, tmdbKey = '', requestCache = null) {
+  const hits = await searchTmdbCandidates(title, type, year, tmdbKey, requestCache);
+  if (!Array.isArray(hits) || hits.length === 0) return null;
+  const termLower = title.toLowerCase().trim();
+  hits.sort((a, b) => {
+    const aTitle = (a.title || a.name || '').toLowerCase().trim();
+    const bTitle = (b.title || b.name || '').toLowerCase().trim();
+    const aExact = aTitle === termLower || (a.original_title || a.original_name || '').toLowerCase().trim() === termLower;
+    const bExact = bTitle === termLower || (b.original_title || b.original_name || '').toLowerCase().trim() === termLower;
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+    return Number(b.vote_count || 0) - Number(a.vote_count || 0);
+  });
+  return hits[0] || null;
 }
 
 // ============================================================================
@@ -2774,11 +2787,18 @@ export default async function handler(req, res) {
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
       }, requestedMediaType, telemetry);
 
-      const orchestration = orchestrateSearch({
+      const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || req.body?.tmdbApiKey || '').trim();
+      const tmdbResolutionCache = new Map();
+      const orchestration = await orchestrateSearch({
         interpreted: llmResult,
         cleanQuery: req.body?.rawQuery || cleanQuery,
         requestedMediaType,
-        telemetry
+        telemetry,
+        resolveEntities: (canonicalIntent) => resolveKnownTitles(canonicalIntent, {
+          searchCandidates: (title, type) => searchTmdbCandidates(
+            title, type, null, tmdbKey, tmdbResolutionCache
+          )
+        })
       });
       const orchestratedLlmResult = orchestration.interpreted;
 
@@ -2837,7 +2857,6 @@ export default async function handler(req, res) {
       //   * Ces films constituent la réponse FINALE à renvoyer au frontend
       //   * DÉSACTIVER IMMÉDIATEMENT tout appel au fallback de genre
       //   * Conserver les badges exacts ("FILM" ou "SÉRIE")
-      const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || req.body?.tmdbApiKey || '').trim();
       const candidateList = (Array.isArray(rawRecommendedTitles) && rawRecommendedTitles.length > 0)
         ? rawRecommendedTitles
         : (Array.isArray(matches) && matches.length > 0)
@@ -2853,7 +2872,7 @@ export default async function handler(req, res) {
         console.log(`[API /api/search] [Priorité 1 Direct TMDB] Résolution chirurgicale de ${candidateList.length} titre(s) LLM...`);
         const resolvedList = await Promise.all(
           candidateList.slice(0, 10).map(async (item) => {
-            const hit = await fetchExactTmdbCandidate(item.title, item.type, item.release_year, tmdbKey);
+            const hit = await fetchExactTmdbCandidate(item.title, item.type, item.release_year, tmdbKey, tmdbResolutionCache);
             if (!hit || !hit.poster_path) return null;
 
             const isActuallyTv = item.type === 'tv' || hit.media_type === 'tv' || Boolean(hit.first_air_date) || Boolean(hit.name && !hit.title);
