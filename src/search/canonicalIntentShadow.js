@@ -35,3 +35,9 @@ export function generateCanonicalIntentShadow(interpreted, context, telemetry) {
   }
   return intent;
 }
+
+/** The Phase 3 orchestrator uses this throwing form to select a safe fallback. */
+export function createCanonicalIntentFromLegacy(interpreted, context) {
+  const adapted = adaptLegacySearchIntent(interpreted, context);
+  return normalizeSearchIntent(adapted);
+}

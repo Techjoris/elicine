@@ -69,25 +69,14 @@ tsx is available in pre-existing uncommitted package changes; Phase 2 adds no
 dependency. Its JavaScript tests require a Node version supporting JSON import
 attributes; verified locally on Node 26.8.2.
 
-The baseline runner replays the actual handler from pinned Phase 1 commit
-9b818b3f59bef875462f25a40ba29b7c78afdc6b and the current handler in isolated
-processes. Each of the 30 queries runs with direct TMDB results, empty TMDB
-results, and no LLM provider; the current handler also runs with injected
-canonical validation failures. It compares public status/payload, result order,
-scores, all outbound requests including LLM prompts, and free quota responses.
-A source guard checks that only the import and shadow call changed in search.js.
-The worker clears service credentials and replaces fetch; no real service runs.
-The fixtures are synthetic, not recorded live recommendations.
+Phase 3 extends the baseline runner to compare the legacy and canonical paths
+using isolated deterministic fixtures; see tests/search/PHASE3.md.
 
 This verifies deterministic non-regression, NOT the baseline's qualitative
 relevance expectations, live provider reliability, authenticated Supabase
 retrieval, or browser end-to-end behavior.
 
-## Existing failure explicitly retained
+## Historical fallback correction
 
-Without an LLM provider, 27 of the 30 queries encounter the existing
-ReferenceError: heuristicMood is not defined. queryLlmCandidates references it
-when heuristicSummary is empty. This happens before the Phase 2 hook and also
-occurs at the pinned Phase 1 commit. Tests preserve and compare this failure;
-they do not claim those 27 searches succeed. Fixing the historical fallback is
-outside Phase 2, which explicitly prohibits fallback changes.
+Phase 3 corrects the historical heuristicMood ReferenceError with a dedicated
+regression test. The no-provider path now continues to its existing fallback.

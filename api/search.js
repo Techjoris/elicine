@@ -1,5 +1,5 @@
 import { checkRateLimit } from './_rateLimit.js';
-import { generateCanonicalIntentShadow } from '../src/search/canonicalIntentShadow.js';
+import { orchestrateSearch } from '../src/search/searchOrchestrator.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
@@ -2774,8 +2774,13 @@ export default async function handler(req, res) {
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
       }, requestedMediaType, telemetry);
 
-      // Phase 2: observational only; no canonical field feeds the legacy engine.
-      generateCanonicalIntentShadow(llmResult, { userQuery: req.body?.rawQuery || cleanQuery }, telemetry);
+      const orchestration = orchestrateSearch({
+        interpreted: llmResult,
+        cleanQuery: req.body?.rawQuery || cleanQuery,
+        requestedMediaType,
+        telemetry
+      });
+      const orchestratedLlmResult = orchestration.interpreted;
 
       const {
         media_type: extractedMediaType = 'all',
@@ -2789,7 +2794,7 @@ export default async function handler(req, res) {
         matches = [],
         facets: extractedFacets = null,
         provider = 'Algorithme Éliciné'
-      } = llmResult;
+      } = orchestratedLlmResult;
 
       // Consolidation du format recherché
       if (extractedMediaType && extractedMediaType !== 'all') {
@@ -2909,7 +2914,7 @@ export default async function handler(req, res) {
           incrementMemoryDailyQuota(ipHash, todayDate);
         }
 
-        const editorialSummary = rawAtmosphereSummary || llmResult.atmosphere_summary || suggestedMood || cleanQuery;
+        const editorialSummary = rawAtmosphereSummary || orchestratedLlmResult.atmosphere_summary || suggestedMood || cleanQuery;
         const thoughtMsg = editorialSummary.toLowerCase().startsWith('vision') || editorialSummary.toLowerCase().startsWith('atmosphère')
           ? editorialSummary
           : `Vision & Recommandation Éliciné — ${editorialSummary}`;

@@ -1,36 +1,17 @@
 // Isolated process: no real credentials, network, database writes or quota use.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import corpus from './baseline-corpus.v1.json' with { type: 'json' };
 
 const mode = process.argv[2];
-const root = fileURLToPath(new URL('../../', import.meta.url));
+assert.ok(['legacy', 'canonical'].includes(mode), 'Expected legacy or canonical mode');
 for (const key of Object.keys(process.env)) {
   if (/API_KEY|SUPABASE|DASHSCOPE|SEARCH_OBSERVABILITY/i.test(key)) delete process.env[key];
 }
+if (mode === 'canonical') process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'true';
+else delete process.env.CANONICAL_SEARCH_ENGINE_ENABLED;
 console.log = console.info = console.warn = console.error = () => {};
-const oldSource = execFileSync('git', [
-  'show', '9b818b3f59bef875462f25a40ba29b7c78afdc6b:api/search.js'
-], { cwd: root, encoding: 'utf8' });
-const currentSource = readFileSync(new URL('../../api/search.js', import.meta.url), 'utf8');
-const withoutShadow = currentSource.replace(/\r\n/g, '\n')
-  .replace("import { generateCanonicalIntentShadow } from '../src/search/canonicalIntentShadow.js';\n", '')
-  .replace("\n      // Phase 2: observational only; no canonical field feeds the legacy engine.\n      generateCanonicalIntentShadow(llmResult, { userQuery: req.body?.rawQuery || cleanQuery }, telemetry);\n", '');
-assert.equal(withoutShadow, oldSource.replace(/\r\n/g, '\n'),
-  'Only the Phase 2 import and shadow hook may differ from the pinned handler');
-// Resolve imports without creating a temporary copy or changing the checkout.
-const source = (mode === 'old' ? oldSource : currentSource).replace(
-  /from '(\.\.?\/[^']+)'/g,
-  (_, specifier) => "from '" + new URL(specifier, new URL('../../api/search.js', import.meta.url)).href + "'"
-);
-const { default: handler } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const { default: handler } = await import('../../api/search.js');
 const { getBufferedSearchTelemetry } = await import('../../api/searchPhase0.js');
-if (mode === 'failure') {
-  const { canonicalIntentSchema } = await import('../../src/types/canonicalIntent.runtime.js');
-  canonicalIntentSchema.parse = () => { throw new Error('Injected validation failure'); };
-}
 
 let requests = [];
 let activeCase;
@@ -40,6 +21,9 @@ globalThis.fetch = async (url, options = {}) => {
   const body = options.body ? JSON.parse(options.body) : null;
   requests.push({ url: String(url), method: options.method || 'GET', body });
   if (parsed.hostname === 'api.groq.com') {
+    if (scenario === 'provider-error') {
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
     const media = activeCase.expectedMediaTypes.length === 1 ? activeCase.expectedMediaTypes[0] : 'all';
     return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
       media_type: media,
@@ -53,11 +37,13 @@ globalThis.fetch = async (url, options = {}) => {
     }) } }] }) };
   }
   if (parsed.hostname === 'api.themoviedb.org') {
-    if (scenario !== 'direct') return { ok: true, json: async () => ({ results: [] }) };
+    if (!['direct', 'duplicates'].includes(scenario)) {
+      return { ok: true, json: async () => ({ results: [] }) };
+    }
     const title = parsed.searchParams.get('query') || 'Fixture';
     const tv = parsed.pathname.includes('/tv');
     const item = {
-      id: title === 'Fixture Alpha' ? 100 : 200, poster_path: '/fixture.jpg',
+      id: scenario === 'duplicates' ? 100 : (title === 'Fixture Alpha' ? 100 : 200), poster_path: '/fixture.jpg',
       overview: 'Deterministic fixture', vote_count: 1000, vote_average: 8,
       genre_ids: [80, 18],
       ...(tv ? { name: title, first_air_date: '2001-01-01' } : { title, release_date: '2001-01-01' })
@@ -68,7 +54,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 
 const snapshots = [];
-for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic'].entries()) {
+for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-error', 'duplicates'].entries()) {
   scenario = name;
   for (const [index, entry] of corpus.queries.entries()) {
     activeCase = entry;
@@ -91,25 +77,24 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic'].entries()) 
       return { status: response.statusCode, payload: response.payload };
     };
     const response = await invoke();
-    // Existing Phase 1 defect: provider exhaustion references heuristicMood,
-    // which is undefined. Record it explicitly; Phase 2 must not alter fallbacks.
-    if (scenario === 'heuristic') {
-      assert.ok([200, 500].includes(response.status));
-      if (response.status === 500) assert.equal(response.payload.error, 'heuristicMood is not defined');
-    } else assert.equal(response.status, 200);
+    assert.equal(response.status, 200, entry.id + '/' + scenario);
     const telemetry = getBufferedSearchTelemetry().at(-1);
-    if (mode !== 'old' && response.status === 200) {
-      assert.equal(telemetry.canonicalIntentGenerated, mode !== 'failure');
-      assert.equal(telemetry.canonicalIntentValid, mode !== 'failure');
-      assert.equal(telemetry.canonicalIntentError, mode === 'failure' ? 'CANONICAL_INTENT_VALIDATION_FAILED' : null);
+    if (mode === 'canonical') {
+      assert.equal(telemetry.searchEnginePath, 'canonical');
+      assert.equal(telemetry.orchestrationSucceeded, true);
+      assert.equal(telemetry.canonicalIntentGenerated, true);
+      assert.equal(telemetry.canonicalIntentValid, true);
+    } else {
+      assert.equal(telemetry.searchEnginePath, 'legacy');
     }
-    if (scenario !== 'heuristic') assert.ok(requests.length > 0);
-    else if (response.status === 500) assert.equal(telemetry.canonicalIntentGenerated, undefined);
-    if (scenario === 'direct') assert.ok(response.payload.results.length > 0);
-    if (scenario === 'empty') assert.equal((response.payload.movies || []).length, 0);
+    assert.ok(requests.length > 0);
+    if (['direct', 'duplicates'].includes(scenario)) assert.ok(response.payload.results.length > 0);
+    if (scenario === 'duplicates') {
+      assert.equal(new Set(response.payload.results.map(item => item.id)).size, response.payload.results.length);
+    }
     const quota = [await invoke('GET')];
     // Exercise the unchanged free quota boundary as well as successful searches.
-    if (scenario === 'direct') {
+    if (['direct', 'duplicates'].includes(scenario)) {
       quota.push(await invoke(), await invoke(), await invoke(), await invoke('GET'));
       assert.equal(quota[3].payload.code, 'QUOTA_EXCEEDED');
     }
