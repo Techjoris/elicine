@@ -1,4 +1,5 @@
 import { checkRateLimit } from './_rateLimit.js';
+import { generateCanonicalIntentShadow } from '../src/search/canonicalIntentShadow.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
@@ -2770,6 +2771,9 @@ export default async function handler(req, res) {
         geminiApiKey:   req.body?.geminiApiKey,
         openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
       }, requestedMediaType, telemetry);
+
+      // Phase 2: observational only; no canonical field feeds the legacy engine.
+      generateCanonicalIntentShadow(llmResult, { userQuery: req.body?.rawQuery || cleanQuery }, telemetry);
 
       const {
         media_type: extractedMediaType = 'all',
