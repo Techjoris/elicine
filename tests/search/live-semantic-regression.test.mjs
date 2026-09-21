@@ -21,6 +21,7 @@ test('no-LLM person signal resolves Leonardo DiCaprio and retrieves Inception/Ti
   const signals = extractFallbackIntentSignals(query);
   assert.deepEqual(signals.people, ['leonardo dicaprio']);
   assert.ok(signals.themes.includes('shared dreams'));
+  assert.ok(signals.keywords.includes('rêve'));
 
   const calls = [];
   const client = createTmdbRetrievalClient({

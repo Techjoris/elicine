@@ -65,7 +65,12 @@ export function extractFallbackIntentSignals(userQuery = '') {
 
   const namedPhrases = String(userQuery).match(/\b[A-ZÀ-ÖØ-Þ][\p{L}'-]+(?:\s+[A-ZÀ-ÖØ-Þ][\p{L}'-]+)+/gu) || [];
   const tokens = text.split(/\s+/).filter(token => token.length >= 4 && !STOP_WORDS.has(token));
-  const keywords = [...new Set([...namedPhrases, ...themes, ...tokens])].slice(0, 8);
+  // Keep a couple of deterministic lexical variants for the shared-dreams
+  // concept. TMDB overviews commonly use singular French "rêve"/"subconscient"
+  // even when the user writes plural "rêves"; this improves retrieval without
+  // introducing a provider call or changing the ranking formula.
+  const dreamVariants = themes.includes('shared dreams') ? ['rêve', 'subconscient'] : [];
+  const keywords = [...new Set([...namedPhrases, ...themes, ...dreamVariants, ...tokens])].slice(0, 8);
   const moods = /\bsombre\b/.test(text) ? ['dark'] : [];
   return { genres, themes, moods, keywords, people: extractPersonQueries(userQuery) };
 }
