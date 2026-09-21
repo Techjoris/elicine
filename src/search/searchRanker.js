@@ -2,6 +2,7 @@ import { toLegacyRankingCandidate } from './retrievalCandidate.js';
 import { normalizeTerm, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms } from './semanticExpansion.js';
 import { characterSimilarity } from './requestedWork.js';
+import { conceptVariants } from './semanticLexicon.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -36,7 +37,10 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
-  publicMatch: Object.freeze({ floor: 22, spread: 78, saturation: 0.8, gamma: 1.15 })
+  // Saturation sits at the top of the computed range: the displayed percentage
+  // keeps discriminating inside the whole useful band instead of flattening
+  // every strong candidate at 100%.
+  publicMatch: Object.freeze({ floor: 22, spread: 78, saturation: 1, gamma: 1.15 })
 });
 
 export function isElicineRankingEnabled(env = process.env) {
@@ -56,12 +60,20 @@ function termCoverage(requested, structured, freeText) {
   if (!wanted.length) return 0;
   const facts = normalized(structured);
   const text = normalizeTerm(freeText);
+  const available = new Set([...facts.flatMap(value => [...tokens(value)]), ...tokens(text)]);
   const scores = wanted.map(term => {
-    if (facts.includes(term) || containsPhrase(text, term)) return 1;
-    const wantedTokens = tokens(term);
-    if (!wantedTokens.size) return 0;
-    const available = new Set([...facts.flatMap(value => [...tokens(value)]), ...tokens(text)]);
-    return clamp([...wantedTokens].filter(token => available.has(token)).length / wantedTokens.size) * 0.8;
+    // The interpreter writes concepts in English while the catalogue answers in
+    // French: a concept counts as soon as any of its wordings is present, so a
+    // French overview can carry an English concept and an unrelated popular
+    // title cannot win on its name alone.
+    const variants = conceptVariants(term);
+    if (!variants.length) return 0;
+    return Math.max(...variants.map(variant => {
+      if (facts.includes(variant) || containsPhrase(text, variant)) return 1;
+      const wantedTokens = tokens(variant);
+      if (!wantedTokens.size) return 0;
+      return clamp([...wantedTokens].filter(token => available.has(token)).length / wantedTokens.size) * 0.8;
+    }));
   });
   return scores.reduce((sum, value) => sum + value, 0) / scores.length;
 }
@@ -290,12 +302,13 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // The documented weights stay untouched (they sum to 1): convergence is
   // blended in as an explicit share so the historical signal proportions are
   // preserved while genuine multi-signal agreement is rewarded.
-  const identifiedShare = components.identifiedWorkScore > 0
-    ? ELICINE_RANKING_CONFIG.identifiedWorkWeight : 0;
-  const finalScore = clamp(coverageScore *
-    (1 - ELICINE_RANKING_CONFIG.convergenceWeight - identifiedShare) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight +
-    components.identifiedWorkScore * identifiedShare);
+  // The named work earns a bounded bonus on top of the historical blend: its
+  // other signals are never discounted, so an identification cannot be pushed
+  // below a recommendation that merely matches the same concepts. With no
+  // identified work the formula is exactly the historical one.
+  const identifiedBonus = components.identifiedWorkScore * ELICINE_RANKING_CONFIG.identifiedWorkWeight;
+  const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus);
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
