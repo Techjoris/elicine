@@ -11,8 +11,7 @@ frontend search implementation is changed.
 
 The transition flag is server-only:
 
-- during implementation, `HYBRID_RETRIEVAL_ENABLED=true` opts in;
-- after the activation gate, absence or `true` selects hybrid retrieval;
+- after the completed activation gate, absence or `true` selects hybrid retrieval;
 - `HYBRID_RETRIEVAL_ENABLED=false` immediately restores historical retrieval.
 
 Production executes one retrieval path. Legacy/hybrid shadow comparison exists

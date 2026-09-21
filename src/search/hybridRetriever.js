@@ -4,8 +4,8 @@ import { discoverParams, hasDiscoverConstraints, keywordTerms, normalizeTerm, re
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2, terms: 5, keywordIds: 3, sourceResults: 20, sourceTimeoutMs: 4000 });
 export function isHybridRetrievalEnabled(env = process.env) {
-  // Opt-in until the full Phase 5 activation gate has passed.
-  return String(env?.[HYBRID_RETRIEVAL_FLAG] ?? 'false').toLowerCase() === 'true';
+  // Hybrid is the validated default; explicit false is the operational rollback.
+  return String(env?.[HYBRID_RETRIEVAL_FLAG] ?? 'true').toLowerCase() !== 'false';
 }
 export function createRetrievalTelemetry() {
   return { hybridRetrievalAttempted: false, hybridRetrievalSucceeded: false, hybridRetrievalDurationMs: 0,

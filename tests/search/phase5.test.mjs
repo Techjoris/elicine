@@ -14,7 +14,7 @@ export const row = (id, media_type = 'movie', extra = {}) => ({ id, media_type, 
 const run = (input = {}, services = {}, resolvedContext = {}, context = {}) => hybridRetrieve({ intent: intent(input), services, resolvedContext, context });
 
 test('flag supports explicit activation and rollback', () => {
-  assert.equal(isHybridRetrievalEnabled({}), false);
+  assert.equal(isHybridRetrievalEnabled({}), true);
   assert.equal(isHybridRetrievalEnabled({ HYBRID_RETRIEVAL_ENABLED: 'true' }), true);
   assert.equal(isHybridRetrievalEnabled({ HYBRID_RETRIEVAL_ENABLED: 'false' }), false);
 });
