@@ -37,6 +37,11 @@ test('the corpus is versioned, mirrored across films and series, and split in tw
     assert.ok(set.some(entry => entry.expected.mediaType === mediaType),
       `${set === development ? 'development' : 'generalization'} set has no ${mediaType} case`);
   }
+  // The silent-overview blind spot stays covered by design: at least one case
+  // must state an exclusion whose only local evidence is a keyword tag.
+  assert.ok(corpus.some(entry => (entry.intent.semanticExclusions || []).length > 0 &&
+    entry.candidates.some(candidate => (candidate.keywords || []).length > 0 && !candidate.overview)),
+  'the corpus no longer covers a keyword-only exclusion evidence');
 });
 
 const runs = new Map();

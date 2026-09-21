@@ -36,6 +36,10 @@ function row(candidate) {
     genre_ids: candidate.genreIds || [], themes: candidate.themes || [], moods: candidate.moods || [],
     vote_average: candidate.voteAverage ?? 0, vote_count: candidate.voteCount ?? 0,
     popularity: candidate.popularity ?? 0,
+    // TMDB keyword tags are the channel that survives a silent overview: the
+    // fixture carries them the way the provider row does, so a case can prove
+    // an exclusion is confirmed without any wording in the description.
+    keywords: candidate.keywords || [],
     ...(Number.isFinite(Number(candidate.similarity)) ? { similarity: Number(candidate.similarity) } : {})
   };
 }

@@ -34,11 +34,57 @@ export function reliableKeywordId(term, results) {
   return ids.length === 1 ? ids[0] : null;
 }
 
-export function discoverParams(intent, type, keywordIds = []) {
+/**
+ * Exclusion concepts never name a work: each family maps onto the TMDB keyword
+ * wordings the provider itself tags, so Discover can rule the family out at the
+ * source instead of trusting a bounded local pool to have sorted it out. The
+ * table is conceptual and bilingual by construction (the concepts are the
+ * canonical ones the negative clauses normalize to), never a list of works.
+ */
+export const EXCLUSION_KEYWORD_TERMS = Object.freeze({
+  murder: Object.freeze(['murder', 'serial killer', 'homicide', 'killing']),
+  police_investigation: Object.freeze(['police investigation', 'detective']),
+  magic: Object.freeze(['magic', 'sorcery']),
+  supernatural: Object.freeze(['supernatural', 'paranormal']),
+  aliens: Object.freeze(['alien']),
+  monsters: Object.freeze(['monster']),
+  ghosts: Object.freeze(['ghost']),
+  time_travel: Object.freeze(['time travel', 'time loop']),
+  space_travel: Object.freeze(['space travel']),
+  robots: Object.freeze(['robot']),
+  romance: Object.freeze(['romance']),
+  comedy: Object.freeze(['comedy']),
+  science_fiction: Object.freeze(['science fiction']),
+  fantasy_creatures: Object.freeze(['creature']),
+  relationship: Object.freeze(['couple'])
+});
+
+export function exclusionKeywordTerms(concepts = [], limit = 4) {
+  const terms = [];
+  const max = Math.max(0, limit);
+  for (const concept of Array.isArray(concepts) ? concepts : [concepts]) {
+    if (terms.length >= max) break;
+    const key = String(concept ?? '').trim().toLowerCase();
+    // Family keys are underscore wordings (`police_investigation`); a raw
+    // phrase is still accepted through the standard normalization so an
+    // unmapped exclusion never loses the terms it could have matched.
+    const mapped = EXCLUSION_KEYWORD_TERMS[key] || EXCLUSION_KEYWORD_TERMS[normalizeTerm(key)] || [];
+    for (const term of mapped) {
+      if (terms.length >= max) break;
+      if (!terms.includes(term)) terms.push(term);
+    }
+  }
+  return terms;
+}
+
+export function discoverParams(intent, type, keywordIds = [], excludedKeywordIds = []) {
   const params = { language: 'fr-FR', page: 1, include_adult: intent.adult ?? false, sort_by: 'popularity.desc' };
   const ids = tmdbGenreIds(intent.genres, type);
   if (ids.length) params.with_genres = ids.join(',');
   if (keywordIds.length) params.with_keywords = keywordIds.join('|');
+  // TMDB excludes every work carrying any of these keyword IDs, so a stated
+  // exclusion prunes the Discover pool before the local strict filter sees it.
+  if (excludedKeywordIds.length) params.without_keywords = excludedKeywordIds.join(',');
   const date = type === 'tv' ? 'first_air_date' : 'primary_release_date';
   if (intent.yearMin != null) params[`${date}.gte`] = `${intent.yearMin}-01-01`;
   if (intent.yearMax != null) params[`${date}.lte`] = `${intent.yearMax}-12-31`;

@@ -181,5 +181,28 @@
       { "id": 900372, "mediaType": "tv", "title": "Lakeside Comedy", "overview": "A warm family comedy at a lake.", "genreIds": [35], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 7.3, "voteCount": 4000 }
     ],
     "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900371, "mediaType": "tv" }], "mustExclude": [], "after": [900361, 900372], "concepts": ["hospital"] }
+  },
+  {
+    "id": "dev-movie-exclusions-silent-overview", "set": "development",
+    "query": "un thriller psychologique sombre sans meurtre ni enquête policière, centré sur l'identité",
+    "intent": { "mediaType": "movie", "genres": ["Thriller"], "themes": ["psychological"], "moods": ["dark"],
+      "semanticExclusions": ["murder", "police_investigation"] },
+    "candidates": [
+      { "id": 900161, "mediaType": "movie", "title": "Portrait Trouble", "overview": "Un portrait psychologique sombre sur le deuil et l'identite.", "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 45, "voteAverage": 7.6, "voteCount": 4000 },
+      { "id": 900162, "mediaType": "movie", "title": "Le Doute Interieur", "overview": "", "keywords": ["murder", "detective", "serial killer"], "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 8.4, "voteCount": 30000 },
+      { "id": 900163, "mediaType": "movie", "title": "Motel du Lac", "overview": "Une secretaire en fuite s'arrete dans un motel isole.", "keywords": ["police investigation"], "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8.2, "voteCount": 20000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900161, "mediaType": "movie" }], "mustExclude": [{ "tmdbId": 900162, "mediaType": "movie" }, { "tmdbId": 900163, "mediaType": "movie" }], "concepts": ["psychological", "dark"] }
+  },
+  {
+    "id": "gen-tv-exclusions-silent-overview", "set": "generalization",
+    "query": "une série de science-fiction sans robots ni voyage dans le temps",
+    "intent": { "mediaType": "tv", "genres": ["Science Fiction"], "semanticExclusions": ["robots", "time_travel"] },
+    "candidates": [
+      { "id": 900381, "mediaType": "tv", "title": "Grounded Orbit", "overview": "A grounded story about memory and identity on a space station.", "genreIds": [10765], "sources": ["tmdb_discover"], "popularity": 50, "voteAverage": 7.5, "voteCount": 4000 },
+      { "id": 900382, "mediaType": "tv", "title": "Machine Uprising", "overview": "", "keywords": ["robot", "artificial intelligence"], "genreIds": [10765], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8.1, "voteCount": 15000 },
+      { "id": 900383, "mediaType": "tv", "title": "Loop Story", "overview": "A man relives the same day again and again.", "keywords": ["time travel"], "genreIds": [10765], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 8, "voteCount": 12000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900381, "mediaType": "tv" }], "mustExclude": [{ "tmdbId": 900382, "mediaType": "tv" }, { "tmdbId": 900383, "mediaType": "tv" }], "concepts": ["memory", "identity"] }
   }
 ]

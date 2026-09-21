@@ -1,12 +1,14 @@
 import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
-import { discoverParams, hasDiscoverConstraints, keywordTerms, normalizeTerm, reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
+import { discoverParams, exclusionKeywordTerms, hasDiscoverConstraints, keywordTerms, normalizeTerm,
+  reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 import { createFallbackTelemetry, failedSourceLabel, FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 import { recordEvaluationSource, summarizeEvaluationCandidates } from './searchEvaluation.js';
+import { normalizeSemanticExclusions } from './strictConstraintFilter.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
-  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, sourceResults: 20, sourceTimeoutMs: 4000 });
+  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, exclusionTerms: 4, sourceResults: 20, sourceTimeoutMs: 4000 });
 export function isHybridRetrievalEnabled(env = process.env) {
   // Hybrid is the validated default; explicit false is the operational rollback.
   return String(env?.[HYBRID_RETRIEVAL_FLAG] ?? 'true').toLowerCase() !== 'false';
@@ -30,7 +32,8 @@ export function createRetrievalTelemetry() {
     diversificationAttempted: false, diversificationCandidateCount: 0,
     diversificationReorderedCount: 0, diversificationDurationMs: 0,
     semanticExpansionApplied: false, semanticExpansionTermCount: 0,
-    semanticKeywordResolvedCount: 0, ...createFallbackTelemetry() };
+    semanticKeywordResolvedCount: 0, semanticExclusionKeywordResolvedCount: 0,
+    ...createFallbackTelemetry() };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {
@@ -142,24 +145,36 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   if (services.vector) source('supabase_vector', signal => services.vector(intent, { signal, context }));
 
   // Keywords are a dependency only of Discover; seeds/lexical/legacy already run.
+  // Positive concepts restrict the pool (with_keywords), stated exclusions prune
+  // it (without_keywords): both read TMDB's own taxonomy, never a work list.
   const keywordsTask = (async () => {
-    if (!services.keyword) return [];
-    const results = await Promise.allSettled(keywordTerms(intent, RETRIEVAL_LIMITS.terms).map(async term => {
-      try {
-        return reliableKeywordId(term, await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout));
-      } catch (error) {
-        errors.push({ source: 'tmdb_keyword', code: error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED' });
-        return null;
-      }
-    }));
-    return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, 3);
+    const resolveIds = async (terms, limit) => {
+      if (!services.keyword || terms.length === 0) return [];
+      const results = await Promise.allSettled(terms.map(async term => {
+        try {
+          return reliableKeywordId(term, await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout));
+        } catch (error) {
+          errors.push({ source: 'tmdb_keyword', code: error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED' });
+          return null;
+        }
+      }));
+      return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, limit);
+    };
+    const [included, excluded] = await Promise.all([
+      resolveIds(keywordTerms(intent, RETRIEVAL_LIMITS.terms), RETRIEVAL_LIMITS.keywordIds),
+      resolveIds(exclusionKeywordTerms(normalizeSemanticExclusions(intent.semanticExclusions),
+        RETRIEVAL_LIMITS.exclusionTerms), RETRIEVAL_LIMITS.exclusionTerms)
+    ]);
+    return { included, excluded };
   })();
-  const keywordIds = await keywordsTask;
+  const { included: keywordIds, excluded: excludedKeywordIds } = await keywordsTask;
   if (evaluationTrace) evaluationTrace.semanticExpansion.resolvedKeywordIds = [...keywordIds];
   metrics.semanticKeywordResolvedCount = keywordIds.length;
+  metrics.semanticExclusionKeywordResolvedCount = excludedKeywordIds.length;
   if (services.discover) for (const type of intent.mediaType ? [intent.mediaType] : ['movie', 'tv']) {
     if (hasDiscoverConstraints(intent, type, keywordIds))
-      source('tmdb_discover', signal => services.discover(type, discoverParams(intent, type, keywordIds), { signal, context }), type, { keywordIds });
+      source('tmdb_discover', signal => services.discover(type,
+        discoverParams(intent, type, keywordIds, excludedKeywordIds), { signal, context }), type, { keywordIds });
   }
   const settled = await Promise.allSettled(tasks);
   const candidates = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);

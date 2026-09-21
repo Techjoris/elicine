@@ -2781,6 +2781,14 @@ export default async function handler(req, res) {
       if (directTmdbMovies.length >= 1) {
         console.log(`[API /api/search] [Priorité 1 Succès] ${directTmdbMovies.length} titre(s) validé(s) par TMDB. Blocage absolu du fallback.`);
 
+        // A provider suggestion is not an answer: the canonical intent still
+        // decides, so a title the user explicitly excluded is never returned by
+        // this shortcut even when the language model recommended it.
+        if (orchestration.canonicalIntent) {
+          directTmdbMovies = filterStrictCandidates(directTmdbMovies, orchestration.canonicalIntent,
+            { telemetry }).candidates;
+        }
+
         if (requestedMediaType && requestedMediaType !== 'Tous') {
           if (requestedMediaType === 'Séries TV') {
             const seriesOnly = directTmdbMovies.filter(m => m.media_type === 'tv' || m.badge === 'SÉRIE');
@@ -3009,6 +3017,14 @@ export default async function handler(req, res) {
 
       if (orchestration.canonicalIntent?.mediaType) {
         resolvedMovies = resolvedMovies.filter(movie => candidateMediaType(movie) === orchestration.canonicalIntent.mediaType);
+      }
+
+      // The historical levels assemble their own pool (catalogue, provider
+      // search, genre complement) without the canonical stages. The constraints
+      // the query stated still apply to whatever they found, so no response can
+      // contain a work the canonical intent rules out.
+      if (!useHybrid && orchestration.canonicalIntent && resolvedMovies.length > 0) {
+        resolvedMovies = filterStrictCandidates(resolvedMovies, orchestration.canonicalIntent, { telemetry }).candidates;
       }
 
       if (useHybrid && resolvedMovies.length === 0 &&

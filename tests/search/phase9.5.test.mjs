@@ -3,7 +3,8 @@ import test from 'node:test';
 import { hybridRetrieve, RETRIEVAL_LIMITS } from '../../src/search/hybridRetriever.js';
 import { createSupabaseLexicalSource } from '../../src/search/retrievalServices.js';
 import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from '../../src/search/semanticExpansion.js';
-import { discoverParams, keywordTerms, reliableKeywordId } from '../../src/search/tmdbRetrievalParams.js';
+import { discoverParams, exclusionKeywordTerms, keywordTerms, reliableKeywordId }
+  from '../../src/search/tmdbRetrievalParams.js';
 import {
   buildMediaIndexText, buildVectorQueryText, VECTOR_EMBEDDING_DIMENSION, VECTOR_EMBEDDING_MODEL
 } from '../../src/search/vectorRetrieval.js';
@@ -158,4 +159,52 @@ test('Discover keeps media type strict and combines genre with only resolved key
   const params = discoverParams(canonical, 'tv', [10, 20, 30]);
   assert.equal(params.with_genres, '10768');
   assert.equal(params.with_keywords, '10|20|30');
+});
+
+test('stated exclusions map onto TMDB keyword wordings, bounded and deduplicated', () => {
+  assert.deepEqual(exclusionKeywordTerms(['murder']), ['murder', 'serial killer', 'homicide', 'killing']);
+  assert.deepEqual(exclusionKeywordTerms(['police_investigation']), ['police investigation', 'detective']);
+  assert.deepEqual(exclusionKeywordTerms(['time_travel', 'romance'], 3), ['time travel', 'time loop', 'romance']);
+  assert.deepEqual(exclusionKeywordTerms(['science_fiction', 'robots'], 2), ['science fiction', 'robot']);
+  assert.deepEqual(exclusionKeywordTerms(['murder', 'murder']), ['murder', 'serial killer', 'homicide', 'killing']);
+  assert.deepEqual(exclusionKeywordTerms([], 4), []);
+  assert.deepEqual(exclusionKeywordTerms(['concept sans famille']), []);
+  assert.deepEqual(exclusionKeywordTerms(['murder'], 0), []);
+});
+
+test('Discover carries stated exclusions as without_keywords next to resolved positive keywords', () => {
+  const canonical = intent({ mediaType: 'movie', genres: ['Thriller'] });
+  const params = discoverParams(canonical, 'movie', [10, 20], [9826, 10714]);
+  assert.equal(params.with_keywords, '10|20');
+  assert.equal(params.without_keywords, '9826,10714');
+  // No stated exclusion means no exclusion parameter at all: the provider
+  // request keeps its historical shape.
+  assert.equal('without_keywords' in discoverParams(canonical, 'movie', [10, 20]), false);
+});
+
+test('hybrid retrieval resolves exclusion keywords and prunes the Discover pool at the source', async () => {
+  const canonical = intent({ mediaType: 'movie', genres: ['Thriller'], semanticExclusions: ['murder'] });
+  const keywordIds = new Map([['murder', 9826], ['serial killer', 10714]]);
+  const lookedUp = [];
+  const excluded = row(901, 'Tagged Killer', 'movie', { keywords: ['serial killer'] });
+  const kept = row(902, 'Quiet Portrait', 'movie', { keywords: ['psychological'] });
+  const telemetry = {};
+  let discoverParamsSeen = null;
+  const pool = await hybridRetrieve({ intent: canonical, context: { telemetry }, services: {
+    keyword: async term => { lookedUp.push(term);
+      return keywordIds.has(term) ? [{ id: keywordIds.get(term), name: term }] : []; },
+    discover: async (type, params) => {
+      discoverParamsSeen = params;
+      // The fixture honours without_keywords the way the provider does: a work
+      // carrying any excluded keyword never reaches the local pool.
+      const without = new Set(String(params.without_keywords || '').split(',').filter(Boolean).map(Number));
+      return [excluded, kept].filter(candidate =>
+        !(candidate.keywords || []).some(name => without.has(keywordIds.get(name))));
+    }
+  } });
+  assert.deepEqual(lookedUp, ['murder', 'serial killer', 'homicide', 'killing']);
+  assert.equal(discoverParamsSeen.without_keywords, '9826,10714');
+  assert.deepEqual(pool.map(candidate => candidate.title), ['Quiet Portrait']);
+  assert.equal(telemetry.semanticExclusionKeywordResolvedCount, 2);
+  assert.equal(telemetry.semanticKeywordResolvedCount, 0);
 });
