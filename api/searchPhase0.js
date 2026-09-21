@@ -60,6 +60,21 @@ export function recordSearchLlmAttempt(telemetry, provider, model) {
   telemetry.llmAttempts.push({ provider, model, atMs: Date.now() - telemetry.startedAt });
 }
 
+/**
+ * Interpreter-level observability. Fixed operational labels only: the user
+ * query and any provider output are never stored here.
+ * path is one of: deepseek | provider_fallback | heuristic_fallback.
+ */
+export function recordSearchInterpreter(telemetry, { path = null, providerId = null,
+  reason = null, partial = false } = {}) {
+  if (!telemetry) return;
+  const label = value => (typeof value === 'string' && value ? value.slice(0, 40) : null);
+  telemetry.semanticInterpreterPath = label(path);
+  telemetry.semanticInterpreterProvider = label(providerId);
+  telemetry.semanticInterpreterReason = label(reason);
+  telemetry.semanticInterpreterPartial = Boolean(partial);
+}
+
 export function recordSearchCandidateCount(telemetry, source, count) {
   if (!telemetry || !Number.isFinite(Number(count))) return;
   telemetry.candidateCounts[source] = Number(count);

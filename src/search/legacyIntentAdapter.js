@@ -53,6 +53,15 @@ export function adaptLegacySearchIntent(interpreted, { userQuery = '', recoverFa
       references.some(title => typeof title !== 'string'))) {
     throw new TypeError('Legacy references must be strings');
   }
+  // Interpreter-provided titles are a trusted channel: the LLM may normalize or
+  // repair a reference ("shuter island" -> "Shutter Island") that literal
+  // matching would drop. The legacy parser never emits this key, so its
+  // non-promotion guarantee is unchanged.
+  const explicitTitles = interpreted.known_titles;
+  if (explicitTitles != null && (!Array.isArray(explicitTitles) ||
+      explicitTitles.some(title => typeof title !== 'string'))) {
+    throw new TypeError('Interpreted known titles must be strings');
+  }
   // Literal whole-title evidence only; no fuzzy correction or translation.
   const words = value => value.normalize('NFC').toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -61,14 +70,17 @@ export function adaptLegacySearchIntent(interpreted, { userQuery = '', recoverFa
     const titleWords = words(title);
     return titleWords && queryWords.includes(' ' + titleWords + ' ');
   });
-  const extractedReferences = extractReferenceTitleQueries(userQuery).filter(extracted => {
+  // When the interpreter supplied titles, the raw "comme X" regex is a no-LLM
+  // signal and must not complete the interpreted intent. Extraction stays active
+  // for the legacy parser and for the explicit no-LLM fallback path.
+  const extractedReferences = (explicitTitles?.length ? [] : extractReferenceTitleQueries(userQuery)).filter(extracted => {
     const extractedWords = words(extracted);
     return !literalReferences.some(literal => {
       const literalWords = words(literal);
       return extractedWords === literalWords || extractedWords.startsWith(`${literalWords} `);
     });
   });
-  const knownTitles = mergeUnique(literalReferences, extractedReferences).slice(0, 5);
+  const knownTitles = mergeUnique(explicitTitles || [], literalReferences, extractedReferences).slice(0, 5);
   const providerFallback = recoverFallbackSignals && interpreted.provider === 'Algorithme Éliciné';
   const hasStructuredSemantics = [interpreted.primary_genres, interpreted.mood_tags,
     interpreted.explicit_themes, interpreted.keywords, knownTitles]

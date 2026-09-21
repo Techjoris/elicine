@@ -11,12 +11,14 @@ import { diversifyRankedCandidates } from '../src/search/resultDiversifier.js';
 import { resolveKnownPeople, resolveKnownTitles } from '../src/search/entityResolver.js';
 import { extractPersonQueries } from '../src/search/fallbackIntentSignals.js';
 import { FALLBACK_REASONS, recordFallback } from '../src/search/fallbackPolicy.js';
+import { interpretSearchQuery, SEMANTIC_INTERPRETER_PATHS } from '../src/search/semanticInterpreter.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
   finalizeSearchTelemetry,
   getSearchEngineMode,
   recordSearchCandidateCount,
+  recordSearchInterpreter,
   recordSearchLlmAttempt
 } from './searchPhase0.js';
 import { persistSearchTelemetry } from './searchTelemetryPersistence.js';
@@ -30,99 +32,11 @@ import {
 } from './_security.js';
 
 // ============================================================================
-// SYSTEM PROMPT — ÉTAPE 1 : Cerveau LLM (Extraction & Correction)
-// Rôle : Corriger les fautes, interpréter les descriptions libres,
-//        et renvoyer impérativement 3 à 5 titres de films pertinents.
+// ÉTAPE 1 — Interprétation sémantique LLM-first (DeepSeek prioritaire)
+// Le prompt système, le contrat JSON et la cascade de providers vivent dans
+// src/search/semanticInterpreter.js. Le no-LLM n est utilisé qu en secours,
+// en cas de timeout, erreur fournisseur, réponse invalide ou provider absent.
 // ============================================================================
-// SYSTEM PROMPT — ÉTAPE 1 : Cerveau LLM (Extraction & Correction)
-// Rôle : Corriger les fautes, interpréter les descriptions libres,
-//        et renvoyer impérativement 5 à 8 films pertinents.
-// ============================================================================
-const LLM_SYSTEM_PROMPT = `Tu es une encyclopédie universelle du cinéma dotée d'une intelligence exceptionnelle.
-
-Ta mission est double :
-1. CORRIGER silencieusement toutes les fautes de frappe, d'orthographe ou de grammaire dans la requête de l'utilisateur avant de l'analyser.
-2. TRANSFORMER toute description littéraire, métaphore sensorielle, ambiance poétique, situation narrative, époque ou mots-clés en une liste précise de 4 à 8 films cinématographiques qui correspondent VÉRITABLEMENT à cette intention.
-
-Directives cinématographiques majeures :
-- COHÉRENCE SÉMANTIQUE GLOBALE & PROFONDEUR THÉMATIQUE (PRIORITÉ ABSOLUE) :
-  L'analyse doit porter sur la COHÉRENCE GLOBALE de l'œuvre (intrigue principale, enjeux dramatiques majeurs, thématiques centrales) et NON sur de simples mots-clés indépendants ou superficiels.
-  Exemple critique : si l'utilisateur recherche "un film sur le mariage et la mort", les films recommandés DOIVENT articuler véritablement et simultanément ces deux thèmes au cœur de leur histoire (ex: Les Noces funèbres / Corpse Bride, Melancholia, Amour de Haneke, Beetlejuice, Quatre mariages et un enterrement, Ready or Not / Wedding Nightmare, Ghost, etc.).
-  INTERDICTION FORMELLE de proposer des comédies de bureau, des films d'entreprise, des romances légères ordinaires ou des films de jazz qui n'ont aucun rapport avec la thématique conjointe demandée.
-- GESTION PROPRE DU ZÉRO RÉSULTAT & INTERDICTION DU BLOCAGE SEC INJUSTIFIÉ :
-  Le renvoi d'un tableau vide "matches": [] est STRICTEMENT RÉSERVÉ aux suites de caractères insensées (charabia incompréhensible, ex: "sjkdfhkjsdhf") ou aux requêtes véritablement impossibles.
-  INTERDICTION FORMELLE DU BLOCAGE SEC sur une recherche formulée avec des négations ou des exclusions (ex: "un film d'action sans super-héros et sans explosion") : le modèle ne doit JAMAIS bloquer s'il existe dans le cinéma des œuvres du genre principal respectant ces critères d'éviction.
-- EXPANSION SÉMANTIQUE & AMBIANCES SENSORIELLES :
-  Si la requête contient une métaphore ou une sensation (ex: "un film qui donne l'impression d'être enfermé dans un ascenseur sous la pluie"), ne cherche JAMAIS une correspondance littérale mot-à-mot. Traduis l'intention en sous-genres cinématographiques : Huis clos oppressant, claustrophobie, tension psychologique, esthétique sombre/néo-noir ou polar pluvieux (ex: Devil, Buried, Panic Room, Se7en, Phone Game, Blade Runner).
-- EXPANSION SÉMANTIQUE DES INTENTIONS ÉMOTIONNELLES & D'HUMEUR (RÈGLE OBLIGATOIRE) :
-  Si la requête de l'utilisateur exprime une humeur, un état émotionnel, une sensation ou un besoin affectif (ex: "pour pleurer un bon coup", "qui fait pleurer", "qui remonte le moral", "qui fait peur sans sursaut", "film doudou", "film déchirant", "amour tragique", "adrénaline pure") :
-  * INTERDICTION FORMELLE de faire une recherche littérale mot-à-mot (ex: ne cherche pas un film où un personnage dit "pleurer un bon coup").
-  * TRADUIS IMMÉDIATEMENT CETTE ÉMOTION EN SOUS-GENRES ET CHEFS-D'ŒUVRE EMBLÉMATIQUES :
-    - Tristesse / Larmes cathartiques ("pleurer un bon coup", "faire chialer", "triste à mourir") -> Drames poignants, tragédies humaines, romances dévastatrices, deuils (ex: La Ligne verte / The Green Mile, Le Tombeau des lucioles / Grave of the Fireflies, La Liste de Schindler, Nos étoiles contraires / The Fault in Our Stars, Manchester by the Sea, La vie est belle / Life Is Beautiful, Titanic, Le Pianiste).
-    - Feel-good / Remonte le moral ("qui remonte le moral", "feel good", "baume au cœur", "réconfortant") -> Comédies chaleureuses, fables solaires, récits d'amitié réconfortants (ex: Intouchables, Le Fabuleux Destin d'Amélie Poulain, Little Miss Sunshine, Green Book, The Truman Show, Forrest Gump, Paddington 2, Good Will Hunting, Le Cercle des poètes disparus).
-    - Horreur sans sursaut / Angoisse sourde ("qui fait peur sans sursaut", "sans jump scares") -> Horreur psychologique atmosphérique, malaise sourd, slow burn, tension lente (ex: Hereditary, Midsommar, The Witch, Shining / The Shining, Rosemary's Baby, The Lighthouse, It Follows, Get Out, Les Autres / The Others).
-    - Nostalgie / Douce mélancolie ("nostalgique", "souvenirs d'enfance") -> Chroniques initiatiques, récits d'enfance, coming-of-age doux-amer (ex: Stand by Me, Cinema Paradiso, Les Goonies, Boyhood, Aftersun, Le Cercle des poètes disparus).
-- TOLÉRANCE HISTORIQUE & CROISEMENTS TEMPORELS :
-  Pour un croisement temporel (ex: "SF des années 70", "polar des années 80"), comprends qu'il s'agit du cinéma de ce genre sorti au cours de cette décennie (les dystopies et rétro-futurismes des années 70 comme Alien, Solaris, Soleil Vert / Soylent Green, Rencontres du troisième type, Rollerball, Orange Mécanique).
-- CONTRE-EMPLOI & RÔLES SPÉCIFIQUES :
-  Si un acteur est associé à un registre inhabituel (ex: "Jim Carrey dans un rôle dramatique"), sélectionne ses films sérieux et dramatiques (The Truman Show, Eternal Sunshine of the Spotless Mind, Man on the Moon, The Number 23).
-- TRADUCTION SÉMANTIQUE POSITIVE DES TOURNURES NÉGATIVES & EXCLUSIONS (RÈGLE MAJEURE) :
-  Lorsque l'utilisateur formule une recherche avec des exclusions ou des négations (ex: "sans super-héros", "sans explosion", "sans monstres", "sans fantastique"), le modèle NE DOIT JAMAIS se bloquer.
-  Il DOIT TRADUIRE INTELLIGEMMENT CETTE EXCLUSION EN UN CHOIX ARTISTIQUE ET SÉMANTIQUE POSITIF :
-  * "un film d'action sans super-héros et sans explosion" -> Traduire immédiatement par : Film d'action ancré dans le réel, polar réaliste, thriller urbain nerveux, poursuite tactique, espionnage réaliste, tension psychologique (ex: Sicario, Heat, Collateral, Drive, Le Fugitif / The Fugitive, Ronin, Jason Bourne / La Mémoire dans la peau, No Country for Old Men, Les Infiltrés / The Departed, Léon, Taken).
-  * "SF sans extraterrestre" -> SF d'anticipation humaine, cybernétique, IA, paradoxe temporel ou dystopie sociale (Gattaca, Ex Machina, Blade Runner, Her, Les Fils de l'homme / Children of Men, Interstellar).
-  * "Horreur sans jump scares" ->  Écarte simplement les sous-genres indésirables (exclure Marvel, DC Comics, blockbusters pyrotechniques Michael Bay) et renvoie les chefs-d'œuvre du genre principal qui satisfont l'intention. L'algorithme cherche TOUJOURS à satisfaire l'utilisateur avec la meilleure alternative sémantique possible dans le catalogue.
-- DÉCOMPOSITION MULTI-FACETTES DES REQUÊTES CROISÉES (RÈGLE IMPÉRATIVE) :
-  Quand une requête combine plusieurs notions distinctes (ex: [Action/Sous-genre: Braquage] + [Cadre/Décor: Espace], [Western] + [Science-Fiction], etc.) :
-  * Le modèle DOIT décomposer l'intention en critères obligatoires dans l'objet "facets" :
-    {
-      "is_multi_facet": true,
-      "core_action": "braquage / casse / vol / heist",
-      "setting": "espace / science-fiction / station spatiale",
-      "forbidden_mismatches": ["survie solitaire", "drame familial contemplatif", "exploration contemplative"]
-    }
-  * Prioriser IMPÉRATIVEMENT en tête de liste les œuvres hybrides réelles qui combinent SIMULTANÉMENT les deux facettes (ex: pour braquage dans l'espace : Lockout, Solo: A Star Wars Story, Cowboy Bebop: Le Film, Outland, Rogue One, Les Gardiens de la Galaxie).
-  * INTERDICTION FORMELLE d'ignorer la facette action/braquage pour ne renvoyer que de la survie spatiale solitaire ou des drames contemplatifs (ex: Interstellar, Seul sur Mars, Ad Astra, First Man sont des mismatches interdits pour un braquage spatial !).
-- DIVERSITÉ & QUALITÉ :
-  Propose des films de réalisateurs différents qui explorent l'idée sous des angles riches. Fournis à la fois le titre français et le titre original international quand ils diffèrent (ex: "Soleil Vert / Soylent Green").
-  Chaque film doit comporter une justification concise, authentique et personnalisée ("reason") expliquant exactement pourquoi et comment l'intrigue répond aux thèmes demandés.
-- CONTRAINTES DE FORMAT ET EXCLUSION STRICTE DES NON-FICTIONS :
-  Tu ne dois recommander QUE des œuvres cinématographiques / fictions narratives réelles.
-  INTERDICTION FORMELLE ABSOLUE des émissions télévisées de discussion, talk-shows, interviews d'acteurs, télé-réalités, cérémonies de remise de prix, making-of, podcasts vidéo ou documentaires (ex: 'Actors on Actors', 'Inside the Actors Studio', émissions de variétés, talk-shows de fin de soirée), sauf si l'utilisateur demande explicitement un documentaire ou un talk-show.
-  Si la requête demande des 'films', ne propose JAMAIS de séries télévisées ni d'émissions de discussion !
-- INTERDICTION ABSOLUE des mockbusters, parodies bon marché, téléfilms obscurs ou films Asylum. Films reconnus ayant au moins 500 votes sur TMDB et note >= 5.5.
-
-- RÔLE DE SEMANTIC QUERY EXPANDER (ÉTAPE 1) :
-  Lorsque l'utilisateur formule une requête en langage naturel (ex: "comédie légère sans prise de tête", "histoire d'amour impossible mais réaliste", "film pour pleurer un bon coup", "film de braquage qui se passe dans l'espace", "avengers doomsday", "série d'enquête policière"), tu dois identifier 6 à 10 œuvres cinématographiques incontournables et formuler un résumé éditorial élégant.
-
-Format de réponse OBLIGATOIRE — objet JSON strict, sans texte autour :
-{
-  "media_type": "movie" | "tv" | "all",
-  "atmosphere_summary": "Phrase d'accroche cinéphile résumant la sélection et le fil conducteur",
-  "recommended_titles": [
-    {
-      "title": "Titre international officiel TMDB",
-      "release_year": 2018,
-      "type": "movie" | "tv",
-      "reason": "Explication cinématographique concise et personnalisée",
-      "match_percentage": 98
-    }
-  ],
-  "primary_genres": ["Action", "Science-Fiction"],
-  "mood_tags": ["ambiance", "thème"],
-  "facets": {
-    "is_multi_facet": false,
-    "core_action": "",
-    "setting": "",
-    "forbidden_mismatches": []
-  },
-  "reference_titles": ["Titre 1", "Titre 2"],
-  "clean_query": "requête nettoyée",
-  "suggested_mood": "Phrase d'accroche cinéphile résumant la sélection",
-  "matches": [
-    { "title": "Titre 1", "reason": "Explication cinématographique" }
-  ]
-}`;
 
 // ============================================================================
 // CACHE CONTEXTUEL DES JUSTIFICATIONS (movie_id + cluster_id)
@@ -465,158 +379,13 @@ export function extractMatchesFromJson(rawText) {
 }
 
 /**
- * Construit le body commun pour les appels LLM OpenAI-compatible.
- * Le paramètre useJsonFormat doit être false pour Gemini (non supporté).
+ * No-LLM fallback interpretation ("Algorithme Éliciné").
+ *
+ * Reached only when every interpretation provider is unusable: missing key,
+ * timeout, provider error or invalid response. It never completes a valid LLM
+ * interpretation and never overrides an interpreted intent.
  */
-function buildChatBody(messages, useJsonFormat = true) {
-  const body = { messages, temperature: 0.2, max_tokens: 512 };
-  if (useJsonFormat) body.response_format = { type: 'json_object' };
-  return body;
-}
-
-// ============================================================================
-// ÉTAPE 1 : Cascade LLM — DeepSeek → Qwen → Groq → Gemini → OpenAI
-// ============================================================================
-async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType = 'Tous', telemetry = null) {
-  let userPrompt = `Requête de l'utilisateur : "${cleanQuery}"`;
-  if (targetMediaType === 'Séries TV') {
-    userPrompt += `\n\nCONTRAINTE STRICTE DE FORMAT : L'utilisateur recherche EXCLUSIVEMENT des SÉRIES TÉLÉVISÉES (TV Shows / mini-séries). Tu dois recommander UNIQUEMENT des séries télévisées réelles, AUCUN film !`;
-  } else if (targetMediaType === 'Films') {
-    userPrompt += `\n\nCONTRAINTE STRICTE DE FORMAT : L'utilisateur recherche EXCLUSIVEMENT des FILMS de cinéma (longs métrages). Tu dois recommander UNIQUEMENT des films de cinéma, AUCUNE série télévisée !`;
-  }
-  userPrompt += `\n\nRéponds UNIQUEMENT avec l'objet JSON strict demandé.`;
-
-  const messages = [
-    { role: 'system', content: LLM_SYSTEM_PROMPT },
-    { role: 'user', content: userPrompt }
-  ];
-
-  const deepseekKey = (process.env.DEEPSEEK_API_KEY || customKeys.deepseekApiKey || '').trim().replace(/^["']|["']$/g, '');
-  const qwenKey     = (process.env.DASHSCOPE_API_KEY || process.env.QWEN_API_KEY || customKeys.qwenApiKey || '').trim().replace(/^["']|["']$/g, '');
-  const groqKey     = (process.env.GROQ_API_KEY || process.env.AI_API_KEY || customKeys.groqApiKey || '').trim().replace(/^["']|["']$/g, '');
-  const geminiKey   = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || customKeys.geminiApiKey || '').trim().replace(/^["']|["']$/g, '');
-  const openAiKey   = (process.env.OPENAI_API_KEY || customKeys.openAiApiKey || '').trim().replace(/^["']|["']$/g, '');
-
-  // ── 1. Groq Cloud (llama-3.3-70b-versatile) — Ultra-rapide (~300ms sur LPU)
-  if (groqKey) {
-    try {
-      recordSearchLlmAttempt(telemetry, 'groq', 'llama-3.3-70b-versatile');
-      console.log('[API /api/search] [LLM] Groq (llama-3.3-70b-versatile)...');
-      const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', ...buildChatBody(messages, true) })
-      }, 4000);
-      if (res.ok) {
-        const data = await res.json();
-        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
-          return { ...extracted, provider: 'Groq (Llama 3.3 70B)' };
-        }
-      }
-    } catch (err) {
-      console.warn('[API /api/search] Groq échoué → DeepSeek :', err?.message);
-    }
-  }
-
-  // ── 2. DeepSeek (deepseek-chat) — Secondaire
-  if (deepseekKey) {
-    try {
-      recordSearchLlmAttempt(telemetry, 'deepseek', 'deepseek-chat');
-      console.log('[API /api/search] [LLM] DeepSeek (deepseek-chat)...');
-      const res = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
-        body: JSON.stringify({ model: 'deepseek-chat', ...buildChatBody(messages, true) })
-      }, 4000);
-      if (res.ok) {
-        const data = await res.json();
-        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
-          return { ...extracted, provider: 'DeepSeek (deepseek-chat)' };
-        }
-      } else {
-        console.warn(`[API /api/search] DeepSeek HTTP ${res.status}`);
-      }
-    } catch (err) {
-      console.warn('[API /api/search] DeepSeek échoué → Qwen :', err?.message);
-    }
-  }
-
-  // ── 3. Qwen (DashScope) — Tertiaire
-  if (qwenKey) {
-    const endpoints = [
-      'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
-      'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
-    ];
-    for (const endpoint of endpoints) {
-      try {
-        recordSearchLlmAttempt(telemetry, 'qwen', 'qwen-plus');
-        console.log(`[API /api/search] [LLM] Qwen (qwen-plus) via ${endpoint}...`);
-        const res = await fetchWithTimeout(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${qwenKey}` },
-          body: JSON.stringify({ model: 'qwen-plus', ...buildChatBody(messages, true) })
-        }, 4000);
-        if (res.ok) {
-          const data = await res.json();
-          const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-          if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
-            return { ...extracted, provider: 'Qwen (qwen-plus)' };
-          }
-        } else {
-          console.warn(`[API /api/search] Qwen HTTP ${res.status} sur ${endpoint}`);
-        }
-      } catch (err) {
-        console.warn('[API /api/search] Qwen endpoint échoué :', err?.message);
-      }
-    }
-  }
-
-  // ── 4. Google Gemini (gemini-2.0-flash) — SANS response_format (bug "empty output")
-  if (geminiKey) {
-    try {
-      recordSearchLlmAttempt(telemetry, 'gemini', 'gemini-2.0-flash');
-      console.log('[API /api/search] [LLM] Gemini (gemini-2.0-flash)...');
-      const res = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
-        body: JSON.stringify({ model: 'gemini-2.0-flash', ...buildChatBody(messages, false) })
-      }, 4500);
-      if (res.ok) {
-        const data = await res.json();
-        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
-          return { ...extracted, provider: 'Gemini (gemini-2.0-flash)' };
-        }
-      }
-    } catch (err) {
-      console.warn('[API /api/search] Gemini échoué :', err?.message);
-    }
-  }
-
-  // ── 5. OpenAI (gpt-4o-mini) — Dernier recours
-  if (openAiKey) {
-    try {
-      recordSearchLlmAttempt(telemetry, 'openai', 'gpt-4o-mini');
-      console.log('[API /api/search] [LLM] OpenAI (gpt-4o-mini)...');
-      const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
-        body: JSON.stringify({ model: 'gpt-4o-mini', ...buildChatBody(messages, true) })
-      }, 4500);
-      if (res.ok) {
-        const data = await res.json();
-        const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
-          return { ...extracted, provider: 'OpenAI (gpt-4o-mini)' };
-        }
-      }
-    } catch (err) {
-      console.warn('[API /api/search] OpenAI échoué :', err?.message);
-    }
-  }
-
+export function buildHeuristicInterpretation(cleanQuery) {
   const qLower = (cleanQuery || '').toLowerCase();
   const heuristicFacets = detectHeuristicFacets(cleanQuery);
   const heuristicPeople = extractPersonQueries(cleanQuery);
@@ -726,6 +495,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
     suggested_mood: heuristicSummary || heuristicMoods[0] || '',
     facets: heuristicFacets,
     people: heuristicPeople,
+    media_type: heuristicMediaType,
     provider: 'Algorithme Éliciné'
   };
 }
@@ -2805,14 +2575,36 @@ export default async function handler(req, res) {
 
       console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}" (format: ${requestedMediaType})`);
 
-      // ─── ÉTAPE 1 : Interprétation sémantique systématique (LLM Semantic Expansion) ──
-      const llmResult = await queryLlmCandidates(cleanQuery, {
-        groqApiKey:     req.body?.groqApiKey,
-        deepseekApiKey: req.body?.deepseekApiKey,
-        qwenApiKey:     req.body?.qwenApiKey,
-        geminiApiKey:   req.body?.geminiApiKey,
-        openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
-      }, requestedMediaType, telemetry);
+      // ─── ÉTAPE 1 : Interprétation sémantique LLM-first (DeepSeek → fallback) ──
+      // One interpretation call per search. The no-LLM catalogue is reached only
+      // when every provider is unusable, with an explicit reason.
+      const interpretation = await interpretSearchQuery({
+        query: cleanQuery,
+        targetMediaType: requestedMediaType,
+        keys: {
+          deepseekApiKey: req.body?.deepseekApiKey,
+          groqApiKey:     req.body?.groqApiKey,
+          qwenApiKey:     req.body?.qwenApiKey,
+          geminiApiKey:   req.body?.geminiApiKey,
+          openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
+        },
+        telemetry,
+        heuristicInterpretation: buildHeuristicInterpretation,
+        onAttempt: (providerId, model) => recordSearchLlmAttempt(telemetry, providerId, model)
+      });
+      const heuristicFallbackUsed = interpretation.path === SEMANTIC_INTERPRETER_PATHS.HEURISTIC_FALLBACK;
+      const llmResult = interpretation.interpreted;
+      recordSearchInterpreter(telemetry, {
+        path: interpretation.path,
+        providerId: interpretation.providerId,
+        reason: interpretation.reason,
+        partial: interpretation.partial
+      });
+      addSearchTelemetryPath(telemetry, 'semantic_interpreter', {
+        path: interpretation.path,
+        provider: interpretation.providerId,
+        reason: interpretation.reason
+      });
 
       const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || req.body?.tmdbApiKey || '').trim();
       const tmdbResolutionCache = new Map();
@@ -2827,7 +2619,9 @@ export default async function handler(req, res) {
         cleanQuery: req.body?.rawQuery || cleanQuery,
         requestedMediaType,
         enforceRequestedMediaType: hybridEnabled,
-        recoverFallbackSignals: hybridEnabled,
+        // A valid LLM interpretation is never completed by heuristic signals;
+        // recovery is reserved for the explicit no-LLM fallback path.
+        recoverFallbackSignals: hybridEnabled && heuristicFallbackUsed,
         telemetry,
         resolveEntities: async (canonicalIntent) => {
           const titleContext = await resolveKnownTitles(canonicalIntent, {
@@ -2835,8 +2629,9 @@ export default async function handler(req, res) {
               title, type, null, tmdbKey, tmdbResolutionCache
             )
           });
-          const personHints = [...(llmResult.people || []),
-            ...extractPersonQueries(req.body?.rawQuery || cleanQuery)];
+          const personHints = heuristicFallbackUsed
+            ? [...(llmResult.people || []), ...extractPersonQueries(req.body?.rawQuery || cleanQuery)]
+            : (llmResult.people || []);
           const personContext = hybridEnabled
             ? await resolveKnownPeople(personHints, {
               searchPeople: name => retrievalClient.person(name)

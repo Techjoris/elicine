@@ -25,8 +25,9 @@ for (const entry of corpus.queries) {
     for (let index = 0; index < legacyCases.length; index += 1) {
       assert.deepEqual(canonicalCases[index].response, legacyCases[index].response);
       assert.deepEqual(canonicalCases[index].quota, legacyCases[index].quota);
-      const legacyLlm = legacyCases[index].requests.filter(item => item.url.includes('api.groq.com')).length;
-      const canonicalLlm = canonicalCases[index].requests.filter(item => item.url.includes('api.groq.com')).length;
+      // One interpretation call per search, on the primary interpreter.
+      const legacyLlm = legacyCases[index].requests.filter(item => item.url.includes('api.deepseek.com')).length;
+      const canonicalLlm = canonicalCases[index].requests.filter(item => item.url.includes('api.deepseek.com')).length;
       assert.equal(canonicalLlm, legacyLlm);
       const legacyTmdb = legacyCases[index].requests.filter(item => item.url.includes('api.themoviedb.org')).length;
       const canonicalTmdb = canonicalCases[index].requests.filter(item => item.url.includes('api.themoviedb.org')).length;

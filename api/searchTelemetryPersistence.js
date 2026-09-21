@@ -149,13 +149,25 @@ export function buildSearchTelemetryRow(telemetry, payload = {}, statusCode = 20
     no_relevant_results: Boolean(finalCount === 0),
     excessive_duration: Boolean(totalDuration > 5000),
     result_set_fingerprint: fingerprint,
-    status_code: Number.isInteger(Number(statusCode)) ? Number(statusCode) : null
+    status_code: Number.isInteger(Number(statusCode)) ? Number(statusCode) : null,
+    interpreter_path: typeof telemetry?.semanticInterpreterPath === 'string'
+      ? telemetry.semanticInterpreterPath.slice(0, 40) : null,
+    interpreter_reason: typeof telemetry?.semanticInterpreterReason === 'string'
+      ? telemetry.semanticInterpreterReason.slice(0, 40) : null
   };
 }
 
 function timeoutResult() {
   return { timedOut: true, error: new Error('SEARCH_TELEMETRY_TIMEOUT') };
 }
+
+// Added after the initial telemetry table. A database that has not applied the
+// interpreter migration must keep writing its base row instead of losing it.
+const OPTIONAL_INTERPRETER_COLUMNS = ['interpreter_path', 'interpreter_reason'];
+const missingInterpreterColumns = error => {
+  const text = `${error?.message || ''} ${error?.code || ''}`;
+  return OPTIONAL_INTERPRETER_COLUMNS.some(column => text.includes(column)) || /PGRST204/i.test(text);
+};
 
 /**
  * Persists exactly one summary row. A missing table, rejected insert or timeout
@@ -168,11 +180,16 @@ export async function persistSearchTelemetry({ client, telemetry, payload = {}, 
 
   const row = buildSearchTelemetryRow(telemetry, payload, statusCode);
   try {
-    const request = client.from('search_telemetry').insert(row);
-    const result = await Promise.race([
-      Promise.resolve(request),
+    const insertRow = async target => Promise.race([
+      Promise.resolve(client.from('search_telemetry').insert(target)),
       new Promise(resolve => setTimeout(() => resolve(timeoutResult()), Math.max(1, timeoutMs)))
     ]);
+    let result = await insertRow(row);
+    if (result?.error && missingInterpreterColumns(result.error)) {
+      const reduced = { ...row };
+      for (const column of OPTIONAL_INTERPRETER_COLUMNS) delete reduced[column];
+      result = await insertRow(reduced);
+    }
     if (result?.timedOut || result?.error) {
       return { persisted: false, error: result?.error || new Error('SEARCH_TELEMETRY_INSERT_FAILED'), row };
     }

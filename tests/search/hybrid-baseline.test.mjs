@@ -32,7 +32,7 @@ for (const entry of corpus.queries) test(`hybrid baseline ${entry.id}: HTTP, quo
     if (current.quota.length > 1) assert.deepEqual(current.quota.at(-1), old.quota.at(-1));
     assert.equal(current.metrics.llmCalls, old.metrics.llmCalls);
     assert.ok(current.metrics.tmdbCalls <= 30);
-    const llmCount = value => value.requests.filter(r => r.url.includes('api.groq.com')).length;
+    const llmCount = value => value.requests.filter(r => r.url.includes('api.deepseek.com')).length;
     assert.equal(llmCount(current), llmCount(old));
     const rows = results(current.response);
     assert.ok(Array.isArray(rows));

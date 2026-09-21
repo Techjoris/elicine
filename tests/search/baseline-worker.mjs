@@ -21,15 +21,20 @@ globalThis.fetch = async (url, options = {}) => {
   const parsed = new URL(url);
   const body = options.body ? JSON.parse(options.body) : null;
   requests.push({ url: String(url), method: options.method || 'GET', body });
-  if (parsed.hostname === 'api.groq.com') {
+  if (parsed.hostname === 'api.deepseek.com') {
     if (scenario === 'provider-error') {
       return { ok: false, status: 503, json: async () => ({}) };
     }
     const media = activeCase.expectedMediaTypes.length === 1 ? activeCase.expectedMediaTypes[0] : 'all';
+    const personIntent = activeCase.intent === 'person';
     return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
       media_type: media,
-      primary_genres: ['Thriller'], mood_tags: ['dark'],
-      reference_titles: activeCase.intent === 'person' ? [] : activeCase.references,
+      intent_type: personIntent ? 'person_search'
+        : (activeCase.references.length ? 'similar_to_title' : 'thematic_search'),
+      genres: ['Thriller'], moods: ['dark'], themes: ['psychological tension'],
+      keywords: ['detective'], semantic_concepts: ['psychological tension'],
+      known_titles: personIntent ? [] : activeCase.references,
+      people: personIntent ? activeCase.references : [],
       clean_query: activeCase.query,
       recommended_titles: [
         { title: 'Fixture Alpha', type: media === 'tv' ? 'tv' : 'movie', release_year: 2001, match_percentage: 97 },
@@ -73,7 +78,7 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-e
         method, query: method === 'GET' ? { action: 'quota' } : {},
         headers: {}, socket: { remoteAddress: ip },
         body: { query: entry.query, rawQuery: entry.query, tmdbApiKey: 'fixture-tmdb',
-          ...(scenario === 'heuristic' ? {} : { groqApiKey: 'fixture-groq' }), ...body }
+          ...(scenario === 'heuristic' ? {} : { deepseekApiKey: 'fixture-deepseek' }), ...body }
       }, response);
       return { status: response.statusCode, payload: response.payload };
     };
