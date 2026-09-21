@@ -26,6 +26,10 @@ export const SEMANTIC_RELATIONS = Object.freeze([
     terms: Object.freeze(['fighter pilots', 'fighter aircraft', 'air force', 'aerial combat', 'military aviation'])
   }),
   Object.freeze({
+    triggers: Object.freeze(['shared dreams', 'shared dream', 'dream travel', 'reves partages']),
+    terms: Object.freeze(['dream', 'dreams', 'subconscious', 'shared dream', 'dream world'])
+  }),
+  Object.freeze({
     triggers: Object.freeze(['combat aerien', 'aerial combat', 'combat aviation']),
     terms: Object.freeze(['aerial combat', 'combat aviation', 'fighter aircraft', 'fighter pilots'])
   }),

@@ -72,6 +72,7 @@ test('semantic documents stay distinct and media type keeps war pools separate',
   const warText = buildVectorQueryText(warMovie);
   assert.notEqual(inceptionText, warText);
   assert.match(inceptionText, /leonardo|dicaprio|shared dreams/i);
+  assert.match(inceptionText, /semantic_expansion:.*dream/i);
   assert.match(warText, /modern warfare|fighter aircraft|military aviation/i);
 
   const source = async intent => [movie(27205, 'Inception', 62), movie(999, 'War Film', 10), tv(998, 'War Series', 10)];
