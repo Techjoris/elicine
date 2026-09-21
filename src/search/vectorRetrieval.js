@@ -20,8 +20,8 @@ const list = value => [...new Set((Array.isArray(value) ? value : [])
 /** Stable query representation made only from CanonicalIntent, never the raw query. */
 export function buildVectorQueryText(intent = {}) {
   const expansion = expandSemanticTerms(intent);
-  const parts = [
-    ['media_type', clean(intent.mediaType)], ['genres', list(intent.genres).join(', ')],
+  const semanticParts = [
+    ['genres', list(intent.genres).join(', ')],
     ['moods', list(intent.moods).join(', ')], ['themes', list(intent.themes).join(', ')],
     ['keywords', list(intent.keywords).join(', ')], ['references', list(intent.knownTitles).join(', ')],
     ['semantic_expansion', expansion.addedTerms.join(', ')],
@@ -29,7 +29,10 @@ export function buildVectorQueryText(intent = {}) {
     ['year_min', intent.yearMin], ['year_max', intent.yearMax],
     ['runtime_min', intent.runtimeMin], ['runtime_max', intent.runtimeMax], ['min_rating', intent.minRating]
   ];
-  return parts.filter(([, value]) => value !== null && value !== undefined && clean(value))
+  const meaningful = semanticParts.filter(([, value]) => value !== null && value !== undefined && clean(value));
+  if (!meaningful.length) return '';
+  return [['media_type', clean(intent.mediaType)], ...meaningful]
+    .filter(([, value]) => value !== null && value !== undefined && clean(value))
     .map(([label, value]) => `${label}: ${clean(value)}`).join('\n');
 }
 

@@ -36,6 +36,7 @@ export async function orchestrateSearch({
   env = process.env,
   createIntent = createCanonicalIntentFromLegacy,
   enforceRequestedMediaType = false,
+  recoverFallbackSignals = true,
   resolveEntities = null
 }) {
   const legacy = (error = null) => {
@@ -63,7 +64,8 @@ export async function orchestrateSearch({
   try {
     const requestedType = requestedMediaType === 'Séries TV' ? 'tv' : requestedMediaType === 'Films' ? 'movie' : null;
     const canonicalIntent = createIntent(enforceRequestedMediaType && requestedType
-      ? { ...interpreted, media_type: requestedType } : interpreted, { userQuery: cleanQuery });
+      ? { ...interpreted, media_type: requestedType } : interpreted,
+    { userQuery: cleanQuery, recoverFallbackSignals });
     const canonicalMediaType = canonicalIntent.mediaType;
     const projectedInterpretation = {
       ...interpreted,

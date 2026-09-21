@@ -2797,6 +2797,7 @@ export default async function handler(req, res) {
         cleanQuery: req.body?.rawQuery || cleanQuery,
         requestedMediaType,
         enforceRequestedMediaType: hybridEnabled,
+        recoverFallbackSignals: hybridEnabled,
         telemetry,
         resolveEntities: (canonicalIntent) => resolveKnownTitles(canonicalIntent, {
           searchCandidates: (title, type) => hybridEnabled ? retrievalClient.search(title, type) : searchTmdbCandidates(
