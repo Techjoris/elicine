@@ -75,6 +75,24 @@ export function recordSearchInterpreter(telemetry, { path = null, providerId = n
   telemetry.semanticInterpreterPartial = Boolean(partial);
 }
 
+/**
+ * Narrative candidate channel observability. Fixed operational labels and
+ * bounded counters only, exactly like the interpreter: no proposed title, no
+ * provider text and no user query is ever stored here.
+ * path is one of: primary | provider_fallback | unavailable.
+ */
+export function recordNarrativeCandidateChannel(telemetry, { path = null, provider = null,
+  reason = null, proposed = 0, resolved = 0 } = {}) {
+  if (!telemetry) return;
+  const label = value => (typeof value === 'string' && value ? value.slice(0, 40) : null);
+  const count = value => (Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0);
+  telemetry.narrativeCandidatePath = label(path);
+  telemetry.narrativeCandidateProvider = label(provider);
+  telemetry.narrativeCandidateReason = label(reason);
+  telemetry.narrativeCandidateProposedCount = count(proposed);
+  telemetry.narrativeCandidateResolvedCount = count(resolved);
+}
+
 export function recordSearchCandidateCount(telemetry, source, count) {
   if (!telemetry || !Number.isFinite(Number(count))) return;
   telemetry.candidateCounts[source] = Number(count);

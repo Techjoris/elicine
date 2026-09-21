@@ -74,7 +74,7 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
   };
 }
 
-const strength = { tmdb_recommendations: 5, tmdb_similar: 4,
+const strength = { tmdb_recommendations: 5, tmdb_similar: 4, llm_candidates: 3.5,
   tmdb_discover: 3, supabase_vector: 3, tmdb_search: 2, tmdb_person_credits: 0.5,
   supabase_lexical: 1, legacy: 0 };
 export function mergeCandidates(candidates, limit = 50, { narrative = false } = {}) {

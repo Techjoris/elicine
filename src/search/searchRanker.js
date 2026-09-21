@@ -18,7 +18,7 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   tieEpsilon: 0.005,
   sourceConfidence: Object.freeze({
     tmdb_person_credits: 1, tmdb_similar: 0.97, tmdb_recommendations: 0.95,
-    supabase_vector: 0.86, tmdb_discover: 0.74, supabase_lexical: 0.62,
+    llm_candidates: 0.90, supabase_vector: 0.86, tmdb_discover: 0.74, supabase_lexical: 0.62,
     tmdb_search: 0.58, fallback: 0.45, legacy: 0.40
   }),
   sourceMultiBonus: 0.05,
@@ -37,6 +37,14 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // compares to it ("comme Inception", where the seed must not monopolise the
   // grid). Empty of requested works, the blend is exactly the historical one.
   identifiedWorkWeight: 0.35,
+  // The model's proposal is retrieval evidence, not a verdict. It earns an
+  // explicit, bounded share of the final score, outside the documented weight
+  // table, and only for a work TMDB confirmed. Its own justification is read
+  // with the same concept primitive as the rest of the engine: an unexplained
+  // proposal earns half the share, a coherent one earns all of it. With no
+  // proposal the blend is exactly the historical one.
+  narrativeCandidateWeight: 0.28,
+  narrativeCandidate: Object.freeze({ rankSpan: 10, reasonFloor: 0.5 }),
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
@@ -152,10 +160,31 @@ function convergenceScore(components, candidate) {
   const { strongSignalThreshold, targetSignalCount, breadthShare } = ELICINE_RANKING_CONFIG.convergence;
   const evidence = [components.entityScore, components.referenceScore, components.titleScore,
     components.themeScore, components.keywordScore, components.moodScore, components.genreScore,
-    components.semanticScore, components.identifiedWorkScore];
+    components.semanticScore, components.identifiedWorkScore, components.narrativeCandidateScore];
   const satisfied = evidence.filter(value => value >= strongSignalThreshold).length;
   const breadth = clamp(Math.max(0, (candidate.sources || []).length - 1) / 2);
   return clamp(clamp(satisfied / targetSignalCount) * (1 - breadthShare) + breadth * breadthShare);
+}
+
+/**
+ * How strongly the model's own proposal supports this candidate. Two bounded
+ * facts: where the model ranked the work it proposed, and whether its stated
+ * justification really carries the concepts the query describes - read with the
+ * same bilingual concept primitive as every other score, so a proposal whose
+ * reason answers nothing earns only the floor.
+ */
+function narrativeCandidateScore(candidate, semanticTerms, genres) {
+  const signals = array(candidate.retrievalSignals).filter(signal => signal?.source === 'llm_candidates');
+  if (!signals.length) return 0;
+  const { rankSpan, reasonFloor } = ELICINE_RANKING_CONFIG.narrativeCandidate;
+  const rankScore = Math.max(...signals.map(signal => {
+    const rank = Number(signal.narrativeCandidateRank);
+    return Number.isFinite(rank) && rank > 0 ? clamp(1 - (rank - 1) / rankSpan) : reasonFloor;
+  }));
+  const reason = signals.map(signal => String(signal.narrativeCandidateReason || '')).filter(Boolean).join(' ');
+  const reasonCoverage = reason && semanticTerms.length
+    ? termCoverage(semanticTerms, [], reason, { genres }) : 1;
+  return clamp(rankScore * (reasonFloor + (1 - reasonFloor) * reasonCoverage));
 }
 
 /**
@@ -309,7 +338,8 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     countryScore: intent.countries?.length ? (data.countries?.length ?
       Number(data.countries.some(country => intent.countries.includes(country))) : 0.5) : 0,
     qualityScore: round(qualityScore(candidate)), popularityScore: round(popularityScore(candidate)),
-    sourceConfidenceScore: round(sourceConfidenceScore(candidate))
+    sourceConfidenceScore: round(sourceConfidenceScore(candidate)),
+    narrativeCandidateScore: round(narrativeCandidateScore(candidate, semanticTerms, conceptGenres))
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
   components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.discriminatingScore));
@@ -346,8 +376,9 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // below a recommendation that merely matches the same concepts. With no
   // identified work the formula is exactly the historical one.
   const identifiedBonus = components.identifiedWorkScore * ELICINE_RANKING_CONFIG.identifiedWorkWeight;
+  const narrativeBonus = components.narrativeCandidateScore * ELICINE_RANKING_CONFIG.narrativeCandidateWeight;
   const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus);
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus);
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
@@ -362,7 +393,7 @@ function compareRanked(left, right) {
   const a = left.ranking;
   const b = right.ranking;
   if (Math.abs(b.finalScore - a.finalScore) > ELICINE_RANKING_CONFIG.tieEpsilon) return b.finalScore - a.finalScore;
-  for (const field of ['intentScore', 'identifiedWorkScore', 'entityScore', 'referenceScore',
+  for (const field of ['intentScore', 'identifiedWorkScore', 'narrativeCandidateScore', 'entityScore', 'referenceScore',
     'semanticScore', 'qualityScore']) {
     if (b[field] !== a[field]) return b[field] - a[field];
   }

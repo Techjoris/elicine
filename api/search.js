@@ -2,7 +2,8 @@ import { checkRateLimit } from './_rateLimit.js';
 import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/searchOrchestrator.js';
 import { isHybridRetrievalEnabled } from '../src/search/hybridRetriever.js';
 import { candidateMediaType, toLegacyRankingCandidate, toRetrievalCandidate } from '../src/search/retrievalCandidate.js';
-import { createTmdbRetrievalClient, createSupabaseLexicalSource, retrieveLegacyHints } from '../src/search/retrievalServices.js';
+import { createTmdbRetrievalClient, createSupabaseLexicalSource, resolveNarrativeCandidates,
+  retrieveLegacyHints } from '../src/search/retrievalServices.js';
 import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVectorSource,
   isVectorRetrievalEnabled } from '../src/search/vectorRetrieval.js';
 import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js';
@@ -12,6 +13,7 @@ import { resolveKnownPeople, resolveKnownTitles } from '../src/search/entityReso
 import { extractPersonQueries } from '../src/search/fallbackIntentSignals.js';
 import { FALLBACK_REASONS, recordFallback } from '../src/search/fallbackPolicy.js';
 import { interpretSearchQuery, SEMANTIC_INTERPRETER_PATHS } from '../src/search/semanticInterpreter.js';
+import { interpretNarrativeCandidates, isLlmCandidateChannelEnabled } from '../src/search/narrativeCandidateInterpreter.js';
 import { applyResultBudget } from '../src/search/resultBudget.js';
 import {
   addSearchTelemetryPath,
@@ -19,6 +21,7 @@ import {
   finalizeSearchTelemetry,
   getSearchEngineMode,
   recordSearchCandidateCount,
+  recordNarrativeCandidateChannel,
   recordSearchInterpreter,
   recordSearchLlmAttempt
 } from './searchPhase0.js';
@@ -2576,19 +2579,36 @@ export default async function handler(req, res) {
 
       console.log(`[API /api/search] [LLM-First] Lancement pipeline pour : "${cleanQuery}" (format: ${requestedMediaType})`);
 
+      const providerKeys = {
+        deepseekApiKey: req.body?.deepseekApiKey,
+        groqApiKey:     req.body?.groqApiKey,
+        qwenApiKey:     req.body?.qwenApiKey,
+        geminiApiKey:   req.body?.geminiApiKey,
+        openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
+      };
+      const hybridEnabled = isHybridRetrievalEnabled();
+      // ─── ÉTAPE 1 bis : canal candidats narratifs (rôle historique du LLM) ──
+      // The model proposes the works that really tell this story; the catalogue
+      // confirms they exist and the deterministic ranking stays the arbiter. The
+      // call runs in parallel with the interpretation, so the recovered recall
+      // costs no extra wall-clock latency. It is pointless without the hybrid
+      // engine, which is the only consumer of a retrieval channel.
+      const narrativeCandidatePromise = hybridEnabled && isLlmCandidateChannelEnabled()
+        ? interpretNarrativeCandidates({
+          query: req.body?.rawQuery || cleanQuery,
+          targetMediaType: requestedMediaType,
+          keys: providerKeys,
+          onAttempt: (providerId, model) => recordSearchLlmAttempt(telemetry, providerId, model)
+        })
+        : null;
+
       // ─── ÉTAPE 1 : Interprétation sémantique LLM-first (DeepSeek → fallback) ──
       // One interpretation call per search. The no-LLM catalogue is reached only
       // when every provider is unusable, with an explicit reason.
       const interpretation = await interpretSearchQuery({
         query: cleanQuery,
         targetMediaType: requestedMediaType,
-        keys: {
-          deepseekApiKey: req.body?.deepseekApiKey,
-          groqApiKey:     req.body?.groqApiKey,
-          qwenApiKey:     req.body?.qwenApiKey,
-          geminiApiKey:   req.body?.geminiApiKey,
-          openAiApiKey:   req.body?.openAiApiKey || req.body?.openaiApiKey
-        },
+        keys: providerKeys,
         telemetry,
         heuristicInterpretation: buildHeuristicInterpretation,
         onAttempt: (providerId, model) => recordSearchLlmAttempt(telemetry, providerId, model)
@@ -2612,7 +2632,6 @@ export default async function handler(req, res) {
 
       const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || req.body?.tmdbApiKey || '').trim();
       const tmdbResolutionCache = new Map();
-      const hybridEnabled = isHybridRetrievalEnabled();
       const retrievalClient = createTmdbRetrievalClient({ apiKey: tmdbKey, cache: tmdbResolutionCache, telemetry });
       const vectorEnabled = isVectorRetrievalEnabled();
       const queryEmbedding = vectorEnabled ? createQueryEmbeddingService({
@@ -2712,16 +2731,42 @@ export default async function handler(req, res) {
           ? matches.map(m => ({ title: m.title, type: extractedMediaType === 'tv' ? 'tv' : 'movie', reason: m.reason }))
           : referenceTitles.map(t => ({ title: t, type: extractedMediaType === 'tv' ? 'tv' : 'movie' }));
 
+      // The proposal only ever feeds the candidate pool: it is never the answer.
+      // A failed or unavailable channel resolves to null and changes nothing.
+      let narrativeCandidates = null;
+      if (narrativeCandidatePromise) {
+        try {
+          narrativeCandidates = await narrativeCandidatePromise;
+        } catch {
+          narrativeCandidates = null;
+        }
+      }
+      if (narrativeCandidates) {
+        recordNarrativeCandidateChannel(telemetry, {
+          path: narrativeCandidates.path,
+          provider: narrativeCandidates.providerId,
+          reason: narrativeCandidates.reason,
+          proposed: narrativeCandidates.candidates?.length || 0
+        });
+        if (narrativeCandidates.candidates?.length) {
+          addSearchTelemetryPath(telemetry, 'narrative_candidates_completed', {
+            provider: narrativeCandidates.providerId, count: narrativeCandidates.candidates.length });
+        }
+      }
+
       const hybridPool = await orchestrateCandidateRetrieval({
         orchestration,
         services: {
           ...retrievalClient,
           lexical: createSupabaseLexicalSource(supabaseServer),
           vector: vectorEnabled ? createSupabaseVectorSource({ client: supabaseServer, queryEmbedding, telemetry }) : null,
-          legacy: options => retrieveLegacyHints(candidateList, orchestration.resolvedIntentContext, retrievalClient, options)
+          legacy: options => retrieveLegacyHints(candidateList, orchestration.resolvedIntentContext, retrievalClient, options),
+          narrativeCandidates: (candidates, options) => resolveNarrativeCandidates(candidates, retrievalClient, options)
         },
-        context: { telemetry, tmdbResolutionCache, semanticIntentContext }
+        context: { telemetry, tmdbResolutionCache, semanticIntentContext, narrativeCandidates }
       });
+      // How many proposed titles the catalogue actually confirmed and admitted.
+      telemetry.narrativeCandidateResolvedCount = Number(telemetry.retrievalLlmCandidatesCount || 0);
       const useHybrid = hybridPool !== null;
       const usingElicineRanking = useHybrid && telemetry.rankingAttempted;
 

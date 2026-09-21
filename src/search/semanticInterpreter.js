@@ -132,13 +132,13 @@ function countryCodes(value, limit = 4) {
     .filter(item => /^[A-Z]{2}$/.test(item)))].slice(0, limit);
 }
 
-function normalizeMediaType(value) {
+export function normalizeMediaType(value) {
   const key = normalizeKey(value);
   if (!key) return 'all';
   return MEDIA_TYPE_ALIASES[key] || 'all';
 }
 
-function parseJsonObject(rawText) {
+export function parseJsonObject(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
   const cleaned = rawText.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/im, '').trim();
   const start = cleaned.indexOf('{');
@@ -396,14 +396,22 @@ async function requestWithTimeout(fetchImpl, url, options, timeoutMs) {
   }
 }
 
-async function requestInterpreter(provider, { messages, model, key, fetchImpl }) {
+/**
+ * One bounded provider attempt across its endpoints. The caller owns only the
+ * request body and the response parser, so every LLM step of the engine shares
+ * exactly one timeout, one endpoint order and one failure vocabulary. Provider
+ * text is never returned as a reason: only fixed codes are.
+ */
+export async function requestProviderJson(provider, { messages, model, key, fetchImpl, parse,
+  buildBody = buildSemanticInterpreterBody, timeoutMs = null } = {}) {
   let reason = INTERPRETER_FALLBACK_REASONS.PROVIDER_ERROR;
+  const budget = Number(timeoutMs) > 0 ? Number(timeoutMs) : provider.timeoutMs;
   for (const endpoint of provider.endpoints) {
     const { response, timedOut, error } = await requestWithTimeout(fetchImpl, endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, ...buildSemanticInterpreterBody(messages, provider.jsonFormat) })
-    }, provider.timeoutMs);
+      body: JSON.stringify({ model, ...buildBody(messages, provider.jsonFormat) })
+    }, budget);
     if (timedOut) { reason = INTERPRETER_FALLBACK_REASONS.TIMEOUT; continue; }
     if (error || !response) { reason = INTERPRETER_FALLBACK_REASONS.PROVIDER_ERROR; continue; }
     if (!response.ok) { reason = INTERPRETER_FALLBACK_REASONS.PROVIDER_ERROR; continue; }
@@ -414,11 +422,46 @@ async function requestInterpreter(provider, { messages, model, key, fetchImpl })
       reason = INTERPRETER_FALLBACK_REASONS.INVALID_RESPONSE;
       continue;
     }
-    const parsed = parseSemanticInterpretation(payload?.choices?.[0]?.message?.content ?? '');
+    const parsed = parse(payload?.choices?.[0]?.message?.content ?? '');
     if (parsed.valid) return { ok: true, parsed };
     reason = INTERPRETER_FALLBACK_REASONS.INVALID_RESPONSE;
   }
   return { ok: false, reason };
+}
+
+/**
+ * Shared provider cascade: one attempt per configured provider, in order, until
+ * one returns a usable payload. An unusable chain resolves with an explicit
+ * reason instead of throwing, so each caller decides its own no-LLM fallback.
+ */
+export async function runProviderCascade({
+  providers = SEMANTIC_INTERPRETER_PROVIDERS, messages, parse,
+  buildBody = buildSemanticInterpreterBody, keys = {}, env = process.env,
+  fetchImpl = globalThis.fetch, onAttempt = null, timeoutMs = null
+} = {}) {
+  const attempts = [];
+  let firstFailure = null;
+  for (const provider of providers) {
+    const configuredModel = provider.envModel ? clean(env?.[provider.envModel]) : '';
+    const model = configuredModel || provider.model;
+    const key = resolveProviderKey(provider, keys, env);
+    if (!key) {
+      attempts.push({ provider: provider.id, reason: INTERPRETER_FALLBACK_REASONS.UNAVAILABLE });
+      continue;
+    }
+    if (typeof onAttempt === 'function') onAttempt(provider.id, model);
+    const attempt = await requestProviderJson(provider, { messages, model, key, fetchImpl, parse, buildBody, timeoutMs });
+    if (attempt.ok) {
+      return { ok: true, parsed: attempt.parsed, provider, providerId: provider.id, model, attempts, reason: firstFailure };
+    }
+    attempts.push({ provider: provider.id, reason: attempt.reason });
+    firstFailure = firstFailure || attempt.reason;
+  }
+  // The most explicit failure wins: a real provider error, timeout or invalid
+  // response is more actionable than a provider that simply had no key.
+  const reason = attempts.find(item => item.reason !== INTERPRETER_FALLBACK_REASONS.UNAVAILABLE)?.reason
+    || INTERPRETER_FALLBACK_REASONS.UNAVAILABLE;
+  return { ok: false, parsed: null, provider: null, providerId: null, model: null, attempts, reason };
 }
 
 /**
@@ -438,40 +481,24 @@ export async function interpretSearchQuery({
   providers = SEMANTIC_INTERPRETER_PROVIDERS
 } = {}) {
   const messages = buildSemanticInterpreterMessages(query, targetMediaType);
-  const attempts = [];
-  let firstFailure = null;
-  for (const provider of providers) {
-    const configuredModel = provider.envModel ? clean(env?.[provider.envModel]) : '';
-    const model = configuredModel || provider.model;
-    const key = resolveProviderKey(provider, keys, env);
-    if (!key) {
-      attempts.push({ provider: provider.id, reason: INTERPRETER_FALLBACK_REASONS.UNAVAILABLE });
-      continue;
-    }
-    if (typeof onAttempt === 'function') onAttempt(provider.id, model);
-    const attempt = await requestInterpreter(provider, { messages, model, key, fetchImpl });
-    if (attempt.ok) {
-      return {
-        interpreted: { ...attempt.parsed.legacy, provider: provider.label, semanticProviderId: provider.id },
-        semanticContext: attempt.parsed.semanticContext,
-        people: collectSemanticPeople(attempt.parsed.semanticContext, 4),
-        provider: provider.label,
-        providerId: provider.id,
-        model,
-        path: provider.primary ? SEMANTIC_INTERPRETER_PATHS.DEEPSEEK : SEMANTIC_INTERPRETER_PATHS.PROVIDER_FALLBACK,
-        reason: firstFailure,
-        partial: attempt.parsed.partial,
-        attempts
-      };
-    }
-    attempts.push({ provider: provider.id, reason: attempt.reason });
-    firstFailure = firstFailure || attempt.reason;
+  const cascade = await runProviderCascade({ providers, messages, keys, env, fetchImpl, onAttempt,
+    parse: parseSemanticInterpretation });
+  if (cascade.ok) {
+    return {
+      interpreted: { ...cascade.parsed.legacy, provider: cascade.provider.label, semanticProviderId: cascade.providerId },
+      semanticContext: cascade.parsed.semanticContext,
+      people: collectSemanticPeople(cascade.parsed.semanticContext, 4),
+      provider: cascade.provider.label,
+      providerId: cascade.providerId,
+      model: cascade.model,
+      path: cascade.provider.primary ? SEMANTIC_INTERPRETER_PATHS.DEEPSEEK : SEMANTIC_INTERPRETER_PATHS.PROVIDER_FALLBACK,
+      reason: cascade.reason,
+      partial: cascade.parsed.partial,
+      attempts: cascade.attempts
+    };
   }
 
-  // The most explicit failure wins: a real provider error, timeout or invalid
-  // response is more actionable than a provider that simply had no key.
-  const failureReason = attempts.find(item => item.reason !== INTERPRETER_FALLBACK_REASONS.UNAVAILABLE)?.reason
-    || INTERPRETER_FALLBACK_REASONS.UNAVAILABLE;
+  const failureReason = cascade.reason;
   const heuristic = typeof heuristicInterpretation === 'function'
     ? heuristicInterpretation(query)
     : { media_type: 'all', primary_genres: [], mood_tags: [], reference_titles: [],
@@ -487,6 +514,6 @@ export async function interpretSearchQuery({
     path: SEMANTIC_INTERPRETER_PATHS.HEURISTIC_FALLBACK,
     reason: failureReason,
     partial: false,
-    attempts
+    attempts: cascade.attempts
   };
 }

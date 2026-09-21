@@ -87,6 +87,24 @@ export function createTmdbRetrievalClient({ apiKey, cache = new Map(), telemetry
   };
 }
 
+/**
+ * Historical exact-title-then-votes selection of one TMDB search hit, shared by
+ * every title-keyed source so they all agree on what "this title" means. A hit
+ * without a poster is unusable for the grid and is discarded here.
+ */
+export function pickBestTitleHit(hits, title, releaseYear = null) {
+  const wanted = normalizeTerm(title);
+  const ordered = (Array.isArray(hits) ? hits : []).filter(row => row?.poster_path && candidateMediaType(row))
+    .sort((a, b) => {
+      const exact = row => [row.title, row.name, row.original_title, row.original_name]
+        .some(value => normalizeTerm(value) === wanted);
+      return Number(exact(b)) - Number(exact(a)) || Number(b.vote_count || 0) - Number(a.vote_count || 0);
+    });
+  const year = Number(releaseYear);
+  return (year && ordered.find(row => Number((row.release_date || row.first_air_date || '').slice(0, 4)) === year))
+    || ordered[0] || null;
+}
+
 /** The historical one-title/one-hit candidate source; no provider interpretation. */
 export async function retrieveLegacyHints(hints, resolvedContext, client, { signal } = {}) {
   const settled = await Promise.allSettled(hints.slice(0, 10).map(async hint => {
@@ -97,16 +115,31 @@ export async function retrieveLegacyHints(hints, resolvedContext, client, { sign
       (!hint.type || hint.type === seed.mediaType));
     if (resolved) return client.entity(resolved.mediaType, resolved.tmdbId) || null;
     const hits = await client.search(hint.title, ['movie', 'tv'].includes(hint.type) ? hint.type : null, { signal });
-    // Historical exact-title + votes selection; copy to avoid mutating cached arrays.
-    const ordered = hits.filter(row => row.poster_path && candidateMediaType(row)).sort((a, b) => {
-      const exact = row => [row.title, row.name, row.original_title, row.original_name].some(t => normalizeTerm(t) === normalized);
-      return Number(exact(b)) - Number(exact(a)) || Number(b.vote_count || 0) - Number(a.vote_count || 0);
-    });
-    const year = Number(hint.release_year);
-    return (year && ordered.find(row => Number((row.release_date || row.first_air_date || '').slice(0, 4)) === year)) || ordered[0] || null;
+    return pickBestTitleHit(hits, hint.title, hint.release_year);
   }));
   if (settled.length && settled.every(r => r.status === 'rejected')) throw new Error('LEGACY_SOURCE_FAILED');
   return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+}
+
+/**
+ * Re-resolves model-proposed titles against TMDB: one catalogue search per
+ * title, never a model call per title, and a title TMDB cannot confirm is
+ * dropped. The channel can therefore only add works that really exist. It fails
+ * soft on purpose: a total resolution failure returns no candidate instead of
+ * raising a retrieval error, so the deterministic pool is never blamed for a
+ * proposal the catalogue simply could not confirm.
+ */
+export async function resolveNarrativeCandidates(candidates, client, { signal, limit = 6 } = {}) {
+  const wanted = (Array.isArray(candidates) ? candidates : [])
+    .filter(item => item?.title).slice(0, Math.max(0, Number(limit) || 0));
+  if (!wanted.length) return [];
+  const settled = await Promise.allSettled(wanted.map(async (item, index) => {
+    const hits = await client.search(item.title, ['movie', 'tv'].includes(item.type) ? item.type : null, { signal });
+    const hit = pickBestTitleHit(hits, item.title, item.releaseYear);
+    if (!hit) return null;
+    return { ...hit, llm_rank: index + 1, llm_reason: String(item.reason || '') };
+  }));
+  return settled.filter(result => result.status === 'fulfilled' && result.value).map(result => result.value);
 }
 
 /** Reuses existing ILIKE catalog retrieval, not the misleadingly named vector path.

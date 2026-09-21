@@ -30,10 +30,17 @@ for (const entry of corpus.queries) test(`hybrid baseline ${entry.id}: HTTP, quo
     // GET quota responses are unchanged, even when result IDs intentionally differ.
     assert.deepEqual(current.quota[0], old.quota[0]);
     if (current.quota.length > 1) assert.deepEqual(current.quota.at(-1), old.quota.at(-1));
-    assert.equal(current.metrics.llmCalls, old.metrics.llmCalls);
     assert.ok(current.metrics.tmdbCalls <= 30);
+    // The hybrid engine runs the semantic interpretation plus at most one
+    // bounded narrative candidate call (the channel restored from the 16-19/09
+    // engine); the canonical rollback keeps exactly the single interpretation
+    // round of the no-hybrid engine. Providers stay strictly bounded.
     const llmCount = value => value.requests.filter(r => r.url.includes('api.deepseek.com')).length;
-    assert.equal(llmCount(current), llmCount(old));
+    assert.ok(current.metrics.llmCalls >= old.metrics.llmCalls &&
+      current.metrics.llmCalls <= old.metrics.llmCalls + 1,
+      `llm calls per search ${old.metrics.llmCalls} -> ${current.metrics.llmCalls}`);
+    assert.ok(llmCount(current) >= llmCount(old) && llmCount(current) <= 2 * llmCount(old),
+      `llm requests ${llmCount(old)} -> ${llmCount(current)}`);
     const rows = results(current.response);
     assert.ok(Array.isArray(rows));
     if (rows.length) {

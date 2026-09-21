@@ -9,7 +9,8 @@ import { buildNarrativeRetrievalPlan, narrativeEvidence, narrativeKeywordAngles,
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
-  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, exclusionTerms: 4, sourceResults: 20, sourceTimeoutMs: 4000 });
+  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, exclusionTerms: 4, llmCandidates: 6,
+  sourceResults: 20, sourceTimeoutMs: 4000 });
 export function isHybridRetrievalEnabled(env = process.env) {
   // Hybrid is the validated default; explicit false is the operational rollback.
   return String(env?.[HYBRID_RETRIEVAL_FLAG] ?? 'true').toLowerCase() !== 'false';
@@ -20,7 +21,8 @@ export function createRetrievalTelemetry() {
     retrievalTmdbSearchCount: 0, retrievalTmdbDiscoverCount: 0, retrievalTmdbSimilarCount: 0,
     retrievalTmdbRecommendationsCount: 0, retrievalTmdbPersonCreditsCount: 0,
     retrievalLegacyCount: 0, retrievalSupabaseLexicalCount: 0,
-    retrievalSupabaseVectorCount: 0, retrievalSourceErrorCount: 0, retrievalSourceErrors: [],
+    retrievalSupabaseVectorCount: 0, retrievalLlmCandidatesCount: 0,
+    retrievalSourceErrorCount: 0, retrievalSourceErrors: [],
     vectorRetrievalAttempted: false, vectorRetrievalSucceeded: false,
     vectorRetrievalCandidateCount: 0, vectorRetrievalDurationMs: 0,
     vectorRetrievalError: null, embeddingDurationMs: 0,
@@ -54,7 +56,7 @@ const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retri
   tmdb_similar: 'retrievalTmdbSimilarCount', tmdb_recommendations: 'retrievalTmdbRecommendationsCount',
   tmdb_person_credits: 'retrievalTmdbPersonCreditsCount',
   legacy: 'retrievalLegacyCount', supabase_lexical: 'retrievalSupabaseLexicalCount',
-  supabase_vector: 'retrievalSupabaseVectorCount' };
+  supabase_vector: 'retrievalSupabaseVectorCount', llm_candidates: 'retrievalLlmCandidatesCount' };
 
 /** Pure retrieval orchestration: no React, raw LLM, ranking, quota or global state. */
 export async function hybridRetrieve({ intent, resolvedContext = {}, services = {}, context = {} }) {
@@ -79,14 +81,15 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const timeout = context.sourceTimeoutMs ?? RETRIEVAL_LIMITS.sourceTimeoutMs;
   const errors = [];
   const tasks = [];
-  const source = (name, work, hint = null, signals = {}, request = {}) => tasks.push((async () => {
+  const source = (name, work, hint = null, signals = {}, request = {}, rowSignals = null) => tasks.push((async () => {
     const sourceStarted = Date.now();
     try {
       const rows = await withSourceTimeout(work, timeout);
       const converted = prioritizeNarrativeRows(Array.isArray(rows) ? rows : [], narrativePlan)
         .slice(0, RETRIEVAL_LIMITS.sourceResults)
         .map((row, index) => toRetrievalCandidate(row, name, { mediaType: hint, sourceRank: index + 1,
-          ...(Number.isFinite(Number(row?.similarity)) ? { sourceScore: Number(row.similarity) } : {}), ...signals }))
+          ...(Number.isFinite(Number(row?.similarity)) ? { sourceScore: Number(row.similarity) } : {}),
+          ...(typeof rowSignals === 'function' ? rowSignals(row, index) : {}), ...signals }))
         .filter(Boolean);
       const candidates = converted.filter(c => !intent.mediaType || c.mediaType === intent.mediaType);
       for (const candidate of candidates) {
@@ -143,6 +146,20 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
         }, { mediaType: type, personTmdbId: Number(person.tmdbId) });
       }
     }
+  }
+  // The model's own proposal is a retrieval channel, never an answer: each title
+  // is re-resolved against TMDB (the catalogue decides what exists) and the
+  // resulting candidates then pass through the same strict filter, ranking and
+  // budget as every other source. With no proposal, nothing is scheduled, so the
+  // channel is inert by construction.
+  const proposed = (Array.isArray(context.narrativeCandidates?.candidates)
+    ? context.narrativeCandidates.candidates : []).filter(item => item?.title);
+  if (proposed.length && services.narrativeCandidates) {
+    source('llm_candidates',
+      signal => services.narrativeCandidates(proposed, { signal, limit: RETRIEVAL_LIMITS.llmCandidates, context }),
+      intent.mediaType, { narrativeCandidate: true }, { candidateCount: proposed.length },
+      (row, index) => ({ narrativeCandidateRank: Number(row?.llm_rank) || index + 1,
+        narrativeCandidateReason: String(row?.llm_reason || '').slice(0, 240) }));
   }
   // Only explicit unresolved titles, never a free-text query or single theme
   // word, plus the works the query names itself: those are answered by their own
