@@ -13,7 +13,7 @@ function response() {
   };
 }
 
-test('the no-provider heuristic fallback never reads an undefined heuristicMood', async () => {
+test('the no-provider path returns a clean empty result without fabricated titles', async () => {
   const saved = Object.fromEntries(Object.entries(process.env)
     .filter(([key]) => /(?:API_KEY|DASHSCOPE)/.test(key)));
   for (const key of Object.keys(process.env)) {
@@ -33,8 +33,8 @@ test('the no-provider heuristic fallback never reads an undefined heuristicMood'
     assert.equal(res.statusCode, 200);
     assert.equal(res.payload.success, true);
     assert.notEqual(res.payload.error, 'heuristicMood is not defined');
-    assert.ok(res.payload.movies.length > 0);
-    assert.equal(res.payload.fallback_triggered, true);
+    assert.deepEqual(res.payload.movies, []);
+    assert.equal(res.payload.isEmpty, true);
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of Object.keys(process.env)) {

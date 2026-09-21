@@ -1071,7 +1071,7 @@ function applyFiltersToMovies(movies: Movie[], filters?: AdvancedSearchFiltersOp
   if (filters.mediaType && filters.mediaType !== 'Tous') {
     const target = filters.mediaType === 'Films' ? 'FILM' : 'SÉRIE';
     const filtered = list.filter(m => m.media_type === target);
-    if (filtered.length > 0) list = filtered;
+    list = filtered;
   }
 
   if (filters.platform && filters.platform !== 'all') {
@@ -1086,13 +1086,8 @@ function applyFiltersToMovies(movies: Movie[], filters?: AdvancedSearchFiltersOp
 }
 
 /**
- * 3. Règle de fallback contractuelle :
- * - Si le format demandé est 'Séries TV' : ne renvoyer QUE des séries si présentes.
- *   Si 0 série trouvée dans le catalogue, renvoyer explicitement :
- *   "Aucune série trouvée pour ce thème. Voici des films similaires :"
- * - Si le format demandé est 'Films' : ne renvoyer QUE des films si présents.
- *   Si 0 film trouvé dans le catalogue, renvoyer :
- *   "Aucun film trouvé pour ce thème. Voici des séries similaires :"
+ * Enforce the requested format without cross-media rescue. An empty exact pool
+ * stays empty; cross-media suggestions belong to a future, separate surface.
  */
 export function enforceFormatConstraintAndFallback(
   movies: Movie[],
@@ -1112,18 +1107,9 @@ export function enforceFormatConstraintAndFallback(
     if (seriesOnly.length > 0) {
       return { movies: seriesOnly, isFallback: false, thought: defaultThought };
     }
-    // Aucune série trouvée pour ce thème -> repli transparent avec message contractuel
-    const similarMovies = movies.filter(m => m.media_type === 'FILM' || (m as any).media_type === 'movie' || !m.media_type);
-    if (similarMovies.length > 0) {
-      return {
-        movies: similarMovies,
-        isFallback: true,
-        thought: "Aucune série trouvée pour ce thème. Voici des films similaires :"
-      };
-    }
     return {
       movies: [],
-      isFallback: true,
+      isFallback: false,
       thought: "Aucune série trouvée pour ce thème dans notre catalogue"
     };
   }
@@ -1133,18 +1119,9 @@ export function enforceFormatConstraintAndFallback(
     if (filmsOnly.length > 0) {
       return { movies: filmsOnly, isFallback: false, thought: defaultThought };
     }
-    // Aucun film trouvé pour ce thème -> repli avec séries similaires
-    const similarSeries = movies.filter(m => m.media_type === 'SÉRIE' || (m as any).media_type === 'tv');
-    if (similarSeries.length > 0) {
-      return {
-        movies: similarSeries,
-        isFallback: true,
-        thought: "Aucun film trouvé pour ce thème. Voici des séries similaires :"
-      };
-    }
     return {
       movies: [],
-      isFallback: true,
+      isFallback: false,
       thought: "Aucun film trouvé pour ce thème dans notre catalogue"
     };
   }
@@ -1220,6 +1197,25 @@ export async function executeCinoraSearch(
   const aiKey = qwenKey || deepseekKey || groqKey;
   const specificity = analyzeQuerySpecificity(cleanQuery);
   const offlineCriteria = extractHardCriteriaAndEntities(cleanQuery);
+  const emptyServerResult = (payload: any = {}): AIRecommendationResult => ({
+    thought: payload.thought || payload.message || (effectiveFilters.mediaType === 'Séries TV'
+      ? "Aucune série trouvée pour ce thème dans notre catalogue"
+      : (effectiveFilters.mediaType === 'Films'
+          ? "Aucun film trouvé pour ce thème dans notre catalogue"
+          : "Aucun résultat pertinent trouvé dans notre catalogue")),
+    moodDetected: payload.suggested_mood || cleanQuery,
+    recommendedMovies: [],
+    isFallbackMode: false,
+    providerUsed: payload.providerUsed || 'Algorithme Éliciné',
+    suggestedPrompts: payload.suggestedPrompts || [],
+    cascade: {
+      tierReached: 1,
+      criteria: offlineCriteria,
+      tier1Count: 0,
+      tier2Count: 0,
+      tier3Count: 0
+    }
+  });
 
   console.log(`[Éliciné AI] Spécificité pour "${cleanQuery}" :`, specificity.level, `(cible: ${specificity.targetCount}, critères durs: ${offlineCriteria.hasHardCriteria}, formatIntent: ${formatIntent.mediaType})`);
 
@@ -1320,9 +1316,11 @@ export async function executeCinoraSearch(
       }
       throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
     }
+    if (!searchRes.ok) throw new Error('SEARCH_BACKEND_UNAVAILABLE');
 
     if (searchRes.ok) {
       const searchData = await searchRes.json();
+      if (!searchData.success) return emptyServerResult(searchData);
       if (searchData.success) {
         // Cas A : Des correspondances réelles ou de repli intelligent ont été trouvées
         const returnedList = searchData.results || searchData.movies || [];
@@ -1382,9 +1380,11 @@ export async function executeCinoraSearch(
           }
         }
 
-        // Cas B : Zéro résultat de /api/search → on laisse tomber vers le pipeline TMDB
+        // An empty successful response is authoritative. Client-side catalogue
+        // fallbacks must not bypass server constraints or inject cross-media.
         if (searchData.isEmpty || (Array.isArray(returnedList) && returnedList.length === 0)) {
-          console.log('[Éliciné LLM-First] 0 correspondance dans /api/search → repli sur pipeline TMDB standard.');
+          console.log('[Éliciné LLM-First] 0 correspondance admissible dans /api/search → résultat vide autoritaire.');
+          return emptyServerResult(searchData);
         }
       }
     }
@@ -1392,7 +1392,8 @@ export async function executeCinoraSearch(
     if (backendErr?.message?.includes('Quota gratuit') || backendErr?.message?.includes('Quota journalier') || backendErr?.message?.includes('abonnés Pro')) {
       throw backendErr;
     }
-    console.warn('[Éliciné LLM-First] Backend /api/search indisponible ou erreur, repli sur pipeline unifié :', backendErr?.message);
+    console.warn('[Éliciné LLM-First] Backend /api/search indisponible ou erreur, résultat vide sûr :', backendErr?.message);
+    return emptyServerResult();
   }
 
   // Enrichissement du prompt nettoyé avec filtres Pro si présents et expansion sémantique
@@ -2089,29 +2090,29 @@ export async function executeCinoraSearch(
     }
   }
 
-  // ─── 3. RÈGLE DE FALLBACK CONTRACTUELLE (Instruction 3) ─────────────────────
-  // Si le catalogue ne contient aucune série correspondant exactement au critère strict,
-  // renvoyer un message explicite : "Aucune série trouvée pour ce thème. Voici des films similaires :"
-  // plutôt que d'afficher des films étiquetés MOVIE comme s'ils répondaient à la demande.
+  // ─── 3. FALLBACK LOCAL SOUS CONTRAINTE DE FORMAT ────────────────────────────
+  // Ce chemin n'est atteint que si le serveur est indisponible. Il peut réutiliser
+  // des candidats locaux, mais jamais les convertir en alternatives cross-media.
   if (effectiveFilters.mediaType && effectiveFilters.mediaType !== 'Tous') {
     if (supabaseFallbackResult && supabaseFallbackResult.movies.length > 0) {
-      return {
-        thought: supabaseFallbackResult.thought,
+      const exactSupabase = enforceFormatConstraintAndFallback(
+        supabaseFallbackResult.movies,
+        effectiveFilters.mediaType,
+        supabaseFallbackResult.thought
+      );
+      if (exactSupabase.movies.length > 0) return {
+        thought: exactSupabase.thought,
         moodDetected: cleanQuery,
-        recommendedMovies: supabaseFallbackResult.movies,
+        recommendedMovies: exactSupabase.movies,
         isFallbackMode: true,
         providerUsed: 'Algorithme Éliciné',
-        suggestedPrompts: [
-          'Une série policière sombre et captivante',
-          'Une série de science-fiction dystopique',
-          'Une comédie feel-good et touchante'
-        ],
+        suggestedPrompts: [],
         cascade: {
           tierReached: 3,
           criteria,
           tier1Count: 0,
-          tier2Count: supabaseFallbackResult.movies.length,
-          tier3Count: supabaseFallbackResult.movies.length
+          tier2Count: exactSupabase.movies.length,
+          tier3Count: exactSupabase.movies.length
         }
       };
     }
@@ -2123,15 +2124,15 @@ export async function executeCinoraSearch(
     );
 
     if (effectiveFilters.mediaType === 'Séries TV') {
-      const similarFilms = cleanFallback.filter(m => m.media_type === 'FILM' || (m as any).media_type === 'movie' || !m.media_type);
-      if (similarFilms.length > 0) {
-        const rescued = similarFilms.slice(0, 6).map((m, idx) => ({
+      const exactSeries = cleanFallback.filter(m => m.media_type === 'SÉRIE' || (m as any).media_type === 'tv');
+      if (exactSeries.length > 0) {
+        const rescued = exactSeries.slice(0, 6).map((m, idx) => ({
           ...m,
           match_rate: Math.max(70, 85 - idx * 2),
-          ai_match_reason: m.ai_match_reason || `✨ Film similaire sur la même thématique`
+          ai_match_reason: m.ai_match_reason || `✨ Série similaire sur la même thématique`
         }));
         return {
-          thought: "Aucune série trouvée pour ce thème. Voici des films similaires :",
+          thought: "Séries admissibles les plus proches de cette thématique :",
           moodDetected: cleanQuery,
           recommendedMovies: rescued,
           isFallbackMode: true,
@@ -2151,15 +2152,15 @@ export async function executeCinoraSearch(
         };
       }
     } else if (effectiveFilters.mediaType === 'Films') {
-      const similarSeries = cleanFallback.filter(m => m.media_type === 'SÉRIE' || (m as any).media_type === 'tv');
-      if (similarSeries.length > 0) {
-        const rescued = similarSeries.slice(0, 6).map((m, idx) => ({
+      const exactMovies = cleanFallback.filter(m => m.media_type === 'FILM' || (m as any).media_type === 'movie');
+      if (exactMovies.length > 0) {
+        const rescued = exactMovies.slice(0, 6).map((m, idx) => ({
           ...m,
           match_rate: Math.max(70, 85 - idx * 2),
-          ai_match_reason: m.ai_match_reason || `✨ Série similaire sur la même thématique`
+          ai_match_reason: m.ai_match_reason || `✨ Film similaire sur la même thématique`
         }));
         return {
-          thought: "Aucun film trouvé pour ce thème. Voici des séries similaires :",
+          thought: "Films admissibles les plus proches de cette thématique :",
           moodDetected: cleanQuery,
           recommendedMovies: rescued,
           isFallbackMode: true,

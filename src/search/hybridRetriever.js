@@ -1,6 +1,7 @@
 import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
 import { discoverParams, hasDiscoverConstraints, keywordTerms, normalizeTerm, reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
+import { createFallbackTelemetry, failedSourceLabel, FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
@@ -27,7 +28,7 @@ export function createRetrievalTelemetry() {
     diversificationAttempted: false, diversificationCandidateCount: 0,
     diversificationReorderedCount: 0, diversificationDurationMs: 0,
     semanticExpansionApplied: false, semanticExpansionTermCount: 0,
-    semanticKeywordResolvedCount: 0 };
+    semanticKeywordResolvedCount: 0, ...createFallbackTelemetry() };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {
@@ -133,6 +134,15 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     retrievalSourceErrorCount: errors.length,
     retrievalSourceErrors: errors.sort((a, b) => a.source.localeCompare(b.source))
   });
+  if (errors.length > 0) {
+    recordFallback(metrics, {
+      used: merged.candidates.length > 0,
+      reason: errors.some(error => error.code === 'TIMEOUT') ? FALLBACK_REASONS.TIMEOUT : FALLBACK_REASONS.PROVIDER_ERROR,
+      source: failedSourceLabel(errors)
+    });
+  } else if (merged.candidates.length === 0) {
+    recordFallback(metrics, { reason: FALLBACK_REASONS.NO_CANDIDATES, source: 'hybrid_retrieval' });
+  }
   Object.assign(telemetry, metrics);
   return merged.candidates;
 }

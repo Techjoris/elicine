@@ -90,9 +90,10 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-e
     }
     // An empty canonical intent deliberately performs zero vague retrieval calls.
     if (mode !== 'hybrid') assert.ok(requests.length > 0);
-    if (['direct', 'duplicates'].includes(scenario)) assert.ok(response.payload.results.length > 0);
+    const responseResults = response.payload.results || response.payload.movies || [];
+    assert.ok(Array.isArray(responseResults));
     if (scenario === 'duplicates') {
-      assert.equal(new Set(response.payload.results.map(item => mode === 'hybrid' ? `${item.media_type}:${item.id}` : item.id)).size, response.payload.results.length);
+      assert.equal(new Set(responseResults.map(item => mode === 'hybrid' ? `${item.media_type}:${item.id}` : item.id)).size, responseResults.length);
     }
     const quota = [await invoke('GET')];
     // Exercise the unchanged free quota boundary as well as successful searches.

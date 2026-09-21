@@ -7,6 +7,7 @@ import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
 import { filterStrictCandidates } from './strictConstraintFilter.js';
 import { rankSearchCandidates } from './searchRanker.js';
 import { diversifyRankedCandidates } from './resultDiversifier.js';
+import { FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -106,23 +107,50 @@ export async function orchestrateSearch({
 }
 
 /** null = historical path; [] = attempted hybrid with no usable candidates. */
-export async function orchestrateCandidateRetrieval({ orchestration, services, context, env = process.env }) {
+export async function orchestrateCandidateRetrieval({
+  orchestration,
+  services,
+  context,
+  env = process.env,
+  rankCandidates = rankSearchCandidates,
+  diversifyCandidates = diversifyRankedCandidates
+}) {
   if (!isHybridRetrievalEnabled(env) || !orchestration.canonicalIntent) return null;
   try {
     const candidates = await hybridRetrieve({ intent: orchestration.canonicalIntent,
       resolvedContext: orchestration.resolvedIntentContext, services, context });
+    if (candidates.length === 0) {
+      if (!context.telemetry.fallbackReason) {
+        recordFallback(context.telemetry, { reason: FALLBACK_REASONS.NO_CANDIDATES, source: 'hybrid_retrieval' });
+      }
+      return [];
+    }
     const admissible = filterStrictCandidates(candidates, orchestration.canonicalIntent, {
       telemetry: context.telemetry, env
     }).candidates;
-    const ranked = rankSearchCandidates(admissible, orchestration.canonicalIntent,
-      orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
-    return diversifyRankedCandidates(ranked, orchestration.canonicalIntent,
+    if (admissible.length === 0) {
+      recordFallback(context.telemetry, { reason: FALLBACK_REASONS.NO_RELEVANT_RESULTS, source: 'strict_filter' });
+      return [];
+    }
+    let ranked;
+    try {
+      ranked = rankCandidates(admissible, orchestration.canonicalIntent,
+        orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
+    } catch {
+      recordFallback(context.telemetry, { reason: FALLBACK_REASONS.RANKING_ERROR, source: 'ranking' });
+      return [];
+    }
+    if (!Array.isArray(ranked) || ranked.length === 0) {
+      recordFallback(context.telemetry, { reason: FALLBACK_REASONS.RANKING_ERROR, source: 'ranking' });
+      return [];
+    }
+    return diversifyCandidates(ranked, orchestration.canonicalIntent,
       orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
   } catch {
-    // Programming/adapter failure: keep the existing global fallback and quota path.
     Object.assign(context.telemetry, { hybridRetrievalAttempted: true, hybridRetrievalSucceeded: false,
       retrievalSourceErrorCount: (context.telemetry.retrievalSourceErrorCount || 0) + 1,
       retrievalSourceErrors: [{ source: 'orchestrator', code: 'RETRIEVAL_FAILED' }] });
+    recordFallback(context.telemetry, { reason: FALLBACK_REASONS.PROVIDER_ERROR, source: 'orchestrator' });
     return [];
   }
 }

@@ -9,6 +9,7 @@ import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js'
 import { rankSearchCandidates, toElicineRankedResult } from '../src/search/searchRanker.js';
 import { diversifyRankedCandidates } from '../src/search/resultDiversifier.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
+import { FALLBACK_REASONS, recordFallback } from '../src/search/fallbackPolicy.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
@@ -2033,33 +2034,9 @@ export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTag
     }
   }
 
-  // 5. Ultime filet de secours : 6 chefs-d'œuvre emblématiques de l'atmosphère
-  const isComedy = dominantGenres.some(g => /com[eé]die|comedy|rire|humour|feel[\s-]?good/i.test(g));
-  const isRomanceOrDrama = dominantGenres.some(g => /romance|amour|drame|drama/i.test(g));
-  const fallbackTitles = isComedy
-    ? ['Le Dîner de Cons', 'SuperGrave', 'La Cité de la Peur', 'Intouchables', 'The Big Lebowski', 'OSS 117 : Le Caire, nid d\'espions']
-    : (isRomanceOrDrama
-        ? ['Past Lives', 'La La Land', 'Blue Valentine', 'In the Mood for Love', 'Her', 'Marriage Story']
-        : ['Interstellar', 'Blade Runner 2049', 'Se7en', 'Le Silence des agneaux', 'Arrival', 'Prisoners']);
-
-  return fallbackTitles.slice(0, 6).map((t, idx) => ({
-    id: 990000 + idx,
-    tmdb_id: 990000 + idx,
-    title: t,
-    original_title: t,
-    overview: `Chef-d'œuvre cinématographique célébré pour sa résonance émotionnelle et son atmosphère unique.`,
-    poster_path: null,
-    backdrop_path: null,
-    release_date: '2020',
-    vote_average: 8.4,
-    vote_count: 5000,
-    genres: dominantLabel,
-    media_type: 'movie',
-    badge: 'Recommandations Éliciné pour votre atmosphère',
-    ai_badge: 'Recommandations Éliciné pour votre atmosphère',
-    match_rate: Math.max(78, 95 - idx * 2),
-    ai_match_reason: `Recommandation Éliciné pour votre atmosphère (${dominantLabel})`
-  }));
+  // Never fabricate catalogue entries. Exhausted real sources produce a clean
+  // empty result so explicit constraints remain authoritative.
+  return [];
 }
 
 /**
@@ -2694,6 +2671,11 @@ export default async function handler(req, res) {
           // Instruction 2 : Abaissement dynamique du seuil si moins de 3 résultats (Relaxed Similarity Fallback)
           if ((!data || data.length < 3) && currentThreshold > 0.20) {
             const relaxedThreshold = Math.max(0.20, currentThreshold - 0.20);
+            recordFallback(telemetry, {
+              reason: FALLBACK_REASONS.FALLBACK_USED,
+              source: 'legacy_vector_threshold',
+              relaxationApplied: true
+            });
             console.log(`[API /api/search] [Vector] Moins de 3 résultats (${data?.length || 0}) → Abaissement dynamique du seuil de ${currentThreshold} à ${relaxedThreshold}`);
             const relaxedRes = await supabaseServer.rpc('match_movies', {
               query_embedding: queryEmbedding,
@@ -2703,6 +2685,7 @@ export default async function handler(req, res) {
             if (!relaxedRes.error && Array.isArray(relaxedRes.data) && relaxedRes.data.length > (data?.length || 0)) {
               data = relaxedRes.data;
               currentThreshold = relaxedThreshold;
+              telemetry.fallbackUsed = true;
             }
           }
 
@@ -2956,14 +2939,21 @@ export default async function handler(req, res) {
         if (requestedMediaType && requestedMediaType !== 'Tous') {
           if (requestedMediaType === 'Séries TV') {
             const seriesOnly = directTmdbMovies.filter(m => m.media_type === 'tv' || m.badge === 'SÉRIE');
-            if (seriesOnly.length > 0) directTmdbMovies = seriesOnly;
+            directTmdbMovies = seriesOnly;
           } else if (requestedMediaType === 'Films') {
             const filmsOnly = directTmdbMovies.filter(m => m.media_type === 'movie' || m.badge === 'FILM');
-            if (filmsOnly.length > 0) directTmdbMovies = filmsOnly;
+            directTmdbMovies = filmsOnly;
           }
         }
 
-        if (!isPro && ipHash) {
+        if (directTmdbMovies.length === 0) {
+          recordFallback(telemetry, {
+            reason: FALLBACK_REASONS.NO_RELEVANT_RESULTS,
+            source: 'direct_tmdb_media_type'
+          });
+        }
+
+        if (directTmdbMovies.length > 0 && !isPro && ipHash) {
           incrementMemoryDailyQuota(ipHash, todayDate);
         }
 
@@ -2972,7 +2962,7 @@ export default async function handler(req, res) {
           ? editorialSummary
           : `Vision & Recommandation Éliciné — ${editorialSummary}`;
 
-        return res.status(200).json({
+        if (directTmdbMovies.length > 0) return res.status(200).json({
           success: true,
           results: directTmdbMovies,
           movies: directTmdbMovies,
@@ -3109,61 +3099,9 @@ export default async function handler(req, res) {
       // Application du filtre strict de format (Films vs Séries TV)
       if (!useHybrid && requestedMediaType && requestedMediaType !== 'Tous' && resolvedMovies.length > 0) {
         if (requestedMediaType === 'Séries TV') {
-          const seriesOnly = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
-          if (seriesOnly.length > 0) {
-            resolvedMovies = seriesOnly;
-          } else {
-            const similarFilms = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie' || !m.media_type);
-            if (similarFilms.length > 0) {
-              return res.status(200).json({
-                success: true,
-                results: similarFilms,
-                movies: similarFilms,
-                count: similarFilms.length,
-                fallback_triggered: true,
-                isFallbackMode: true,
-                suggested_mood: suggestedMood,
-                badge: 'Sélection Éliciné',
-                providerUsed: 'Algorithme Éliciné',
-                correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
-                thought: "Aucune série trouvée pour ce thème. Voici des films similaires :",
-                extractedTitles: referenceTitles,
-                suggestedPrompts: [
-                  'Une série policière sombre et addictive',
-                  'Une série de science-fiction dystopique',
-                  'Une comédie feel-good et touchante'
-                ]
-              });
-            }
-          }
+          resolvedMovies = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
         } else if (requestedMediaType === 'Films') {
-          const filmsOnly = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie');
-          if (filmsOnly.length > 0) {
-            resolvedMovies = filmsOnly;
-          } else {
-            const similarSeries = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
-            if (similarSeries.length > 0) {
-              return res.status(200).json({
-                success: true,
-                results: similarSeries,
-                movies: similarSeries,
-                count: similarSeries.length,
-                fallback_triggered: true,
-                isFallbackMode: true,
-                suggested_mood: suggestedMood,
-                badge: 'Sélection Éliciné',
-                providerUsed: 'Algorithme Éliciné',
-                correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
-                thought: "Aucun film trouvé pour ce thème. Voici des séries similaires :",
-                extractedTitles: referenceTitles,
-                suggestedPrompts: [
-                  'Un film de braquage haletant avec twist',
-                  'Un chef-d\'œuvre de science-fiction dystopique',
-                  'Un thriller psychologique sombre et mystérieux'
-                ]
-              });
-            }
-          }
+          resolvedMovies = resolvedMovies.filter(m => m.media_type === 'FILM' || m.media_type === 'movie');
         }
       }
 
@@ -3183,7 +3121,11 @@ export default async function handler(req, res) {
 
       const llmHasNoUsableTitles = (!candidateList || candidateList.length === 0);
 
-      if (resolvedMovies.length === 0 && (useHybrid || llmHasNoUsableTitles) && hasIdentifiableIntent) {
+      if (!useHybrid && resolvedMovies.length === 0 && llmHasNoUsableTitles && hasIdentifiableIntent) {
+        recordFallback(telemetry, {
+          reason: FALLBACK_REASONS.FALLBACK_USED,
+          source: 'legacy_genre_atmosphere'
+        });
         console.log(`[API /api/search] [Priorité 2 Fallback] 0 résultat et 0 titre LLM exploitable → Déclenchement Smart Fallback sur genre principal "${primaryGenres[0] || 'Drame'}"`);
         const fallbackMovies = await resolveDominantGenreAtmosphere(
           primaryGenres,
@@ -3195,7 +3137,7 @@ export default async function handler(req, res) {
           // net, not a second network cascade (nor another LLM/quota charge).
           useHybrid
         );
-        const admissibleFallback = useHybrid ? filterStrictCandidates(
+        const admissibleFallback = orchestration.canonicalIntent ? filterStrictCandidates(
           fallbackMovies, orchestration.canonicalIntent, { telemetry }
         ).candidates : fallbackMovies;
         if (admissibleFallback.length > 0) {
@@ -3211,11 +3153,21 @@ export default async function handler(req, res) {
             resolvedMovies = admissibleFallback.slice(0, 6);
           }
           fallbackTriggered = true;
+          telemetry.fallbackUsed = true;
         }
       }
 
-      if (useHybrid && orchestration.canonicalIntent.mediaType) {
+      if (orchestration.canonicalIntent?.mediaType) {
         resolvedMovies = resolvedMovies.filter(movie => candidateMediaType(movie) === orchestration.canonicalIntent.mediaType);
+      }
+
+      if (useHybrid && resolvedMovies.length === 0 &&
+          ![FALLBACK_REASONS.PROVIDER_ERROR, FALLBACK_REASONS.TIMEOUT, FALLBACK_REASONS.RANKING_ERROR]
+            .includes(telemetry.fallbackReason)) {
+        recordFallback(telemetry, {
+          reason: FALLBACK_REASONS.NO_RELEVANT_RESULTS,
+          source: 'canonical_pipeline'
+        });
       }
 
       // Incrémentation du quota pour les recherches exécutées (si non-pro)
