@@ -1,5 +1,8 @@
 import { checkRateLimit } from './_rateLimit.js';
-import { orchestrateSearch } from '../src/search/searchOrchestrator.js';
+import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/searchOrchestrator.js';
+import { isHybridRetrievalEnabled } from '../src/search/hybridRetriever.js';
+import { candidateMediaType, toLegacyRankingCandidate } from '../src/search/retrievalCandidate.js';
+import { createTmdbRetrievalClient, createSupabaseLexicalSource, retrieveLegacyHints } from '../src/search/retrievalServices.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
@@ -407,6 +410,12 @@ export function extractMatchesFromJson(rawText) {
       }
 
       return {
+        // Preserve independently structured facts when supplied. No prompt change,
+        // no inference of years/languages from the display locale or mood aliases.
+        ...Object.fromEntries(['explicit_themes', 'keywords', 'excluded_titles', 'excluded_genres',
+          'year_min', 'year_max', 'languages', 'countries', 'runtime_min', 'runtime_max',
+          'min_rating', 'adult', 'sort_preference'].filter(key => parsed[key] !== undefined)
+          .map(key => [key, parsed[key]])),
         media_type: mediaType,
         primary_genres: primaryGenres,
         mood_tags: moodTags,
@@ -1884,7 +1893,7 @@ const TMDB_GENRE_NAME_TO_ID = {
   'animation': 16
 };
 
-export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTags = [], cleanQuery = '', tmdbApiKey = '', clusterId = null) {
+export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTags = [], cleanQuery = '', tmdbApiKey = '', clusterId = null, offline = false) {
   // 1. Identification du genre principal (primary_genres[0])
   let primaryGenre = null;
   if (Array.isArray(primaryGenres) && primaryGenres.length > 0 && typeof primaryGenres[0] === 'string' && primaryGenres[0].trim().length > 0) {
@@ -1925,7 +1934,7 @@ export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTag
   console.log(`[API /api/search] [Étape 3 Fallback] Sélection des 6 meilleurs films du genre principal : "${dominantLabel}"`);
 
   // 2. Recherche prioritaire dans le catalogue Supabase local pour primary_genres[0]
-  if (supabaseServer) {
+  if (supabaseServer && !offline) {
     const cleanG = primaryGenre.replace(/[,()%"']/g, '').trim();
     if (cleanG.length >= 3) {
       try {
@@ -1955,7 +1964,7 @@ export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTag
   }
 
   // 3. Fallback sur archetypes de l'intention émotionnelle si disponibles
-  if (emotionalExpansion && Array.isArray(emotionalExpansion.archetypeTitles) && emotionalExpansion.archetypeTitles.length > 0) {
+  if (!offline && emotionalExpansion && Array.isArray(emotionalExpansion.archetypeTitles) && emotionalExpansion.archetypeTitles.length > 0) {
     const emotionalMovies = await resolveEmotionalMasterpieces(emotionalExpansion, tmdbApiKey, clusterId);
     if (emotionalMovies.length > 0) {
       return emotionalMovies.slice(0, 6).map((m, idx) => ({
@@ -1970,7 +1979,7 @@ export async function resolveDominantGenreAtmosphere(primaryGenres = [], moodTag
 
   // 4. Découverte TMDB des 6 chefs-d'œuvre les mieux notés du genre principal
   const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || tmdbApiKey || '').trim();
-  if (tmdbKey) {
+  if (tmdbKey && !offline) {
     const genreIds = [];
     const gKey = primaryGenre.toLowerCase().trim();
     if (TMDB_GENRE_NAME_TO_ID[gKey]) {
@@ -2471,13 +2480,13 @@ function filterMockbusters(movies, queryText) {
 // ============================================================================
 // Helper : Déduplication + enrichissement badge Éliciné
 // ============================================================================
-function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éliciné', queryText = '', clusterId = null, facets = null) {
+export function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélection Éliciné', queryText = '', clusterId = null, facets = null, identity = movie => movie.id || movie.tmdb_id || movie.title) {
   if (!Array.isArray(rawMovies) || rawMovies.length === 0) return [];
 
   const seenIds = new Set();
   const unique = [];
   for (const movie of rawMovies) {
-    const key = movie.id || movie.tmdb_id || movie.title;
+    const key = identity(movie);
     if (!seenIds.has(key)) { seenIds.add(key); unique.push(movie); }
   }
 
@@ -2789,13 +2798,16 @@ export default async function handler(req, res) {
 
       const tmdbKey = (process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || req.body?.tmdbApiKey || '').trim();
       const tmdbResolutionCache = new Map();
+      const hybridEnabled = isHybridRetrievalEnabled();
+      const retrievalClient = createTmdbRetrievalClient({ apiKey: tmdbKey, cache: tmdbResolutionCache, telemetry });
       const orchestration = await orchestrateSearch({
         interpreted: llmResult,
         cleanQuery: req.body?.rawQuery || cleanQuery,
         requestedMediaType,
+        enforceRequestedMediaType: hybridEnabled,
         telemetry,
         resolveEntities: (canonicalIntent) => resolveKnownTitles(canonicalIntent, {
-          searchCandidates: (title, type) => searchTmdbCandidates(
+          searchCandidates: (title, type) => hybridEnabled ? retrievalClient.search(title, type) : searchTmdbCandidates(
             title, type, null, tmdbKey, tmdbResolutionCache
           )
         })
@@ -2863,11 +2875,22 @@ export default async function handler(req, res) {
           ? matches.map(m => ({ title: m.title, type: extractedMediaType === 'tv' ? 'tv' : 'movie', reason: m.reason }))
           : referenceTitles.map(t => ({ title: t, type: extractedMediaType === 'tv' ? 'tv' : 'movie' }));
 
+      const hybridPool = await orchestrateCandidateRetrieval({
+        orchestration,
+        services: {
+          ...retrievalClient,
+          lexical: createSupabaseLexicalSource(supabaseServer),
+          legacy: options => retrieveLegacyHints(candidateList, orchestration.resolvedIntentContext, retrievalClient, options)
+        },
+        context: { telemetry, tmdbResolutionCache }
+      });
+      const useHybrid = hybridPool !== null;
+
       let directTmdbMovies = [];
       const seenTmdbIds = new Set();
       const seenTitles = new Set();
 
-      if (tmdbKey && candidateList.length > 0) {
+      if (!useHybrid && tmdbKey && candidateList.length > 0) {
         addSearchTelemetryPath(telemetry, 'tmdb_direct_resolution_started', { titleCount: candidateList.length });
         console.log(`[API /api/search] [Priorité 1 Direct TMDB] Résolution chirurgicale de ${candidateList.length} titre(s) LLM...`);
         const resolvedList = await Promise.all(
@@ -2966,14 +2989,18 @@ export default async function handler(req, res) {
       const activeClusterId = explicitThematicCluster || detectedThematicCluster;
       const activeFacets = extractedFacets || detectHeuristicFacets(cleanQuery);
 
-      let resolvedMovies = [];
+      // Exactly the historical scoring function, with only its redundant ID
+      // deduplication adapted to TMDB's separate movie/TV ID namespaces.
+      let resolvedMovies = useHybrid ? enrichWithBadges(hybridPool.map(toLegacyRankingCandidate),
+        matches, 'Sélection Éliciné', effectiveCleanQuery, activeClusterId, activeFacets,
+        movie => `${movie.media_type}:${movie.tmdb_id}`) : [];
       let fallbackTriggered = false;
 
       // ─── ÉTAPE 2 : Stratégie de récupération hybride multi-niveaux ─────────
 
       // Niveau 1 (Matching direct & vectoriel) : Exécuter la recherche vectorielle / sémantique avec la `clean_query`
       console.log(`[API /api/search] [Niveau 1] Matching direct & vectoriel sur : "${effectiveCleanQuery}"`);
-      const directVectorHits = await executeDirectAndVectorSearch(effectiveCleanQuery, requestedMediaType, activeClusterId, activeFacets);
+      const directVectorHits = useHybrid ? [] : await executeDirectAndVectorSearch(effectiveCleanQuery, requestedMediaType, activeClusterId, activeFacets);
       recordSearchCandidateCount(telemetry, 'supabaseDirect', directVectorHits.length);
       if (directVectorHits.length > 0) {
         resolvedMovies.push(...directVectorHits);
@@ -2981,7 +3008,7 @@ export default async function handler(req, res) {
       }
 
       // Niveau 2 (Matching par références & genres) : Si le Niveau 1 renvoie moins de 4 films, élargir automatiquement
-      if (resolvedMovies.length < 4) {
+      if (!useHybrid && resolvedMovies.length < 4) {
         console.log(`[API /api/search] [Niveau 2] Niveau 1 renvoie ${resolvedMovies.length} (< 4) film(s) → Élargissement par références & genres`);
         const seenIds = new Set(resolvedMovies.map(m => m.id || m.tmdb_id));
 
@@ -3067,7 +3094,7 @@ export default async function handler(req, res) {
       }
 
       // Application du filtre strict de format (Films vs Séries TV)
-      if (requestedMediaType && requestedMediaType !== 'Tous' && resolvedMovies.length > 0) {
+      if (!useHybrid && requestedMediaType && requestedMediaType !== 'Tous' && resolvedMovies.length > 0) {
         if (requestedMediaType === 'Séries TV') {
           const seriesOnly = resolvedMovies.filter(m => m.media_type === 'SÉRIE' || m.media_type === 'tv');
           if (seriesOnly.length > 0) {
@@ -3143,19 +3170,26 @@ export default async function handler(req, res) {
 
       const llmHasNoUsableTitles = (!candidateList || candidateList.length === 0);
 
-      if (resolvedMovies.length === 0 && llmHasNoUsableTitles && hasIdentifiableIntent) {
+      if (resolvedMovies.length === 0 && (useHybrid || llmHasNoUsableTitles) && hasIdentifiableIntent) {
         console.log(`[API /api/search] [Priorité 2 Fallback] 0 résultat et 0 titre LLM exploitable → Déclenchement Smart Fallback sur genre principal "${primaryGenres[0] || 'Drame'}"`);
         const fallbackMovies = await resolveDominantGenreAtmosphere(
           primaryGenres,
           moodTags,
           effectiveCleanQuery,
           req.body?.tmdbApiKey || '',
-          activeClusterId
+          activeClusterId,
+          // Sources were already attempted. Use the existing final offline safety
+          // net, not a second network cascade (nor another LLM/quota charge).
+          useHybrid
         );
         if (fallbackMovies.length > 0) {
           resolvedMovies = fallbackMovies.slice(0, 6);
           fallbackTriggered = true;
         }
+      }
+
+      if (useHybrid && orchestration.canonicalIntent.mediaType) {
+        resolvedMovies = resolvedMovies.filter(movie => candidateMediaType(movie) === orchestration.canonicalIntent.mediaType);
       }
 
       // Incrémentation du quota pour les recherches exécutées (si non-pro)

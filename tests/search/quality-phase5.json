@@ -1,0 +1,9 @@
+[
+  { "id": "modern-war-series-air-combat", "query": "une série de guerre moderne avec des avions de combat", "mediaType": "tv", "genres": ["War"], "themes": ["guerre moderne", "aviation militaire", "avions de combat"], "seeds": [] },
+  { "id": "gone-girl", "query": "un thriller comme Gone Girl", "mediaType": "movie", "genres": ["Thriller"], "seeds": [{ "id": 210577, "title": "Gone Girl", "type": "movie" }] },
+  { "id": "mindhunter", "query": "une série comme Mindhunter", "mediaType": "tv", "genres": ["Crime"], "seeds": [{ "id": 67744, "title": "Mindhunter", "type": "tv" }] },
+  { "id": "science-fiction-after-2015", "query": "un film de science-fiction après 2015", "mediaType": "movie", "genres": ["Science-fiction"], "yearMin": 2016, "seeds": [] },
+  { "id": "dark-crime-tv", "query": "une série policière sombre", "mediaType": "tv", "genres": ["Crime"], "moods": ["dark"], "seeds": [] },
+  { "id": "top-gun-dunkirk", "query": "des films comme Top Gun et Dunkirk", "mediaType": "movie", "genres": ["War"], "seeds": [{ "id": 744, "title": "Top Gun", "type": "movie" }, { "id": 374720, "title": "Dunkirk", "type": "movie" }] },
+  { "id": "recent-french-comedy", "query": "une comédie française récente", "mediaType": "movie", "genres": ["Comedy"], "languages": ["fr"], "yearMin": 2023, "seeds": [] }
+]

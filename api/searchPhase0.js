@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { createRetrievalTelemetry } from '../src/search/hybridRetriever.js';
 
 export const SEARCH_ENGINE_MODES = Object.freeze({
   CURRENT_ENGINE: 'CURRENT_ENGINE',
@@ -36,6 +37,8 @@ export function createSearchTelemetry({ rawQuery = '', locale, executionSurface 
     path: [],
     llmCalls: 0,
     tmdbCalls: 0,
+    ...createRetrievalTelemetry(),
+    retrievalTmdbCacheHits: 0,
     candidateCounts: {},
     errors: []
   };

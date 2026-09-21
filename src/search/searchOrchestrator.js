@@ -3,6 +3,7 @@ import {
   generateCanonicalIntentShadow
 } from './canonicalIntentShadow.js';
 import { createResolvedIntentContext } from './resolvedIntentContext.js';
+import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -29,6 +30,7 @@ export async function orchestrateSearch({
   telemetry,
   env = process.env,
   createIntent = createCanonicalIntentFromLegacy,
+  enforceRequestedMediaType = false,
   resolveEntities = null
 }) {
   const legacy = (error = null) => {
@@ -54,7 +56,9 @@ export async function orchestrateSearch({
   }
 
   try {
-    const canonicalIntent = createIntent(interpreted, { userQuery: cleanQuery });
+    const requestedType = requestedMediaType === 'Séries TV' ? 'tv' : requestedMediaType === 'Films' ? 'movie' : null;
+    const canonicalIntent = createIntent(enforceRequestedMediaType && requestedType
+      ? { ...interpreted, media_type: requestedType } : interpreted, { userQuery: cleanQuery });
     const canonicalMediaType = canonicalIntent.mediaType;
     const projectedInterpretation = {
       ...interpreted,
@@ -95,5 +99,20 @@ export async function orchestrateSearch({
   } catch {
     // Fixed code only: exception text can include provider output.
     return legacy('CANONICAL_ORCHESTRATION_FAILED');
+  }
+}
+
+/** null = historical path; [] = attempted hybrid with no usable candidates. */
+export async function orchestrateCandidateRetrieval({ orchestration, services, context, env = process.env }) {
+  if (!isHybridRetrievalEnabled(env) || !orchestration.canonicalIntent) return null;
+  try {
+    return await hybridRetrieve({ intent: orchestration.canonicalIntent,
+      resolvedContext: orchestration.resolvedIntentContext, services, context });
+  } catch {
+    // Programming/adapter failure: keep the existing global fallback and quota path.
+    Object.assign(context.telemetry, { hybridRetrievalAttempted: true, hybridRetrievalSucceeded: false,
+      retrievalSourceErrorCount: (context.telemetry.retrievalSourceErrorCount || 0) + 1,
+      retrievalSourceErrors: [{ source: 'orchestrator', code: 'RETRIEVAL_FAILED' }] });
+    return [];
   }
 }

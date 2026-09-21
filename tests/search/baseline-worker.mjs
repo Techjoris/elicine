@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import corpus from './baseline-corpus.v1.json' with { type: 'json' };
 
 const mode = process.argv[2];
-assert.ok(['legacy', 'canonical'].includes(mode), 'Expected legacy or canonical mode');
+assert.ok(['legacy', 'canonical', 'hybrid'].includes(mode), 'Expected legacy, canonical or hybrid mode');
 for (const key of Object.keys(process.env)) {
   if (/API_KEY|SUPABASE|DASHSCOPE|SEARCH_OBSERVABILITY/i.test(key)) delete process.env[key];
 }
-if (mode === 'canonical') process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'true';
+process.env.HYBRID_RETRIEVAL_ENABLED = mode === 'hybrid' ? 'true' : 'false';
+if (mode !== 'legacy') process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'true';
 else process.env.CANONICAL_SEARCH_ENGINE_ENABLED = 'false';
 console.log = console.info = console.warn = console.error = () => {};
 const { default: handler } = await import('../../api/search.js');
@@ -79,7 +80,7 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-e
     const response = await invoke();
     assert.equal(response.status, 200, entry.id + '/' + scenario);
     const telemetry = getBufferedSearchTelemetry().at(-1);
-    if (mode === 'canonical') {
+    if (mode !== 'legacy') {
       assert.equal(telemetry.searchEnginePath, 'canonical');
       assert.equal(telemetry.orchestrationSucceeded, true);
       assert.equal(telemetry.canonicalIntentGenerated, true);
@@ -87,10 +88,11 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-e
     } else {
       assert.equal(telemetry.searchEnginePath, 'legacy');
     }
-    assert.ok(requests.length > 0);
+    // An empty canonical intent deliberately performs zero vague retrieval calls.
+    if (mode !== 'hybrid') assert.ok(requests.length > 0);
     if (['direct', 'duplicates'].includes(scenario)) assert.ok(response.payload.results.length > 0);
     if (scenario === 'duplicates') {
-      assert.equal(new Set(response.payload.results.map(item => item.id)).size, response.payload.results.length);
+      assert.equal(new Set(response.payload.results.map(item => mode === 'hybrid' ? `${item.media_type}:${item.id}` : item.id)).size, response.payload.results.length);
     }
     const quota = [await invoke('GET')];
     // Exercise the unchanged free quota boundary as well as successful searches.
@@ -98,7 +100,9 @@ for (const [scenarioIndex, name] of ['direct', 'empty', 'heuristic', 'provider-e
       quota.push(await invoke(), await invoke(), await invoke(), await invoke('GET'));
       assert.equal(quota[3].payload.code, 'QUOTA_EXCEEDED');
     }
-    snapshots.push({ id: entry.id, scenario, response, quota, requests });
+    snapshots.push({ id: entry.id, scenario, response, quota, requests,
+      metrics: { attempted: telemetry.hybridRetrievalAttempted, pool: telemetry.retrievalCandidateCountFinal,
+        errors: telemetry.retrievalSourceErrorCount, llmCalls: telemetry.llmCalls, tmdbCalls: telemetry.tmdbCalls } });
   }
 }
 process.stdout.write(JSON.stringify(snapshots));
