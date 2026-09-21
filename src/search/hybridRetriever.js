@@ -12,7 +12,10 @@ export function createRetrievalTelemetry() {
     retrievalCandidateCountBeforeDedup: 0, retrievalCandidateCountAfterDedup: 0, retrievalCandidateCountFinal: 0,
     retrievalTmdbSearchCount: 0, retrievalTmdbDiscoverCount: 0, retrievalTmdbSimilarCount: 0,
     retrievalTmdbRecommendationsCount: 0, retrievalLegacyCount: 0, retrievalSupabaseLexicalCount: 0,
-    retrievalSourceErrorCount: 0, retrievalSourceErrors: [] };
+    retrievalSupabaseVectorCount: 0, retrievalSourceErrorCount: 0, retrievalSourceErrors: [],
+    vectorRetrievalAttempted: false, vectorRetrievalSucceeded: false,
+    vectorRetrievalCandidateCount: 0, vectorRetrievalDurationMs: 0,
+    vectorRetrievalError: null, embeddingDurationMs: 0 };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {
@@ -30,7 +33,8 @@ export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourc
 
 const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retrievalTmdbDiscoverCount',
   tmdb_similar: 'retrievalTmdbSimilarCount', tmdb_recommendations: 'retrievalTmdbRecommendationsCount',
-  legacy: 'retrievalLegacyCount', supabase_lexical: 'retrievalSupabaseLexicalCount' };
+  legacy: 'retrievalLegacyCount', supabase_lexical: 'retrievalSupabaseLexicalCount',
+  supabase_vector: 'retrievalSupabaseVectorCount' };
 
 /** Pure retrieval orchestration: no React, raw LLM, ranking, quota or global state. */
 export async function hybridRetrieve({ intent, resolvedContext = {}, services = {}, context = {} }) {
@@ -44,7 +48,8 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     try {
       const rows = await withSourceTimeout(work, timeout);
       const candidates = (Array.isArray(rows) ? rows : []).slice(0, RETRIEVAL_LIMITS.sourceResults)
-        .map((row, index) => toRetrievalCandidate(row, name, { mediaType: hint, sourceRank: index + 1, ...signals }))
+        .map((row, index) => toRetrievalCandidate(row, name, { mediaType: hint, sourceRank: index + 1,
+          ...(Number.isFinite(Number(row?.similarity)) ? { sourceScore: Number(row.similarity) } : {}), ...signals }))
         .filter(c => c && (!intent.mediaType || c.mediaType === intent.mediaType));
       for (const candidate of candidates) candidate.retrievalSignals[0].matchedGenreCount =
         candidate.genreIds.filter(id => tmdbGenreIds(intent.genres, candidate.mediaType).includes(id)).length;
@@ -76,6 +81,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     source('tmdb_search', signal => services.search(title, intent.mediaType, { signal, context }), intent.mediaType);
   if (services.legacy) source('legacy', signal => services.legacy({ signal, context }));
   if (services.lexical) source('supabase_lexical', signal => services.lexical(intent, { signal, context }));
+  if (services.vector) source('supabase_vector', signal => services.vector(intent, { signal, context }));
 
   // Keywords are a dependency only of Discover; seeds/lexical/legacy already run.
   const keywordsTask = (async () => {
@@ -98,6 +104,10 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const settled = await Promise.allSettled(tasks);
   const candidates = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
   const merged = mergeCandidates(candidates);
+  for (const field of ['vectorRetrievalAttempted', 'vectorRetrievalSucceeded',
+    'vectorRetrievalCandidateCount', 'vectorRetrievalDurationMs', 'vectorRetrievalError', 'embeddingDurationMs']) {
+    if (telemetry[field] !== undefined) metrics[field] = telemetry[field];
+  }
   Object.assign(metrics, {
     hybridRetrievalSucceeded: merged.candidates.length > 0,
     hybridRetrievalDurationMs: Date.now() - started,

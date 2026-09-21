@@ -3,6 +3,8 @@ import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/
 import { isHybridRetrievalEnabled } from '../src/search/hybridRetriever.js';
 import { candidateMediaType, toLegacyRankingCandidate } from '../src/search/retrievalCandidate.js';
 import { createTmdbRetrievalClient, createSupabaseLexicalSource, retrieveLegacyHints } from '../src/search/retrievalServices.js';
+import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVectorSource,
+  isVectorRetrievalEnabled } from '../src/search/vectorRetrieval.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
@@ -2800,6 +2802,10 @@ export default async function handler(req, res) {
       const tmdbResolutionCache = new Map();
       const hybridEnabled = isHybridRetrievalEnabled();
       const retrievalClient = createTmdbRetrievalClient({ apiKey: tmdbKey, cache: tmdbResolutionCache, telemetry });
+      const vectorEnabled = isVectorRetrievalEnabled();
+      const queryEmbedding = vectorEnabled ? createQueryEmbeddingService({
+        client: createEmbeddingClient(), telemetry
+      }) : null;
       const orchestration = await orchestrateSearch({
         interpreted: llmResult,
         cleanQuery: req.body?.rawQuery || cleanQuery,
@@ -2880,6 +2886,7 @@ export default async function handler(req, res) {
         services: {
           ...retrievalClient,
           lexical: createSupabaseLexicalSource(supabaseServer),
+          vector: vectorEnabled ? createSupabaseVectorSource({ client: supabaseServer, queryEmbedding, telemetry }) : null,
           legacy: options => retrieveLegacyHints(candidateList, orchestration.resolvedIntentContext, retrievalClient, options)
         },
         context: { telemetry, tmdbResolutionCache }
