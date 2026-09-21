@@ -1,3 +1,5 @@
+import { extractReliableSemanticExclusions, normalizeSemanticExclusions } from './strictConstraintFilter.js';
+
 /**
  * Adapter for extractMatchesFromJson's legacy output, NOT an LLM SDK response.
  * Keep all legacy field names here, outside the canonical contract.
@@ -33,6 +35,10 @@ export function adaptLegacySearchIntent(interpreted, { userQuery = '' } = {}) {
     keywords: interpreted.keywords,
     excludedTitles: interpreted.excluded_titles,
     excludedGenres: interpreted.excluded_genres,
+    semanticExclusions: interpreted.semantic_exclusions !== undefined
+      ? (Array.isArray(interpreted.semantic_exclusions)
+          ? normalizeSemanticExclusions(interpreted.semantic_exclusions) : interpreted.semantic_exclusions)
+      : extractReliableSemanticExclusions(userQuery),
     yearMin: interpreted.year_min,
     yearMax: interpreted.year_max,
     languages: interpreted.languages,

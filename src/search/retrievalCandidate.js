@@ -10,6 +10,7 @@
  * @property {string|null} originalLanguage
  * @property {string[]} sources
  * @property {Object[]} retrievalSignals Internal provenance, NOT final scores.
+ * @property {Object} constraintData Internal structured facts, never exposed to HTTP.
  * @property {Object} metadata Allowlisted display/ranking fields, never raw provider data.
  */
 export function candidateMediaType(row, hint = null) {
@@ -31,6 +32,14 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
   const genres = row.genreIds || row.genre_ids || row.genres || [];
   const genreIds = (Array.isArray(genres) ? genres : String(genres).split(','))
     .map(g => Number(typeof g === 'object' ? g?.id : g)).filter(n => Number.isInteger(n) && n > 0);
+  const names = value => (Array.isArray(value) ? value : value == null ? [] : [value])
+    .flatMap(item => typeof item === 'object' ? [item?.name] : String(item).split(','))
+    .map(item => String(item || '').trim())
+    .filter(item => item && !/^\d+$/.test(item));
+  const countries = [...(Array.isArray(row.origin_country) ? row.origin_country : []),
+    ...(Array.isArray(row.production_countries) ? row.production_countries.map(country => country?.iso_3166_1) : [])]
+    .filter(Boolean).map(country => String(country).toUpperCase());
+  const runtime = Number(row.runtime ?? (Array.isArray(row.episode_run_time) ? row.episode_run_time[0] : null));
   return {
     tmdbId, mediaType, title,
     originalTitle: row.originalTitle || row.original_title || row.original_name || title,
@@ -38,6 +47,12 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
     firstAirDate: mediaType === 'tv' ? row.firstAirDate || row.first_air_date || row.release_date || null : null,
     genreIds: [...new Set(genreIds)], originalLanguage: row.originalLanguage || row.original_language || null,
     sources: [source], retrievalSignals: [{ source, ...signal }],
+    constraintData: {
+      runtime: Number.isFinite(runtime) && runtime > 0 ? runtime : null,
+      countries: [...new Set(countries)], adult: typeof row.adult === 'boolean' ? row.adult : null,
+      genres: names(row.genres), keywords: names(row.keywords), themes: names(row.themes), moods: names(row.moods),
+      overview: row.overview || ''
+    },
     metadata: {
       overview: row.overview || '', poster_path: row.poster_path || null,
       backdrop_path: row.backdrop_path || null, vote_average: Number(row.vote_average) || 0,
@@ -56,13 +71,22 @@ export function mergeCandidates(candidates, limit = 50) {
     const key = `${candidate.mediaType}:${candidate.tmdbId}`;
     const previous = byIdentity.get(key);
     if (!previous) {
-      byIdentity.set(key, { ...candidate, metadata: { ...candidate.metadata }, sources: [...candidate.sources], retrievalSignals: [...candidate.retrievalSignals] });
+      byIdentity.set(key, { ...candidate, metadata: { ...candidate.metadata },
+        constraintData: { ...candidate.constraintData, countries: [...candidate.constraintData.countries],
+          genres: [...candidate.constraintData.genres], keywords: [...candidate.constraintData.keywords],
+          themes: [...candidate.constraintData.themes], moods: [...candidate.constraintData.moods] },
+        sources: [...candidate.sources], retrievalSignals: [...candidate.retrievalSignals] });
     } else {
       previous.sources = [...new Set([...previous.sources, ...candidate.sources])];
       previous.retrievalSignals.push(...candidate.retrievalSignals);
       previous.genreIds = [...new Set([...previous.genreIds, ...candidate.genreIds])];
       for (const field of ['releaseDate', 'firstAirDate', 'originalLanguage']) previous[field] ||= candidate[field];
       for (const [field, value] of Object.entries(candidate.metadata)) previous.metadata[field] ||= value;
+      for (const field of ['countries', 'genres', 'keywords', 'themes', 'moods']) {
+        previous.constraintData[field] = [...new Set([...previous.constraintData[field], ...candidate.constraintData[field]])];
+      }
+      for (const field of ['runtime', 'adult']) previous.constraintData[field] ??= candidate.constraintData[field];
+      previous.constraintData.overview ||= candidate.constraintData.overview;
     }
   }
   // Lexicographic priority only; no semantic/popularity/rating score is computed.

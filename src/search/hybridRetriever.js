@@ -15,7 +15,11 @@ export function createRetrievalTelemetry() {
     retrievalSupabaseVectorCount: 0, retrievalSourceErrorCount: 0, retrievalSourceErrors: [],
     vectorRetrievalAttempted: false, vectorRetrievalSucceeded: false,
     vectorRetrievalCandidateCount: 0, vectorRetrievalDurationMs: 0,
-    vectorRetrievalError: null, embeddingDurationMs: 0 };
+    vectorRetrievalError: null, embeddingDurationMs: 0,
+    strictFilterAttempted: false, strictFilterInputCount: 0, strictFilterOutputCount: 0,
+    strictFilterRejectedCount: 0, strictFilterUnknownCount: 0,
+    rejectedMediaType: 0, rejectedYear: 0, rejectedGenre: 0, rejectedTitle: 0,
+    rejectedSemanticExclusion: 0 };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {

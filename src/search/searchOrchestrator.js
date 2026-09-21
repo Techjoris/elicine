@@ -4,6 +4,7 @@ import {
 } from './canonicalIntentShadow.js';
 import { createResolvedIntentContext } from './resolvedIntentContext.js';
 import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
+import { filterStrictCandidates } from './strictConstraintFilter.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -106,8 +107,11 @@ export async function orchestrateSearch({
 export async function orchestrateCandidateRetrieval({ orchestration, services, context, env = process.env }) {
   if (!isHybridRetrievalEnabled(env) || !orchestration.canonicalIntent) return null;
   try {
-    return await hybridRetrieve({ intent: orchestration.canonicalIntent,
+    const candidates = await hybridRetrieve({ intent: orchestration.canonicalIntent,
       resolvedContext: orchestration.resolvedIntentContext, services, context });
+    return filterStrictCandidates(candidates, orchestration.canonicalIntent, {
+      telemetry: context.telemetry, env
+    }).candidates;
   } catch {
     // Programming/adapter failure: keep the existing global fallback and quota path.
     Object.assign(context.telemetry, { hybridRetrievalAttempted: true, hybridRetrievalSucceeded: false,

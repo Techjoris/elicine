@@ -15,7 +15,7 @@ export function normalizeSearchIntent(input = {}) {
   const cleaned = { ...input };
   for (const key of [
     'genres', 'moods', 'themes', 'keywords', 'knownTitles',
-    'excludedTitles', 'excludedGenres', 'languages', 'countries'
+    'excludedTitles', 'excludedGenres', 'semanticExclusions', 'languages', 'countries'
   ]) {
     if (Array.isArray(cleaned[key])) {
       cleaned[key] = cleaned[key].map(value =>

@@ -10,7 +10,7 @@ test('creates an empty canonical intent with deterministic defaults', () => {
   assert.deepEqual(intent, {
     mediaType: null,
     genres: [], moods: [], themes: [], keywords: [], knownTitles: [],
-    excludedTitles: [], excludedGenres: [], yearMin: null, yearMax: null,
+    excludedTitles: [], excludedGenres: [], semanticExclusions: [], yearMin: null, yearMax: null,
     languages: [], countries: [], runtimeMin: null, runtimeMax: null,
     minRating: null, adult: null, sortPreference: null
   });

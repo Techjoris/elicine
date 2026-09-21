@@ -14,6 +14,7 @@ export interface CanonicalIntent {
   knownTitles: string[];
   excludedTitles: string[];
   excludedGenres: string[];
+  semanticExclusions: string[];
   yearMin: number | null;
   yearMax: number | null;
   languages: string[];

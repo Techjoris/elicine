@@ -18,7 +18,7 @@ for (const [input, expected] of [
 }
 
 for (const field of [
-  'genres', 'moods', 'themes', 'keywords', 'knownTitles', 'excludedTitles', 'excludedGenres'
+  'genres', 'moods', 'themes', 'keywords', 'knownTitles', 'excludedTitles', 'excludedGenres', 'semanticExclusions'
 ]) {
   test('normalizer cleans and deduplicates ' + field, () => {
     const input = { [field]: ['  Gone   Girl ', 'gone girl', '', ' \n ', 'Crime'] };

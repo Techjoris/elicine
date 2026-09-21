@@ -5,6 +5,7 @@ import { candidateMediaType, toLegacyRankingCandidate } from '../src/search/retr
 import { createTmdbRetrievalClient, createSupabaseLexicalSource, retrieveLegacyHints } from '../src/search/retrievalServices.js';
 import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVectorSource,
   isVectorRetrievalEnabled } from '../src/search/vectorRetrieval.js';
+import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
@@ -414,7 +415,7 @@ export function extractMatchesFromJson(rawText) {
       return {
         // Preserve independently structured facts when supplied. No prompt change,
         // no inference of years/languages from the display locale or mood aliases.
-        ...Object.fromEntries(['explicit_themes', 'keywords', 'excluded_titles', 'excluded_genres',
+        ...Object.fromEntries(['explicit_themes', 'keywords', 'excluded_titles', 'excluded_genres', 'semantic_exclusions',
           'year_min', 'year_max', 'languages', 'countries', 'runtime_min', 'runtime_max',
           'min_rating', 'adult', 'sort_preference'].filter(key => parsed[key] !== undefined)
           .map(key => [key, parsed[key]])),
@@ -3189,8 +3190,11 @@ export default async function handler(req, res) {
           // net, not a second network cascade (nor another LLM/quota charge).
           useHybrid
         );
-        if (fallbackMovies.length > 0) {
-          resolvedMovies = fallbackMovies.slice(0, 6);
+        const admissibleFallback = useHybrid ? filterStrictCandidates(
+          fallbackMovies, orchestration.canonicalIntent, { telemetry }
+        ).candidates : fallbackMovies;
+        if (admissibleFallback.length > 0) {
+          resolvedMovies = admissibleFallback.slice(0, 6);
           fallbackTriggered = true;
         }
       }
