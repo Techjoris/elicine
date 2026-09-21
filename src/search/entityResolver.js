@@ -3,6 +3,8 @@ import { createResolvedIntentContext } from './resolvedIntentContext.js';
 export const ENTITY_RESOLUTION_LIMIT = 5;
 export const ENTITY_RESOLUTION_THRESHOLD = 0.72;
 export const ENTITY_AMBIGUITY_MARGIN = 0.06;
+export const PERSON_RESOLUTION_LIMIT = 2;
+export const PERSON_RESOLUTION_THRESHOLD = 0.78;
 
 /** Comparison-only normalization; the original title is always preserved. */
 export function normalizeEntityTitle(value) {
@@ -43,6 +45,47 @@ function tokenSimilarity(left, right) {
   if (!a.size || !b.size) return 0;
   const intersection = [...a].filter(token => b.has(token)).length;
   return intersection / new Set([...a, ...b]).size;
+}
+
+function candidatePersonName(candidate) {
+  return candidate?.name || candidate?.original_name || '';
+}
+
+function scorePersonCandidate(inputName, candidate) {
+  const input = normalizeEntityTitle(inputName);
+  const name = normalizeEntityTitle(candidatePersonName(candidate));
+  if (!input || !name) return 0;
+  let score = input === name ? 0.96 : tokenSimilarity(inputName, candidatePersonName(candidate)) * 0.82;
+  const department = normalizeEntityTitle(candidate?.known_for_department || '');
+  const knownFor = Array.isArray(candidate?.known_for) ? candidate.known_for : [];
+  if (department === 'acting' || knownFor.some(item => candidateMediaType(item))) score += 0.04;
+  return Math.max(0, Math.min(1, Number(score.toFixed(4))));
+}
+
+function selectPersonCandidate(inputName, candidates) {
+  const scored = (Array.isArray(candidates) ? candidates : [])
+    .filter(candidate => candidate && candidate.id !== undefined && candidate.id !== null)
+    .map(candidate => ({ candidate, score: scorePersonCandidate(inputName, candidate), exact:
+      normalizeEntityTitle(inputName) === normalizeEntityTitle(candidatePersonName(candidate)) }))
+    .sort((left, right) => right.score - left.score || Number(right.exact) - Number(left.exact) ||
+      Number(right.candidate.popularity || 0) - Number(left.candidate.popularity || 0));
+  const top = scored[0];
+  const second = scored[1];
+  if (!top || top.score < PERSON_RESOLUTION_THRESHOLD) return { candidate: null, score: top?.score || 0, ambiguous: false };
+  const ambiguous = Boolean(second && top.score - second.score < ENTITY_AMBIGUITY_MARGIN && !top.exact);
+  return ambiguous ? { candidate: null, score: top.score, ambiguous: true } : { candidate: top.candidate, score: top.score, ambiguous: false };
+}
+
+function buildResolvedPerson(inputName, candidate, confidence) {
+  return {
+    inputName,
+    tmdbId: Number(candidate.id),
+    name: candidatePersonName(candidate),
+    knownForDepartment: candidate.known_for_department || null,
+    resolutionConfidence: confidence,
+    resolutionMethod: normalizeEntityTitle(inputName) === normalizeEntityTitle(candidatePersonName(candidate))
+      ? 'exact_person_name' : 'deterministic_person_similarity'
+  };
 }
 
 /** Exported for deterministic unit tests and diagnostics. */
@@ -174,4 +217,52 @@ export async function resolveKnownTitles(intent, { searchCandidates, limit = ENT
       entityResolutionDurationMs: Date.now() - startedAt
     }
   });
+}
+
+/** Resolve a small, explicit list of people without guessing from arbitrary terms. */
+export async function resolveKnownPeople(inputPeople = [], { searchPeople, limit = PERSON_RESOLUTION_LIMIT } = {}) {
+  const startedAt = Date.now();
+  const uniquePeople = [];
+  const seen = new Set();
+  for (const person of Array.isArray(inputPeople) ? inputPeople : []) {
+    const value = String(typeof person === 'string' ? person : person?.name || '').trim();
+    const normalized = normalizeEntityTitle(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    uniquePeople.push(value);
+    if (uniquePeople.length >= Math.max(0, Math.min(PERSON_RESOLUTION_LIMIT, limit))) break;
+  }
+  const resolvedPeople = [];
+  const unresolvedPeople = [];
+  let ambiguousCount = 0;
+  let errorCount = 0;
+  for (const inputName of uniquePeople) {
+    try {
+      const candidates = typeof searchPeople === 'function' ? await searchPeople(inputName) : [];
+      const selection = selectPersonCandidate(inputName, candidates);
+      if (!selection.candidate) {
+        unresolvedPeople.push(inputName);
+        if (selection.ambiguous) ambiguousCount += 1;
+        continue;
+      }
+      const resolved = buildResolvedPerson(inputName, selection.candidate, selection.score);
+      if (!resolvedPeople.some(person => person.tmdbId === resolved.tmdbId)) resolvedPeople.push(resolved);
+    } catch {
+      errorCount += 1;
+      unresolvedPeople.push(inputName);
+    }
+  }
+  return {
+    resolvedPeople,
+    unresolvedPeople,
+    metrics: {
+      personResolutionAttempted: uniquePeople.length > 0,
+      personResolutionInputCount: uniquePeople.length,
+      personResolutionResolvedCount: resolvedPeople.length,
+      personResolutionUnresolvedCount: unresolvedPeople.length,
+      personResolutionAmbiguousCount: ambiguousCount,
+      personResolutionErrorCount: errorCount,
+      personResolutionDurationMs: Date.now() - startedAt
+    }
+  };
 }

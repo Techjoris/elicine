@@ -13,7 +13,8 @@ if (!query) {
     { createSearchTelemetry },
     { createTmdbRetrievalClient, createSupabaseLexicalSource },
     { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVectorSource, isVectorRetrievalEnabled },
-    { resolveKnownTitles },
+    { resolveKnownPeople, resolveKnownTitles },
+    { extractPersonQueries },
     { orchestrateCandidateRetrieval },
     { createSearchEvaluationTrace, inferDiagnosticIntent, recordEvaluationSource }
   ] = await Promise.all([
@@ -22,6 +23,7 @@ if (!query) {
     import('../src/search/retrievalServices.js'),
     import('../src/search/vectorRetrieval.js'),
     import('../src/search/entityResolver.js'),
+    import('../src/search/fallbackIntentSignals.js'),
     import('../src/search/searchOrchestrator.js'),
     import('../src/search/searchEvaluation.js')
   ]);
@@ -31,7 +33,16 @@ if (!query) {
   const intent = inferDiagnosticIntent(query);
   const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || '';
   const tmdb = createTmdbRetrievalClient({ apiKey: tmdbApiKey, telemetry });
-  const resolvedIntentContext = await resolveKnownTitles(intent, { searchCandidates: tmdb.search });
+  const titleContext = await resolveKnownTitles(intent, { searchCandidates: tmdb.search });
+  const personContext = await resolveKnownPeople(extractPersonQueries(query), {
+    searchPeople: name => tmdb.person(name)
+  });
+  const resolvedIntentContext = {
+    ...titleContext,
+    resolvedPeople: personContext.resolvedPeople,
+    unresolvedPeople: personContext.unresolvedPeople,
+    metrics: { ...titleContext.metrics, ...personContext.metrics }
+  };
   const queryEmbedding = createQueryEmbeddingService({ client: createEmbeddingClient(), telemetry });
   const vector = isVectorRetrievalEnabled() ? createSupabaseVectorSource({
     client: supabaseServer, queryEmbedding, telemetry

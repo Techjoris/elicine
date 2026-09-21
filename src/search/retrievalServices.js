@@ -40,10 +40,13 @@ export function createTmdbRetrievalClient({ apiKey, cache = new Map(), telemetry
             });
             if (!response.ok) throw new Error('TMDB_HTTP_ERROR');
             const data = await response.json();
-            if (!Array.isArray(data?.results)) throw new Error('TMDB_INVALID_RESPONSE');
+            const rawRows = Array.isArray(data?.results) ? data.results
+              : Array.isArray(data?.cast) ? data.cast : null;
+            if (!rawRows) throw new Error('TMDB_INVALID_RESPONSE');
             const typedEndpoint = path.match(/^(?:search|discover)\/(movie|tv)$|^(movie|tv)\/\d+\//);
-            const type = typedEndpoint?.[1] || typedEndpoint?.[2] || null;
-            const rows = data.results.map(row => {
+            const personCreditsEndpoint = path.match(/^person\/\d+\/(movie|tv)_credits$/);
+            const type = typedEndpoint?.[1] || typedEndpoint?.[2] || personCreditsEndpoint?.[1] || null;
+            const rows = rawRows.map(row => {
               const actualType = candidateMediaType(row, type);
               if (!actualType || path === 'search/keyword') return row;
               const typed = { ...row, media_type: actualType };
@@ -68,6 +71,13 @@ export function createTmdbRetrievalClient({ apiKey, cache = new Map(), telemetry
     get,
     entity: (type, id) => entities.get(`${type}:${id}`),
     search: (title, type, options) => get(`search/${type || 'multi'}`, { query: title.trim(), include_adult: false }, options),
+    person: (name, options) => get('search/person', { query: String(name || '').trim(), include_adult: false }, options),
+    personCredits: async (id, type = 'movie', options) => {
+      const mediaType = type === 'tv' ? 'tv' : 'movie';
+      const rows = await get(`person/${Number(id)}/${mediaType}_credits`, {}, options);
+      return [...rows].sort((left, right) => Number(right.popularity || 0) - Number(left.popularity || 0) ||
+        Number(right.vote_count || 0) - Number(left.vote_count || 0));
+    },
     discover: (type, params, options) => get(`discover/${type}`, params, options),
     keyword: (term, options) => get('search/keyword', { query: term }, options),
     similar: (seed, options) => get(`${seed.mediaType}/${seed.tmdbId}/similar`, {}, options),

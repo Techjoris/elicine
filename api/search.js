@@ -8,7 +8,8 @@ import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVecto
 import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js';
 import { rankSearchCandidates, toElicineRankedResult } from '../src/search/searchRanker.js';
 import { diversifyRankedCandidates } from '../src/search/resultDiversifier.js';
-import { resolveKnownTitles } from '../src/search/entityResolver.js';
+import { resolveKnownPeople, resolveKnownTitles } from '../src/search/entityResolver.js';
+import { extractPersonQueries } from '../src/search/fallbackIntentSignals.js';
 import { FALLBACK_REASONS, recordFallback } from '../src/search/fallbackPolicy.js';
 import {
   addSearchTelemetryPath,
@@ -275,7 +276,8 @@ export function extractMatchesFromJson(rawText) {
     suggestedMood: '',
     atmosphere_summary: '',
     recommended_titles: [],
-    matches: []
+    matches: [],
+    people: []
   };
 
   if (!rawText || typeof rawText !== 'string') {
@@ -318,6 +320,14 @@ export function extractMatchesFromJson(rawText) {
       const rawRefTitles = parsed.reference_titles || parsed.referenceTitles || parsed.similar_reference_titles || parsed.similar_titles;
       let referenceTitles = Array.isArray(rawRefTitles)
         ? rawRefTitles.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim())
+        : [];
+
+      // Optional structured people/actors. This is additive metadata used by
+      // entity resolution; it never changes the provider prompt contract.
+      const rawPeople = parsed.people || parsed.persons || parsed.actors || parsed.cast || parsed.criteria?.people || parsed.criteria?.actors;
+      const people = Array.isArray(rawPeople)
+        ? rawPeople.map(person => typeof person === 'string' ? person : person?.name || person?.person || '')
+          .filter(name => String(name).trim().length > 1).map(name => String(name).trim()).slice(0, 2)
         : [];
 
       // 5. clean_query (Requête nettoyée des mots parasites)
@@ -444,7 +454,8 @@ export function extractMatchesFromJson(rawText) {
         cleanSearchKeywords: cleanQueryStr ? [cleanQueryStr] : [],
         correctedQuery: cleanQueryStr,
         suggestedMood: suggestedMoodStr,
-        matches
+        matches,
+        people
       };
     }
   } catch (err) {
@@ -499,7 +510,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       if (res.ok) {
         const data = await res.json();
         const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
           return { ...extracted, provider: 'Groq (Llama 3.3 70B)' };
         }
       }
@@ -521,7 +532,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       if (res.ok) {
         const data = await res.json();
         const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
           return { ...extracted, provider: 'DeepSeek (deepseek-chat)' };
         }
       } else {
@@ -550,7 +561,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
         if (res.ok) {
           const data = await res.json();
           const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-          if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+          if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
             return { ...extracted, provider: 'Qwen (qwen-plus)' };
           }
         } else {
@@ -575,7 +586,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       if (res.ok) {
         const data = await res.json();
         const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
           return { ...extracted, provider: 'Gemini (gemini-2.0-flash)' };
         }
       }
@@ -597,7 +608,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
       if (res.ok) {
         const data = await res.json();
         const extracted = extractMatchesFromJson(data.choices?.[0]?.message?.content || '');
-        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0) {
+        if (extracted.matches.length > 0 || extracted.similarReferenceTitles.length > 0 || extracted.canonicalGenres.length > 0 || extracted.people?.length > 0) {
           return { ...extracted, provider: 'OpenAI (gpt-4o-mini)' };
         }
       }
@@ -608,6 +619,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
 
   const qLower = (cleanQuery || '').toLowerCase();
   const heuristicFacets = detectHeuristicFacets(cleanQuery);
+  const heuristicPeople = extractPersonQueries(cleanQuery);
   let heuristicRecs = [];
   let heuristicGenres = [];
   let heuristicMoods = [];
@@ -713,6 +725,7 @@ async function queryLlmCandidates(cleanQuery, customKeys = {}, targetMediaType =
     // heuristicMood variable. Keep the historical empty-summary behaviour.
     suggested_mood: heuristicSummary || heuristicMoods[0] || '',
     facets: heuristicFacets,
+    people: heuristicPeople,
     provider: 'Algorithme Éliciné'
   };
 }
@@ -2816,11 +2829,24 @@ export default async function handler(req, res) {
         enforceRequestedMediaType: hybridEnabled,
         recoverFallbackSignals: hybridEnabled,
         telemetry,
-        resolveEntities: (canonicalIntent) => resolveKnownTitles(canonicalIntent, {
-          searchCandidates: (title, type) => hybridEnabled ? retrievalClient.search(title, type) : searchTmdbCandidates(
-            title, type, null, tmdbKey, tmdbResolutionCache
-          )
-        })
+        resolveEntities: async (canonicalIntent) => {
+          const titleContext = await resolveKnownTitles(canonicalIntent, {
+            searchCandidates: (title, type) => hybridEnabled ? retrievalClient.search(title, type) : searchTmdbCandidates(
+              title, type, null, tmdbKey, tmdbResolutionCache
+            )
+          });
+          const personContext = hybridEnabled
+            ? await resolveKnownPeople(llmResult.people || [], {
+              searchPeople: name => retrievalClient.person(name)
+            })
+            : { resolvedPeople: [], unresolvedPeople: [], metrics: {} };
+          return {
+            ...titleContext,
+            resolvedPeople: personContext.resolvedPeople,
+            unresolvedPeople: personContext.unresolvedPeople,
+            metrics: { ...titleContext.metrics, ...personContext.metrics }
+          };
+        }
       });
       const orchestratedLlmResult = orchestration.interpreted;
 

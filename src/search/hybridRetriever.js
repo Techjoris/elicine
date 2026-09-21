@@ -103,6 +103,22 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     for (const method of ['similar', 'recommendations']) if (services[method])
       source(`tmdb_${method}`, signal => services[method](seed, { signal, context }), seed.mediaType, { seedTmdbId: seed.tmdbId });
   }
+  // Explicit people are resolved separately from title references. Their
+  // credits are a reliable TMDB source for queries such as "film de Leonardo
+  // DiCaprio ..." where free-text movie search cannot identify the person.
+  const resolvedPeople = Array.isArray(resolvedContext.resolvedPeople)
+    ? resolvedContext.resolvedPeople.slice(0, 2) : [];
+  if (services.personCredits) {
+    const personTypes = intent.mediaType ? [intent.mediaType] : ['movie', 'tv'];
+    for (const person of resolvedPeople) {
+      if (!Number.isSafeInteger(Number(person?.tmdbId)) || Number(person.tmdbId) <= 0) continue;
+      for (const type of personTypes) {
+        source('tmdb_search', signal => services.personCredits(Number(person.tmdbId), type, { signal, context }), type, {
+          personTmdbId: Number(person.tmdbId), personQuery: person.inputName || person.name || null
+        });
+      }
+    }
+  }
   // Only explicit unresolved titles, never a free-text query or single theme word.
   const resolvedNames = new Set(allResolved.flatMap(s => [s.inputTitle, s.canonicalTitle, s.originalTitle]).map(normalizeTerm));
   const searchTitles = [...new Set((intent.knownTitles || []).map(t => t.trim()))]
