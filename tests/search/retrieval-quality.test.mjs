@@ -26,7 +26,7 @@ async function replay(entry, mode) {
     let results = [];
     if (url.pathname.includes('/search/keyword')) {
       const term = url.searchParams.get('query');
-      const index = ['modern warfare', 'military aviation', 'fighter jet'].indexOf(term);
+      const index = ['modern warfare', 'military aviation', 'fighter aircraft'].indexOf(term);
       results = index < 0 ? [] : [{ id: 100 + index, name: term }];
     } else if (url.pathname.includes('/search/')) {
       const term = url.searchParams.get('query');

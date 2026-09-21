@@ -85,7 +85,9 @@ test('keywords exact-only, ambiguous IDs and weak matches ignored', () => {
   assert.equal(reliableKeywordId('fighter jet', [{ id: 1, name: 'Fighter Jet' }]), 1);
   assert.equal(reliableKeywordId('fighter jet', [{ id: 1, name: 'jet' }]), null);
   assert.equal(reliableKeywordId('war', [{ id: 1, name: 'war' }, { id: 2, name: 'war' }]), null);
-  assert.equal(keywordTerms(intent({ themes: ['avions de combat'], keywords: ['fighter jet'] })).length, 1);
+  const expanded = keywordTerms(intent({ themes: ['avions de combat'], keywords: ['fighter jet'] }));
+  assert.ok(expanded.includes('fighter aircraft')); assert.ok(expanded.includes('fighter jets'));
+  assert.equal(new Set(expanded).size, expanded.length); assert.ok(expanded.length <= 8);
 });
 test('five distinct terms, three keyword IDs, only Discover waits for keywords', async () => {
   const calls = []; let release;

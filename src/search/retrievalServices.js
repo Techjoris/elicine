@@ -1,5 +1,6 @@
 import { candidateMediaType } from './retrievalCandidate.js';
 import { normalizeTerm } from './tmdbRetrievalParams.js';
+import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 
 export const TMDB_REQUEST_LIMIT = 30;
 export const TMDB_TIMEOUT_MS = 3500;
@@ -102,9 +103,11 @@ export async function retrieveLegacyHints(hints, resolvedContext, client, { sign
 export function createSupabaseLexicalSource(client) {
   if (!client) return null;
   return async (intent, { signal } = {}) => {
-    const terms = [...new Set([...(intent.knownTitles || []), ...(intent.keywords || []),
-      ...(intent.themes || []), ...(intent.moods || [])].map(value =>
-      String(value).replace(/[^\p{L}\p{N}\s-]/gu, '').trim()).filter(t => t.length >= 3))].slice(0, 5);
+    const expansion = expandSemanticTerms(intent);
+    const termLimit = expansion.applied ? SEMANTIC_EXPANSION_LIMIT : 5;
+    const terms = [...new Set([...(intent.knownTitles || []), ...expansion.addedTerms,
+      ...expansion.sourceTerms].map(value => String(value).replace(/[^\p{L}\p{N}\s-]/gu, '').trim())
+      .filter(t => t.length >= 3))].slice(0, termLimit);
     if (!terms.length) return [];
     const filter = terms.flatMap(t => [`original_title.ilike.%${t}%`, `overview.ilike.%${t}%`]).join(',');
     let lastError = null;

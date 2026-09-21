@@ -1,4 +1,5 @@
 import { candidateMediaType } from './retrievalCandidate.js';
+import { expandSemanticTerms } from './semanticExpansion.js';
 
 export const VECTOR_RETRIEVAL_FLAG = 'VECTOR_RETRIEVAL_ENABLED';
 export const VECTOR_EMBEDDING_MODEL = 'text-embedding-3-small';
@@ -18,10 +19,12 @@ const list = value => [...new Set((Array.isArray(value) ? value : [])
 
 /** Stable query representation made only from CanonicalIntent, never the raw query. */
 export function buildVectorQueryText(intent = {}) {
+  const expansion = expandSemanticTerms(intent);
   const parts = [
     ['media_type', clean(intent.mediaType)], ['genres', list(intent.genres).join(', ')],
     ['moods', list(intent.moods).join(', ')], ['themes', list(intent.themes).join(', ')],
     ['keywords', list(intent.keywords).join(', ')], ['references', list(intent.knownTitles).join(', ')],
+    ['semantic_expansion', expansion.addedTerms.join(', ')],
     ['languages', list(intent.languages).join(', ')], ['countries', list(intent.countries).join(', ')],
     ['year_min', intent.yearMin], ['year_max', intent.yearMax],
     ['runtime_min', intent.runtimeMin], ['runtime_max', intent.runtimeMax], ['min_rating', intent.minRating]

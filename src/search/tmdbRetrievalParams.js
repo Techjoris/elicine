@@ -1,3 +1,5 @@
+import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
+
 export const normalizeTerm = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '')
   .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -18,13 +20,13 @@ export function tmdbGenreIds(names = [], type) {
   return [...new Set(names.map(name => genres[type]?.[normalizeTerm(name)]).filter(Boolean))];
 }
 
-// No fuzzy keyword guessing or LLM translation. Only conservative vocabulary aliases.
-const keywordAliases = { 'guerre moderne': 'modern warfare', 'aviation militaire': 'military aviation',
-  'avions de combat': 'fighter jet', 'avion de combat': 'fighter jet' };
-export function keywordTerms(intent) {
-  return [...new Set([...(intent.keywords || []), ...(intent.themes || []), ...(intent.moods || [])]
-    .map(normalizeTerm).filter(term => term.length >= 3 && term.length <= 80)
-    .map(term => keywordAliases[term] || term))].slice(0, 5);
+// Expanded terms are curated and bounded; TMDB still accepts only exact keyword matches.
+export function keywordTerms(intent, limit = SEMANTIC_EXPANSION_LIMIT) {
+  const expansion = expandSemanticTerms(intent, limit);
+  const effectiveLimit = expansion.applied ? limit : Math.min(5, limit);
+  return [...new Set([...expansion.addedTerms, ...expansion.sourceTerms])]
+    .filter(term => term.length >= 3 && term.length <= 80)
+    .slice(0, Math.max(0, Math.min(effectiveLimit, SEMANTIC_EXPANSION_LIMIT)));
 }
 export function reliableKeywordId(term, results) {
   const ids = [...new Set((results || []).filter(row => normalizeTerm(row.name) === normalizeTerm(term))

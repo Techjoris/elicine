@@ -1,8 +1,10 @@
 import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
 import { discoverParams, hasDiscoverConstraints, keywordTerms, normalizeTerm, reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
+import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
-export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2, terms: 5, keywordIds: 3, sourceResults: 20, sourceTimeoutMs: 4000 });
+export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
+  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, sourceResults: 20, sourceTimeoutMs: 4000 });
 export function isHybridRetrievalEnabled(env = process.env) {
   // Hybrid is the validated default; explicit false is the operational rollback.
   return String(env?.[HYBRID_RETRIEVAL_FLAG] ?? 'true').toLowerCase() !== 'false';
@@ -23,7 +25,9 @@ export function createRetrievalTelemetry() {
     rankingAttempted: false, rankingCandidateCount: 0, rankingDurationMs: 0,
     rankingTopScore: 0, rankingAverageScore: 0,
     diversificationAttempted: false, diversificationCandidateCount: 0,
-    diversificationReorderedCount: 0, diversificationDurationMs: 0 };
+    diversificationReorderedCount: 0, diversificationDurationMs: 0,
+    semanticExpansionApplied: false, semanticExpansionTermCount: 0,
+    semanticKeywordResolvedCount: 0 };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {
@@ -48,6 +52,9 @@ const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retri
 export async function hybridRetrieve({ intent, resolvedContext = {}, services = {}, context = {} }) {
   const telemetry = context.telemetry || {};
   const metrics = { ...createRetrievalTelemetry(), hybridRetrievalAttempted: true };
+  const semanticExpansion = expandSemanticTerms(intent, RETRIEVAL_LIMITS.terms);
+  metrics.semanticExpansionApplied = semanticExpansion.applied;
+  metrics.semanticExpansionTermCount = semanticExpansion.addedTerms.length;
   const started = Date.now();
   const timeout = context.sourceTimeoutMs ?? RETRIEVAL_LIMITS.sourceTimeoutMs;
   const errors = [];
@@ -94,7 +101,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   // Keywords are a dependency only of Discover; seeds/lexical/legacy already run.
   const keywordsTask = (async () => {
     if (!services.keyword) return [];
-    const results = await Promise.allSettled(keywordTerms(intent).map(async term => {
+    const results = await Promise.allSettled(keywordTerms(intent, RETRIEVAL_LIMITS.terms).map(async term => {
       try {
         return reliableKeywordId(term, await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout));
       } catch (error) {
@@ -105,6 +112,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, 3);
   })();
   const keywordIds = await keywordsTask;
+  metrics.semanticKeywordResolvedCount = keywordIds.length;
   if (services.discover) for (const type of intent.mediaType ? [intent.mediaType] : ['movie', 'tv']) {
     if (hasDiscoverConstraints(intent, type, keywordIds))
       source('tmdb_discover', signal => services.discover(type, discoverParams(intent, type, keywordIds), { signal, context }), type, { keywordIds });
