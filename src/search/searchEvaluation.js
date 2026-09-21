@@ -1,6 +1,6 @@
 import { createCanonicalIntent } from '../types/canonicalIntent.runtime.js';
 import { extractReliableSemanticExclusions } from './strictConstraintFilter.js';
-import { extractFallbackIntentSignals } from './fallbackIntentSignals.js';
+import { extractFallbackIntentSignals, extractReferenceTitleQueries } from './fallbackIntentSignals.js';
 
 export const SEARCH_EVALUATION_FLAG = 'SEARCH_EVALUATION_ENABLED';
 
@@ -140,8 +140,7 @@ export function inferDiagnosticIntent(query) {
   const mediaType = /\b(serie|series|tv|episodes|saison)\b/.test(normalized) ? 'tv'
     : /\b(film|films|movie|cinema)\b/.test(normalized) ? 'movie' : null;
   const recovered = extractFallbackIntentSignals(query);
-  const knownTitles = [];
-  if (/\btitanic\b/.test(normalized)) knownTitles.push('Titanic');
+  const knownTitles = extractReferenceTitleQueries(query);
   return createCanonicalIntent({ mediaType, genres: recovered.genres, themes: recovered.themes,
     moods: recovered.moods, keywords: recovered.keywords,
     knownTitles, semanticExclusions: extractReliableSemanticExclusions(query) });

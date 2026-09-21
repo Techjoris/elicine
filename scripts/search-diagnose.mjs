@@ -53,7 +53,7 @@ if (!query) {
     vector,
     legacy: async () => []
   };
-  const expectedSources = ['tmdb_search', 'tmdb_discover', 'tmdb_similar', 'tmdb_recommendations',
+  const expectedSources = ['tmdb_person_credits', 'tmdb_search', 'tmdb_discover', 'tmdb_similar', 'tmdb_recommendations',
     'supabase_vector', 'supabase_lexical', 'legacy'];
 
   const results = await orchestrateCandidateRetrieval({

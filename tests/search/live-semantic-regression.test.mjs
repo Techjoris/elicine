@@ -55,6 +55,8 @@ test('no-LLM person signal resolves Leonardo DiCaprio and retrieves Inception/Ti
   });
   assert.ok(pool.some(candidate => candidate.tmdbId === 27205));
   assert.ok(pool.some(candidate => candidate.tmdbId === 597));
+  assert.ok(pool.find(candidate => candidate.tmdbId === 27205).sources.includes('tmdb_person_credits'));
+  assert.equal(telemetry.retrievalTmdbPersonCreditsCount, 3);
   assert.ok(calls.some(path => path.includes('/search/person')));
   assert.ok(calls.some(path => path.includes('/person/6193/movie_credits')));
   // The request-scoped URL cache prevents a duplicate person lookup.

@@ -15,7 +15,8 @@ export function createRetrievalTelemetry() {
   return { hybridRetrievalAttempted: false, hybridRetrievalSucceeded: false, hybridRetrievalDurationMs: 0,
     retrievalCandidateCountBeforeDedup: 0, retrievalCandidateCountAfterDedup: 0, retrievalCandidateCountFinal: 0,
     retrievalTmdbSearchCount: 0, retrievalTmdbDiscoverCount: 0, retrievalTmdbSimilarCount: 0,
-    retrievalTmdbRecommendationsCount: 0, retrievalLegacyCount: 0, retrievalSupabaseLexicalCount: 0,
+    retrievalTmdbRecommendationsCount: 0, retrievalTmdbPersonCreditsCount: 0,
+    retrievalLegacyCount: 0, retrievalSupabaseLexicalCount: 0,
     retrievalSupabaseVectorCount: 0, retrievalSourceErrorCount: 0, retrievalSourceErrors: [],
     vectorRetrievalAttempted: false, vectorRetrievalSucceeded: false,
     vectorRetrievalCandidateCount: 0, vectorRetrievalDurationMs: 0,
@@ -47,6 +48,7 @@ export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourc
 
 const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retrievalTmdbDiscoverCount',
   tmdb_similar: 'retrievalTmdbSimilarCount', tmdb_recommendations: 'retrievalTmdbRecommendationsCount',
+  tmdb_person_credits: 'retrievalTmdbPersonCreditsCount',
   legacy: 'retrievalLegacyCount', supabase_lexical: 'retrievalSupabaseLexicalCount',
   supabase_vector: 'retrievalSupabaseVectorCount' };
 
@@ -113,7 +115,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     for (const person of resolvedPeople) {
       if (!Number.isSafeInteger(Number(person?.tmdbId)) || Number(person.tmdbId) <= 0) continue;
       for (const type of personTypes) {
-        source('tmdb_search', signal => services.personCredits(Number(person.tmdbId), type, { signal, context }), type, {
+        source('tmdb_person_credits', signal => services.personCredits(Number(person.tmdbId), type, { signal, context }), type, {
           personTmdbId: Number(person.tmdbId), personQuery: person.inputName || person.name || null
         });
       }

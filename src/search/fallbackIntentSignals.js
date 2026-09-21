@@ -7,6 +7,16 @@ const STOP_WORDS = new Set([
   'des', 'les', 'sur', 'aux', 'ses', 'qui', 'que', 'plus', 'tres', 'entre'
 ]);
 
+const NON_PERSON_WORDS = new Set([
+  'action', 'aventure', 'aviation', 'avion', 'avions', 'combat', 'combats', 'comedie', 'crime', 'drame', 'fantastique',
+  'fiction', 'forces', 'guerre', 'horreur', 'melancolique', 'militaire', 'moderne',
+  'psychologique', 'romance', 'science', 'speciales', 'thriller'
+]);
+
+const NON_TITLE_REFERENCES = new Set([
+  'ca', 'cela', 'ceci', 'celui ci', 'elle', 'eux', 'lui', 'quelque chose', 'un truc'
+]);
+
 /**
  * Recover a bounded actor/person hint when the LLM is unavailable.  This is
  * deliberately grammar-based: it only looks for a name following an explicit
@@ -18,24 +28,61 @@ export function extractPersonQueries(userQuery = '') {
   if (!raw) return [];
   const normalized = raw.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   const people = [];
-  const add = value => {
+  const add = (value, { requireCapitalized = false } = {}) => {
     const name = String(value || '').replace(/^[\s,.;:!?]+|[\s,.;:!?]+$/g, '').trim();
     const tokens = name.split(/\s+/).filter(Boolean);
     if (tokens.length < 2 || tokens.length > 4 || tokens.some(token => token.length < 2)) return;
+    if (requireCapitalized && tokens.some(token => !/^[A-ZÀ-ÖØ-Þ]/u.test(token))) return;
+    if (tokens.some(token => NON_PERSON_WORDS.has(normalize(token)))) return;
     if (!people.some(existing => existing.toLowerCase() === name.toLowerCase())) people.push(name);
   };
-  const pattern = /\b(?:film|films|movie|movies|série|serie|series)\s+(?:de|d'|avec)\s+([\p{L}][\p{L}'-]*(?:\s+[\p{L}][\p{L}'-]*){1,3})(?=\s+(?:ou|où|qui|dans|avec|et|sur|sans|pour|dont|mais|plus|apres|avant)\b|[,.!?;:]|$)/giu;
+  const pattern = /\b(?:film|films|movie|movies|série|serie|series)\s+(?:de\s+|d['’]\s*|avec\s+)([\p{L}][\p{L}'-]*(?:\s+[\p{L}][\p{L}'-]*){1,3})(?=\s+(?:ou|où|qui|dans|avec|et|sur|sans|pour|dont|mais|plus|apres|avant)\b|[,.!?;:]|$)/giu;
   for (const match of normalized.matchAll(pattern)) add(match[1]);
   // Also support a leading "de Leonardo DiCaprio" without requiring the
   // noun immediately before it, while retaining the same bounded boundary.
   const directPattern = /\bde\s+([\p{L}][\p{L}'-]*(?:\s+[\p{L}][\p{L}'-]*){1,3})(?=\s+(?:ou|où|qui|dans|avec|et|sur|sans|pour|dont|mais|plus|apres|avant)\b|[,.!?;:]|$)/giu;
   for (const match of normalized.matchAll(directPattern)) add(match[1]);
+  const withPattern = /\bavec\s+([\p{L}][\p{L}'’-]*(?:\s+[\p{L}][\p{L}'’-]*){1,3})(?=\s+(?:ou|où|qui|dans|avec|et|sur|sans|pour|dont|mais|plus|apr[eè]s|avant)\b|[,.!?;:]|$)/giu;
+  for (const match of raw.matchAll(withPattern)) add(match[1], { requireCapitalized: true });
   return people.slice(0, 2);
 }
 
 /**
- * Minimal no-LLM recovery. It preserves discriminating concepts from the user
- * text only when the provider returned no structured semantic evidence.
+ * Recover explicit comparison seeds without attempting generic named-entity
+ * recognition. Only bounded comparison grammar is accepted; TMDB resolution
+ * remains authoritative and rejects invalid or ambiguous captures.
+ */
+export function extractReferenceTitleQueries(userQuery = '') {
+  const raw = String(userQuery || '').trim();
+  if (!raw) return [];
+  const patterns = [
+    /\b(?:du\s+)?m[êe]me\s+style\s+que\s+(.+)/iu,
+    /\bdans\s+le\s+style\s+de\s+(.+)/iu,
+    /\b(?:similaire|semblable)\s+[àa]\s+(.+)/iu,
+    /\bcomme\s+(.+)/iu
+  ];
+  const titles = [];
+  const add = value => {
+    const bounded = String(value || '')
+      .split(/[,;!?]|\s+(?:mais|merci|whereas|s['’ ]?il\s+te\s+pla[iî]t)\b/iu, 1)[0]
+      .replace(/^[\s,.;:!?]+|[\s,.;:!?]+$/g, '').trim();
+    const titleTokens = bounded.split(/\s+/).filter(Boolean);
+    if (!titleTokens.length || titleTokens.length > 8 || bounded.length < 2) return;
+    const normalizedTitle = normalize(bounded);
+    if (!normalizedTitle || NON_TITLE_REFERENCES.has(normalizedTitle) ||
+        /^(?:un|une|le|la|les|film|serie|movie|show)$/.test(normalizedTitle)) return;
+    if (!titles.some(title => normalize(title) === normalizedTitle)) titles.push(bounded);
+  };
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match) add(match[1]);
+  }
+  return titles.slice(0, 3);
+}
+
+/**
+ * Minimal deterministic recovery. The adapter uses it only when a provider
+ * returned no structured semantics or collapsed the query to generic genres.
  */
 export function extractFallbackIntentSignals(userQuery = '') {
   const text = normalize(userQuery);

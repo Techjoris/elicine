@@ -22,7 +22,7 @@ test('modern-war aviation expansion is deterministic, one-hop and bounded to eig
     themes: ['guerre moderne', 'aviation militaire', 'avions de combat'] });
   const expansion = expandSemanticTerms(canonical);
   assert.deepEqual(expansion.addedTerms, ['modern warfare', 'military aviation', 'fighter aircraft',
-    'military', 'air force', 'fighter jets', 'special forces', 'aerial combat']);
+    'military', 'air force', 'aerial combat', 'special forces', 'fighter pilots']);
   assert.equal(expansion.addedTerms.length, SEMANTIC_EXPANSION_LIMIT);
   assert.equal(expansion.applied, true);
   assert.equal(expandSemanticTerms(canonical).addedTerms.join('|'), expansion.addedTerms.join('|'));

@@ -10,12 +10,12 @@ export const SEMANTIC_RELATIONS = Object.freeze([
     terms: Object.freeze(['modern warfare', 'military', 'special forces', 'special operations', 'armed forces'])
   }),
   Object.freeze({
-    triggers: Object.freeze(['aviation militaire', 'military aviation']),
-    terms: Object.freeze(['military aviation', 'air force', 'aerial combat', 'combat aviation'])
+    triggers: Object.freeze(['aviation militaire', 'military aviation', 'avion de combat', 'avions de combat']),
+    terms: Object.freeze(['military aviation', 'air force', 'fighter pilots', 'combat aviation'])
   }),
   Object.freeze({
     triggers: Object.freeze(['avion de combat', 'avions de combat', 'fighter aircraft', 'fighter jets']),
-    terms: Object.freeze(['fighter aircraft', 'fighter jets', 'aerial combat', 'fighter pilots'])
+    terms: Object.freeze(['fighter aircraft', 'aerial combat', 'fighter jets', 'fighter pilots'])
   }),
   Object.freeze({
     triggers: Object.freeze(['forces speciales', 'special forces']),

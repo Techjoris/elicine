@@ -2835,8 +2835,10 @@ export default async function handler(req, res) {
               title, type, null, tmdbKey, tmdbResolutionCache
             )
           });
+          const personHints = [...(llmResult.people || []),
+            ...extractPersonQueries(req.body?.rawQuery || cleanQuery)];
           const personContext = hybridEnabled
-            ? await resolveKnownPeople(llmResult.people || [], {
+            ? await resolveKnownPeople(personHints, {
               searchPeople: name => retrievalClient.person(name)
             })
             : { resolvedPeople: [], unresolvedPeople: [], metrics: {} };

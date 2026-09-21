@@ -47,6 +47,20 @@ function tokenSimilarity(left, right) {
   return intersection / new Set([...a, ...b]).size;
 }
 
+function titleWithTrailingPreference(inputTitle, candidateValue) {
+  const input = normalizeEntityTitle(inputTitle);
+  const candidate = normalizeEntityTitle(candidateValue);
+  if (!input || !candidate || !input.startsWith(`${candidate} `)) return false;
+  const suffix = input.slice(candidate.length).trim();
+  return /^(?:mais|avec|sans|plus|moins|qui|dont|where|with|without)\b/.test(suffix);
+}
+
+function splitCompoundReference(inputTitle) {
+  const parts = String(inputTitle || '').split(/\s+(?:et|ou|and|or)\s+/iu).map(value => value.trim()).filter(Boolean);
+  if (parts.length !== 2 || parts.some(part => part.split(/\s+/).length > 5 || part.length < 2)) return [];
+  return parts;
+}
+
 function candidatePersonName(candidate) {
   return candidate?.name || candidate?.original_name || '';
 }
@@ -97,6 +111,8 @@ export function scoreEntityCandidate(inputTitle, candidate, expectedMediaType = 
 
   if (input && input === title) score = 0.9;
   else if (input && input === original) score = 0.86;
+  else if (titleWithTrailingPreference(inputTitle, candidateTitle(candidate)) ||
+      titleWithTrailingPreference(inputTitle, candidateOriginalTitle(candidate))) score = 0.84;
   else score = Math.max(tokenSimilarity(inputTitle, candidateTitle(candidate)), tokenSimilarity(inputTitle, candidateOriginalTitle(candidate))) * 0.72;
 
   const type = candidateMediaType(candidate);
@@ -184,12 +200,32 @@ export async function resolveKnownTitles(intent, { searchCandidates, limit = ENT
   for (const inputTitle of uniqueTitles) {
     try {
       const candidates = await searchCandidates(inputTitle, expectedMediaType);
-      const selection = selectEntityCandidate(
+      let selection = selectEntityCandidate(
         inputTitle, Array.isArray(candidates) ? candidates : [], expectedMediaType, expectedYear
       );
       if (!selection.candidate) {
-        unresolvedTitles.push(inputTitle);
-        if (selection.ambiguous) ambiguousCount += 1;
+        const alternatives = splitCompoundReference(inputTitle);
+        let alternativeResolved = false;
+        for (const alternative of alternatives) {
+          const alternativeCandidates = await searchCandidates(alternative, expectedMediaType);
+          selection = selectEntityCandidate(alternative,
+            Array.isArray(alternativeCandidates) ? alternativeCandidates : [], expectedMediaType, expectedYear);
+          if (!selection.candidate) {
+            if (selection.ambiguous) ambiguousCount += 1;
+            continue;
+          }
+          const resolved = buildResolvedTitle(alternative, selection.candidate, selection.score);
+          const entityKey = `${resolved.mediaType || 'unknown'}:${resolved.tmdbId}`;
+          if (!seenEntities.has(entityKey)) {
+            seenEntities.add(entityKey);
+            resolvedTitles.push(resolved);
+          }
+          alternativeResolved = true;
+        }
+        if (!alternativeResolved) {
+          unresolvedTitles.push(inputTitle);
+          if (selection.ambiguous) ambiguousCount += 1;
+        }
         continue;
       }
       const resolved = buildResolvedTitle(inputTitle, selection.candidate, selection.score);

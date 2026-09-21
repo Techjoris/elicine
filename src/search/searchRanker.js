@@ -1,22 +1,23 @@
 import { toLegacyRankingCandidate } from './retrievalCandidate.js';
 import { normalizeTerm, tmdbGenreIds } from './tmdbRetrievalParams.js';
+import { expandSemanticTerms } from './semanticExpansion.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
 export const ELICINE_RANKING_CONFIG = Object.freeze({
   weights: Object.freeze({
-    semanticScore: 0.20, genreScore: 0.15, themeScore: 0.10, moodScore: 0.08,
-    keywordScore: 0.10, referenceScore: 0.12, titleScore: 0.05, yearScore: 0.04,
-    languageScore: 0.03, countryScore: 0.02, qualityScore: 0.06,
-    popularityScore: 0.015, sourceConfidenceScore: 0.035
+    semanticScore: 0.18, genreScore: 0.13, themeScore: 0.09, moodScore: 0.07,
+    keywordScore: 0.09, referenceScore: 0.12, entityScore: 0.12, titleScore: 0.04,
+    yearScore: 0.035, languageScore: 0.025, countryScore: 0.015, qualityScore: 0.05,
+    popularityScore: 0.01, sourceConfidenceScore: 0.025
   }),
   quality: Object.freeze({ priorMean: 6.5, priorVotes: 500, normalizedFloor: 4, normalizedRange: 5 }),
   popularityScale: 1000,
   tieEpsilon: 0.005,
   sourceConfidence: Object.freeze({
-    tmdb_recommendations: 1, tmdb_similar: 0.92, supabase_vector: 0.85,
-    tmdb_discover: 0.72, tmdb_search: 0.66, supabase_lexical: 0.58,
-    fallback: 0.50, legacy: 0.45
+    tmdb_person_credits: 1, tmdb_similar: 0.97, tmdb_recommendations: 0.95,
+    supabase_vector: 0.86, tmdb_discover: 0.74, supabase_lexical: 0.62,
+    tmdb_search: 0.58, fallback: 0.45, legacy: 0.40
   }),
   sourceMultiBonus: 0.05,
   sourceMultiBonusCap: 0.15
@@ -121,6 +122,29 @@ function referenceScore(candidate, resolvedContext, semanticScore) {
     sharedReferenceTerms * 0.8, semanticScore * 0.65));
 }
 
+function entityScore(candidate, intent, resolvedContext, semanticScore) {
+  const people = array(resolvedContext?.resolvedPeople).filter(person =>
+    Number.isSafeInteger(Number(person?.tmdbId)) && Number(person.tmdbId) > 0);
+  if (!people.length) return 0;
+  const signals = array(candidate.retrievalSignals);
+  const matchedPeople = people.filter(person => signals.some(signal =>
+    signal?.source === 'tmdb_person_credits' && Number(signal.personTmdbId) === Number(person.tmdbId)));
+  if (!matchedPeople.length) return 0;
+  const confidence = Math.max(...matchedPeople.map(person => clamp(person.resolutionConfidence ?? 1)));
+
+  // A person-credit hit is useful on its own. When the query also carries a
+  // distinct concept (dreams, war, memory...), reward the conjunction rather
+  // than every credit for the same performer equally.
+  const personTokens = new Set(matchedPeople.flatMap(person => [person.inputName, person.name]
+    .flatMap(value => [...tokens(value)])));
+  const semanticTerms = normalized([...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)]);
+  const hasIndependentSemantics = semanticTerms.some(term =>
+    [...tokens(term)].some(token => !personTokens.has(token)));
+  return hasIndependentSemantics
+    ? clamp(confidence * (0.4 + semanticScore * 0.6))
+    : confidence;
+}
+
 function titleScore(candidate, intent, resolvedContext) {
   const known = normalized(intent.knownTitles);
   if (!known.length) return 0;
@@ -152,15 +176,19 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const data = candidate.constraintData || {};
   const text = candidateText(candidate);
   const semanticTerms = [...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)];
+  const expansion = expandSemanticTerms(intent);
   const lexicalSemantic = termCoverage(semanticTerms,
     [...array(data.themes), ...array(data.moods), ...array(data.keywords)], text);
-  const semanticScore = Math.max(sourceSimilarity(candidate), lexicalSemantic);
+  const expandedSemantic = termCoverage(expansion.addedTerms,
+    [...array(data.themes), ...array(data.moods), ...array(data.keywords)], text);
+  const semanticScore = Math.max(sourceSimilarity(candidate), lexicalSemantic, expandedSemantic);
   const components = {
     semanticScore: round(semanticScore), genreScore: round(genreOverlap(candidate, intent)),
     themeScore: round(termCoverage(intent.themes, data.themes, text)),
     moodScore: round(termCoverage(intent.moods, data.moods, text)),
     keywordScore: round(termCoverage(intent.keywords, data.keywords, text)),
-    referenceScore: 0, titleScore: round(titleScore(candidate, intent, resolvedContext)),
+    referenceScore: 0, entityScore: 0,
+    titleScore: round(titleScore(candidate, intent, resolvedContext)),
     yearScore: round(boundedYearScore(candidate, intent)),
     languageScore: intent.languages?.length ? (candidate.originalLanguage ?
       Number(intent.languages.includes(candidate.originalLanguage.toLowerCase())) : 0.5) : 0,
@@ -170,6 +198,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     sourceConfidenceScore: round(sourceConfidenceScore(candidate))
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
+  components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.semanticScore));
 
   const active = {
     semanticScore: semanticTerms.length > 0 || (resolvedContext?.resolvedTitles || []).length > 0,
@@ -178,6 +207,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     moodScore: (intent.moods || []).length > 0,
     keywordScore: (intent.keywords || []).length > 0,
     referenceScore: (resolvedContext?.resolvedTitles || []).length > 0,
+    entityScore: (resolvedContext?.resolvedPeople || []).length > 0,
     titleScore: (intent.knownTitles || []).length > 0,
     yearScore: intent.yearMin != null || intent.yearMax != null,
     languageScore: (intent.languages || []).length > 0,
@@ -188,7 +218,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const weightTotal = weighted.reduce((sum, [, weight]) => sum + weight, 0);
   const finalScore = weightTotal ? weighted.reduce((sum, [name, weight]) => sum + components[name] * weight, 0) / weightTotal : 0;
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
-    'referenceScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
+    'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
   const intentWeight = intentWeighted.reduce((sum, [, weight]) => sum + weight, 0);
   const intentScore = intentWeight ? intentWeighted.reduce((sum, [name, weight]) =>
@@ -201,7 +231,7 @@ function compareRanked(left, right) {
   const a = left.ranking;
   const b = right.ranking;
   if (Math.abs(b.finalScore - a.finalScore) > ELICINE_RANKING_CONFIG.tieEpsilon) return b.finalScore - a.finalScore;
-  for (const field of ['intentScore', 'referenceScore', 'semanticScore', 'qualityScore']) {
+  for (const field of ['intentScore', 'entityScore', 'referenceScore', 'semanticScore', 'qualityScore']) {
     if (b[field] !== a[field]) return b[field] - a[field];
   }
   const voteDifference = Number(right.metadata?.vote_count || 0) - Number(left.metadata?.vote_count || 0);
