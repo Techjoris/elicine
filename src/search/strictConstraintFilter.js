@@ -15,6 +15,7 @@ const SEMANTIC_EXCLUSIONS = Object.freeze({
   murder: { aliases: ['murder', 'meurtre', 'meurtres', 'homicide', 'assassinat'], terms: ['murder', 'murders', 'murdered', 'meurtre', 'meurtres', 'homicide', 'assassinat', 'serial killer'] },
   police_investigation: { aliases: ['police investigation', 'enquete policiere'], terms: ['police investigation', 'enquete policiere', 'detective investigation', 'police detective', 'detective', 'enquete criminelle'] },
   romance: { aliases: ['romance', 'romantique'], terms: ['romance', 'romantic', 'romantique'], genres: ['Romance'] },
+  relationship: { aliases: ['relationship', 'couple story', 'histoire de couple', 'couple'], terms: ['relationship', 'couple', 'histoire de couple', 'marriage', 'mariage'] },
   supernatural: { aliases: ['supernatural', 'surnaturel'], terms: ['supernatural', 'surnaturel', 'paranormal'] },
   aliens: { aliases: ['aliens', 'alien', 'extraterrestres', 'extraterrestre'], terms: ['alien', 'aliens', 'extraterrestre', 'extraterrestres'] },
   space_travel: { aliases: ['space travel', 'voyage spatial'], terms: ['space travel', 'voyage spatial', 'interstellar travel', 'voyage interstellaire'] },

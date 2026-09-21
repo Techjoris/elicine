@@ -1,11 +1,12 @@
 import { checkRateLimit } from './_rateLimit.js';
 import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/searchOrchestrator.js';
 import { isHybridRetrievalEnabled } from '../src/search/hybridRetriever.js';
-import { candidateMediaType, toLegacyRankingCandidate } from '../src/search/retrievalCandidate.js';
+import { candidateMediaType, toLegacyRankingCandidate, toRetrievalCandidate } from '../src/search/retrievalCandidate.js';
 import { createTmdbRetrievalClient, createSupabaseLexicalSource, retrieveLegacyHints } from '../src/search/retrievalServices.js';
 import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVectorSource,
   isVectorRetrievalEnabled } from '../src/search/vectorRetrieval.js';
 import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js';
+import { rankSearchCandidates, toElicineRankedResult } from '../src/search/searchRanker.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
@@ -2893,6 +2894,7 @@ export default async function handler(req, res) {
         context: { telemetry, tmdbResolutionCache }
       });
       const useHybrid = hybridPool !== null;
+      const usingElicineRanking = useHybrid && telemetry.rankingAttempted;
 
       let directTmdbMovies = [];
       const seenTmdbIds = new Set();
@@ -2999,9 +3001,11 @@ export default async function handler(req, res) {
 
       // Exactly the historical scoring function, with only its redundant ID
       // deduplication adapted to TMDB's separate movie/TV ID namespaces.
-      let resolvedMovies = useHybrid ? enrichWithBadges(hybridPool.map(toLegacyRankingCandidate),
-        matches, 'Sélection Éliciné', effectiveCleanQuery, activeClusterId, activeFacets,
-        movie => `${movie.media_type}:${movie.tmdb_id}`) : [];
+      let resolvedMovies = useHybrid ? (usingElicineRanking
+        ? hybridPool.map(candidate => toElicineRankedResult(candidate, 'Sélection Éliciné'))
+        : enrichWithBadges(hybridPool.map(toLegacyRankingCandidate),
+          matches, 'Sélection Éliciné', effectiveCleanQuery, activeClusterId, activeFacets,
+          movie => `${movie.media_type}:${movie.tmdb_id}`)) : [];
       let fallbackTriggered = false;
 
       // ─── ÉTAPE 2 : Stratégie de récupération hybride multi-niveaux ─────────
@@ -3194,7 +3198,15 @@ export default async function handler(req, res) {
           fallbackMovies, orchestration.canonicalIntent, { telemetry }
         ).candidates : fallbackMovies;
         if (admissibleFallback.length > 0) {
-          resolvedMovies = admissibleFallback.slice(0, 6);
+          if (useHybrid && usingElicineRanking) {
+            const fallbackCandidates = admissibleFallback
+              .map(movie => toRetrievalCandidate(movie, 'fallback')).filter(Boolean);
+            resolvedMovies = rankSearchCandidates(fallbackCandidates, orchestration.canonicalIntent,
+              orchestration.resolvedIntentContext, { telemetry }).slice(0, 6).map(candidate =>
+              toElicineRankedResult(candidate, 'Recommandations Éliciné pour votre atmosphère'));
+          } else {
+            resolvedMovies = admissibleFallback.slice(0, 6);
+          }
           fallbackTriggered = true;
         }
       }
@@ -3243,7 +3255,7 @@ export default async function handler(req, res) {
 
       // ─── Transparence IA & Validation Croisée Multi-Facettes ───────────────
       let transparencyNotice = null;
-      if (activeFacets?.is_multi_facet && resolvedMovies.length > 0) {
+      if (!usingElicineRanking && activeFacets?.is_multi_facet && resolvedMovies.length > 0) {
         // Est-ce qu'au moins un film résolu est un vrai hybride validé ?
         const hasStrictHybrid = resolvedMovies.some(m => m.is_hybrid_match || Number(m.match_rate || 0) >= 80);
 
