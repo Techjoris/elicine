@@ -102,10 +102,17 @@ export function adaptLegacySearchIntent(interpreted, { userQuery = '', recoverFa
     keywords: mergeUnique(interpreted.keywords || [], recovered.keywords),
     excludedTitles: interpreted.excluded_titles,
     excludedGenres: interpreted.excluded_genres,
-    semanticExclusions: interpreted.semantic_exclusions !== undefined
-      ? (Array.isArray(interpreted.semantic_exclusions)
-          ? normalizeSemanticExclusions(interpreted.semantic_exclusions) : interpreted.semantic_exclusions)
-      : extractReliableSemanticExclusions(userQuery),
+    // Explicit negative clauses are read from the raw query in every case: a
+    // provider may paraphrase an exclusion or drop the field entirely, and a
+    // missing exclusion is a wrong answer, not a neutral one. The provider keeps
+    // priority for the concepts it names; the deterministic extraction only
+    // completes the list and never contradicts it.
+    semanticExclusions: mergeUnique(
+      interpreted.semantic_exclusions !== undefined
+        ? (Array.isArray(interpreted.semantic_exclusions)
+            ? normalizeSemanticExclusions(interpreted.semantic_exclusions) : interpreted.semantic_exclusions)
+        : [],
+      extractReliableSemanticExclusions(userQuery)),
     yearMin: interpreted.year_min,
     yearMax: interpreted.year_max,
     languages: interpreted.languages,

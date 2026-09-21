@@ -94,6 +94,10 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   })());
 
   const allResolved = resolvedContext.resolvedTitles || [];
+  // Works the query names itself, as opposed to works it only compares to. They
+  // must reach the pool the ranking sorts: a seed is never listed by its own
+  // similar/recommendation endpoints, so nothing else would bring it back.
+  const requestedWorks = Array.isArray(resolvedContext.requestedTitles) ? resolvedContext.requestedTitles : [];
   const seenSeeds = new Set();
   const seeds = allResolved.filter(seed => {
     const key = `${seed.mediaType}:${seed.tmdbId}`;
@@ -121,10 +125,16 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
       }
     }
   }
-  // Only explicit unresolved titles, never a free-text query or single theme word.
+  // Only explicit unresolved titles, never a free-text query or single theme
+  // word, plus the works the query names itself: those are answered by their own
+  // entry, not only by their neighbourhood.
   const resolvedNames = new Set(allResolved.flatMap(s => [s.inputTitle, s.canonicalTitle, s.originalTitle]).map(normalizeTerm));
-  const searchTitles = [...new Set((intent.knownTitles || []).map(t => t.trim()))]
-    .filter(title => title.length > 1 && !resolvedNames.has(normalizeTerm(title))).slice(0, RETRIEVAL_LIMITS.searchTitles);
+  const requestedQueries = requestedWorks
+    .map(work => String(work?.canonicalTitle || work?.originalTitle || '').trim()).filter(Boolean);
+  const requestedQueryNames = new Set(requestedQueries.map(normalizeTerm));
+  const searchTitles = [...new Set([...requestedQueries, ...(intent.knownTitles || []).map(t => t.trim())])]
+    .filter(title => title.length > 1 && (requestedQueryNames.has(normalizeTerm(title)) ||
+      !resolvedNames.has(normalizeTerm(title)))).slice(0, RETRIEVAL_LIMITS.searchTitles);
   if (services.search) for (const title of searchTitles)
     source('tmdb_search', signal => services.search(title, intent.mediaType, { signal, context }), intent.mediaType);
   if (services.legacy) source('legacy', signal => services.legacy({ signal, context }));
@@ -154,6 +164,26 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const settled = await Promise.allSettled(tasks);
   const candidates = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
   const merged = mergeCandidates(candidates);
+  // A targeted source can still be crowded out of the bounded pool by broad
+  // sources. The named work is re-attached from the facts the resolver already
+  // confirmed, only on a live pool so a total provider failure still reaches the
+  // historical fallback instead of returning an empty card.
+  const pool = [...merged.candidates];
+  if (pool.length > 0) for (const work of requestedWorks) {
+    const tmdbId = Number(work?.tmdbId);
+    if (!['movie', 'tv'].includes(work?.mediaType) || !Number.isSafeInteger(tmdbId) || tmdbId <= 0) continue;
+    if (pool.some(candidate => candidate.mediaType === work.mediaType &&
+        Number(candidate.tmdbId) === tmdbId)) continue;
+    const title = String(work.canonicalTitle || work.originalTitle || work.inputTitle || '').trim();
+    const injected = toRetrievalCandidate({ id: tmdbId, media_type: work.mediaType, title,
+      original_title: work.originalTitle, genre_ids: work.genreIds,
+      original_language: work.originalLanguage,
+      release_date: work.mediaType === 'movie' && Number.isInteger(work.releaseYear)
+        ? `${work.releaseYear}-01-01` : undefined,
+      first_air_date: work.mediaType === 'tv' && Number.isInteger(work.releaseYear)
+        ? `${work.releaseYear}-01-01` : undefined }, 'requested_work');
+    if (injected) pool.unshift(injected);
+  }
   if (evaluationTrace) {
     evaluationTrace.poolBeforeDeduplication = summarizeEvaluationCandidates(candidates);
     evaluationTrace.poolAfterDeduplication = summarizeEvaluationCandidates(merged.candidates);
@@ -163,11 +193,11 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     if (telemetry[field] !== undefined) metrics[field] = telemetry[field];
   }
   Object.assign(metrics, {
-    hybridRetrievalSucceeded: merged.candidates.length > 0,
+    hybridRetrievalSucceeded: pool.length > 0,
     hybridRetrievalDurationMs: Date.now() - started,
     retrievalCandidateCountBeforeDedup: candidates.length,
     retrievalCandidateCountAfterDedup: merged.afterDedup,
-    retrievalCandidateCountFinal: merged.candidates.length,
+    retrievalCandidateCountFinal: pool.length,
     retrievalSourceErrorCount: errors.length,
     retrievalSourceErrors: errors.sort((a, b) => a.source.localeCompare(b.source))
   });
@@ -181,5 +211,5 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     recordFallback(metrics, { reason: FALLBACK_REASONS.NO_CANDIDATES, source: 'hybrid_retrieval' });
   }
   Object.assign(telemetry, metrics);
-  return merged.candidates;
+  return pool;
 }

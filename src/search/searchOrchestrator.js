@@ -3,6 +3,7 @@ import {
   generateCanonicalIntentShadow
 } from './canonicalIntentShadow.js';
 import { createResolvedIntentContext } from './resolvedIntentContext.js';
+import { detectRequestedTitles } from './requestedWork.js';
 import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
 import { filterStrictCandidates } from './strictConstraintFilter.js';
 import { rankSearchCandidates } from './searchRanker.js';
@@ -85,9 +86,20 @@ export async function orchestrateSearch({
     if (typeof resolveEntities === 'function') {
       // Entity failures are isolated per reference by the resolver. A provider
       // adapter failure still leaves the already validated intent usable.
-      resolvedIntentContext = await resolveEntities(canonicalIntent);
-      const metrics = resolvedIntentContext?.metrics || {};
-      updateTelemetry(telemetry, metrics);
+      resolvedIntentContext = { requestedTitles: [],
+        ...(await resolveEntities(canonicalIntent) || {}) };
+      // Telling apart the work the query names ("Inception") from a work it only
+      // compares to ("comme Inception") is pure query/title string logic over the
+      // titles the resolver already confirmed: no extra provider call and no LLM
+      // call per candidate. A named work becomes the answer it describes, a
+      // comparison keeps its seed role.
+      const requestedTitles = detectRequestedTitles(cleanQuery, resolvedIntentContext.resolvedTitles);
+      if (requestedTitles.length > 0) {
+        resolvedIntentContext = { ...resolvedIntentContext, requestedTitles,
+          metrics: { ...(resolvedIntentContext.metrics || {}), requestedWorkDetected: true,
+            requestedWorkCount: requestedTitles.length } };
+      }
+      updateTelemetry(telemetry, resolvedIntentContext.metrics || {});
     }
     projectedInterpretation.resolvedIntentContext = resolvedIntentContext;
     updateTelemetry(telemetry, {

@@ -93,6 +93,58 @@ test('a comparable runner-up keeps an ambiguous identification at two or three w
   assert.ok(kept.length >= 2 && kept.length <= 3, `length=${kept.length}`);
 });
 
+/** Resolved work the raw query names, as the orchestrator publishes it. */
+const requestedWork = (tmdbId, mediaType) => ({ tmdbId, mediaType, canonicalTitle: 'Requested work',
+  originalTitle: 'Requested work', inputTitle: 'Requested work' });
+const withRequested = (requestedTitles, resolvedTitles = requestedTitles) => ({ resolvedTitles,
+  requestedTitles, resolvedPeople: [], unresolvedTitles: [], metrics: {} });
+
+test('a work the query names is answered by that work alone, for films and series alike', () => {
+  for (const mediaType of ['movie', 'tv']) {
+    const candidates = [ranked(1, 0.62, { mediaType }), ranked(2, 0.34, { mediaType }),
+      ranked(3, 0.3, { mediaType }), ranked(4, 0.27, { mediaType })];
+    const context = semanticContext(INTENT_TYPES.THEMATIC_SEARCH);
+    const plan = resolveResultBudget(workIntent(mediaType), context, candidates,
+      withRequested([requestedWork(1, mediaType)]));
+    assert.equal(plan.bucket, RESULT_BUDGET_BUCKETS.IDENTIFICATION_CONFIDENT, mediaType);
+    assert.equal(plan.shape, SEARCH_INTENT_SHAPES.IDENTIFICATION, mediaType);
+    assert.equal(plan.target, 1, mediaType);
+    const kept = applyResultBudget(candidates, workIntent(mediaType),
+      withRequested([requestedWork(1, mediaType)]), { semanticIntentContext: context });
+    assert.equal(kept.length, 1, mediaType);
+    assert.equal(kept[0].tmdbId, 1, mediaType);
+    assert.equal(kept[0].mediaType, mediaType, mediaType);
+  }
+});
+
+test('two named works keep the ambiguity window instead of a single answer', () => {
+  const candidates = [ranked(1, 0.62), ranked(2, 0.59), ranked(3, 0.55), ranked(4, 0.2)];
+  const context = semanticContext(INTENT_TYPES.SIMILAR_TO_TITLE);
+  const kept = applyResultBudget(candidates, workIntent('movie'),
+    withRequested([requestedWork(1, 'movie'), requestedWork(2, 'movie')]), { semanticIntentContext: context });
+  assert.ok(kept.length >= 2 && kept.length <= 3, `length=${kept.length}`);
+});
+
+test('the requested-work rule only applies to a ranked pool', () => {
+  const unranked = Array.from({ length: 20 }, (_, index) => ({ tmdbId: index + 1, mediaType: 'movie',
+    title: `Title ${index + 1}` }));
+  const kept = applyResultBudget(unranked, intent({ knownTitles: ['Reference'] }),
+    withRequested([requestedWork(1, 'movie')]),
+    { semanticIntentContext: semanticContext(INTENT_TYPES.SIMILAR_TO_TITLE) });
+  // A direct resolution carries no evidence of which entry is the named work, so
+  // it stays capped by its own bucket exactly as before.
+  assert.equal(kept.length, 12);
+});
+
+test('the requested work is reported in the budget telemetry', () => {
+  const telemetry = {};
+  applyResultBudget(decayingPool(20), workIntent('movie'), withRequested([requestedWork(1, 'movie')]),
+    { semanticIntentContext: semanticContext(INTENT_TYPES.THEMATIC_SEARCH), telemetry });
+  assert.equal(telemetry.resultBudgetBucket, RESULT_BUDGET_BUCKETS.IDENTIFICATION_CONFIDENT);
+  assert.equal(telemetry.resultBudgetTarget, 1);
+  assert.equal(telemetry.resultBudgetOutputCount, 1);
+});
+
 test('similar_to_title keeps a twelve-item window and cuts the tail', () => {
   const kept = applyResultBudget(decayingPool(30), intent({ knownTitles: ['Reference'] }), resolved(),
     { semanticIntentContext: semanticContext(INTENT_TYPES.SIMILAR_TO_TITLE) });

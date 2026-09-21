@@ -154,12 +154,24 @@ export function resolveResultBudget(intent = {}, semanticIntentContext = null, c
   const context = semanticIntentContext && typeof semanticIntentContext === 'object' ? semanticIntentContext : {};
   const intentType = context.intentType || null;
   const richness = intentSignalRichness(intent, context, resolvedContext);
-  const shape = resolveSearchIntentShape(intentType, intent, context);
-  const bucket = shape === SEARCH_INTENT_SHAPES.IDENTIFICATION
-    ? (isConfidentIdentification(candidates, richness)
-        ? RESULT_BUDGET_BUCKETS.IDENTIFICATION_CONFIDENT
-        : RESULT_BUDGET_BUCKETS.IDENTIFICATION_AMBIGUOUS)
-    : resolveSelectionBucket(intentType, richness);
+  // A single work the query names itself is identified by the query: the grid is
+  // that work and nothing else, whatever the interpreter guessed and however the
+  // convergence fell. Several named works keep the ambiguity window instead.
+  // This only holds inside a ranked pool: an unranked direct resolution carries
+  // no evidence of which entry is the named work, so it stays capped by its own
+  // bucket exactly as before.
+  const rankedPool = Array.isArray(candidates) && candidates.length > 0 &&
+    candidates.every(candidate => Number.isFinite(Number(candidate?.ranking?.finalScore)));
+  const requestedWorks = rankedPool ? array(resolvedContext?.requestedTitles).length : 0;
+  const shape = requestedWorks > 0 ? SEARCH_INTENT_SHAPES.IDENTIFICATION
+    : resolveSearchIntentShape(intentType, intent, context);
+  const bucket = requestedWorks === 1 ? RESULT_BUDGET_BUCKETS.IDENTIFICATION_CONFIDENT
+    : requestedWorks > 1 ? RESULT_BUDGET_BUCKETS.IDENTIFICATION_AMBIGUOUS
+      : shape === SEARCH_INTENT_SHAPES.IDENTIFICATION
+        ? (isConfidentIdentification(candidates, richness)
+            ? RESULT_BUDGET_BUCKETS.IDENTIFICATION_CONFIDENT
+            : RESULT_BUDGET_BUCKETS.IDENTIFICATION_AMBIGUOUS)
+        : resolveSelectionBucket(intentType, richness);
   const plan = RESULT_BUDGETS[bucket];
   return Object.freeze({
     shape, bucket, intentType, richness,

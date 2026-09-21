@@ -1,6 +1,7 @@
 import { toLegacyRankingCandidate } from './retrievalCandidate.js';
 import { normalizeTerm, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms } from './semanticExpansion.js';
+import { characterSimilarity } from './requestedWork.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -26,6 +27,12 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // single generic genre or keyword.
   convergenceWeight: 0.095,
   convergence: Object.freeze({ strongSignalThreshold: 0.6, targetSignalCount: 4, breadthShare: 0.2 }),
+  // A work the query names is not a weighted component among others: it is the
+  // answer. It earns an explicit share of the final score, activated only when
+  // the query really requests that work ("Inception") and never when it merely
+  // compares to it ("comme Inception", where the seed must not monopolise the
+  // grid). Empty of requested works, the blend is exactly the historical one.
+  identifiedWorkWeight: 0.35,
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
@@ -117,7 +124,7 @@ function convergenceScore(components, candidate) {
   const { strongSignalThreshold, targetSignalCount, breadthShare } = ELICINE_RANKING_CONFIG.convergence;
   const evidence = [components.entityScore, components.referenceScore, components.titleScore,
     components.themeScore, components.keywordScore, components.moodScore, components.genreScore,
-    components.semanticScore];
+    components.semanticScore, components.identifiedWorkScore];
   const satisfied = evidence.filter(value => value >= strongSignalThreshold).length;
   const breadth = clamp(Math.max(0, (candidate.sources || []).length - 1) / 2);
   return clamp(clamp(satisfied / targetSignalCount) * (1 - breadthShare) + breadth * breadthShare);
@@ -181,6 +188,19 @@ function entityScore(candidate, intent, resolvedContext, semanticScore) {
     : confidence;
 }
 
+/**
+ * The work the user names as the answer itself, as opposed to a work used as a
+ * style seed. Only resolver-confirmed requested works qualify, so the signal
+ * stays at zero for a comparison query and behaves identically for films and
+ * series.
+ */
+function identifiedWorkScore(candidate, resolvedContext) {
+  const requested = array(resolvedContext?.requestedTitles);
+  if (!requested.length) return 0;
+  return requested.some(entry => entry?.mediaType === candidate.mediaType &&
+    Number(entry.tmdbId) === Number(candidate.tmdbId)) ? 1 : 0;
+}
+
 function titleScore(candidate, intent, resolvedContext) {
   const known = normalized(intent.knownTitles);
   if (!known.length) return 0;
@@ -192,9 +212,16 @@ function titleScore(candidate, intent, resolvedContext) {
   return Math.max(0, ...known.flatMap(reference => titles.map(title => {
     const referenceTokens = tokens(reference);
     const titleTokens = tokens(title);
-    if (!referenceTokens.size || !titleTokens.size) return 0;
-    const intersection = [...referenceTokens].filter(token => titleTokens.has(token)).length;
-    return (intersection / new Set([...referenceTokens, ...titleTokens]).size) * 0.7;
+    // Token proximity ("silence agneaux") and character proximity ("shutter
+    // iland") are complementary: a repaired or mistyped title misses whole
+    // tokens while staying close as a string. The character ramp starts at 60%
+    // similarity and only for long enough titles, so short words cannot collide.
+    const overlapScore = (!referenceTokens.size || !titleTokens.size) ? 0
+      : ([...referenceTokens].filter(token => titleTokens.has(token)).length /
+        new Set([...referenceTokens, ...titleTokens]).size) * 0.7;
+    const characterScore = Math.min(reference.length, title.length) >= 5
+      ? clamp((characterSimilarity(reference, title) - 0.6) / 0.4) * 0.85 : 0;
+    return Math.max(overlapScore, characterScore);
   })));
 }
 
@@ -235,6 +262,11 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
   components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.semanticScore));
+  // The work the query names is the answer: it must not be pushed under its own
+  // recommendations by the anti-monopoly rule that keeps a style seed out of the
+  // grid. A comparison seed keeps its zero, a requested work earns the title.
+  components.identifiedWorkScore = identifiedWorkScore(candidate, resolvedContext);
+  if (components.identifiedWorkScore > 0) components.titleScore = 1;
   components.convergenceScore = round(convergenceScore(components, candidate));
 
   const active = {
@@ -258,8 +290,12 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // The documented weights stay untouched (they sum to 1): convergence is
   // blended in as an explicit share so the historical signal proportions are
   // preserved while genuine multi-signal agreement is rewarded.
-  const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight);
+  const identifiedShare = components.identifiedWorkScore > 0
+    ? ELICINE_RANKING_CONFIG.identifiedWorkWeight : 0;
+  const finalScore = clamp(coverageScore *
+    (1 - ELICINE_RANKING_CONFIG.convergenceWeight - identifiedShare) +
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight +
+    components.identifiedWorkScore * identifiedShare);
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
@@ -274,7 +310,8 @@ function compareRanked(left, right) {
   const a = left.ranking;
   const b = right.ranking;
   if (Math.abs(b.finalScore - a.finalScore) > ELICINE_RANKING_CONFIG.tieEpsilon) return b.finalScore - a.finalScore;
-  for (const field of ['intentScore', 'entityScore', 'referenceScore', 'semanticScore', 'qualityScore']) {
+  for (const field of ['intentScore', 'identifiedWorkScore', 'entityScore', 'referenceScore',
+    'semanticScore', 'qualityScore']) {
     if (b[field] !== a[field]) return b[field] - a[field];
   }
   const voteDifference = Number(right.metadata?.vote_count || 0) - Number(left.metadata?.vote_count || 0);

@@ -41,6 +41,16 @@ test('semantic exclusions survive legacy adaptation into CanonicalIntent', () =>
   assert.deepEqual(canonical.semanticExclusions, ['murder', 'police_investigation']);
 });
 
+test('an explicit exclusion survives a provider that omitted it', () => {
+  const canonical = createCanonicalIntentFromLegacy({ media_type: 'movie', primary_genres: ['Thriller'],
+    mood_tags: [], semantic_exclusions: [] },
+  { userQuery: 'un thriller psychologique sombre sans meurtre ni enquête policière' });
+  assert.deepEqual(new Set(canonical.semanticExclusions), new Set(['murder', 'police_investigation']));
+  const filtered = filterStrictCandidates([candidate(1, 'movie', { overview: 'A murder investigation.' }),
+    candidate(2, 'movie', { overview: 'A dark psychological story.' })], canonical, { enabled: true });
+  assert.deepEqual(filtered.candidates.map(item => item.tmdbId), [2]);
+});
+
 test('media type is hard for every source and cannot be bypassed by fallback', () => {
   const canonical = intent({ mediaType: 'tv', genres: ['War'], themes: ['guerre moderne', 'avions de combat'] });
   const sources = ['tmdb_discover', 'tmdb_search', 'supabase_lexical', 'supabase_vector', 'legacy', 'fallback'];
