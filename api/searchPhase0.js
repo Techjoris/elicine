@@ -24,8 +24,12 @@ export function isShadowModePrepared(env = process.env) {
 
 export function createSearchTelemetry({ rawQuery = '', locale, executionSurface = 'server' } = {}) {
   const startedAt = Date.now();
+  const searchId = crypto.randomUUID();
   return {
-    queryId: crypto.randomUUID(),
+    // searchId is the durable correlation key. queryId remains as a backwards-
+    // compatible alias for existing headers and comparison helpers.
+    searchId,
+    queryId: searchId,
     startedAt,
     timestamp: new Date(startedAt).toISOString(),
     queryHash: rawQuery ? crypto.createHash('sha256').update(rawQuery).digest('hex') : null,
@@ -87,11 +91,14 @@ export function finalizeSearchTelemetry(telemetry, payload, statusCode = 200) {
     return counts;
   }, {});
 
-  // In-memory, bounded telemetry only. No Supabase write or extra network call is
-  // introduced on the critical path. Raw queries are intentionally never logged.
-  const buffer = globalThis[BUFFER_KEY] || (globalThis[BUFFER_KEY] = []);
-  buffer.push(telemetry);
-  if (buffer.length > MAX_BUFFERED_EVENTS) buffer.splice(0, buffer.length - MAX_BUFFERED_EVENTS);
+  // Keep the old bounded buffer for local diagnostics and tests only. Production
+  // observability is persisted by api/search.js through the server Supabase
+  // client, so requests do not accumulate in process memory there.
+  if (process.env.NODE_ENV !== 'production' || String(process.env.SEARCH_TELEMETRY_BUFFER || '').toLowerCase() === 'true') {
+    const buffer = globalThis[BUFFER_KEY] || (globalThis[BUFFER_KEY] = []);
+    buffer.push(telemetry);
+    if (buffer.length > MAX_BUFFERED_EVENTS) buffer.splice(0, buffer.length - MAX_BUFFERED_EVENTS);
+  }
 
   if (String(process.env.SEARCH_OBSERVABILITY_LOGS || '').toLowerCase() === 'true') {
     console.info('[Éliciné SearchTelemetry]', JSON.stringify(telemetry));

@@ -18,6 +18,7 @@ import {
   recordSearchCandidateCount,
   recordSearchLlmAttempt
 } from './searchPhase0.js';
+import { persistSearchTelemetry } from './searchTelemetryPersistence.js';
 import { 
   searchQuotaQuerySchema, 
   verifyServerSession, 
@@ -2517,20 +2518,36 @@ export function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélecti
 }
 
 export default async function handler(req, res) {
-  // Phase 0: response-boundary telemetry only. It never changes search inputs,
-  // ranking, fallbacks, or the response body, and never performs network I/O.
+  // Phase 12: one request-scoped correlation ID follows the complete pipeline.
+  // Only the POST search route is persisted; quota/TMDB/legacy vector proxy
+  // responses keep their existing behaviour and are not search summaries.
   const telemetry = createSearchTelemetry({
     rawQuery: req.body?.query || req.body?.searchQuery || req.body?.prompt || '',
     locale: req.body?.locale || req.headers?.['accept-language'] || null
   });
   res.setHeader('x-elicine-search-query-id', telemetry.queryId);
+  res.setHeader('x-elicine-search-id', telemetry.searchId);
   res.setHeader('x-elicine-search-engine', getSearchEngineMode());
   const originalJson = res.json.bind(res);
-  res.json = (payload) => {
+  const requestAction = req.query?.action || req.body?.action;
+  const shouldPersistTelemetry = req.method === 'POST' &&
+    (!requestAction || requestAction === 'search');
+  res.json = async (payload) => {
     try {
       finalizeSearchTelemetry(telemetry, payload, res.statusCode || 200);
     } catch (_) {
       // Observability must never affect the current engine.
+    }
+    if (shouldPersistTelemetry) {
+      const persistence = await persistSearchTelemetry({
+        client: supabaseServer,
+        telemetry,
+        payload,
+        statusCode: res.statusCode || 200
+      });
+      if (persistence?.error && String(process.env.SEARCH_OBSERVABILITY_LOGS || '').toLowerCase() === 'true') {
+        console.warn('[Éliciné SearchTelemetry] persistence unavailable');
+      }
     }
     return originalJson(payload);
   };
