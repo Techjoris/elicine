@@ -1,5 +1,6 @@
 import { candidateMediaType } from './retrievalCandidate.js';
 import { tmdbGenreIds } from './tmdbRetrievalParams.js';
+import { CONCEPT_PARTIAL_CREDIT, conceptMatch } from './semanticLexicon.js';
 
 export const STRICT_CONSTRAINT_FILTER_FLAG = 'STRICT_CONSTRAINT_FILTER_ENABLED';
 
@@ -12,8 +13,27 @@ const normalize = value => String(value ?? '').normalize('NFKD').replace(/[\u030
   .replace(/[’‘`´]/g, "'").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 
 const SEMANTIC_EXCLUSIONS = Object.freeze({
-  murder: { aliases: ['murder', 'meurtre', 'meurtres', 'homicide', 'assassinat'], terms: ['murder', 'murders', 'murdered', 'meurtre', 'meurtres', 'homicide', 'assassinat', 'serial killer'] },
-  police_investigation: { aliases: ['police investigation', 'enquete policiere'], terms: ['police investigation', 'enquete policiere', 'detective investigation', 'police detective', 'detective', 'enquete criminelle'] },
+  murder: {
+    aliases: ['murder', 'murders', 'killing', 'homicide', 'meurtre', 'meurtres', 'assassinat', 'assassinats',
+      'tuerie', 'tueur', 'tueurs', 'meurtrier', 'serial killer', 'serial killers', 'tueur en serie',
+      'tueurs en serie'],
+    terms: ['murder', 'murders', 'murdered', 'murderer', 'murderers', 'murderous', 'murder investigation',
+      'killing', 'killings', 'killed', 'homicide', 'homicides', 'massacre', 'massacres',
+      'meurtre', 'meurtres', 'meurtrier', 'meurtriere', 'meurtriers', 'meurtrieres', 'assassin', 'assassins',
+      'assassinat', 'assassinats', 'assassiner', 'assassine', 'assassinee', 'tuer', 'tue', 'tuerie', 'tueries',
+      'tueur', 'tueurs', 'tueuse', 'tueuses', 'serial killer', 'serial killers', 'tueur en serie',
+      'tueurs en serie']
+  },
+  police_investigation: {
+    aliases: ['police investigation', 'police enquiry', 'police inquiry', 'enquete policiere', 'enquete criminelle',
+      'investigation policiere', 'murder investigation', 'detective story', 'police procedural', 'whodunit',
+      'enquete', 'enqueteur', 'investigation', 'detective', 'inspecteur'],
+    terms: ['police investigation', 'police enquiry', 'police inquiry', 'police detective', 'police procedural',
+      'detective investigation', 'criminal investigation', 'detective', 'detectives', 'detective story',
+      'murder investigation', 'whodunit', 'enquete policiere', 'enquete criminelle', 'investigation policiere',
+      'enquete', 'enquetes', 'enqueter', 'enqueteur', 'enqueteurs', 'enqueteuse', 'inspecteur', 'inspectrice',
+      'crime scene', 'scene de crime']
+  },
   romance: { aliases: ['romance', 'romantique'], terms: ['romance', 'romantic', 'romantique'], genres: ['Romance'] },
   relationship: { aliases: ['relationship', 'couple story', 'histoire de couple', 'couple'], terms: ['relationship', 'couple', 'histoire de couple', 'marriage', 'mariage'] },
   supernatural: { aliases: ['supernatural', 'surnaturel'], terms: ['supernatural', 'surnaturel', 'paranormal'] },
@@ -33,14 +53,27 @@ const SEMANTIC_EXCLUSIONS = Object.freeze({
 const escaped = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const hasTerm = (text, term) => new RegExp(`(?:^| )${escaped(normalize(term))}(?: |$)`, 'u').test(text);
 
+/**
+ * A negative concept is never silently discarded: it is either mapped onto a
+ * known exclusion family or kept as its own bounded wording, to be confirmed
+ * later against the candidate metadata. An exclusion that vanishes is a wrong
+ * answer, not a neutral one.
+ */
+export const MAX_EXCLUSION_WORDS = 4;
+
 export function normalizeSemanticExclusions(values = []) {
   const items = Array.isArray(values) ? values : [];
   const resolved = [];
   for (const item of items) {
     const value = normalize(item);
+    if (!value) continue;
     const concept = Object.entries(SEMANTIC_EXCLUSIONS).find(([key, definition]) =>
       normalize(key) === value || definition.aliases.some(alias => normalize(alias) === value))?.[0];
-    if (concept && !resolved.includes(concept)) resolved.push(concept);
+    if (concept) {
+      if (!resolved.includes(concept)) resolved.push(concept);
+    } else if (value.split(' ').length <= MAX_EXCLUSION_WORDS && !resolved.includes(value)) {
+      resolved.push(value);
+    }
   }
   return resolved;
 }
@@ -93,6 +126,19 @@ function candidateFacts(candidate = {}) {
 
 const add = (list, value) => { if (!list.includes(value)) list.push(value); };
 
+/**
+ * Bilingual confirmation of one exclusion from the candidate's own metadata.
+ * `conceptMatch` knows the wordings the catalogue actually uses (French
+ * overviews, English keywords) without ever widening a concept to a broader
+ * one, and every content word of the concept must be present. A concept that
+ * nothing confirms is left alone: missing information never invents a
+ * violation, and no provider call is made per candidate.
+ */
+function confirmsConcept(semanticText, concept) {
+  if (!semanticText) return false;
+  return conceptMatch(semanticText, String(concept).replace(/_/g, ' ')) >= CONCEPT_PARTIAL_CREDIT;
+}
+
 /** Pure per-candidate decision. It performs no I/O and never mutates the candidate. */
 export function evaluateStrictConstraints(candidate, intent = {}, { resolvedExcludedTitles = [] } = {}) {
   const facts = candidateFacts(candidate);
@@ -144,11 +190,12 @@ export function evaluateStrictConstraints(candidate, intent = {}, { resolvedExcl
 
   for (const concept of normalizeSemanticExclusions(intent.semanticExclusions)) {
     const definition = SEMANTIC_EXCLUSIONS[concept];
-    const genreMatch = facts.mediaType && definition.genres?.length
+    const genreMatch = facts.mediaType && definition?.genres?.length
       ? tmdbGenreIds(definition.genres, facts.mediaType).some(id => facts.genreIds.includes(id)) : false;
-    const textMatch = definition.terms.some(term => hasTerm(facts.semanticText, term));
-    if (genreMatch || textMatch) add(rejectedBy, 'semanticExclusion');
-    else if (!facts.semanticText && !(definition.genres?.length && facts.genreIds.length)) {
+    const termMatch = Boolean(definition?.terms?.some(term => hasTerm(facts.semanticText, term)));
+    if (genreMatch || termMatch || confirmsConcept(facts.semanticText, concept)) {
+      add(rejectedBy, 'semanticExclusion');
+    } else if (!facts.semanticText && !(definition?.genres?.length && facts.genreIds.length)) {
       add(unknownConstraints, 'semanticExclusion');
     }
   }

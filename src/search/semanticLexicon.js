@@ -23,6 +23,10 @@
  *    "dreams" never answers "shared dreams" while "rêves" still answers
  *    "dreams". Without it the equivalence silently broadens what the query
  *    asked for and a derivative candidate can outscore the described work.
+ *
+ * On top of that vocabulary, `conceptMatch` / `conceptCoverage` / 
+ * `conceptSpecificity` expose the matching primitives the ranking and the
+ * offline metrics both use, so a concept is measured the same way everywhere.
  */
 
 const normalize = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
@@ -114,4 +118,77 @@ export function conceptVariants(term) {
     }
   }
   return [...variants];
+}
+
+/** A partial token overlap is evidence, never the equal of a real match. */
+export const CONCEPT_PARTIAL_CREDIT = 0.8;
+
+/**
+ * A concept that only restates a genre the user already declared ("war" next
+ * to the genre War) carries no discriminations beyond that genre, so it weighs
+ * far less than a described element. Granularity works the same way: a single
+ * word is broader than a two-word or three-word description.
+ */
+export const CONCEPT_WEIGHTS = Object.freeze({
+  genreRestatement: 0.35, singleWord: 0.6, twoWords: 0.85, described: 1
+});
+
+const containsPhrase = (text, phrase) => (` ${text} `).includes(` ${phrase} `);
+
+const tokenSet = value => new Set(normalize(value).split(' ').filter(Boolean));
+
+const singular = value => value.replace(/s$/, '');
+
+/** How well one concept is answered by a text, in 0..1. */
+export function conceptMatch(text, term) {
+  const key = normalize(term);
+  if (!key) return 0;
+  const haystack = normalize(text);
+  const available = tokenSet(haystack);
+  let best = 0;
+  for (const variant of conceptVariants(key)) {
+    if (containsPhrase(haystack, variant)) return 1;
+    const wanted = contentTokens(variant);
+    if (!wanted.length) continue;
+    const ratio = wanted.filter(token => available.has(token)).length / wanted.length;
+    best = Math.max(best, ratio * CONCEPT_PARTIAL_CREDIT);
+  }
+  return Math.min(1, Number(best.toFixed(6)));
+}
+
+/**
+ * Relative weight of a concept inside an intent: a described element weighs
+ * more than a single broad word, and a concept that merely restates a declared
+ * genre weighs less than both. Only relative weights matter: a single-concept
+ * intent is unaffected, a rich one stops treating every concept as equal.
+ */
+export function conceptSpecificity(term, { genres = [] } = {}) {
+  const key = normalize(term);
+  if (!key) return 0;
+  const size = contentTokens(key).length;
+  const granularity = size <= 1 ? CONCEPT_WEIGHTS.singleWord
+    : size === 2 ? CONCEPT_WEIGHTS.twoWords : CONCEPT_WEIGHTS.described;
+  const genreLike = (Array.isArray(genres) ? genres : [genres]).map(normalize).filter(Boolean)
+    .some(genre => genre === key || singular(genre) === singular(key));
+  return Number((granularity * (genreLike ? CONCEPT_WEIGHTS.genreRestatement : 1)).toFixed(6));
+}
+
+/**
+ * Specificity-weighted coverage of a concept list by a text. Returns the mean
+ * of the concepts' weights: covering the described elements dominates, while
+ * matching only the broad words they contain does not add up to the same
+ * answer.
+ */
+export function conceptCoverage(text, concepts, { genres = [] } = {}) {
+  const wanted = (Array.isArray(concepts) ? concepts : concepts == null ? [] : [concepts])
+    .map(normalize).filter(Boolean);
+  if (!wanted.length) return 0;
+  let weighted = 0;
+  let total = 0;
+  for (const term of wanted) {
+    const weight = conceptSpecificity(term, { genres });
+    weighted += conceptMatch(text, term) * weight;
+    total += weight;
+  }
+  return total ? Number((weighted / total).toFixed(6)) : 0;
 }

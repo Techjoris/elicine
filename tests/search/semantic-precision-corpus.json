@@ -1,0 +1,185 @@
+[
+  {
+    "id": "dev-movie-person-described", "set": "development",
+    "query": "le film de Leonardo DiCaprio dans lequel il voyage dans le rêve des gens",
+    "intent": { "mediaType": "movie", "genres": ["Science Fiction"], "themes": ["shared dreams"], "keywords": ["subconscious"] },
+    "resolvedPeople": [{ "tmdbId": 6193, "name": "Leonardo DiCaprio", "inputName": "leonardo dicaprio", "resolutionConfidence": 1 }],
+    "candidates": [
+      { "id": 27205, "mediaType": "movie", "title": "Inception", "overview": "A thief enters shared dreams and the subconscious of other people.", "genreIds": [878, 53], "sources": ["tmdb_person_credits"], "personTmdbId": 6193, "popularity": 75, "voteAverage": 8.4, "voteCount": 39000 },
+      { "id": 372058, "mediaType": "movie", "title": "Your Name.", "overview": "Two teenagers discover that their dreams connect their lives.", "genreIds": [16, 18], "sources": ["supabase_vector"], "similarity": 0.76, "popularity": 110, "voteAverage": 8.5, "voteCount": 12000 },
+      { "id": 64682, "mediaType": "movie", "title": "The Great Gatsby", "overview": "A wealthy man pursues a lost romance in New York.", "genreIds": [18], "sources": ["tmdb_person_credits"], "personTmdbId": 6193, "popularity": 90, "voteAverage": 7.4, "voteCount": 13000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 27205, "mediaType": "movie" }], "mustExclude": [], "after": [372058, 64682], "concepts": ["shared dreams", "subconscious"] }
+  },
+  {
+    "id": "dev-tv-person-described", "set": "development",
+    "query": "la série avec Bryan Cranston où un professeur de chimie se lance dans le trafic de drogue",
+    "intent": { "mediaType": "tv", "genres": ["Drama", "Crime"], "themes": ["chemistry teacher", "drug trade"] },
+    "resolvedPeople": [{ "tmdbId": 17419, "name": "Bryan Cranston", "inputName": "bryan cranston", "resolutionConfidence": 1 }],
+    "candidates": [
+      { "id": 1396, "mediaType": "tv", "title": "Breaking Bad", "overview": "A chemistry teacher turns to the drug trade after a lethal diagnosis.", "genreIds": [18, 80], "sources": ["tmdb_person_credits"], "personTmdbId": 17419, "popularity": 400, "voteAverage": 8.9, "voteCount": 14000 },
+      { "id": 1426, "mediaType": "tv", "title": "Family Chaos", "overview": "A family comedy about a chaotic household.", "genreIds": [35], "sources": ["tmdb_person_credits"], "personTmdbId": 17419, "popularity": 500, "voteAverage": 7.5, "voteCount": 3000 },
+      { "id": 60059, "mediaType": "tv", "title": "Desert Law", "overview": "A lawyer builds a small practice in New Mexico.", "genreIds": [18, 80], "sources": ["supabase_vector"], "similarity": 0.7, "popularity": 120, "voteAverage": 8.4, "voteCount": 9000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 1396, "mediaType": "tv" }], "mustExclude": [], "after": [1426, 60059], "concepts": ["chemistry teacher", "drug trade"] }
+  },
+  {
+    "id": "dev-movie-exclusions", "set": "development",
+    "query": "un thriller psychologique sombre sans meurtre ni enquête policière",
+    "intent": { "mediaType": "movie", "genres": ["Thriller"], "themes": ["psychological"], "moods": ["dark"], "semanticExclusions": ["murder", "police_investigation"] },
+    "candidates": [
+      { "id": 900101, "mediaType": "movie", "title": "Portrait Trouble", "overview": "Un portrait psychologique sombre sur le deuil et l'identite.", "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 45, "voteAverage": 7.6, "voteCount": 4000 },
+      { "id": 900102, "mediaType": "movie", "title": "Le Doute", "overview": "Un inspecteur mene l'enquete sur une affaire criminelle.", "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 500, "voteAverage": 7.9, "voteCount": 8000 },
+      { "id": 900103, "mediaType": "movie", "title": "Les Ombres", "overview": "Des meurtres bouleversent une petite ville portuaire.", "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 8.1, "voteCount": 9000 },
+      { "id": 900104, "mediaType": "movie", "title": "Le Motel", "overview": "Une secretaire en fuite s'arrete dans un motel isole. Une serie de meurtres va suivre.", "genreIds": [53], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 8.5, "voteCount": 20000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900101, "mediaType": "movie" }], "mustExclude": [{ "tmdbId": 900102, "mediaType": "movie" }, { "tmdbId": 900103, "mediaType": "movie" }, { "tmdbId": 900104, "mediaType": "movie" }], "concepts": ["psychological", "dark"] }
+  },
+  {
+    "id": "dev-tv-exclusions", "set": "development",
+    "query": "une série psychologique sombre sans meurtre ni enquête policière",
+    "intent": { "mediaType": "tv", "genres": ["Drama"], "themes": ["psychological"], "moods": ["dark"], "semanticExclusions": ["murder", "police_investigation"] },
+    "candidates": [
+      { "id": 900111, "mediaType": "tv", "title": "Headspace", "overview": "Un drame psychologique sombre sur la memoire et l'identite.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 40, "voteAverage": 7.8, "voteCount": 3000 },
+      { "id": 900112, "mediaType": "tv", "title": "Enquete Speciale", "overview": "Deux inspecteurs enqueter sur une disparition inquietante.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 600, "voteAverage": 7.9, "voteCount": 7000 },
+      { "id": 900113, "mediaType": "tv", "title": "Serial", "overview": "Un tueur en serie manipule la police et ses enquetes.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8.3, "voteCount": 11000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900111, "mediaType": "tv" }], "mustExclude": [{ "tmdbId": 900112, "mediaType": "tv" }, { "tmdbId": 900113, "mediaType": "tv" }], "concepts": ["psychological", "dark"] }
+  },
+  {
+    "id": "dev-movie-war-aviation", "set": "development",
+    "query": "film de guerre moderne avec des avions de combat",
+    "intent": { "mediaType": "movie", "genres": ["War"], "themes": ["modern warfare", "military aviation", "fighter aircraft"] },
+    "candidates": [
+      { "id": 900121, "mediaType": "movie", "title": "Strike Wing", "overview": "Modern warfare missions rely on military aviation and fighter aircraft flown by veteran pilots.", "genreIds": [10752, 28], "themes": ["modern warfare", "military aviation", "fighter aircraft"], "sources": ["supabase_vector"], "similarity": 0.92, "popularity": 55, "voteAverage": 7.7, "voteCount": 5000 },
+      { "id": 900122, "mediaType": "movie", "title": "Historical War", "overview": "A historical war drama on the front line.", "genreIds": [10752, 36], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8.2, "voteCount": 20000 },
+      { "id": 900123, "mediaType": "movie", "title": "Battles of Old", "overview": "A silent-era battle fresco about soldiers.", "genreIds": [10752, 36], "sources": ["tmdb_discover"], "popularity": 600, "voteAverage": 7.9, "voteCount": 9000 },
+      { "id": 900124, "mediaType": "movie", "title": "Animated Fun", "overview": "An animated family comedy.", "genreIds": [16, 35], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 7.4, "voteCount": 5000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900121, "mediaType": "movie" }], "mustExclude": [], "after": [900122, 900123, 900124], "concepts": ["modern warfare", "military aviation", "fighter aircraft"] }
+  },
+  {
+    "id": "dev-tv-war-aviation", "set": "development",
+    "query": "une série de guerre moderne avec des avions de combat",
+    "intent": { "mediaType": "tv", "genres": ["War"], "themes": ["modern warfare", "military aviation", "fighter aircraft"] },
+    "candidates": [
+      { "id": 900131, "mediaType": "tv", "title": "Air Squadron", "overview": "Modern warfare missions rely on military aviation and fighter aircraft.", "genreIds": [10768], "themes": ["modern warfare", "military aviation", "fighter aircraft"], "sources": ["supabase_vector"], "similarity": 0.9, "popularity": 50, "voteAverage": 7.6, "voteCount": 4000 },
+      { "id": 900132, "mediaType": "tv", "title": "War Chronicles", "overview": "A historical war drama.", "genreIds": [10768], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 8, "voteCount": 15000 },
+      { "id": 900133, "mediaType": "tv", "title": "Cartoon Wars", "overview": "An animated family comedy.", "genreIds": [16, 35], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 7.2, "voteCount": 4000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900131, "mediaType": "tv" }], "mustExclude": [], "after": [900132, 900133], "concepts": ["modern warfare", "military aviation", "fighter aircraft"] }
+  },
+  {
+    "id": "dev-movie-style-seed", "set": "development",
+    "query": "film du même style que Shutter Island",
+    "intent": { "mediaType": "movie", "genres": ["Thriller", "Mystery"], "themes": ["psychological"], "moods": ["dark"], "knownTitles": ["Shutter Island"] },
+    "resolvedTitles": [{ "tmdbId": 11324, "mediaType": "movie", "canonicalTitle": "Shutter Island", "originalTitle": "Shutter Island", "genreIds": [53, 9648] }],
+    "candidates": [
+      { "id": 11324, "mediaType": "movie", "title": "Shutter Island", "overview": "A marshal investigates a disappearance in an isolated asylum.", "genreIds": [53, 9648], "sources": ["legacy"], "popularity": 90, "voteAverage": 8.2, "voteCount": 25000 },
+      { "id": 900141, "mediaType": "movie", "title": "Island of Minds", "overview": "A dark psychological mystery set in an isolated island asylum.", "genreIds": [53, 9648], "themes": ["psychological"], "moods": ["dark"], "sources": ["tmdb_recommendations"], "seedTmdbId": 11324, "popularity": 60, "voteAverage": 7.8, "voteCount": 6000 },
+      { "id": 900142, "mediaType": "movie", "title": "City Lights Romance", "overview": "A romantic comedy in the city.", "genreIds": [35, 10749], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 7.5, "voteCount": 5000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900141, "mediaType": "movie" }], "mustExclude": [], "after": [11324, 900142], "concepts": ["psychological", "mystery"] }
+  },
+  {
+    "id": "dev-tv-style-seed", "set": "development",
+    "query": "une série comme Mindhunter mais plus récente et avec davantage d'action",
+    "intent": { "mediaType": "tv", "genres": ["Crime"], "themes": ["action"], "knownTitles": ["Mindhunter"], "yearMin": 2018 },
+    "resolvedTitles": [{ "tmdbId": 67744, "mediaType": "tv", "canonicalTitle": "Mindhunter", "originalTitle": "Mindhunter", "genreIds": [80] }],
+    "candidates": [
+      { "id": 67744, "mediaType": "tv", "title": "Mindhunter", "overview": "FBI agents interview imprisoned killers to understand criminal minds.", "genreIds": [80], "sources": ["legacy"], "popularity": 200, "voteAverage": 8.6, "voteCount": 9000 },
+      { "id": 900151, "mediaType": "tv", "title": "Recent Action Case", "overview": "An action-heavy criminal hunt in a modern city.", "genreIds": [80], "themes": ["action"], "sources": ["tmdb_recommendations"], "seedTmdbId": 67744, "year": 2023, "popularity": 70, "voteAverage": 7.8, "voteCount": 5000 },
+      { "id": 900152, "mediaType": "tv", "title": "Slow Case Files", "overview": "A slow procedural drama about interviews.", "genreIds": [80], "sources": ["tmdb_similar"], "seedTmdbId": 67744, "year": 2019, "popularity": 150, "voteAverage": 8, "voteCount": 7000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900151, "mediaType": "tv" }], "mustExclude": [], "after": [67744, 900152], "concepts": ["action", "criminal"] }
+  },
+
+  {
+    "id": "gen-movie-person-described", "set": "generalization",
+    "query": "un film avec Tom Hanks où il survit seul sur une île déserte",
+    "intent": { "mediaType": "movie", "genres": ["Adventure", "Drama"], "themes": ["desert island", "survival"] },
+    "resolvedPeople": [{ "tmdbId": 31, "name": "Tom Hanks", "inputName": "tom hanks", "resolutionConfidence": 0.97 }],
+    "candidates": [
+      { "id": 8358, "mediaType": "movie", "title": "Cast Away", "overview": "A man fights for survival alone on a desert island after a plane crash.", "genreIds": [12, 18], "sources": ["tmdb_person_credits"], "personTmdbId": 31, "popularity": 60, "voteAverage": 7.7, "voteCount": 12000 },
+      { "id": 858, "mediaType": "movie", "title": "Radio Romance", "overview": "A widower's son calls a radio show to find him a new romance.", "genreIds": [35, 10749], "sources": ["tmdb_person_credits"], "personTmdbId": 31, "popularity": 90, "voteAverage": 7, "voteCount": 8000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 8358, "mediaType": "movie" }], "mustExclude": [], "after": [858], "concepts": ["desert island", "survival"] }
+  },
+  {
+    "id": "gen-tv-person-described", "set": "generalization",
+    "query": "la série avec James Gandolfini où un parrain de la mafia consulte un psychiatre",
+    "intent": { "mediaType": "tv", "genres": ["Drama", "Crime"], "themes": ["mafia boss", "psychiatrist"] },
+    "resolvedPeople": [{ "tmdbId": 14787, "name": "James Gandolfini", "inputName": "james gandolfini", "resolutionConfidence": 0.96 }],
+    "candidates": [
+      { "id": 1398, "mediaType": "tv", "title": "The Sopranos", "overview": "A mafia boss balances his family life and his psychiatrist.", "genreIds": [18, 80], "sources": ["tmdb_person_credits"], "personTmdbId": 14787, "popularity": 250, "voteAverage": 8.7, "voteCount": 9000 },
+      { "id": 900301, "mediaType": "tv", "title": "Another Credit", "overview": "A courtroom drama about lawyers.", "genreIds": [18], "sources": ["tmdb_person_credits"], "personTmdbId": 14787, "popularity": 300, "voteAverage": 7.4, "voteCount": 3000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 1398, "mediaType": "tv" }], "mustExclude": [], "after": [900301], "concepts": ["mafia boss", "psychiatrist"] }
+  },
+  {
+    "id": "gen-movie-exclusions-sf", "set": "generalization",
+    "query": "un film de science-fiction sans voyage dans le temps ni robots",
+    "intent": { "mediaType": "movie", "genres": ["Science Fiction"], "semanticExclusions": ["time_travel", "robots"] },
+    "candidates": [
+      { "id": 900311, "mediaType": "movie", "title": "Grounded Orbit", "overview": "A grounded story about memory and identity on a space station.", "genreIds": [878], "sources": ["tmdb_discover"], "popularity": 50, "voteAverage": 7.5, "voteCount": 4000 },
+      { "id": 900312, "mediaType": "movie", "title": "Loop Story", "overview": "A man relives the same day in a time loop.", "genreIds": [878], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 8, "voteCount": 12000 },
+      { "id": 900313, "mediaType": "movie", "title": "Machine Uprising", "overview": "Robots rebel against their creators.", "genreIds": [878], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8.1, "voteCount": 15000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900311, "mediaType": "movie" }], "mustExclude": [{ "tmdbId": 900312, "mediaType": "movie" }, { "tmdbId": 900313, "mediaType": "movie" }], "concepts": ["memory", "identity"] }
+  },
+  {
+    "id": "gen-tv-exclusions-romance", "set": "generalization",
+    "query": "une série médicale sans romance",
+    "intent": { "mediaType": "tv", "genres": ["Drama"], "themes": ["medicale"], "semanticExclusions": ["romance"] },
+    "candidates": [
+      { "id": 900321, "mediaType": "tv", "title": "Emergency Ward", "overview": "Une equipe medicale affronte des urgences quotidiennes dans un hopital.", "genreIds": [18], "themes": ["medicale"], "sources": ["tmdb_discover"], "popularity": 60, "voteAverage": 7.8, "voteCount": 6000 },
+      { "id": 900322, "mediaType": "tv", "title": "Hospital Love", "overview": "Deux medecins tombent amoureux dans un hopital.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 7.9, "voteCount": 9000 },
+      { "id": 900323, "mediaType": "tv", "title": "Scrubs of Love", "overview": "A romantic drama between surgeons.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8, "voteCount": 11000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900321, "mediaType": "tv" }], "mustExclude": [{ "tmdbId": 900322, "mediaType": "tv" }, { "tmdbId": 900323, "mediaType": "tv" }], "concepts": ["medicale", "urgences"] }
+  },
+  {
+    "id": "gen-movie-specificity-submarine", "set": "generalization",
+    "query": "un film sur un sous-marin nucléaire en mission secrète",
+    "intent": { "mediaType": "movie", "genres": ["War", "Thriller"], "themes": ["nuclear submarine"] },
+    "candidates": [
+      { "id": 900331, "mediaType": "movie", "title": "Deep Silence", "overview": "A nuclear submarine carries a secret mission under the ice.", "genreIds": [10752, 53], "themes": ["nuclear submarine"], "sources": ["supabase_vector"], "similarity": 0.9, "popularity": 55, "voteAverage": 7.6, "voteCount": 5000 },
+      { "id": 900332, "mediaType": "movie", "title": "Sea Battles", "overview": "A naval war drama on the surface fleet.", "genreIds": [10752], "sources": ["tmdb_discover"], "popularity": 700, "voteAverage": 8, "voteCount": 14000 },
+      { "id": 900333, "mediaType": "movie", "title": "Land Command", "overview": "A military action thriller on land.", "genreIds": [28, 10752], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8, "voteCount": 13000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900331, "mediaType": "movie" }], "mustExclude": [], "after": [900332, 900333], "concepts": ["nuclear submarine", "secret mission"] }
+  },
+  {
+    "id": "gen-tv-specificity-coldwar", "set": "generalization",
+    "query": "une série d'espionnage pendant la guerre froide",
+    "intent": { "mediaType": "tv", "genres": ["Drama"], "themes": ["cold war", "espionage"] },
+    "candidates": [
+      { "id": 900341, "mediaType": "tv", "title": "Agent Berlin", "overview": "Cold War espionage between rival spies in Berlin.", "genreIds": [18], "themes": ["cold war", "espionage"], "sources": ["supabase_vector"], "similarity": 0.9, "popularity": 45, "voteAverage": 7.9, "voteCount": 4000 },
+      { "id": 900342, "mediaType": "tv", "title": "Modern Ops", "overview": "A modern action thriller about special operations.", "genreIds": [10759], "sources": ["tmdb_discover"], "popularity": 800, "voteAverage": 8, "voteCount": 12000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900341, "mediaType": "tv" }], "mustExclude": [], "after": [900342], "concepts": ["cold war", "espionage"] }
+  },
+  {
+    "id": "gen-movie-adaptation", "set": "generalization",
+    "query": "le film où un enfant traverse un miroir pour rejoindre un monde parallèle",
+    "intent": { "mediaType": "movie", "genres": ["Fantasy", "Adventure"], "themes": ["mirror", "parallel world", "child"] },
+    "candidates": [
+      { "id": 900351, "mediaType": "movie", "title": "Through the Mirror", "overview": "A child crosses a mirror into a parallel world.", "genreIds": [14, 12], "themes": ["mirror", "parallel world"], "sources": ["tmdb_discover"], "popularity": 55, "voteAverage": 7.7, "voteCount": 5000 },
+      { "id": 900352, "mediaType": "movie", "title": "Fantasy Roads", "overview": "A fantasy adventure for the whole family.", "genreIds": [14, 12], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 8.1, "voteCount": 16000 },
+      { "id": 900353, "mediaType": "movie", "title": "Mirror Lake", "overview": "A child spends a summer at a lake.", "genreIds": [18], "sources": ["tmdb_discover"], "popularity": 400, "voteAverage": 7.9, "voteCount": 9000 }
+    ],
+    "expected": { "mediaType": "movie", "mustInclude": [{ "tmdbId": 900351, "mediaType": "movie" }], "mustExclude": [], "after": [900352, 900353], "concepts": ["mirror", "parallel world"] }
+  },
+  {
+    "id": "gen-tv-style-seed", "set": "generalization",
+    "query": "une série du même genre qu'Engrenages, mais dans un hôpital",
+    "intent": { "mediaType": "tv", "genres": ["Crime", "Drama"], "themes": ["hospital"], "knownTitles": ["Engrenages"] },
+    "resolvedTitles": [{ "tmdbId": 900361, "mediaType": "tv", "canonicalTitle": "Engrenages", "originalTitle": "Engrenages", "genreIds": [80, 18] }],
+    "candidates": [
+      { "id": 900361, "mediaType": "tv", "title": "Engrenages", "overview": "A Parisian police precinct and its justice system.", "genreIds": [80, 18], "sources": ["legacy"], "popularity": 120, "voteAverage": 8.2, "voteCount": 5000 },
+      { "id": 900371, "mediaType": "tv", "title": "Ward Thirteen", "overview": "A hospital drama seen through the eyes of an overworked staff.", "genreIds": [18], "themes": ["hospital"], "sources": ["tmdb_recommendations"], "seedTmdbId": 900361, "popularity": 70, "voteAverage": 7.8, "voteCount": 4000 },
+      { "id": 900372, "mediaType": "tv", "title": "Lakeside Comedy", "overview": "A warm family comedy at a lake.", "genreIds": [35], "sources": ["tmdb_discover"], "popularity": 900, "voteAverage": 7.3, "voteCount": 4000 }
+    ],
+    "expected": { "mediaType": "tv", "mustInclude": [{ "tmdbId": 900371, "mediaType": "tv" }], "mustExclude": [], "after": [900361, 900372], "concepts": ["hospital"] }
+  }
+]

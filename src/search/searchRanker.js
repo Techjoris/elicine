@@ -2,7 +2,7 @@ import { toLegacyRankingCandidate } from './retrievalCandidate.js';
 import { normalizeTerm, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms } from './semanticExpansion.js';
 import { characterSimilarity } from './requestedWork.js';
-import { conceptVariants } from './semanticLexicon.js';
+import { CONCEPT_WEIGHTS, conceptMatch, conceptSpecificity } from './semanticLexicon.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -23,6 +23,9 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   }),
   sourceMultiBonus: 0.05,
   sourceMultiBonusCap: 0.15,
+  // A person credit is recall, not relevance: when the query also describes the
+  // film, the credit only earns the floor and the narrative decides the rest.
+  entity: Object.freeze({ narrativeFloor: 0.15 }),
   // Multi-signal convergence: a bounded share of the final score reserved for
   // candidates supported by several independent strong signals instead of a
   // single generic genre or keyword.
@@ -53,29 +56,42 @@ const array = value => Array.isArray(value) ? value : value == null ? [] : [valu
 const normalized = values => [...new Set(array(values).map(value =>
   normalizeTerm(typeof value === 'object' ? value?.name ?? value?.id : value)).filter(Boolean))];
 const tokens = value => new Set(normalizeTerm(value).split(' ').filter(token => token.length > 1));
-const containsPhrase = (text, phrase) => (` ${text} `).includes(` ${phrase} `);
 
-function termCoverage(requested, structured, freeText) {
+/**
+ * Tokens of the people the query resolved. A person's own name is an entity,
+ * not a narrative concept: it must never count as evidence that a candidate
+ * answers the described story.
+ */
+function resolvedPersonTokens(resolvedContext) {
+  return new Set(array(resolvedContext?.resolvedPeople)
+    .filter(person => Number.isSafeInteger(Number(person?.tmdbId)) && Number(person.tmdbId) > 0)
+    .flatMap(person => [person.inputName, person.name].flatMap(value => [...tokens(value)])));
+}
+
+/**
+ * Coverage of a requested concept list by one candidate, weighted by how much
+ * each concept discriminates. The interpreter writes concepts in English while
+ * the catalogue answers in French, so the wording equivalence lives in
+ * semanticLexicon, together with the matching primitive the offline metrics
+ * reuse: a concept is measured the same way everywhere.
+ *
+ * The weights are relative, so a single-concept intent is unchanged while a
+ * rich one stops counting a broad word as much as a described element.
+ */
+function termCoverage(requested, structured, freeText, { genres = [] } = {}) {
   const wanted = normalized(requested);
   if (!wanted.length) return 0;
   const facts = normalized(structured);
   const text = normalizeTerm(freeText);
-  const available = new Set([...facts.flatMap(value => [...tokens(value)]), ...tokens(text)]);
-  const scores = wanted.map(term => {
-    // The interpreter writes concepts in English while the catalogue answers in
-    // French: a concept counts as soon as any of its wordings is present, so a
-    // French overview can carry an English concept and an unrelated popular
-    // title cannot win on its name alone.
-    const variants = conceptVariants(term);
-    if (!variants.length) return 0;
-    return Math.max(...variants.map(variant => {
-      if (facts.includes(variant) || containsPhrase(text, variant)) return 1;
-      const wantedTokens = tokens(variant);
-      if (!wantedTokens.size) return 0;
-      return clamp([...wantedTokens].filter(token => available.has(token)).length / wantedTokens.size) * 0.8;
-    }));
-  });
-  return scores.reduce((sum, value) => sum + value, 0) / scores.length;
+  const haystack = [...facts, text].filter(Boolean).join(' ');
+  let weighted = 0;
+  let total = 0;
+  for (const term of wanted) {
+    const weight = conceptSpecificity(term, { genres });
+    weighted += conceptMatch(haystack, term) * weight;
+    total += weight;
+  }
+  return total ? clamp(weighted / total) : 0;
 }
 
 function candidateText(candidate) {
@@ -177,7 +193,7 @@ function referenceScore(candidate, resolvedContext, semanticScore) {
     sharedReferenceTerms * 0.8, semanticScore * 0.65));
 }
 
-function entityScore(candidate, intent, resolvedContext, semanticScore) {
+function entityScore(candidate, intent, resolvedContext, narrativeScore) {
   const people = array(resolvedContext?.resolvedPeople).filter(person =>
     Number.isSafeInteger(Number(person?.tmdbId)) && Number(person.tmdbId) > 0);
   if (!people.length) return 0;
@@ -187,16 +203,18 @@ function entityScore(candidate, intent, resolvedContext, semanticScore) {
   if (!matchedPeople.length) return 0;
   const confidence = Math.max(...matchedPeople.map(person => clamp(person.resolutionConfidence ?? 1)));
 
-  // A person-credit hit is useful on its own. When the query also carries a
-  // distinct concept (dreams, war, memory...), reward the conjunction rather
-  // than every credit for the same performer equally.
-  const personTokens = new Set(matchedPeople.flatMap(person => [person.inputName, person.name]
-    .flatMap(value => [...tokens(value)])));
+  // A person credit is recall, not relevance. When the query only names the
+  // performer, the credit is the whole answer and keeps its confidence. When
+  // the query also describes the work (dreams, war, memory...), the credit is
+  // worth no more than a floor and the narrative evidence decides the rest: a
+  // bare filmography entry must not outrank the work that actually matches.
+  const personTokens = resolvedPersonTokens(resolvedContext);
   const semanticTerms = normalized([...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)]);
   const hasIndependentSemantics = semanticTerms.some(term =>
     [...tokens(term)].some(token => !personTokens.has(token)));
   return hasIndependentSemantics
-    ? clamp(confidence * (0.4 + semanticScore * 0.6))
+    ? clamp(confidence * (ELICINE_RANKING_CONFIG.entity.narrativeFloor +
+        (1 - ELICINE_RANKING_CONFIG.entity.narrativeFloor) * clamp(narrativeScore)))
     : confidence;
 }
 
@@ -251,17 +269,38 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const data = candidate.constraintData || {};
   const text = candidateText(candidate);
   const semanticTerms = [...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)];
+  const conceptGenres = array(intent.genres);
   const expansion = expandSemanticTerms(intent);
-  const lexicalSemantic = termCoverage(semanticTerms,
-    [...array(data.themes), ...array(data.moods), ...array(data.keywords)], text);
-  const expandedSemantic = termCoverage(expansion.addedTerms,
-    [...array(data.themes), ...array(data.moods), ...array(data.keywords)], text);
+  const structuredConcepts = [...array(data.themes), ...array(data.moods), ...array(data.keywords)];
+  const personTokens = resolvedPersonTokens(resolvedContext);
+  const narrativeTerms = personTokens.size ? semanticTerms.filter(term =>
+    [...tokens(term)].some(token => !personTokens.has(token))) : semanticTerms;
+  const lexicalSemantic = termCoverage(semanticTerms, structuredConcepts, text, { genres: conceptGenres });
+  const expandedSemantic = termCoverage(expansion.addedTerms, structuredConcepts, text);
   const semanticScore = Math.max(sourceSimilarity(candidate), lexicalSemantic, expandedSemantic);
+  const discriminatingScore = termCoverage(narrativeTerms, structuredConcepts, text, { genres: conceptGenres });
+  // A declared genre is context, not proof: it names the family the user asked
+  // about, never the work itself. When the query describes the work, a
+  // candidate carried only by that broad family - and by none of the described
+  // elements - must not rival the candidate that answers them, so the generic
+  // credit is earned in proportion to the discriminating coverage. A query that
+  // only restates its own genre, or carries no narrative concept at all, keeps
+  // the historical behaviour exactly.
+  const describesNarrative = narrativeTerms.some(term =>
+    conceptSpecificity(term, { genres: conceptGenres }) > CONCEPT_WEIGHTS.genreRestatement);
+  const genericCredit = describesNarrative ? discriminatingScore : 1;
   const components = {
-    semanticScore: round(semanticScore), genreScore: round(genreOverlap(candidate, intent)),
-    themeScore: round(termCoverage(intent.themes, data.themes, text)),
-    moodScore: round(termCoverage(intent.moods, data.moods, text)),
-    keywordScore: round(termCoverage(intent.keywords, data.keywords, text)),
+    semanticScore: round(semanticScore),
+    genreScore: round(genreOverlap(candidate, intent) * genericCredit),
+    themeScore: round(termCoverage(intent.themes, data.themes, text, { genres: conceptGenres })),
+    moodScore: round(termCoverage(intent.moods, data.moods, text, { genres: conceptGenres })),
+    keywordScore: round(termCoverage(intent.keywords, data.keywords, text, { genres: conceptGenres })),
+    // How much of the described intent the candidate really answers, from its own
+    // metadata only: no retrieval source, no one-hop expansion, and never the
+    // person's own name, which is an entity rather than narrative evidence. A
+    // credit for the person is combined with this evidence, not with the raw
+    // retrieval score.
+    discriminatingScore: round(discriminatingScore),
     referenceScore: 0, entityScore: 0,
     titleScore: round(titleScore(candidate, intent, resolvedContext)),
     yearScore: round(boundedYearScore(candidate, intent)),
@@ -273,7 +312,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     sourceConfidenceScore: round(sourceConfidenceScore(candidate))
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
-  components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.semanticScore));
+  components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.discriminatingScore));
   // The work the query names is the answer: it must not be pushed under its own
   // recommendations by the anti-monopoly rule that keeps a style seed out of the
   // grid. A comparison seed keeps its zero, a requested work earns the title.

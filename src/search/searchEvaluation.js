@@ -1,4 +1,5 @@
 import { createCanonicalIntent } from '../types/canonicalIntent.runtime.js';
+import { conceptCoverage } from './semanticLexicon.js';
 import { extractReliableSemanticExclusions } from './strictConstraintFilter.js';
 import { extractFallbackIntentSignals, extractReferenceTitleQueries } from './fallbackIntentSignals.js';
 
@@ -132,6 +133,93 @@ export function evaluateSearchCorpus(runs = []) {
     irrelevantPoolOverlapRate: Number(average(overlaps).toFixed(4)),
     emptyResultRate: Number((runs.length ? emptyCount / runs.length : 0).toFixed(4))
   };
+}
+
+const asList = value => Array.isArray(value) ? value : value == null ? [] : [value];
+const label = value => typeof value === 'object' ? value?.name ?? value?.title ?? '' : value;
+
+/**
+ * The text a candidate really offers to a concept comparison: its own title and
+ * metadata, never a retrieval source and never a score. The offline metrics and
+ * the ranking therefore measure the same thing on the same words.
+ */
+export function candidateSemanticText(candidate = {}) {
+  const internal = candidate.constraintData || {};
+  const metadata = candidate.metadata || {};
+  return [candidate.title, candidate.name, candidate.originalTitle, candidate.original_title,
+    candidate.original_name, metadata.overview, candidate.overview, internal.overview,
+    ...asList(candidate.genres), ...asList(candidate.keywords), ...asList(candidate.themes),
+    ...asList(candidate.moods), ...asList(internal.genres), ...asList(internal.keywords),
+    ...asList(internal.themes), ...asList(internal.moods)].map(label).filter(Boolean).join(' ');
+}
+
+const ratio = (value, total) => Number((total ? value / total : 0).toFixed(4));
+
+/**
+ * Ranking-quality metrics, additive to `evaluateSearchCorpus`, whose historical
+ * shape is preserved for its existing callers. They answer a different set of
+ * questions: how high the expected work actually lands, how much of the
+ * displayed grid is off topic, and how much of the described intent the results
+ * really cover. Everything is reported per media type as well as overall, so a
+ * film-side improvement can never hide a series-side regression.
+ */
+export function evaluateSearchQuality(runs = [], { coverageThreshold = 0.5 } = {}) {
+  const buckets = new Map();
+  const bucket = type => {
+    if (!buckets.has(type)) buckets.set(type, { caseCount: 0, top1: 0, top3: 0, reciprocalRank: 0,
+      reciprocalCases: 0, violations: 0, results: 0, coverageTotal: 0, coverageSamples: 0, offTopic: 0 });
+    return buckets.get(type);
+  };
+  for (const run of runs) {
+    const results = Array.isArray(run.results) ? run.results : [];
+    const expected = run.expected || {};
+    const mediaType = expected.mediaType || run.mediaType || results[0]?.mediaType || null;
+    const concepts = asList(expected.concepts).map(label).filter(Boolean);
+    const required = new Set(asList(expected.mustInclude).map(candidateIdentity).filter(Boolean));
+    const forbidden = new Set(asList(expected.mustExclude).map(candidateIdentity).filter(Boolean));
+    for (const type of mediaType ? ['all', mediaType] : ['all']) {
+      const stats = bucket(type);
+      const identities = results.map(candidateIdentity);
+      stats.caseCount += 1;
+      stats.results += results.length;
+      if (required.size) {
+        if (identities[0] && required.has(identities[0])) stats.top1 += 1;
+        if (identities.slice(0, 3).some(identity => required.has(identity))) stats.top3 += 1;
+        const rank = identities.findIndex(identity => required.has(identity));
+        if (rank >= 0) stats.reciprocalRank += 1 / (rank + 1);
+        stats.reciprocalCases += 1;
+      }
+      for (const result of results) {
+        const identity = candidateIdentity(result);
+        if (forbidden.has(identity) || (expected.mediaType && result.mediaType !== expected.mediaType)) {
+          stats.violations += 1;
+        }
+        if (!concepts.length) continue;
+        const coverage = conceptCoverage(candidateSemanticText(result), concepts);
+        stats.coverageTotal += coverage;
+        stats.coverageSamples += 1;
+        if (coverage < coverageThreshold && !required.has(identity)) stats.offTopic += 1;
+      }
+    }
+  }
+  const summarize = type => {
+    const stats = buckets.get(type);
+    if (!stats) return { caseCount: 0, top1: 0, top3: 0, mrr: 0, constraintViolationRate: 0,
+      offTopicRate: 0, averageSemanticCoverage: 0, averageResultCount: 0 };
+    return {
+      caseCount: stats.caseCount,
+      top1: ratio(stats.top1, stats.reciprocalCases),
+      top3: ratio(stats.top3, stats.reciprocalCases),
+      mrr: ratio(stats.reciprocalRank, stats.reciprocalCases),
+      constraintViolationRate: ratio(stats.violations, stats.results),
+      offTopicRate: ratio(stats.offTopic, stats.coverageSamples),
+      averageSemanticCoverage: ratio(stats.coverageTotal, stats.coverageSamples),
+      averageResultCount: ratio(stats.results, stats.caseCount)
+    };
+  };
+  const byMediaType = {};
+  for (const type of ['movie', 'tv']) if (buckets.has(type)) byMediaType[type] = summarize(type);
+  return { overall: summarize('all'), byMediaType };
 }
 
 /** Deterministic, local normalization used only by the manual diagnostic CLI. */

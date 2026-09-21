@@ -59,8 +59,9 @@ export function createSemanticIntentContext(input = {}) {
       SEMANTIC_CONTEXT_LIMITS.motifs),
     styleReferences: bounded(source.styleReferences ?? source.style_references,
       SEMANTIC_CONTEXT_LIMITS.references),
-    // Only allowlisted concepts are usable by the strict filter; unknown labels
-    // would create silent no-op constraints, so they are dropped here.
+    // Known concepts map onto their exclusion family; unknown ones keep their
+    // own bounded wording and are confirmed later against the candidate
+    // metadata, so an exclusion the provider phrased differently is not lost.
     negativeConcepts: normalizeSemanticExclusions(negativeTerms),
     intentType: normalizeSemanticIntentType(source.intentType ?? source.intent_type ?? source.intent)
   };

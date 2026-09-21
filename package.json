@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "search:diagnose": "node scripts/search-diagnose.mjs"
+    "search:diagnose": "node scripts/search-diagnose.mjs",
+    "search:benchmark": "node --import tsx scripts/search-benchmark.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
