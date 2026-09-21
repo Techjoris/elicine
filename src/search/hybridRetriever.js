@@ -21,7 +21,9 @@ export function createRetrievalTelemetry() {
     rejectedMediaType: 0, rejectedYear: 0, rejectedGenre: 0, rejectedTitle: 0,
     rejectedSemanticExclusion: 0,
     rankingAttempted: false, rankingCandidateCount: 0, rankingDurationMs: 0,
-    rankingTopScore: 0, rankingAverageScore: 0 };
+    rankingTopScore: 0, rankingAverageScore: 0,
+    diversificationAttempted: false, diversificationCandidateCount: 0,
+    diversificationReorderedCount: 0, diversificationDurationMs: 0 };
 }
 
 export async function withSourceTimeout(work, timeoutMs = RETRIEVAL_LIMITS.sourceTimeoutMs) {

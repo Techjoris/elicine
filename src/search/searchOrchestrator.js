@@ -6,6 +6,7 @@ import { createResolvedIntentContext } from './resolvedIntentContext.js';
 import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
 import { filterStrictCandidates } from './strictConstraintFilter.js';
 import { rankSearchCandidates } from './searchRanker.js';
+import { diversifyRankedCandidates } from './resultDiversifier.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -113,7 +114,9 @@ export async function orchestrateCandidateRetrieval({ orchestration, services, c
     const admissible = filterStrictCandidates(candidates, orchestration.canonicalIntent, {
       telemetry: context.telemetry, env
     }).candidates;
-    return rankSearchCandidates(admissible, orchestration.canonicalIntent,
+    const ranked = rankSearchCandidates(admissible, orchestration.canonicalIntent,
+      orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
+    return diversifyRankedCandidates(ranked, orchestration.canonicalIntent,
       orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
   } catch {
     // Programming/adapter failure: keep the existing global fallback and quota path.

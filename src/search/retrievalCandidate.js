@@ -11,6 +11,7 @@
  * @property {string[]} sources
  * @property {Object[]} retrievalSignals Internal provenance, NOT final scores.
  * @property {Object} constraintData Internal structured facts, never exposed to HTTP.
+ * @property {Object} diversityData Internal collection/director facts, never exposed to HTTP.
  * @property {Object} metadata Allowlisted display/ranking fields, never raw provider data.
  */
 export function candidateMediaType(row, hint = null) {
@@ -40,6 +41,11 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
     ...(Array.isArray(row.production_countries) ? row.production_countries.map(country => country?.iso_3166_1) : [])]
     .filter(Boolean).map(country => String(country).toUpperCase());
   const runtime = Number(row.runtime ?? (Array.isArray(row.episode_run_time) ? row.episode_run_time[0] : null));
+  const collection = row.belongs_to_collection || row.collection || null;
+  const directorEntries = [row.director, ...(Array.isArray(row.directors) ? row.directors : []),
+    ...(Array.isArray(row.crew) ? row.crew.filter(person => person?.job === 'Director') : [])].filter(Boolean);
+  const directorIds = directorEntries.map(person => Number(typeof person === 'object' ? person?.id : null))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
   return {
     tmdbId, mediaType, title,
     originalTitle: row.originalTitle || row.original_title || row.original_name || title,
@@ -52,6 +58,11 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
       countries: [...new Set(countries)], adult: typeof row.adult === 'boolean' ? row.adult : null,
       genres: names(row.genres), keywords: names(row.keywords), themes: names(row.themes), moods: names(row.moods),
       overview: row.overview || ''
+    },
+    diversityData: {
+      collectionId: row.collectionId ?? row.collection_id ?? collection?.id ?? null,
+      collectionName: row.collectionName || row.collection_name || collection?.name || null,
+      directorIds: [...new Set(directorIds)], directorNames: names(directorEntries)
     },
     metadata: {
       overview: row.overview || '', poster_path: row.poster_path || null,
@@ -75,6 +86,9 @@ export function mergeCandidates(candidates, limit = 50) {
         constraintData: { ...candidate.constraintData, countries: [...candidate.constraintData.countries],
           genres: [...candidate.constraintData.genres], keywords: [...candidate.constraintData.keywords],
           themes: [...candidate.constraintData.themes], moods: [...candidate.constraintData.moods] },
+        diversityData: { ...candidate.diversityData,
+          directorIds: [...(candidate.diversityData?.directorIds || [])],
+          directorNames: [...(candidate.diversityData?.directorNames || [])] },
         sources: [...candidate.sources], retrievalSignals: [...candidate.retrievalSignals] });
     } else {
       previous.sources = [...new Set([...previous.sources, ...candidate.sources])];
@@ -87,6 +101,13 @@ export function mergeCandidates(candidates, limit = 50) {
       }
       for (const field of ['runtime', 'adult']) previous.constraintData[field] ??= candidate.constraintData[field];
       previous.constraintData.overview ||= candidate.constraintData.overview;
+      previous.diversityData.collectionId ??= candidate.diversityData?.collectionId;
+      previous.diversityData.collectionName ||= candidate.diversityData?.collectionName;
+      for (const field of ['directorIds', 'directorNames']) {
+        previous.diversityData[field] = [...new Set([
+          ...(previous.diversityData[field] || []), ...(candidate.diversityData?.[field] || [])
+        ])];
+      }
     }
   }
   // Lexicographic priority only; no semantic/popularity/rating score is computed.

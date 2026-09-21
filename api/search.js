@@ -7,6 +7,7 @@ import { createEmbeddingClient, createQueryEmbeddingService, createSupabaseVecto
   isVectorRetrievalEnabled } from '../src/search/vectorRetrieval.js';
 import { filterStrictCandidates } from '../src/search/strictConstraintFilter.js';
 import { rankSearchCandidates, toElicineRankedResult } from '../src/search/searchRanker.js';
+import { diversifyRankedCandidates } from '../src/search/resultDiversifier.js';
 import { resolveKnownTitles } from '../src/search/entityResolver.js';
 import {
   addSearchTelemetryPath,
@@ -3201,7 +3202,9 @@ export default async function handler(req, res) {
           if (useHybrid && usingElicineRanking) {
             const fallbackCandidates = admissibleFallback
               .map(movie => toRetrievalCandidate(movie, 'fallback')).filter(Boolean);
-            resolvedMovies = rankSearchCandidates(fallbackCandidates, orchestration.canonicalIntent,
+            const rankedFallback = rankSearchCandidates(fallbackCandidates, orchestration.canonicalIntent,
+              orchestration.resolvedIntentContext, { telemetry });
+            resolvedMovies = diversifyRankedCandidates(rankedFallback, orchestration.canonicalIntent,
               orchestration.resolvedIntentContext, { telemetry }).slice(0, 6).map(candidate =>
               toElicineRankedResult(candidate, 'Recommandations Éliciné pour votre atmosphère'));
           } else {
