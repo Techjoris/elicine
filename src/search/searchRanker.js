@@ -20,7 +20,16 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
     tmdb_search: 0.58, fallback: 0.45, legacy: 0.40
   }),
   sourceMultiBonus: 0.05,
-  sourceMultiBonusCap: 0.15
+  sourceMultiBonusCap: 0.15,
+  // Multi-signal convergence: a bounded share of the final score reserved for
+  // candidates supported by several independent strong signals instead of a
+  // single generic genre or keyword.
+  convergenceWeight: 0.095,
+  convergence: Object.freeze({ strongSignalThreshold: 0.6, targetSignalCount: 4, breadthShare: 0.2 }),
+  // Public match curve. The displayed percentage must be credible: a clearly
+  // stronger match displays a clearly stronger score. Pure calibration of the
+  // computed score, never a per-title value.
+  publicMatch: Object.freeze({ floor: 22, spread: 78, saturation: 0.8, gamma: 1.15 })
 });
 
 export function isElicineRankingEnabled(env = process.env) {
@@ -96,6 +105,33 @@ function sourceConfidenceScore(candidate) {
   const bonus = Math.min(ELICINE_RANKING_CONFIG.sourceMultiBonusCap,
     Math.max(0, sources.length - 1) * ELICINE_RANKING_CONFIG.sourceMultiBonus);
   return clamp(base * 0.85 + bonus);
+}
+
+/**
+ * Convergence: how many independent strong signals agree on this candidate,
+ * plus how many distinct retrieval sources surfaced it. Two candidates with
+ * comparable coverage but different convergence must not display the same
+ * match, otherwise the grid shows an unexplained plateau.
+ */
+function convergenceScore(components, candidate) {
+  const { strongSignalThreshold, targetSignalCount, breadthShare } = ELICINE_RANKING_CONFIG.convergence;
+  const evidence = [components.entityScore, components.referenceScore, components.titleScore,
+    components.themeScore, components.keywordScore, components.moodScore, components.genreScore,
+    components.semanticScore];
+  const satisfied = evidence.filter(value => value >= strongSignalThreshold).length;
+  const breadth = clamp(Math.max(0, (candidate.sources || []).length - 1) / 2);
+  return clamp(clamp(satisfied / targetSignalCount) * (1 - breadthShare) + breadth * breadthShare);
+}
+
+/**
+ * Credible 0-100 public score for one candidate. Monotone in the computed
+ * score, so the displayed grid never contradicts the ranking order, and
+ * purely calibrated: no per-title value is ever hardcoded.
+ */
+export function publicMatchScore(finalScore) {
+  const { floor, spread, saturation, gamma } = ELICINE_RANKING_CONFIG.publicMatch;
+  const normalized = clamp(clamp(finalScore) / saturation) ** gamma;
+  return Math.round(Math.min(100, Math.max(0, floor + spread * normalized)));
 }
 
 function referenceScore(candidate, resolvedContext, semanticScore) {
@@ -199,6 +235,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
   components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.semanticScore));
+  components.convergenceScore = round(convergenceScore(components, candidate));
 
   const active = {
     semanticScore: semanticTerms.length > 0 || (resolvedContext?.resolvedTitles || []).length > 0,
@@ -216,7 +253,13 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   };
   const weighted = Object.entries(ELICINE_RANKING_CONFIG.weights).filter(([name]) => active[name]);
   const weightTotal = weighted.reduce((sum, [, weight]) => sum + weight, 0);
-  const finalScore = weightTotal ? weighted.reduce((sum, [name, weight]) => sum + components[name] * weight, 0) / weightTotal : 0;
+  const coverageScore = weightTotal
+    ? weighted.reduce((sum, [name, weight]) => sum + components[name] * weight, 0) / weightTotal : 0;
+  // The documented weights stay untouched (they sum to 1): convergence is
+  // blended in as an explicit share so the historical signal proportions are
+  // preserved while genuine multi-signal agreement is rewarded.
+  const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight);
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
@@ -224,7 +267,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const intentScore = intentWeight ? intentWeighted.reduce((sum, [name, weight]) =>
     sum + components[name] * weight, 0) / intentWeight : 0;
   return { ...components, intentScore: round(intentScore), finalScore: round(finalScore),
-    matchScore: Math.round(clamp(finalScore) * 100) };
+    matchScore: publicMatchScore(finalScore) };
 }
 
 function compareRanked(left, right) {

@@ -12,6 +12,7 @@ import { resolveKnownPeople, resolveKnownTitles } from '../src/search/entityReso
 import { extractPersonQueries } from '../src/search/fallbackIntentSignals.js';
 import { FALLBACK_REASONS, recordFallback } from '../src/search/fallbackPolicy.js';
 import { interpretSearchQuery, SEMANTIC_INTERPRETER_PATHS } from '../src/search/semanticInterpreter.js';
+import { applyResultBudget } from '../src/search/resultBudget.js';
 import {
   addSearchTelemetryPath,
   createSearchTelemetry,
@@ -2594,6 +2595,9 @@ export default async function handler(req, res) {
       });
       const heuristicFallbackUsed = interpretation.path === SEMANTIC_INTERPRETER_PATHS.HEURISTIC_FALLBACK;
       const llmResult = interpretation.interpreted;
+      // Semantic context carries people, concepts, motifs, style references and
+      // negative concepts; the result budget reads its intent type.
+      const semanticIntentContext = interpretation.semanticContext || null;
       recordSearchInterpreter(telemetry, {
         path: interpretation.path,
         providerId: interpretation.providerId,
@@ -2716,7 +2720,7 @@ export default async function handler(req, res) {
           vector: vectorEnabled ? createSupabaseVectorSource({ client: supabaseServer, queryEmbedding, telemetry }) : null,
           legacy: options => retrieveLegacyHints(candidateList, orchestration.resolvedIntentContext, retrievalClient, options)
         },
-        context: { telemetry, tmdbResolutionCache }
+        context: { telemetry, tmdbResolutionCache, semanticIntentContext }
       });
       const useHybrid = hybridPool !== null;
       const usingElicineRanking = useHybrid && telemetry.rankingAttempted;
@@ -2793,6 +2797,11 @@ export default async function handler(req, res) {
             source: 'direct_tmdb_media_type'
           });
         }
+
+        // Same result budget as the canonical pipeline: an identified work is
+        // not padded with every other title the model happened to suggest.
+        directTmdbMovies = applyResultBudget(directTmdbMovies, orchestration.canonicalIntent || {},
+          orchestration.resolvedIntentContext, { semanticIntentContext, telemetry });
 
         if (directTmdbMovies.length > 0 && !isPro && ipHash) {
           incrementMemoryDailyQuota(ipHash, todayDate);

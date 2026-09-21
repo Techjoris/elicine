@@ -249,8 +249,14 @@ test('comparison grammar resolves Shutter Island and prioritizes reference-near 
   });
   const nearIds = new Set([2001, 2002, 2003]);
   assert.ok(results.slice(0, 3).every(candidate => nearIds.has(candidate.tmdbId)));
-  assert.ok(results.findIndex(candidate => candidate.tmdbId === 11324) >= 3);
-  assert.ok(offTopic.every(item => results.findIndex(candidate => candidate.tmdbId === item.id) >= 3));
+  const topIds = results.slice(0, 3).map(candidate => candidate.tmdbId);
+  // The result budget (Phase 14) drops the relevance tail instead of padding
+  // the grid, so neither the reference seed nor the off-topic popular titles
+  // are kept at the bottom any more. What still matters is the original
+  // contract: none of them may ever climb into the top three.
+  assert.ok(!topIds.includes(11324));
+  assert.ok(offTopic.every(item => !topIds.includes(item.id)));
+  assert.ok(results.every(candidate => nearIds.has(candidate.tmdbId)));
   assert.ok(trace.sources.tmdb_similar.topIds.includes(2001));
   assert.ok(trace.sources.tmdb_recommendations.topIds.includes(2002));
   assert.ok(trace.sources.supabase_vector.topIds.includes(2003));

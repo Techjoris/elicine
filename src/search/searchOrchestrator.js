@@ -7,6 +7,7 @@ import { hybridRetrieve, isHybridRetrievalEnabled } from './hybridRetriever.js';
 import { filterStrictCandidates } from './strictConstraintFilter.js';
 import { rankSearchCandidates } from './searchRanker.js';
 import { diversifyRankedCandidates } from './resultDiversifier.js';
+import { applyResultBudget } from './resultBudget.js';
 import { FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 import { summarizeEvaluationCandidates } from './searchEvaluation.js';
 
@@ -116,7 +117,8 @@ export async function orchestrateCandidateRetrieval({
   context,
   env = process.env,
   rankCandidates = rankSearchCandidates,
-  diversifyCandidates = diversifyRankedCandidates
+  diversifyCandidates = diversifyRankedCandidates,
+  budgetCandidates = applyResultBudget
 }) {
   if (!isHybridRetrievalEnabled(env) || !orchestration.canonicalIntent) return null;
   const evaluationTrace = context.evaluationTrace || null;
@@ -156,11 +158,17 @@ export async function orchestrateCandidateRetrieval({
     if (evaluationTrace) evaluationTrace.scoresPhase8 = summarizeEvaluationCandidates(ranked);
     const diversified = diversifyCandidates(ranked, orchestration.canonicalIntent,
       orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
-    if (evaluationTrace) {
-      evaluationTrace.orderAfterDiversification = summarizeEvaluationCandidates(diversified);
-      evaluationTrace.finalResults = summarizeEvaluationCandidates(diversified);
-    }
-    return diversified;
+    if (evaluationTrace) evaluationTrace.orderAfterDiversification = summarizeEvaluationCandidates(diversified);
+    // Quality before quantity: the grid stops where relevance stops instead of
+    // filling a fixed number of slots.
+    const budgeted = budgetCandidates(diversified, orchestration.canonicalIntent,
+      orchestration.resolvedIntentContext, {
+        semanticIntentContext: context.semanticIntentContext || null,
+        telemetry: context.telemetry,
+        env
+      });
+    if (evaluationTrace) evaluationTrace.finalResults = summarizeEvaluationCandidates(budgeted);
+    return budgeted;
   } catch {
     Object.assign(context.telemetry, { hybridRetrievalAttempted: true, hybridRetrievalSucceeded: false,
       retrievalSourceErrorCount: (context.telemetry.retrievalSourceErrorCount || 0) + 1,

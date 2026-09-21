@@ -6,7 +6,7 @@ import { mergeCandidates, toLegacyRankingCandidate, toRetrievalCandidate } from 
 import { orchestrateCandidateRetrieval } from '../../src/search/searchOrchestrator.js';
 import {
   ELICINE_RANKING_CONFIG, ELICINE_RANKING_FLAG, isElicineRankingEnabled,
-  rankSearchCandidates, scoreSearchCandidate, toElicineRankedResult
+  publicMatchScore, rankSearchCandidates, scoreSearchCandidate, toElicineRankedResult
 } from '../../src/search/searchRanker.js';
 import { extractReliableSemanticExclusions, filterStrictCandidates } from '../../src/search/strictConstraintFilter.js';
 import { tmdbGenreIds } from '../../src/search/tmdbRetrievalParams.js';
@@ -53,7 +53,10 @@ test('all components and final score stay in 0..1 and public match derives from 
     if (name === 'matchScore') continue;
     assert.ok(value >= 0 && value <= 1, `${name}=${value}`);
   }
-  assert.equal(score.matchScore, Math.round(score.finalScore * 100));
+  // The public percentage is a calibrated curve over finalScore (floor,
+  // saturation), not a raw percentage, so it stays monotone without plateauing
+  // on a linear scale.
+  assert.equal(score.matchScore, publicMatchScore(score.finalScore));
   const publicResult = toElicineRankedResult(rankSearchCandidates([item], canonical, resolved, { enabled: true })[0]);
   assert.equal(publicResult.match_rate, score.matchScore);
   for (const field of ['ranking', 'sources', 'retrievalSignals', 'constraintData']) assert.equal(publicResult[field], undefined);
