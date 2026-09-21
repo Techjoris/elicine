@@ -8,6 +8,7 @@ import { filterStrictCandidates } from './strictConstraintFilter.js';
 import { rankSearchCandidates } from './searchRanker.js';
 import { diversifyRankedCandidates } from './resultDiversifier.js';
 import { FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
+import { summarizeEvaluationCandidates } from './searchEvaluation.js';
 
 export const CANONICAL_SEARCH_ENGINE_FLAG = 'CANONICAL_SEARCH_ENGINE_ENABLED';
 
@@ -116,6 +117,11 @@ export async function orchestrateCandidateRetrieval({
   diversifyCandidates = diversifyRankedCandidates
 }) {
   if (!isHybridRetrievalEnabled(env) || !orchestration.canonicalIntent) return null;
+  const evaluationTrace = context.evaluationTrace || null;
+  if (evaluationTrace) {
+    evaluationTrace.canonicalIntent = structuredClone(orchestration.canonicalIntent);
+    evaluationTrace.resolvedIntentContext = structuredClone(orchestration.resolvedIntentContext || {});
+  }
   try {
     const candidates = await hybridRetrieve({ intent: orchestration.canonicalIntent,
       resolvedContext: orchestration.resolvedIntentContext, services, context });
@@ -128,6 +134,7 @@ export async function orchestrateCandidateRetrieval({
     const admissible = filterStrictCandidates(candidates, orchestration.canonicalIntent, {
       telemetry: context.telemetry, env
     }).candidates;
+    if (evaluationTrace) evaluationTrace.poolAfterStrictFilter = summarizeEvaluationCandidates(admissible);
     if (admissible.length === 0) {
       recordFallback(context.telemetry, { reason: FALLBACK_REASONS.NO_RELEVANT_RESULTS, source: 'strict_filter' });
       return [];
@@ -144,8 +151,14 @@ export async function orchestrateCandidateRetrieval({
       recordFallback(context.telemetry, { reason: FALLBACK_REASONS.RANKING_ERROR, source: 'ranking' });
       return [];
     }
-    return diversifyCandidates(ranked, orchestration.canonicalIntent,
+    if (evaluationTrace) evaluationTrace.scoresPhase8 = summarizeEvaluationCandidates(ranked);
+    const diversified = diversifyCandidates(ranked, orchestration.canonicalIntent,
       orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
+    if (evaluationTrace) {
+      evaluationTrace.orderAfterDiversification = summarizeEvaluationCandidates(diversified);
+      evaluationTrace.finalResults = summarizeEvaluationCandidates(diversified);
+    }
+    return diversified;
   } catch {
     Object.assign(context.telemetry, { hybridRetrievalAttempted: true, hybridRetrievalSucceeded: false,
       retrievalSourceErrorCount: (context.telemetry.retrievalSourceErrorCount || 0) + 1,

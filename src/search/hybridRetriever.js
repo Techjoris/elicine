@@ -2,6 +2,7 @@ import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
 import { discoverParams, hasDiscoverConstraints, keywordTerms, normalizeTerm, reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 import { createFallbackTelemetry, failedSourceLabel, FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
+import { recordEvaluationSource, summarizeEvaluationCandidates } from './searchEvaluation.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
@@ -52,8 +53,14 @@ const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retri
 /** Pure retrieval orchestration: no React, raw LLM, ranking, quota or global state. */
 export async function hybridRetrieve({ intent, resolvedContext = {}, services = {}, context = {} }) {
   const telemetry = context.telemetry || {};
+  const evaluationTrace = context.evaluationTrace || null;
   const metrics = { ...createRetrievalTelemetry(), hybridRetrievalAttempted: true };
   const semanticExpansion = expandSemanticTerms(intent, RETRIEVAL_LIMITS.terms);
+  if (evaluationTrace) evaluationTrace.semanticExpansion = {
+    sourceTerms: [...semanticExpansion.sourceTerms],
+    addedTerms: [...semanticExpansion.addedTerms],
+    applied: semanticExpansion.applied
+  };
   metrics.semanticExpansionApplied = semanticExpansion.applied;
   metrics.semanticExpansionTermCount = semanticExpansion.addedTerms.length;
   const started = Date.now();
@@ -61,18 +68,25 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const errors = [];
   const tasks = [];
   const source = (name, work, hint = null, signals = {}) => tasks.push((async () => {
+    const sourceStarted = Date.now();
     try {
       const rows = await withSourceTimeout(work, timeout);
-      const candidates = (Array.isArray(rows) ? rows : []).slice(0, RETRIEVAL_LIMITS.sourceResults)
+      const converted = (Array.isArray(rows) ? rows : []).slice(0, RETRIEVAL_LIMITS.sourceResults)
         .map((row, index) => toRetrievalCandidate(row, name, { mediaType: hint, sourceRank: index + 1,
           ...(Number.isFinite(Number(row?.similarity)) ? { sourceScore: Number(row.similarity) } : {}), ...signals }))
-        .filter(c => c && (!intent.mediaType || c.mediaType === intent.mediaType));
+        .filter(Boolean);
+      const candidates = converted.filter(c => !intent.mediaType || c.mediaType === intent.mediaType);
       for (const candidate of candidates) candidate.retrievalSignals[0].matchedGenreCount =
         candidate.genreIds.filter(id => tmdbGenreIds(intent.genres, candidate.mediaType).includes(id)).length;
       metrics[counter[name]] += candidates.length;
+      recordEvaluationSource(evaluationTrace, name, { candidates: converted,
+        durationMs: Date.now() - sourceStarted, expectedMediaType: intent.mediaType });
       return candidates;
     } catch (error) {
-      errors.push({ source: name, code: error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED' });
+      const code = error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED';
+      errors.push({ source: name, code });
+      recordEvaluationSource(evaluationTrace, name, { durationMs: Date.now() - sourceStarted,
+        error: code, expectedMediaType: intent.mediaType });
       return [];
     }
   })());
@@ -113,6 +127,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, 3);
   })();
   const keywordIds = await keywordsTask;
+  if (evaluationTrace) evaluationTrace.semanticExpansion.resolvedKeywordIds = [...keywordIds];
   metrics.semanticKeywordResolvedCount = keywordIds.length;
   if (services.discover) for (const type of intent.mediaType ? [intent.mediaType] : ['movie', 'tv']) {
     if (hasDiscoverConstraints(intent, type, keywordIds))
@@ -121,6 +136,10 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const settled = await Promise.allSettled(tasks);
   const candidates = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
   const merged = mergeCandidates(candidates);
+  if (evaluationTrace) {
+    evaluationTrace.poolBeforeDeduplication = summarizeEvaluationCandidates(candidates);
+    evaluationTrace.poolAfterDeduplication = summarizeEvaluationCandidates(merged.candidates);
+  }
   for (const field of ['vectorRetrievalAttempted', 'vectorRetrievalSucceeded',
     'vectorRetrievalCandidateCount', 'vectorRetrievalDurationMs', 'vectorRetrievalError', 'embeddingDurationMs']) {
     if (telemetry[field] !== undefined) metrics[field] = telemetry[field];
