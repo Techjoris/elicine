@@ -79,7 +79,7 @@ for (const entry of corpus) test(`retrieval quality ${entry.id}`, async () => {
   }
   if (entry.id === critical.id) {
     assert.equal(entry.query, critical.query); assert.deepEqual(entry.themes, critical.themes);
-    assert.equal(discover.params.with_keywords, '100|101|102');
+    assert.equal(discover.params.with_keywords, '100,101');
     assert.equal(hybrid.candidates.filter(c => c.mediaType === 'movie').length, 0);
     assert.equal(hybrid.candidates.filter(c => c.mediaType === 'tv').length, 2);
     assert.ok(hybrid.candidates.every(c => !forbidden.includes(c.title)));

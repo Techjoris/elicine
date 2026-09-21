@@ -1,0 +1,1497 @@
+{
+  "capturedAt": "2026-09-21T20:16:30.217Z",
+  "baselineRevision": "1211396dd677f8fdc5fbb05f01f21dbcb77f2e07",
+  "scope": "Frozen manually authored semantic intents; live TMDB responses; no lexical/vector provider; no LLM inference in benchmark",
+  "summary": {
+    "before/development/all": {
+      "cases": 6,
+      "candidateRecallAt10": 0.6666666666666666,
+      "candidateRecallAt20": 0.6666666666666666,
+      "averagePoolSize": 26.5
+    },
+    "before/development/movie": {
+      "cases": 3,
+      "candidateRecallAt10": 0.6666666666666666,
+      "candidateRecallAt20": 0.6666666666666666,
+      "averagePoolSize": 33
+    },
+    "before/development/tv": {
+      "cases": 3,
+      "candidateRecallAt10": 0.6666666666666666,
+      "candidateRecallAt20": 0.6666666666666666,
+      "averagePoolSize": 20
+    },
+    "before/generalization/all": {
+      "cases": 16,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 21.5625
+    },
+    "before/generalization/movie": {
+      "cases": 8,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 24.75
+    },
+    "before/generalization/tv": {
+      "cases": 8,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 18.375
+    },
+    "after/development/all": {
+      "cases": 6,
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "averagePoolSize": 24.666666666666668
+    },
+    "after/development/movie": {
+      "cases": 3,
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "averagePoolSize": 26
+    },
+    "after/development/tv": {
+      "cases": 3,
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "averagePoolSize": 23.333333333333332
+    },
+    "after/generalization/all": {
+      "cases": 16,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 19.75
+    },
+    "after/generalization/movie": {
+      "cases": 8,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 22.625
+    },
+    "after/generalization/tv": {
+      "cases": 8,
+      "candidateRecallAt10": 0.75,
+      "candidateRecallAt20": 0.75,
+      "averagePoolSize": 16.875
+    }
+  },
+  "runs": [
+    {
+      "id": "truman",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "reality television",
+        "surveillance",
+        "artificial world"
+      ],
+      "motifs": [
+        "hidden cameras",
+        "escape from controlled life"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:37165",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 2,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "truman",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "reality television",
+        "surveillance",
+        "artificial world"
+      ],
+      "motifs": [
+        "hidden cameras",
+        "escape from controlled life"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:37165",
+          "position": 3
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 2,
+      "tmdbCalls": 9,
+      "errors": []
+    },
+    {
+      "id": "mindhunter",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "fbi",
+        "serial killer",
+        "criminal psychology"
+      ],
+      "motifs": [
+        "prison interviews",
+        "criminal profiling"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:67744",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "mindhunter",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "fbi",
+        "serial killer",
+        "criminal psychology"
+      ],
+      "motifs": [
+        "prison interviews",
+        "criminal profiling"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 27,
+      "expectedPositions": [
+        {
+          "identity": "tv:67744",
+          "position": 4
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 27
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "money-heist",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "heist",
+        "hostage",
+        "money printing"
+      ],
+      "motifs": [
+        "criminal mastermind",
+        "bank robbery"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:71446",
+          "position": 7
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "money-heist",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "heist",
+        "hostage",
+        "money printing"
+      ],
+      "motifs": [
+        "criminal mastermind",
+        "bank robbery"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 23,
+      "expectedPositions": [
+        {
+          "identity": "tv:71446",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 23
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "mr-robot",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "hacker",
+        "mental illness",
+        "corporation"
+      ],
+      "motifs": [
+        "anti capitalism",
+        "unreliable narrator"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:62560",
+          "position": 5
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 2,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "mr-robot",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "hacker",
+        "mental illness",
+        "corporation"
+      ],
+      "motifs": [
+        "anti capitalism",
+        "unreliable narrator"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:62560",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 2,
+      "resultCount": 3,
+      "tmdbCalls": 9,
+      "errors": []
+    },
+    {
+      "id": "benjamin",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "reverse aging",
+        "aging",
+        "love"
+      ],
+      "motifs": [
+        "growing younger",
+        "unusual life"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 40,
+      "expectedPositions": [
+        {
+          "identity": "movie:4922",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20,
+        "tmdb_person_credits": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 7,
+      "errors": []
+    },
+    {
+      "id": "benjamin",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "reverse aging",
+        "aging",
+        "love"
+      ],
+      "motifs": [
+        "growing younger",
+        "unusual life"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 24,
+      "expectedPositions": [
+        {
+          "identity": "movie:4922",
+          "position": 9
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 4,
+        "tmdb_person_credits": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 12,
+      "errors": []
+    },
+    {
+      "id": "salt",
+      "set": "development",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "cia",
+        "russian spy",
+        "fugitive"
+      ],
+      "motifs": [
+        "false accusation",
+        "double agent"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 39,
+      "expectedPositions": [
+        {
+          "identity": "movie:27576",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_person_credits": 20,
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 1,
+      "tmdbCalls": 7,
+      "errors": []
+    },
+    {
+      "id": "salt",
+      "set": "development",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "cia",
+        "russian spy",
+        "fugitive"
+      ],
+      "motifs": [
+        "false accusation",
+        "double agent"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 34,
+      "expectedPositions": [
+        {
+          "identity": "movie:27576",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_person_credits": 20,
+        "tmdb_discover": 15
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 12,
+      "errors": []
+    },
+    {
+      "id": "arrival",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "alien",
+        "linguist",
+        "nonlinear time"
+      ],
+      "motifs": [
+        "alien language",
+        "first contact"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:329865",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "arrival",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "alien",
+        "linguist",
+        "nonlinear time"
+      ],
+      "motifs": [
+        "alien language",
+        "first contact"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:329865",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "cast-away",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "island",
+        "survival",
+        "plane crash"
+      ],
+      "motifs": [
+        "isolation",
+        "imaginary companion"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 39,
+      "expectedPositions": [
+        {
+          "identity": "movie:8358",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_person_credits": 20,
+        "tmdb_discover": 20
+      },
+      "finalPosition": 3,
+      "resultCount": 3,
+      "tmdbCalls": 7,
+      "errors": []
+    },
+    {
+      "id": "cast-away",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "island",
+        "survival",
+        "plane crash"
+      ],
+      "motifs": [
+        "isolation",
+        "imaginary companion"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 41,
+      "expectedPositions": [
+        {
+          "identity": "movie:8358",
+          "position": 8
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 22,
+        "tmdb_person_credits": 20
+      },
+      "finalPosition": 3,
+      "resultCount": 3,
+      "tmdbCalls": 12,
+      "errors": []
+    },
+    {
+      "id": "oldboy-original",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "imprisonment",
+        "revenge",
+        "kidnapping"
+      ],
+      "motifs": [
+        "mysterious captor",
+        "long captivity"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:670",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "oldboy-original",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "imprisonment",
+        "revenge",
+        "kidnapping"
+      ],
+      "motifs": [
+        "mysterious captor",
+        "long captivity"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:670",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "eternal-sunshine",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "memory",
+        "erased memory",
+        "relationship"
+      ],
+      "motifs": [
+        "memory erasure",
+        "lost love"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:38",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 9,
+      "errors": []
+    },
+    {
+      "id": "eternal-sunshine",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "memory",
+        "erased memory",
+        "relationship"
+      ],
+      "motifs": [
+        "memory erasure",
+        "lost love"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:38",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "severance",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "memory",
+        "corporation",
+        "office"
+      ],
+      "motifs": [
+        "divided consciousness",
+        "work life separation"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 7,
+      "expectedPositions": [
+        {
+          "identity": "tv:95396",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 7
+      },
+      "finalPosition": 1,
+      "resultCount": 2,
+      "tmdbCalls": 8,
+      "errors": []
+    },
+    {
+      "id": "severance",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "memory",
+        "corporation",
+        "office"
+      ],
+      "motifs": [
+        "divided consciousness",
+        "work life separation"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 8,
+      "expectedPositions": [
+        {
+          "identity": "tv:95396",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 8
+      },
+      "finalPosition": 1,
+      "resultCount": 2,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "dark",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "time travel",
+        "missing child",
+        "family secret"
+      ],
+      "motifs": [
+        "time paradox",
+        "interconnected families"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:70523",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 9,
+      "errors": []
+    },
+    {
+      "id": "dark",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "time travel",
+        "missing child",
+        "family secret"
+      ],
+      "motifs": [
+        "time paradox",
+        "interconnected families"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:70523",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "silo",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "underground",
+        "dystopia",
+        "conspiracy"
+      ],
+      "motifs": [
+        "closed society",
+        "forbidden outside world"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:125988",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 2,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "silo",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "underground",
+        "dystopia",
+        "conspiracy"
+      ],
+      "motifs": [
+        "closed society",
+        "forbidden outside world"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:125988",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 2,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "prison-break",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "prison",
+        "escape",
+        "brother"
+      ],
+      "motifs": [
+        "prison escape",
+        "wrongful conviction"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:2288",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 7,
+      "errors": []
+    },
+    {
+      "id": "prison-break",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "prison",
+        "escape",
+        "brother"
+      ],
+      "motifs": [
+        "prison escape",
+        "wrongful conviction"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:2288",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 12,
+      "errors": []
+    },
+    {
+      "id": "gattaca",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "genetic engineering",
+        "identity theft",
+        "space travel"
+      ],
+      "motifs": [
+        "genetic discrimination",
+        "impersonation"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:782",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "gattaca",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "genetic engineering",
+        "identity theft",
+        "space travel"
+      ],
+      "motifs": [
+        "genetic discrimination",
+        "impersonation"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 13,
+      "expectedPositions": [
+        {
+          "identity": "movie:782",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 13
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 10,
+      "errors": []
+    },
+    {
+      "id": "prestige",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "magician",
+        "rivalry",
+        "obsession"
+      ],
+      "motifs": [
+        "stage illusion",
+        "secret identity"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 39,
+      "expectedPositions": [
+        {
+          "identity": "movie:1124",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_person_credits": 20,
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 7,
+      "errors": []
+    },
+    {
+      "id": "prestige",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "magician",
+        "rivalry",
+        "obsession"
+      ],
+      "motifs": [
+        "stage illusion",
+        "secret identity"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 27,
+      "expectedPositions": [
+        {
+          "identity": "movie:1124",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_person_credits": 20,
+        "tmdb_discover": 8
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 10,
+      "errors": []
+    },
+    {
+      "id": "memento",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "amnesia",
+        "revenge",
+        "murder"
+      ],
+      "motifs": [
+        "unreliable narrator",
+        "reverse chronology"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:77",
+          "position": 7
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "memento",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "amnesia",
+        "revenge",
+        "murder"
+      ],
+      "motifs": [
+        "unreliable narrator",
+        "reverse chronology"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:77",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 1,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "man-from-earth",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "immortality",
+        "professor",
+        "prehistory"
+      ],
+      "motifs": [
+        "philosophical discussion",
+        "single location"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:13363",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "man-from-earth",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "movie",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "immortality",
+        "professor",
+        "prehistory"
+      ],
+      "motifs": [
+        "philosophical discussion",
+        "single location"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "movie:13363",
+          "position": 2
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "counterpart",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "parallel world",
+        "espionage",
+        "double identity"
+      ],
+      "motifs": [
+        "parallel universe",
+        "secret agency"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:63686",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "counterpart",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "parallel world",
+        "espionage",
+        "double identity"
+      ],
+      "motifs": [
+        "parallel universe",
+        "secret agency"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:63686",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "the-oa",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "near death experience",
+        "blindness",
+        "disappearance"
+      ],
+      "motifs": [
+        "restored sight",
+        "alternate dimension"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:69061",
+          "position": 9
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "the-oa",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "near death experience",
+        "blindness",
+        "disappearance"
+      ],
+      "motifs": [
+        "restored sight",
+        "alternate dimension"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 6,
+      "expectedPositions": [
+        {
+          "identity": "tv:69061",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 6
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 9,
+      "errors": []
+    },
+    {
+      "id": "travelers",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "time travel",
+        "consciousness transfer",
+        "apocalypse"
+      ],
+      "motifs": [
+        "changing history",
+        "secret mission"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:67683",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "travelers",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "time travel",
+        "consciousness transfer",
+        "apocalypse"
+      ],
+      "motifs": [
+        "changing history",
+        "secret mission"
+      ],
+      "candidateRecallAt10": 0,
+      "candidateRecallAt20": 0,
+      "candidatePoolSize": 21,
+      "expectedPositions": [
+        {
+          "identity": "tv:67683",
+          "position": null
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 21
+      },
+      "finalPosition": null,
+      "resultCount": 3,
+      "tmdbCalls": 11,
+      "errors": []
+    },
+    {
+      "id": "good-place",
+      "set": "generalization",
+      "engine": "before",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "afterlife",
+        "ethics",
+        "mistaken identity"
+      ],
+      "motifs": [
+        "moral philosophy",
+        "false paradise"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:66573",
+          "position": 3
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 3,
+      "resultCount": 3,
+      "tmdbCalls": 6,
+      "errors": []
+    },
+    {
+      "id": "good-place",
+      "set": "generalization",
+      "engine": "after",
+      "mediaType": "tv",
+      "intentType": "specific_title_description",
+      "concepts": [
+        "afterlife",
+        "ethics",
+        "mistaken identity"
+      ],
+      "motifs": [
+        "moral philosophy",
+        "false paradise"
+      ],
+      "candidateRecallAt10": 1,
+      "candidateRecallAt20": 1,
+      "candidatePoolSize": 20,
+      "expectedPositions": [
+        {
+          "identity": "tv:66573",
+          "position": 1
+        }
+      ],
+      "sourceContribution": {
+        "tmdb_discover": 20
+      },
+      "finalPosition": 3,
+      "resultCount": 3,
+      "tmdbCalls": 9,
+      "errors": []
+    }
+  ]
+}

@@ -89,16 +89,16 @@ test('keywords exact-only, ambiguous IDs and weak matches ignored', () => {
   assert.ok(expanded.includes('fighter aircraft')); assert.ok(expanded.includes('fighter jets'));
   assert.equal(new Set(expanded).size, expanded.length); assert.ok(expanded.length <= 8);
 });
-test('five distinct terms, three keyword IDs, only Discover waits for keywords', async () => {
+test('bounded narrative terms, three keyword pairs, only Discover waits for keywords', async () => {
   const calls = []; let release;
   const gate = new Promise(resolve => { release = resolve; });
   const input = { mediaType: 'tv', keywords: ['one', 'two', 'three', 'four', 'five', 'six'] };
   const pending = run(input, {
-    legacy: async () => { calls.push('legacy'); release(); return []; },
+    vector: async () => { calls.push('vector'); release(); return []; },
     keyword: async term => { await gate; calls.push(term); return [{ id: input.keywords.indexOf(term) + 1, name: term }]; },
-    discover: async (type, params) => { assert.equal(params.with_keywords, '1|2|3'); return [row(8, type)]; }
+    discover: async (type, params) => { assert.ok(['1,2', '1,3', '1|2|3'].includes(params.with_keywords)); return [row(8, type)]; }
   });
-  await pending; assert.equal(calls.length, 6); assert.equal(calls[0], 'legacy');
+  await pending; assert.equal(calls.length, 7); assert.equal(calls[0], 'vector');
 });
 test('all six sources, strict type filtering, provenance/signals union', async () => {
   const mixed = async () => [row(1, 'tv'), row(2, 'movie')];
@@ -194,12 +194,12 @@ test('Supabase lexical uses existing text columns, explicit TMDB identities and 
     calls.push(table); const builder = { select() { return this; }, or(filter) {
       assert.match(filter, /overview.ilike/); assert.equal(filter.includes('genres.ilike'), false); return this;
     }, order() { return this; }, limit(n) { assert.equal(n, 16); return this; },
-    abortSignal() { return Promise.resolve({ data: table === 'movies' ? [] : [row(1, 'movie', { tmdb_id: 1 }), { id: 2, title: 'Not a TMDB identity' }] }); } };
+    abortSignal() { return Promise.resolve({ data: table !== 'movies_embeddings' ? [] : [row(1, 'movie', { tmdb_id: 1 }), { id: 2, title: 'Not a TMDB identity' }] }); } };
     return builder;
   } };
   assert.equal(createSupabaseLexicalSource(null), null);
   const candidates = await run({ keywords: ['detective'] }, { lexical: createSupabaseLexicalSource(client) });
-  assert.deepEqual(calls, ['movies', 'movies_embeddings']); assert.equal(candidates.length, 1);
+  assert.deepEqual(calls, ['media_embeddings', 'movies', 'movies_embeddings']); assert.equal(candidates.length, 1);
   assert.deepEqual(candidates[0].sources, ['supabase_lexical']);
 });
 test('canonical fallback / disabled flag does not start hybrid providers or a second LLM', async () => {

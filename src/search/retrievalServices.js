@@ -1,6 +1,7 @@
 import { candidateMediaType } from './retrievalCandidate.js';
 import { normalizeTerm } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
+import { buildNarrativeRetrievalPlan, narrativeLexicalFilter, prioritizeNarrativeRows } from './narrativeRetrieval.js';
 
 export const TMDB_REQUEST_LIMIT = 30;
 export const TMDB_TIMEOUT_MS = 3500;
@@ -69,6 +70,7 @@ export function createTmdbRetrievalClient({ apiKey, cache = new Map(), telemetry
   }
   return {
     get,
+    remainingBudget: () => Math.max(0, TMDB_REQUEST_LIMIT - calls),
     entity: (type, id) => entities.get(`${type}:${id}`),
     search: (title, type, options) => get(`search/${type || 'multi'}`, { query: title.trim(), include_adult: false }, options),
     person: (name, options) => get('search/person', { query: String(name || '').trim(), include_adult: false }, options),
@@ -112,26 +114,46 @@ export async function retrieveLegacyHints(hints, resolvedContext, client, { sign
  */
 export function createSupabaseLexicalSource(client) {
   if (!client) return null;
-  return async (intent, { signal } = {}) => {
+  return async (intent, { signal, context = {} } = {}) => {
+    const plan = context.narrativePlan || buildNarrativeRetrievalPlan(intent, context.semanticIntentContext);
     const expansion = expandSemanticTerms(intent);
     const termLimit = expansion.applied ? SEMANTIC_EXPANSION_LIMIT : 5;
     const terms = [...new Set([...(intent.knownTitles || []), ...expansion.addedTerms,
       ...expansion.sourceTerms].map(value => String(value).replace(/[^\p{L}\p{N}\s-]/gu, '').trim())
       .filter(t => t.length >= 3))].slice(0, termLimit);
-    if (!terms.length) return [];
-    const filter = terms.flatMap(t => [`original_title.ilike.%${t}%`, `overview.ilike.%${t}%`]).join(',');
+    if (!terms.length && !plan.rich) return [];
+    const filter = plan.rich ? narrativeLexicalFilter(plan)
+      : terms.flatMap(t => [`original_title.ilike.%${t}%`, `overview.ilike.%${t}%`]).join(',');
     let lastError = null;
-    for (const table of ['movies', 'movies_embeddings']) {
+    let succeeded = false;
+    const collected = [];
+    // Canonical catalog has real movie AND TV identities. Legacy film tables
+    // remain a fallback, never a way to relabel a film as a series.
+    const tables = intent.mediaType === 'tv' ? ['media_embeddings'] : ['media_embeddings', 'movies', 'movies_embeddings'];
+    for (const table of tables) {
       if (signal?.aborted) throw new Error('RETRIEVAL_TIMEOUT');
-      const { data, error } = await client.from(table).select('*').or(filter)
-        .order('vote_average', { ascending: false }).limit(16).abortSignal(signal);
+      const actualFilter = table === 'media_embeddings' && plan.rich
+        ? narrativeLexicalFilter(plan, ['original_title', 'overview', 'profile_text']) : filter;
+      let request = client.from(table).select(table === 'media_embeddings'
+        ? 'tmdb_id,media_type,title,original_title,overview,profile_text,poster_path,backdrop_path,release_date,first_air_date,original_language,genre_ids'
+        : '*').or(actualFilter);
+      if (table === 'media_embeddings' && intent.mediaType) request = request.eq('media_type', intent.mediaType);
+      if (!plan.rich && table !== 'media_embeddings') request = request.order('vote_average', { ascending: false });
+      const { data, error } = await request.limit(plan.rich ? 50 : 16).abortSignal(signal);
+      if (context.evaluationTrace) (context.evaluationTrace.lexicalRequests ||= []).push({
+        table, filter: actualFilter, mediaType: intent.mediaType, limit: plan.rich ? 50 : 16,
+        candidateCount: data?.length || 0, error: error ? 'LEXICAL_TABLE_FAILED' : null });
       if (error) { lastError = error; continue; }
+      succeeded = true;
       // These tables are film catalogs. Never invent a TV identity from a film row.
       const rows = (data || []).filter(row => Number.isSafeInteger(Number(row.tmdb_id)) && Number(row.tmdb_id) > 0)
-        .map(row => ({ ...row, media_type: row.media_type || 'movie' }));
-      if (rows.length) return rows;
+        .map(row => ({ ...row, media_type: row.media_type || (table === 'media_embeddings' ? null : 'movie') }))
+        .filter(row => candidateMediaType(row) && (!intent.mediaType || candidateMediaType(row) === intent.mediaType));
+      collected.push(...rows);
+      if (rows.length && !plan.rich) return rows;
     }
-    if (lastError) throw new Error('LEXICAL_SOURCE_FAILED');
-    return [];
+    if (!succeeded && lastError) throw new Error('LEXICAL_SOURCE_FAILED');
+    const unique = [...new Map(collected.map(row => [`${row.media_type}:${row.tmdb_id}`, row])).values()];
+    return prioritizeNarrativeRows(unique, plan).slice(0, 20);
   };
 }

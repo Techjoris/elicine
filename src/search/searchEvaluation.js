@@ -32,6 +32,9 @@ export function createSearchEvaluationTrace({ enabled = isSearchEvaluationEnable
   return enabled ? {
     canonicalIntent: null,
     semanticExpansion: null,
+    semanticIntentContext: null,
+    retrievalPlan: null,
+    candidatePool: [],
     resolvedIntentContext: null,
     sources: {},
     poolBeforeDeduplication: [],
@@ -44,10 +47,10 @@ export function createSearchEvaluationTrace({ enabled = isSearchEvaluationEnable
 }
 
 export function recordEvaluationSource(trace, source, {
-  candidates = [], durationMs = 0, error = null, expectedMediaType = null
+  candidates = [], durationMs = 0, error = null, expectedMediaType = null, request = {}
 } = {}) {
   if (!trace) return;
-  const rows = summarizeEvaluationCandidates(candidates, 10);
+  const rows = summarizeEvaluationCandidates(candidates, 50);
   const identities = rows.map(candidateIdentity).filter(Boolean);
   const previous = trace.sources[source];
   const identitySet = previous?._identities || new Set();
@@ -60,6 +63,7 @@ export function recordEvaluationSource(trace, source, {
   const metric = {
     candidateCount,
     uniqueCandidateCount: identitySet.size,
+    requests: [...(previous?.requests || []), { ...request, candidates: rows, error }].slice(0, 12),
     topIds: [...new Set([...(previous?.topIds || []), ...rows.map(row => row.tmdbId)])].slice(0, 10),
     mediaTypeConformity: candidateCount ? (previousConforming + conformingCount) / candidateCount : 1,
     durationMs: (previous?.durationMs || 0) + durationMs,
@@ -71,6 +75,22 @@ export function recordEvaluationSource(trace, source, {
     _conformingCount: { value: previousConforming + conformingCount, enumerable: false }
   });
   trace.sources[source] = metric;
+}
+
+/** Retrieval metric: the bounded merged pool, before strict filtering/ranking.
+ * Expected identities are supplied exclusively by tests/diagnostics.
+ */
+export function evaluateCandidateRecall(pool = [], expected = []) {
+  const wanted = [...new Set(expected.map(candidateIdentity).filter(Boolean))];
+  const identities = pool.map(candidateIdentity);
+  const positions = wanted.map(identity => ({ identity,
+    position: identities.includes(identity) ? identities.indexOf(identity) + 1 : null }));
+  const recall = limit => wanted.length ? positions.filter(item => item.position && item.position <= limit).length / wanted.length : 0;
+  const sourceContribution = {};
+  for (const candidate of pool) for (const source of candidate.sources || [])
+    sourceContribution[source] = (sourceContribution[source] || 0) + 1;
+  return { candidateRecallAt10: recall(10), candidateRecallAt20: recall(20),
+    candidatePoolSize: pool.length, expectedPositions: positions, sourceContribution };
 }
 
 export function candidatePoolOverlapRate(left = [], right = []) {

@@ -1,10 +1,11 @@
 import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
 import { discoverParams, exclusionKeywordTerms, hasDiscoverConstraints, keywordTerms, normalizeTerm,
   reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
-import { expandSemanticTerms, SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
+import { SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 import { createFallbackTelemetry, failedSourceLabel, FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 import { recordEvaluationSource, summarizeEvaluationCandidates } from './searchEvaluation.js';
 import { normalizeSemanticExclusions } from './strictConstraintFilter.js';
+import { buildNarrativeRetrievalPlan, narrativeEvidence, narrativeKeywordAngles, narrativeKeywordId, prioritizeNarrativeRows } from './narrativeRetrieval.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
@@ -59,8 +60,14 @@ const counter = { tmdb_search: 'retrievalTmdbSearchCount', tmdb_discover: 'retri
 export async function hybridRetrieve({ intent, resolvedContext = {}, services = {}, context = {} }) {
   const telemetry = context.telemetry || {};
   const evaluationTrace = context.evaluationTrace || null;
+  const narrativePlan = buildNarrativeRetrievalPlan(intent, context.semanticIntentContext);
+  context = { ...context, narrativePlan };
+  if (evaluationTrace) {
+    evaluationTrace.semanticIntentContext = structuredClone(context.semanticIntentContext || {});
+    evaluationTrace.retrievalPlan = structuredClone(narrativePlan);
+  }
   const metrics = { ...createRetrievalTelemetry(), hybridRetrievalAttempted: true };
-  const semanticExpansion = expandSemanticTerms(intent, RETRIEVAL_LIMITS.terms);
+  const semanticExpansion = narrativePlan.expansion;
   if (evaluationTrace) evaluationTrace.semanticExpansion = {
     sourceTerms: [...semanticExpansion.sourceTerms],
     addedTerms: [...semanticExpansion.addedTerms],
@@ -72,26 +79,34 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   const timeout = context.sourceTimeoutMs ?? RETRIEVAL_LIMITS.sourceTimeoutMs;
   const errors = [];
   const tasks = [];
-  const source = (name, work, hint = null, signals = {}) => tasks.push((async () => {
+  const source = (name, work, hint = null, signals = {}, request = {}) => tasks.push((async () => {
     const sourceStarted = Date.now();
     try {
       const rows = await withSourceTimeout(work, timeout);
-      const converted = (Array.isArray(rows) ? rows : []).slice(0, RETRIEVAL_LIMITS.sourceResults)
+      const converted = prioritizeNarrativeRows(Array.isArray(rows) ? rows : [], narrativePlan)
+        .slice(0, RETRIEVAL_LIMITS.sourceResults)
         .map((row, index) => toRetrievalCandidate(row, name, { mediaType: hint, sourceRank: index + 1,
           ...(Number.isFinite(Number(row?.similarity)) ? { sourceScore: Number(row.similarity) } : {}), ...signals }))
         .filter(Boolean);
       const candidates = converted.filter(c => !intent.mediaType || c.mediaType === intent.mediaType);
-      for (const candidate of candidates) candidate.retrievalSignals[0].matchedGenreCount =
-        candidate.genreIds.filter(id => tmdbGenreIds(intent.genres, candidate.mediaType).includes(id)).length;
+      for (const candidate of candidates) {
+        candidate.retrievalSignals[0].matchedGenreCount =
+          candidate.genreIds.filter(id => tmdbGenreIds(intent.genres, candidate.mediaType).includes(id)).length;
+        if (narrativePlan.rich) {
+          const evidence = narrativeEvidence(candidate, narrativePlan);
+          candidate.retrievalSignals[0].narrativeMatched = Math.max(evidence.matched, signals.keywordConjunctionSize || 0);
+          candidate.retrievalSignals[0].narrativeCoverage = evidence.coverage;
+        }
+      }
       metrics[counter[name]] += candidates.length;
       recordEvaluationSource(evaluationTrace, name, { candidates: converted,
-        durationMs: Date.now() - sourceStarted, expectedMediaType: intent.mediaType });
+        request, durationMs: Date.now() - sourceStarted, expectedMediaType: intent.mediaType });
       return candidates;
     } catch (error) {
       const code = error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED';
       errors.push({ source: name, code });
       recordEvaluationSource(evaluationTrace, name, { durationMs: Date.now() - sourceStarted,
-        error: code, expectedMediaType: intent.mediaType });
+        request, error: code, expectedMediaType: intent.mediaType });
       return [];
     }
   })());
@@ -110,7 +125,8 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   }).slice(0, RETRIEVAL_LIMITS.seeds);
   for (const seed of seeds) {
     for (const method of ['similar', 'recommendations']) if (services[method])
-      source(`tmdb_${method}`, signal => services[method](seed, { signal, context }), seed.mediaType, { seedTmdbId: seed.tmdbId });
+      source(`tmdb_${method}`, signal => services[method](seed, { signal, context }), seed.mediaType,
+        { seedTmdbId: seed.tmdbId }, { mediaType: seed.mediaType, seedTmdbId: seed.tmdbId });
   }
   // Explicit people are resolved separately from title references. Their
   // credits are a reliable TMDB source for queries such as "film de Leonardo
@@ -124,7 +140,7 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
       for (const type of personTypes) {
         source('tmdb_person_credits', signal => services.personCredits(Number(person.tmdbId), type, { signal, context }), type, {
           personTmdbId: Number(person.tmdbId), personQuery: person.inputName || person.name || null
-        });
+        }, { mediaType: type, personTmdbId: Number(person.tmdbId) });
       }
     }
   }
@@ -139,8 +155,9 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     .filter(title => title.length > 1 && (requestedQueryNames.has(normalizeTerm(title)) ||
       !resolvedNames.has(normalizeTerm(title)))).slice(0, RETRIEVAL_LIMITS.searchTitles);
   if (services.search) for (const title of searchTitles)
-    source('tmdb_search', signal => services.search(title, intent.mediaType, { signal, context }), intent.mediaType);
-  if (services.legacy) source('legacy', signal => services.legacy({ signal, context }));
+    source('tmdb_search', signal => services.search(title, intent.mediaType, { signal, context }), intent.mediaType,
+      {}, { query: title, mediaType: intent.mediaType });
+  if (services.legacy && !narrativePlan.rich) source('legacy', signal => services.legacy({ signal, context }));
   if (services.lexical) source('supabase_lexical', signal => services.lexical(intent, { signal, context }));
   if (services.vector) source('supabase_vector', signal => services.vector(intent, { signal, context }));
 
@@ -148,11 +165,16 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   // Positive concepts restrict the pool (with_keywords), stated exclusions prune
   // it (without_keywords): both read TMDB's own taxonomy, never a work list.
   const keywordsTask = (async () => {
-    const resolveIds = async (terms, limit) => {
+    // Let already scheduled source transports debit the shared request budget.
+    await Promise.resolve();
+    const resolveIds = async (terms, limit, narrative = false) => {
       if (!services.keyword || terms.length === 0) return [];
       const results = await Promise.allSettled(terms.map(async term => {
         try {
-          return reliableKeywordId(term, await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout));
+          const rows = await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout);
+          const id = narrative ? narrativeKeywordId(term, rows) : reliableKeywordId(term, rows);
+          if (evaluationTrace) (evaluationTrace.keywordResolution ||= []).push({ term, id });
+          return id;
         } catch (error) {
           errors.push({ source: 'tmdb_keyword', code: error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED' });
           return null;
@@ -160,10 +182,13 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
       }));
       return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, limit);
     };
+    const exclusionTerms = exclusionKeywordTerms(normalizeSemanticExclusions(intent.semanticExclusions), RETRIEVAL_LIMITS.exclusionTerms);
+    const terms = narrativePlan.rich ? narrativePlan.keywordQueries : keywordTerms(intent, RETRIEVAL_LIMITS.terms);
+    const available = services.remainingBudget?.() ?? 30;
+    const reservedDiscover = narrativePlan.rich ? (intent.mediaType ? 3 : 6) : (intent.mediaType ? 1 : 2);
     const [included, excluded] = await Promise.all([
-      resolveIds(keywordTerms(intent, RETRIEVAL_LIMITS.terms), RETRIEVAL_LIMITS.keywordIds),
-      resolveIds(exclusionKeywordTerms(normalizeSemanticExclusions(intent.semanticExclusions),
-        RETRIEVAL_LIMITS.exclusionTerms), RETRIEVAL_LIMITS.exclusionTerms)
+      resolveIds(terms.slice(0, Math.max(0, available - reservedDiscover - exclusionTerms.length)), RETRIEVAL_LIMITS.keywordIds, narrativePlan.rich),
+      resolveIds(exclusionTerms, RETRIEVAL_LIMITS.exclusionTerms)
     ]);
     return { included, excluded };
   })();
@@ -172,13 +197,23 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   metrics.semanticKeywordResolvedCount = keywordIds.length;
   metrics.semanticExclusionKeywordResolvedCount = excludedKeywordIds.length;
   if (services.discover) for (const type of intent.mediaType ? [intent.mediaType] : ['movie', 'tv']) {
-    if (hasDiscoverConstraints(intent, type, keywordIds))
-      source('tmdb_discover', signal => services.discover(type,
-        discoverParams(intent, type, keywordIds, excludedKeywordIds), { signal, context }), type, { keywordIds });
+    if (hasDiscoverConstraints(intent, type, keywordIds)) {
+      const angles = narrativePlan.rich ? narrativeKeywordAngles(keywordIds) : [{ ids: keywordIds, conjunction: false }];
+      for (const { ids, conjunction } of angles) {
+        const params = discoverParams(intent, type, ids, excludedKeywordIds);
+        if (conjunction) params.with_keywords = ids.join(',');
+        source('tmdb_discover', signal => services.discover(type, params, { signal, context }), type,
+          { keywordIds: ids, ...(conjunction ? { keywordConjunctionSize: ids.length } : {}) },
+          { mediaType: type, params });
+      }
+    }
   }
+  // Optional title hints may consume ten calls; narrative Discover has first use
+  // of the same 30-call request budget, including earlier entity resolution.
+  if (services.legacy && narrativePlan.rich) source('legacy', signal => services.legacy({ signal, context }));
   const settled = await Promise.allSettled(tasks);
   const candidates = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
-  const merged = mergeCandidates(candidates);
+  const merged = mergeCandidates(candidates, RETRIEVAL_LIMITS.pool, { narrative: narrativePlan.rich });
   // A targeted source can still be crowded out of the bounded pool by broad
   // sources. The named work is re-attached from the facts the resolver already
   // confirmed, only on a live pool so a total provider failure still reaches the
@@ -200,8 +235,9 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
     if (injected) pool.unshift(injected);
   }
   if (evaluationTrace) {
-    evaluationTrace.poolBeforeDeduplication = summarizeEvaluationCandidates(candidates);
+    evaluationTrace.poolBeforeDeduplication = summarizeEvaluationCandidates(candidates, 400);
     evaluationTrace.poolAfterDeduplication = summarizeEvaluationCandidates(merged.candidates);
+    evaluationTrace.candidatePool = summarizeEvaluationCandidates(pool);
   }
   for (const field of ['vectorRetrievalAttempted', 'vectorRetrievalSucceeded',
     'vectorRetrievalCandidateCount', 'vectorRetrievalDurationMs', 'vectorRetrievalError', 'embeddingDurationMs']) {

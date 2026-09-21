@@ -100,7 +100,7 @@ test('trace measures every retrieval source with bounded, non-sensitive fields',
   for (const name of ['tmdb_search', 'tmdb_discover', 'tmdb_similar', 'tmdb_recommendations',
     'supabase_vector', 'supabase_lexical', 'legacy']) {
     const metric = trace.sources[name];
-    assert.equal(metric.candidateCount, 2);
+    assert.equal(metric.candidateCount, name === 'tmdb_discover' ? 6 : 2);
     assert.equal(metric.uniqueCandidateCount, 2);
     assert.deepEqual(metric.topIds, [920001, 920002]);
     assert.equal(metric.mediaTypeConformity, 0.5);

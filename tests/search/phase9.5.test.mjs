@@ -117,7 +117,8 @@ test('Supabase lexical source receives bounded expanded terms', async () => {
   await createSupabaseLexicalSource(client)(intent({ themes: ['guerre moderne', 'avions de combat'] }));
   assert.match(filter, /modern warfare/);
   assert.match(filter, /fighter aircraft/);
-  assert.ok(filter.split(',').length <= SEMANTIC_EXPANSION_LIMIT * 2);
+  assert.ok(filter.startsWith('and(or('));
+  assert.ok(filter.length < 16000);
 });
 
 async function assertQualityCase(canonical, expectedTerms) {

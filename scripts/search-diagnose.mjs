@@ -3,7 +3,10 @@
 try { process.loadEnvFile?.('.env.local'); } catch {}
 try { process.loadEnvFile?.('.env'); } catch {}
 
-const query = process.argv.slice(2).join(' ').trim();
+const args = process.argv.slice(2);
+const expectedIndex = args.indexOf('--expected');
+const expectedIdentity = expectedIndex >= 0 ? args.splice(expectedIndex, 2)[1] : null;
+const query = args.join(' ').trim();
 if (!query) {
   console.error('Usage: npm run search:diagnose -- "votre recherche"');
   process.exitCode = 1;
@@ -18,7 +21,7 @@ if (!query) {
     { buildHeuristicInterpretation },
     { createCanonicalIntentFromLegacy },
     { orchestrateCandidateRetrieval },
-    { createSearchEvaluationTrace, recordEvaluationSource }
+    { createSearchEvaluationTrace, recordEvaluationSource, evaluateCandidateRecall }
   ] = await Promise.all([
     import('../api/_security.js'),
     import('../api/searchPhase0.js'),
@@ -73,7 +76,7 @@ if (!query) {
   const results = await orchestrateCandidateRetrieval({
     orchestration: { canonicalIntent: intent, resolvedIntentContext },
     services,
-    context: { telemetry, evaluationTrace: trace }
+    context: { telemetry, evaluationTrace: trace, semanticIntentContext: interpretation.semanticContext }
   });
   for (const source of expectedSources) {
     if (!trace.sources[source]) recordEvaluationSource(trace, source, {
@@ -121,6 +124,10 @@ if (!query) {
     unresolvedPeople: personContext.unresolvedPeople || [],
     evaluationSourceCount: Object.keys(trace.sources).length,
     evaluationEmptyPool: results.length === 0,
+    ...(expectedIdentity && /^(movie|tv):\d+$/.test(expectedIdentity) ? {
+      candidateRecall: evaluateCandidateRecall(trace.candidatePool, [{ mediaType: expectedIdentity.split(':')[0],
+        tmdbId: Number(expectedIdentity.split(':')[1]) }])
+    } : {}),
     topResults: results.slice(0, 10).map((candidate, index) => ({ ...describe(candidate), rank: index + 1 })),
     trace
   };

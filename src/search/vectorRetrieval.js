@@ -1,5 +1,5 @@
 import { candidateMediaType } from './retrievalCandidate.js';
-import { expandSemanticTerms } from './semanticExpansion.js';
+import { buildNarrativeRetrievalPlan } from './narrativeRetrieval.js';
 
 export const VECTOR_RETRIEVAL_FLAG = 'VECTOR_RETRIEVAL_ENABLED';
 export const VECTOR_EMBEDDING_MODEL = 'text-embedding-3-small';
@@ -18,9 +18,14 @@ const list = value => [...new Set((Array.isArray(value) ? value : [])
   .map(item => clean(typeof item === 'object' ? item?.name ?? item?.id : item)).filter(Boolean))];
 
 /** Stable query representation made only from CanonicalIntent, never the raw query. */
-export function buildVectorQueryText(intent = {}) {
-  const expansion = expandSemanticTerms(intent);
+export function buildVectorQueryText(intent = {}, semanticContext = {}) {
+  const plan = buildNarrativeRetrievalPlan(intent, semanticContext);
+  const expansion = plan.expansion;
   const semanticParts = [
+    ['semantic_concepts', plan.semanticConcepts.join(', ')],
+    ['narrative_motifs', plan.narrativeMotifs.join(', ')],
+    ['discriminating_concepts', plan.rich ? plan.concepts.join(', ') : ''],
+    ['people', plan.people.join(', ')],
     ['genres', list(intent.genres).join(', ')],
     ['moods', list(intent.moods).join(', ')], ['themes', list(intent.themes).join(', ')],
     ['keywords', list(intent.keywords).join(', ')], ['references', list(intent.knownTitles).join(', ')],
@@ -95,7 +100,8 @@ export function createQueryEmbeddingService({ client, telemetry = {} } = {}) {
   return {
     get(intent, options = {}) {
       if (promise) return promise;
-      const text = buildVectorQueryText(intent);
+      const text = buildVectorQueryText(intent, options.context?.semanticIntentContext);
+      if (options.context?.evaluationTrace) options.context.evaluationTrace.vectorQueryText = text;
       if (!text) return Promise.resolve(null);
       const startedAt = Date.now();
       promise = Promise.resolve().then(() => client.embed(text, options)).finally(() => {
@@ -119,14 +125,14 @@ export function createSupabaseVectorSource({
   threshold = VECTOR_MATCH_THRESHOLD, embeddingVersion = VECTOR_EMBEDDING_VERSION
 } = {}) {
   if (!client || !queryEmbedding) return null;
-  return async (intent, { signal } = {}) => {
+  return async (intent, { signal, context } = {}) => {
     const startedAt = Date.now();
     Object.assign(telemetry, { vectorRetrievalAttempted: true, vectorRetrievalSucceeded: false,
       vectorRetrievalCandidateCount: 0, vectorRetrievalError: null });
     try {
       let vector;
       try {
-        vector = await queryEmbedding.get(intent, { signal });
+        vector = await queryEmbedding.get(intent, { signal, context });
         if (!vector) {
           Object.assign(telemetry, { vectorRetrievalSucceeded: true,
             vectorRetrievalCandidateCount: 0, vectorRetrievalError: null });
@@ -137,13 +143,18 @@ export function createSupabaseVectorSource({
         telemetry.vectorRetrievalError = fixedEmbeddingError(error);
         throw error;
       }
-      let request = client.rpc('match_media', {
+      const params = {
         query_embedding: vector,
         match_media_type: intent.mediaType || null,
         match_limit: Math.max(1, Math.min(VECTOR_MATCH_LIMIT, Number(limit) || VECTOR_MATCH_LIMIT)),
         match_threshold: Number(threshold),
         match_embedding_version: embeddingVersion
-      });
+      };
+      if (context?.evaluationTrace) {
+        const { query_embedding, ...safeParams } = params;
+        context.evaluationTrace.vectorRequest = { rpc: 'match_media', ...safeParams };
+      }
+      let request = client.rpc('match_media', params);
       if (signal && typeof request?.abortSignal === 'function') request = request.abortSignal(signal);
       const { data, error } = await request;
       if (error) {

@@ -77,7 +77,7 @@ export function toRetrievalCandidate(row, source, { mediaType: hint = null, ...s
 const strength = { tmdb_recommendations: 5, tmdb_similar: 4,
   tmdb_discover: 3, supabase_vector: 3, tmdb_search: 2, tmdb_person_credits: 0.5,
   supabase_lexical: 1, legacy: 0 };
-export function mergeCandidates(candidates, limit = 50) {
+export function mergeCandidates(candidates, limit = 50, { narrative = false } = {}) {
   const byIdentity = new Map();
   for (const candidate of candidates) {
     const key = `${candidate.mediaType}:${candidate.tmdbId}`;
@@ -111,8 +111,11 @@ export function mergeCandidates(candidates, limit = 50) {
       }
     }
   }
-  // Lexicographic priority only; no semantic/popularity/rating score is computed.
+  // Retrieval admission only. The final ranking and its public scores are unchanged.
+  const evidence = (candidate, field) => Math.max(0, ...candidate.retrievalSignals.map(signal => signal[field] || 0));
   const merged = [...byIdentity.values()].sort((a, b) =>
+    (narrative ? evidence(b, 'narrativeMatched') - evidence(a, 'narrativeMatched') ||
+      evidence(b, 'narrativeCoverage') - evidence(a, 'narrativeCoverage') : 0) ||
     b.sources.length - a.sources.length ||
     Math.max(...b.sources.map(s => strength[s] ?? 0)) - Math.max(...a.sources.map(s => strength[s] ?? 0)) ||
     Math.min(...a.retrievalSignals.map(s => s.sourceRank ?? 0)) - Math.min(...b.retrievalSignals.map(s => s.sourceRank ?? 0)) ||
