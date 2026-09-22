@@ -564,7 +564,10 @@ export const MovieDetailModal: React.FC = () => {
           })()}
 
           {/* 1. SECTION STREAMING ILLIMITÉ (SVOD) */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex flex-col gap-3">
+          <div
+            key={`streaming-block-${selectedMovie.id}`}
+            className="streaming-block-enter p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex flex-col gap-3"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                 <Tv className="w-4 h-4 text-[#e50914]" />
@@ -627,10 +630,10 @@ export const MovieDetailModal: React.FC = () => {
 
                 {/* Sous-carte : accès selon la localisation */}
                 {providerData.svod.status === 'vpn_needed' && (
-                  <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-slate-50/70 dark:bg-white/[0.02] p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="streaming-location-card rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-slate-50/70 dark:bg-white/[0.02] p-4">
+                    <div className="streaming-location-drift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-3 min-w-0">
-                        <span className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/15 flex items-center justify-center flex-shrink-0">
+                        <span className="streaming-icon-pulse w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/15 flex items-center justify-center flex-shrink-0">
                           <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                         </span>
                         <div className="min-w-0">
@@ -648,9 +651,15 @@ export const MovieDetailModal: React.FC = () => {
                           event.stopPropagation();
                           setIsPrivateConnectionOpen(true);
                         }}
-                        className="w-full sm:w-auto flex-shrink-0 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] px-3.5 py-2 text-[11px] font-semibold text-slate-700 dark:text-zinc-200 hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                        className="streaming-cta-glow group/cta w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] px-3.5 py-2 text-[11px] font-semibold text-slate-700 dark:text-zinc-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 hover:shadow-[0_6px_18px_rgba(56,189,248,0.12)]"
                       >
-                        {t.vpnButton}
+                        <span>{t.vpnButton}</span>
+                        <span
+                          aria-hidden="true"
+                          className="streaming-cta-arrow inline-block transition-transform duration-200 group-hover/cta:translate-x-0.5"
+                        >
+                          →
+                        </span>
                       </button>
                     </div>
                   </div>

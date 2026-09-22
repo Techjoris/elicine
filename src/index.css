@@ -130,5 +130,101 @@ body:not(.light) ::-webkit-scrollbar-thumb:hover {
   animation: bounceSubtle 2.5s ease-in-out infinite;
 }
 
+/* ─── Streaming region block: one-shot entrances ─────────────────────────── */
+@keyframes elicineStreamingBlockIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes elicineLocationCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes elicineLocationDrift {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+@keyframes elicineIconHalo {
+  0% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+  }
+  40% {
+    box-shadow: 0 0 0 8px rgba(14, 165, 233, 0.12), 0 0 18px rgba(14, 165, 233, 0.24);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+  }
+}
+
+@keyframes elicineCtaGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+  45% {
+    box-shadow: 0 0 0 6px rgba(56, 189, 248, 0.10), 0 8px 24px rgba(56, 189, 248, 0.18);
+  }
+}
+
+.streaming-block-enter {
+  animation: elicineStreamingBlockIn 400ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.streaming-location-card {
+  animation: elicineLocationCardIn 500ms cubic-bezier(0.22, 0.61, 0.36, 1) 120ms both;
+}
+
+.streaming-location-drift {
+  animation: elicineLocationDrift 1500ms ease-in-out 620ms 1 both;
+}
+
+.streaming-icon-pulse {
+  animation: elicineIconHalo 720ms ease-out 280ms 1 both;
+}
+
+.streaming-cta-glow {
+  animation: elicineCtaGlow 900ms ease-out 1s 1 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-block-enter,
+  .streaming-location-card,
+  .streaming-location-drift,
+  .streaming-icon-pulse,
+  .streaming-cta-glow {
+    animation: none !important;
+  }
+
+  .streaming-cta-glow:hover {
+    transform: none !important;
+  }
+
+  .streaming-cta-arrow {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
 
 
