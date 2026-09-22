@@ -161,7 +161,7 @@ export const MovieDetailModal: React.FC = () => {
   if (!selectedMovie) return null;
 
   const inWatchlist = isInWatchlist(selectedMovie.id);
-  const alertActive = isMovieAlertActive(selectedMovie.id);
+  const alertActive = isMovieAlertActive(selectedMovie.id, selectedMovie.media_type);
 
   const releaseDateObj = selectedMovie.release_date ? new Date(selectedMovie.release_date) : null;
   const isUpcoming = Boolean(

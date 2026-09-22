@@ -59,7 +59,7 @@ export const AlertsView: React.FC = () => {
           <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-3 text-xs text-emerald-300">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
             <p>
-              Votre <strong>Pass Pro est actif</strong> : vos alertes e-mails sont programmées et seront envoyées automatiquement sur <strong>{user?.email}</strong>.
+              Votre <strong>Pass Pro est actif</strong> : les alertes que vous activez seront envoyées sur <strong>{user?.email}</strong>.
             </p>
           </div>
         )}
@@ -76,10 +76,10 @@ export const AlertsView: React.FC = () => {
             Activez la cloche sur n'importe quelle fiche de film ou série à venir pour programmer vos e-mails de rappel à J-2 et le jour J.
           </p>
           <button
-            onClick={() => setActiveView('home')}
+            onClick={() => setActiveView('upcoming')}
             className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase shadow-sm dark:shadow-neon-gold cursor-pointer transition-all"
           >
-            Explorer le catalogue
+            Explorer les prochaines sorties
           </button>
         </div>
       ) : (

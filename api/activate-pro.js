@@ -9,10 +9,7 @@ import {
   downgradeExpiredSubscriptions,
   processRenewalReminders 
 } from './_pro-activation.js';
-import { 
-  sendMovieAlertJMinus2Email, 
-  sendMovieAlertReleaseDayEmail 
-} from './_email.js';
+import { handleReleaseAlerts, handleReleaseCron } from './_release-alerts.js';
 
 const FOUNDER_EMAILS = [
   'ivanjoris959@gmail.com',
@@ -21,43 +18,10 @@ const FOUNDER_EMAILS = [
   'joris@elicine.app'
 ];
 
-async function checkUserIsPro(email, userId) {
-  const cleanEmail = (email || '').toLowerCase().trim();
-  if (cleanEmail && FOUNDER_EMAILS.includes(cleanEmail)) {
-    return true;
-  }
-  if (!supabaseAdmin) return true;
-
-  try {
-    let profQuery = supabaseAdmin.from('profiles').select('id, email, is_pro, role, expires_at');
-    if (cleanEmail) profQuery = profQuery.ilike('email', cleanEmail);
-    else if (userId) profQuery = profQuery.eq('id', userId);
-    const { data: profile } = await profQuery.maybeSingle();
-
-    if (profile) {
-      if (profile.role === 'admin' || FOUNDER_EMAILS.includes((profile.email || '').toLowerCase())) return true;
-      if (profile.is_pro === true || String(profile.is_pro) === 'true') {
-        if (!profile.expires_at || new Date(profile.expires_at).getTime() > Date.now()) return true;
-      }
-    }
-
-    let subQuery = supabaseAdmin.from('subscriptions').select('*').eq('status', 'active');
-    if (cleanEmail) subQuery = subQuery.ilike('email', cleanEmail);
-    else if (userId) subQuery = subQuery.eq('user_id', userId);
-    const { data: subs } = await subQuery.order('created_at', { ascending: false }).limit(1);
-    if (Array.isArray(subs) && subs.length > 0) {
-      const sub = subs[0];
-      if (!sub.expires_at || new Date(sub.expires_at).getTime() > Date.now()) return true;
-    }
-  } catch (_) {}
-
-  return false;
-}
-
 export default async function handler(req, res) {
   // En-têtes CORS universels
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
   if (req.method === 'OPTIONS') {
@@ -101,188 +65,8 @@ export default async function handler(req, res) {
     ''
   ).trim();
 
-  // ─── ACTION : Alertes de sorties cinématographiques (/api/movie-alerts) ────
-  if (action === 'movie-alerts' || action === 'alerts') {
-    if (req.method === 'GET') {
-      if (!userId && !email) {
-        return res.status(400).json({ error: 'userId ou email requis' });
-      }
-      try {
-        if (supabaseAdmin) {
-          let query = supabaseAdmin
-            .from('user_movie_alerts')
-            .select('*');
-          if (userId) query = query.eq('user_id', userId);
-          else if (email) query = query.ilike('email', email);
-          const { data, error } = await query.order('created_at', { ascending: false });
-          if (!error && data) {
-            return res.status(200).json({ success: true, alerts: data });
-          }
-        }
-      } catch (err) {
-        console.warn('[Movie Alerts GET error]:', err?.message);
-      }
-      return res.status(200).json({ success: true, alerts: [] });
-    }
-
-    if (req.method === 'POST') {
-      const userIsPro = await checkUserIsPro(email, userId);
-      if (!userIsPro) {
-        return res.status(403).json({
-          success: false,
-          requirePro: true,
-          error: "La programmation d'alertes de sorties par email est strictement réservée aux abonnés Éliciné Pro."
-        });
-      }
-
-      const movieId = Number(body.movieId || body.movie_id);
-      const movieTitle = String(body.movieTitle || body.movie_title || body.title || 'Film');
-      const releaseDate = body.releaseDate || body.release_date || null;
-      const posterPath = body.posterPath || body.poster_path || null;
-      const backdropPath = body.backdropPath || body.backdrop_path || null;
-      const mediaType = body.mediaType || body.media_type || 'movie';
-      const overview = body.overview || '';
-
-      const alertItem = {
-        id: `alt_${movieId}_${Date.now()}`,
-        user_id: userId || null,
-        email: email || null,
-        movie_id: movieId,
-        movie_title: movieTitle,
-        release_date: releaseDate,
-        poster_path: posterPath,
-        backdrop_path: backdropPath,
-        media_type: mediaType,
-        overview,
-        status: 'active',
-        notified_j_minus_2: false,
-        notified_release_day: false,
-        created_at: new Date().toISOString()
-      };
-
-      if (supabaseAdmin) {
-        try {
-          await supabaseAdmin
-            .from('user_movie_alerts')
-            .upsert(alertItem, { onConflict: 'user_id,movie_id' });
-        } catch (dbErr) {
-          console.warn('[Movie Alerts POST db notice]:', dbErr?.message);
-        }
-      }
-
-      return res.status(200).json({
-        success: true,
-        active: true,
-        alert: alertItem
-      });
-    }
-
-    if (req.method === 'DELETE') {
-      const alertId = body.alertId || body.id || req.query?.alertId || req.query?.id;
-      const movieId = body.movieId || body.movie_id || req.query?.movieId || req.query?.movie_id;
-
-      if (supabaseAdmin) {
-        try {
-          let delQuery = supabaseAdmin.from('user_movie_alerts').delete();
-          if (alertId) {
-            delQuery = delQuery.eq('id', alertId);
-          } else if (movieId && userId) {
-            delQuery = delQuery.eq('user_id', userId).eq('movie_id', movieId);
-          } else if (movieId && email) {
-            delQuery = delQuery.ilike('email', email).eq('movie_id', movieId);
-          }
-          await delQuery;
-        } catch (delErr) {
-          console.warn('[Movie Alerts DELETE db notice]:', delErr?.message);
-        }
-      }
-
-      return res.status(200).json({ success: true, message: 'Alerte supprimée avec succès.' });
-    }
-
-    return res.status(405).json({ error: 'Méthode non autorisée.' });
-  }
-
-  // ─── ACTION : Cron Quotidien des Alertes Sorties Cinéma (09:00) ────────────
-  if (action === 'movie-alerts-cron') {
-    const authHeader = req.headers['authorization'] || '';
-    const cronSecret = process.env.CRON_SECRET || '';
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.headers['x-cron-secret'] !== cronSecret) {
-      console.warn('[Cron Movie Alerts] ⚠️ Requête sans secret strict.');
-    }
-
-    let processedCount = 0;
-    let jMinus2Count = 0;
-    let releaseDayCount = 0;
-
-    if (supabaseAdmin) {
-      try {
-        const { data: alerts } = await supabaseAdmin
-          .from('user_movie_alerts')
-          .select('*')
-          .eq('status', 'active');
-
-        if (Array.isArray(alerts) && alerts.length > 0) {
-          const today = new Date();
-
-          for (const alert of alerts) {
-            if (!alert.email || !alert.release_date) continue;
-            processedCount++;
-
-            const releaseTime = new Date(alert.release_date).getTime();
-            const nowTime = today.getTime();
-            const diffDays = Math.round((releaseTime - nowTime) / (1000 * 60 * 60 * 24));
-
-            // Alerte J-2
-            if (diffDays <= 2 && diffDays > 0 && !alert.notified_j_minus_2) {
-              await sendMovieAlertJMinus2Email(alert.email, {
-                customerName: alert.customer_name || 'Cinéphile',
-                movieTitle: alert.movie_title,
-                moviePoster: alert.poster_path,
-                releaseDate: alert.release_date,
-                movieId: alert.movie_id,
-                mediaType: alert.media_type,
-                overview: alert.overview
-              });
-              await supabaseAdmin
-                .from('user_movie_alerts')
-                .update({ notified_j_minus_2: true, updated_at: new Date().toISOString() })
-                .eq('id', alert.id);
-              jMinus2Count++;
-            }
-
-            // Alerte Jour J
-            if (diffDays <= 0 && !alert.notified_release_day) {
-              await sendMovieAlertReleaseDayEmail(alert.email, {
-                customerName: alert.customer_name || 'Cinéphile',
-                movieTitle: alert.movie_title,
-                moviePoster: alert.poster_path,
-                releaseDate: alert.release_date,
-                movieId: alert.movie_id,
-                mediaType: alert.media_type,
-                overview: alert.overview
-              });
-              await supabaseAdmin
-                .from('user_movie_alerts')
-                .update({ notified_release_day: true, status: 'completed', updated_at: new Date().toISOString() })
-                .eq('id', alert.id);
-              releaseDayCount++;
-            }
-          }
-        }
-      } catch (cronErr) {
-        console.error('[Cron Movie Alerts Exception]:', cronErr);
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      processed: processedCount,
-      jMinus2Sent: jMinus2Count,
-      releaseDaySent: releaseDayCount
-    });
-  }
+  if (action === 'movie-alerts' || action === 'alerts') return handleReleaseAlerts(req, res);
+  if (action === 'movie-alerts-cron') return handleReleaseCron(req, res);
 
   // ─── ACTION : Exécution de la tâche planifiée (Cron Subscriptions & Relances) ───
   if (action === 'cron' || action === 'cron-subscriptions') {

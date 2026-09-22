@@ -110,5 +110,10 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/activate-pro.js": {
+      "maxDuration": 300
+    }
+  }
 }

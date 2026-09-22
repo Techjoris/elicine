@@ -58,6 +58,7 @@ export interface TranslationSchema {
   // Sidebar & Navigation
   navHome: string;
   navTrending: string;
+  navUpcoming: string;
   navCatalog: string;
   navStreaming: string;
   navMyList: string;
@@ -166,6 +167,7 @@ export type TranslationFunction = {
 export const I18N_KEY_MAP: Record<string, keyof TranslationSchema> = {
   'nav.home': 'navHome',
   'nav.trending': 'navTrending',
+  'nav.upcoming': 'navUpcoming',
   'nav.catalog': 'navCatalog',
   'nav.streaming': 'navStreaming',
   'nav.my_list': 'navMyList',
@@ -240,6 +242,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
 
     navHome: "Accueil",
     navTrending: "Tendances",
+    navUpcoming: "Prochainement",
     navCatalog: "Catalogue & Genres",
     navStreaming: "Streaming",
     navMyList: "Ma Liste",
@@ -383,6 +386,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
 
     navHome: "Home",
     navTrending: "Trending",
+    navUpcoming: "Coming Soon",
     navCatalog: "Catalog & Genres",
     navStreaming: "Streaming",
     navMyList: "My List",
@@ -526,6 +530,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
 
     navHome: "Inicio",
     navTrending: "Tendencias",
+    navUpcoming: "Próximamente",
     navCatalog: "Catálogo y Géneros",
     navStreaming: "Streaming",
     navMyList: "Mi Lista",
@@ -669,6 +674,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
 
     navHome: "Startseite",
     navTrending: "Trends",
+    navUpcoming: "Demnächst",
     navCatalog: "Katalog & Genres",
     navStreaming: "Streaming",
     navMyList: "Meine Liste",
@@ -812,6 +818,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
 
     navHome: "Home",
     navTrending: "Tendenze",
+    navUpcoming: "In arrivo",
     navCatalog: "Catalogo & Generi",
     navStreaming: "Streaming",
     navMyList: "La mia lista",

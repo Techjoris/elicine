@@ -216,6 +216,6 @@ export interface SearchHistoryItem {
   mood?: string;
 }
 
-export type ActiveView = 'home' | 'trending' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password' | 'payment-callback';
+export type ActiveView = 'home' | 'trending' | 'upcoming' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password' | 'payment-callback';
 
 export * from './canonicalIntent';

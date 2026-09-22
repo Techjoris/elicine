@@ -272,6 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'home' as ActiveView, label: t('nav.home') || t.navHome, icon: Home, count: null },
     { id: 'trending' as ActiveView, label: t('nav.trending') || t.navTrending, icon: Flame, count: null },
+    { id: 'upcoming' as ActiveView, label: t('nav.upcoming') || t.navUpcoming, icon: Film, count: null },
     { id: 'catalog' as ActiveView, label: t('nav.catalog') || t.navCatalog, icon: Disc, count: null },
     { id: 'platforms' as ActiveView, label: t('nav.streaming') || t.navStreaming, icon: Tv, count: null },
     { id: 'watchlist' as ActiveView, label: t('nav.my_list') || t.navMyList, icon: Heart, count: watchlist.length > 0 ? watchlist.length : null },

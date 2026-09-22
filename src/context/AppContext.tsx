@@ -17,7 +17,7 @@ import { supabase, signInWithGoogle } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 import { subscriptionService } from '../services/subscriptionService';
-import { movieAlertsService } from '../services/movieAlertsService';
+import { movieAlertsService, alertMediaType } from '../services/movieAlertsService';
 import { initPaddle, openPaddleCheckout } from '../services/paddleService';
 
 interface AppContextType {
@@ -62,7 +62,7 @@ interface AppContextType {
   addAlert: (movie: Movie, email?: string) => void;
   toggleAlert: (movie: Movie) => Promise<void>;
   removeAlert: (alertId: string) => void;
-  isMovieAlertActive: (movieId: number) => boolean;
+  isMovieAlertActive: (movieId: number, mediaType?: string) => boolean;
 
   // Search History & Interactive Query
   searchQuery: string;
@@ -278,15 +278,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return movieAlertsService.getLocalAlerts();
   });
 
-  // Synchronisation des alertes cinématographiques avec Supabase / API lors de la connexion
   useEffect(() => {
-    if (user) {
-      movieAlertsService.getUserAlerts(user).then(syncedAlerts => {
-        if (Array.isArray(syncedAlerts)) {
-          setAlerts(syncedAlerts);
-        }
-      });
-    }
+    let current = true;
+    setAlerts([]);
+    if (user) movieAlertsService.getUserAlerts(user).then(list => {
+      if (current) setAlerts(list);
+    }).catch(() => { if (current) setAlerts([]); });
+    return () => { current = false; };
   }, [user?.id, user?.email]);
 
   // 7. Search History & Interactive Input
@@ -1030,7 +1028,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Alerts Actions (Strictement réservées aux membres Pass Pro)
+  const alertRequests = useRef(new Set<string>());
   const toggleAlert = async (movie: Movie) => {
+    const requestKey = alertMediaType(movie.media_type) + ':' + movie.id;
+    if (alertRequests.current.has(requestKey)) return;
+    const existing = alerts.find(a => a.movieId === movie.id && alertMediaType(a.mediaType) === alertMediaType(movie.media_type));
+    if (existing) { await removeAlert(existing.id); return; }
     const isPro = Boolean(
       user && (
         user.isPro || 
@@ -1047,18 +1050,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const res = await movieAlertsService.toggleMovieAlert(movie, user);
+    alertRequests.current.add(requestKey);
+    let res;
+    try { res = await movieAlertsService.toggleMovieAlert(movie, user); }
+    finally { alertRequests.current.delete(requestKey); }
     if (res.requirePro) {
       setIsProModalOpen(true);
       showToast(res.error || "Abonnement Pass Pro requis pour activer cette alerte.");
       return;
     }
 
+    if (res.error) { showToast(res.error); return; }
+
     if (res.active && res.alert) {
-      setAlerts(prev => [res.alert!, ...prev.filter(a => a.movieId !== movie.id)]);
+      setAlerts(prev => [res.alert!, ...prev.filter(a => !(a.movieId === movie.id && alertMediaType(a.mediaType) === alertMediaType(movie.media_type)))]);
       showToast(`🔔 Alerte activée pour « ${movie.title} » ! Rappel par e-mail à J-2 et le jour J.`);
     } else {
-      setAlerts(prev => prev.filter(a => a.movieId !== movie.id));
+      setAlerts(prev => prev.filter(a => !(a.movieId === movie.id && alertMediaType(a.mediaType) === alertMediaType(movie.media_type))));
       showToast(`Alerte de sortie désactivée pour « ${movie.title} »`);
     }
   };
@@ -1067,14 +1075,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleAlert(movie);
   };
 
-  const removeAlert = (alertId: string) => {
-    movieAlertsService.removeAlert(alertId, user);
-    setAlerts(prev => prev.filter(a => a.id !== alertId));
-    showToast('Alerte supprimée.');
+  const removeAlert = async (alertId: string) => {
+    try {
+      await movieAlertsService.removeAlert(alertId, user);
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      showToast('Alerte supprimée.');
+    } catch (error: any) { showToast(error.message || 'Impossible de supprimer cette alerte.'); }
   };
 
-  const isMovieAlertActive = (movieId: number) => {
-    return alerts.some(a => a.movieId === movieId);
+  const isMovieAlertActive = (movieId: number, mediaType?: string) => {
+    return alerts.some(a => a.movieId === movieId && alertMediaType(a.mediaType) === alertMediaType(mediaType));
   };
 
   // Search History Actions

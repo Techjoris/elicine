@@ -252,7 +252,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     : null;
 
   const inWatchlist = currentMovie?.id ? isInWatchlist(currentMovie.id) : false;
-  const alertActive = currentMovie?.id ? isMovieAlertActive(currentMovie.id) : false;
+  const alertActive = currentMovie?.id ? isMovieAlertActive(currentMovie.id, currentMovie.media_type) : false;
 
   const handleSearch = async (
     queryText?: string,

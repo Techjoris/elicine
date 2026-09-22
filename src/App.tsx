@@ -7,6 +7,7 @@ import { TrendingView } from './components/views/TrendingView';
 import { CatalogView } from './components/views/CatalogView';
 import { PlatformsView } from './components/views/PlatformsView';
 import { WatchlistView } from './components/views/WatchlistView';
+import { UpcomingView } from './components/views/UpcomingView';
 import { AlertsView } from './components/views/AlertsView';
 import { AdminView } from './components/views/AdminView';
 import { TermsView } from './components/views/TermsView';
@@ -459,6 +460,7 @@ export const AppContent: React.FC = () => {
           )}
 
           {activeView === 'trending' && <TrendingView />}
+          {activeView === 'upcoming' && <UpcomingView />}
           {activeView === 'catalog' && <CatalogView />}
           {activeView === 'platforms' && <PlatformsView />}
           {activeView === 'watchlist' && <WatchlistView />}

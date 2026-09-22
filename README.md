@@ -8,7 +8,7 @@
 
 ### 1. UI/UX "Dark Cinema" & Layout
 - **Fond ultra-sombre** `#0b0f19`, effets de flou cinématique (`backdrop-blur`), et néons d'ambiance (`#3b82f6`, `#8b5cf6`, `#f59e0b`).
-- **Sidebar fixe** : Accueil, Tendances, Catalogue complet, Plateformes de streaming (Netflix, Prime, Canal+, Apple TV+), Ma Liste (Favoris), Mes Alertes, Film Surprise aléatoire, Historique IA avec bouton "Vider", Profil utilisateur avec badge de statut (👑 PRO ou 🆓 GRATUIT) et lien d'affiliation.
+- **Sidebar fixe** : Accueil, Tendances, Prochainement (sorties des 6 prochains mois), Catalogue complet, Plateformes de streaming (Netflix, Prime, Canal+, Apple TV+), Ma Liste (Favoris), Mes Alertes, Film Surprise aléatoire, Historique IA avec bouton "Vider", Profil utilisateur avec badge de statut (👑 PRO ou 🆓 GRATUIT) et lien d'affiliation.
 - **Header fixe** : Logo CinéIA, convertisseur multi-devises interactif, boutons d'accès rapide [`👑 Pro`, `🧋 Soutenir`, `⚙️ Clés API`, `👤 Compte`] et bouton d'installation **`📲 INSTALLER L'APPLICATION`** mis en évidence.
 
 ### 2. Dynamique Hero & Carrousel Filigrane
@@ -39,6 +39,12 @@
 - Capture de l'événement `beforeinstallprompt` au clic sur le bouton d'installation.
 - Écouteur de paramètre `?ref=` pour le système de parrainage.
 
+### 7. Prochainement & Alertes de sortie (Pass Pro)
+- Colonne **Prochainement** : films et séries à venir (TMDB, tri par date de sortie puis popularité, filtres Films / Séries).
+- **Alertes e-mail J-2 et jour J** réservées aux comptes Pass Pro, programmées depuis la colonne ou n'importe quelle fiche.
+- Envoi quotidien via Resend, avec verrou anti-doublon en base, vérification du statut de livraison et arrêt automatique si l'abonnement expire.
+- Exploitation, variables d'environnement et tests : [`supabase/RELEASE_ALERTS.md`](supabase/RELEASE_ALERTS.md).
+
 ---
 
 ## 🚀 Démarrage Rapide
@@ -55,4 +61,9 @@ npm run dev
 build.bat
 # ou
 npm run build
+```
+
+### Tester les alertes de sortie (J-2 / jour J) :
+```bash
+npm run test:alerts
 ```
