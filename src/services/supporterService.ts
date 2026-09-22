@@ -45,6 +45,39 @@ export function supporterPriceId(amount: number): string {
   return runtime || String(SUPPORTER_PRICE_IDS[amount] || VITE_PRICE_IDS[amount] || '').trim();
 }
 
+/** price_id résolus depuis l'API Paddle (voir /api/supporter-prices). */
+let resolvedPrices: Record<number, string> = {};
+let pendingResolution: Promise<Record<number, string>> | null = null;
+
+export const SUPPORTER_AMOUNT_LIST = [1, 2, 3, 5, 7, 10, 50];
+
+/** Prix effectivement utilisé par le checkout : configuration d'abord, API Paddle sinon. */
+export function effectiveSupporterPriceId(amount: number): string {
+  return supporterPriceId(amount) || String(resolvedPrices[amount] || '').trim();
+}
+
+/**
+ * Complète les montants non configurés en interrogeant Paddle une seule fois. Aucun échec
+ * réseau ne casse la modale : la configuration statique reste la référence.
+ */
+export async function resolveSupporterPrices(): Promise<Record<number, string>> {
+  if (SUPPORTER_AMOUNT_LIST.every(amount => effectiveSupporterPriceId(amount))) return resolvedPrices;
+  if (pendingResolution) return pendingResolution;
+  pendingResolution = (async () => {
+    try {
+      const response = await fetch('/api/supporter-prices', { headers: { Accept: 'application/json' } });
+      if (response.ok) {
+        const payload = await response.json();
+        resolvedPrices = Object.fromEntries(
+          Object.entries(payload?.prices || {}).map(([amount, priceId]) => [Number(amount), String(priceId).trim()])
+        );
+      }
+    } catch { /* la configuration statique reste la source de vérité */ }
+    return resolvedPrices;
+  })();
+  try { return await pendingResolution; } finally { pendingResolution = null; }
+}
+
 const TIER_COPY: Array<{ amount: number; label: string; tagline: string }> = [
   { amount: 1, label: 'Coup de pouce', tagline: 'Un geste simple, déjà précieux.' },
   { amount: 2, label: 'Petit soutien', tagline: 'Un café offert à Éliciné.' },
@@ -57,7 +90,7 @@ const TIER_COPY: Array<{ amount: number; label: string; tagline: string }> = [
 
 export const SUPPORTER_TIERS: SupporterTier[] = TIER_COPY.map(tier => ({
   ...tier,
-  get priceId() { return supporterPriceId(tier.amount); }
+  get priceId() { return effectiveSupporterPriceId(tier.amount); }
 }));
 
 export const isSupporterTierAvailable = (tier: SupporterTier): boolean => /^pri_[A-Za-z0-9_-]{6,}$/.test(tier.priceId);

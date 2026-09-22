@@ -224,6 +224,23 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.9. ROUTE /api/supporter-prices — price_id Paddle du produit Supporter
+            if (pathname === '/api/supporter-prices') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/supporter-prices.js')).href;
+                const pricesHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await pricesHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 4. ROUTE /api/auth (login, register, send-verification, google)
             if (pathname.startsWith('/api/auth')) {
               adaptResponse();

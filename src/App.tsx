@@ -19,7 +19,7 @@ import { Footer } from './components/layout/Footer';
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
 import { ProModal } from './components/modals/ProModal';
 import { TipModal } from './components/modals/TipModal';
-import { SupporterModal } from './components/modals/SupporterModal';
+import { SupportProjectModal } from './components/modals/SupportProjectModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ProSuccessModal } from './components/modals/ProSuccessModal';
@@ -490,7 +490,7 @@ export const AppContent: React.FC = () => {
       <TermsConsentModal />
       <MovieDetailModal />
       <ProModal />
-      <SupporterModal />
+      <SupportProjectModal />
       <TipModal />
       <SettingsModal
         isOpen={isSettingsModalOpen}

@@ -27,7 +27,12 @@ const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: nu
   CAD: { amounts: [2, 5, 10, 25], defaultAmount: 5 }
 };
 
-export const TipModal: React.FC = () => {
+/**
+ * @param embedded  rendu à l'intérieur de la fenêtre « Soutenir » (onglet Mobile Money),
+ *                  sans calque plein écran ni bouton de fermeture propre.
+ * @param onClose   appelé quand l'onglet intégré demande la fermeture de la fenêtre parente.
+ */
+export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = ({ embedded = false, onClose }) => {
   const { 
     isTipModalOpen, 
     setIsTipModalOpen, 
@@ -49,7 +54,7 @@ export const TipModal: React.FC = () => {
 
   // Sync initial currency and amount based on user geolocation on open
   useEffect(() => {
-    if (!isTipModalOpen) return;
+    if (!embedded && !isTipModalOpen) return;
     setErrorMessage(null);
 
     getUserGeoData().then((geo) => {
@@ -93,6 +98,7 @@ export const TipModal: React.FC = () => {
     }
     setErrorMessage(null);
     setIsWaitingConfirmation(false);
+    if (onClose) onClose();
     setIsTipModalOpen(false);
   };
 
@@ -213,28 +219,34 @@ export const TipModal: React.FC = () => {
     }
   };
 
-  if (!isTipModalOpen) return null;
+  if (!embedded && !isTipModalOpen) return null;
 
   const currentConfig = CURRENCY_CONFIGS[selectedCurrency] || CURRENCY_CONFIGS['XAF'];
   const presets = presetsByCurrency[selectedCurrency] || presetsByCurrency.XAF;
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in"
+      className={embedded
+        ? 'w-full'
+        : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in'}
       onClick={(e) => {
+        if (embedded) return;
         if (e.target === e.currentTarget) {
           handleClose();
         }
       }}
     >
       <div 
-        className="relative w-full max-w-md min-w-[320px] mx-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden text-slate-800 dark:text-slate-100 p-6 sm:p-7 space-y-5 z-50 my-auto"
+        className={embedded
+          ? 'relative w-full text-slate-800 dark:text-slate-100 space-y-4'
+          : 'relative w-full max-w-md min-w-[320px] mx-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden text-slate-800 dark:text-slate-100 p-6 sm:p-7 space-y-5 z-50 my-auto'}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tip-modal-title"
       >
         {/* Bouton Fermer */}
+        {!embedded && (
         <button
           type="button"
           onClick={handleClose}
@@ -243,6 +255,7 @@ export const TipModal: React.FC = () => {
         >
           <span className="text-base font-bold leading-none select-none">✕</span>
         </button>
+        )}
 
         {isWaitingConfirmation ? (
           <div className="flex flex-col items-center justify-center text-center py-6 px-2 space-y-6 animate-fade-in w-full">

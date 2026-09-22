@@ -54,7 +54,9 @@
 - Tests : `npm run test:history`.
 
 ### 9. Soutien ponctuel « Eliciné Supporter » (Paddle)
-- Le bouton **Soutenir le projet** ouvre une modale premium à 7 montants : 1 € Coup de pouce, 2 € Petit soutien, 3 € Merci !, 5 € Soutien, 7 € Gros soutien, 10 € Super soutien, 50 € Soutien exceptionnel.
+- Le bouton **Soutenir le projet** ouvre une **fenêtre unique à deux onglets** : *Carte bancaire* (Paddle, €) et *Mobile Money* (SASPay, FCFA). Fenêtre étroite, montants alignés, pensée pour le téléphone.
+- 7 montants ponctuels : 1 € Coup de pouce, 2 € Petit soutien, 3 € Merci !, 5 € Soutien, 7 € Gros soutien, 10 € Super soutien, 50 € Soutien exceptionnel.
+- Les `price_id` sont **résolus automatiquement** par `GET /api/supporter-prices` (API Paddle, produit reconnu par `product_type = elicine_supporter` puis par son nom) : aucun identifiant à recopier, variables d'environnement seulement si l'on veut figer un montant.
 - Chaque montant lance Paddle Checkout avec **son propre `price_id`** (variables `VITE_PADDLE_SUPPORTER_PRICE_<montant>`), en **paiement unique uniquement**.
 - Un soutien n'active **jamais** le Pass Pro et ne modifie aucun abonnement : le produit est reconnu par `product_type = elicine_supporter` (custom_data produit/prix, complété par les métadonnées de checkout).
 - Le webhook enregistre le soutien dans `supporter_contributions`, met à jour `profiles.is_supporter` / `supporter_total_cents`, et ignore tout rejeu (clé primaire = identifiant d'événement Paddle + journal `paddle_webhook_events`).
