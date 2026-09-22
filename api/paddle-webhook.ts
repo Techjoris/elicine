@@ -675,6 +675,7 @@ export async function handlePaddleRequest(request: Request): Promise<Response> {
       supportedMethods: ['POST', 'OPTIONS'],
       ready: Boolean(PADDLE_WEBHOOK_SECRET_KEY),
       secretConfigured: Boolean(PADDLE_WEBHOOK_SECRET_KEY),
+      paddleApiKeyConfigured: Boolean(PADDLE_API_KEY),
       environment: PADDLE_ENV || 'unspecified'
     });
   }
