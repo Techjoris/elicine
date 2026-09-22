@@ -19,6 +19,7 @@ import { Footer } from './components/layout/Footer';
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
 import { ProModal } from './components/modals/ProModal';
 import { TipModal } from './components/modals/TipModal';
+import { SupporterModal } from './components/modals/SupporterModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ProSuccessModal } from './components/modals/ProSuccessModal';
@@ -65,8 +66,7 @@ export const AppContent: React.FC = () => {
     setIsThankYouModalOpen,
     isProSuccessModalOpen,
     setIsProSuccessModalOpen,
-    isTipModalOpen,
-    setIsTipModalOpen,
+    setIsSupporterModalOpen,
     isSettingsModalOpen,
     setIsSettingsModalOpen,
     isFeedbackModalOpen,
@@ -403,7 +403,7 @@ export const AppContent: React.FC = () => {
     <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white transition-colors duration-200">
       
       {/* Fixed Header */}
-      <Header onGoHome={handleResetHome} onOpenTip={() => setIsTipModalOpen(true)} />
+      <Header onGoHome={handleResetHome} onOpenTip={() => setIsSupporterModalOpen(true)} />
 
       {/* Main Body Layout (Sidebar + Content) */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
@@ -412,8 +412,8 @@ export const AppContent: React.FC = () => {
         <Sidebar 
           onGoHome={handleResetHome} 
           onOpenDevModal={() => setIsDevModalOpen(true)} 
-          onOpenSupport={() => setIsTipModalOpen(true)} 
-          onOpenTip={() => setIsTipModalOpen(true)}
+          onOpenSupport={() => setIsSupporterModalOpen(true)} 
+          onOpenTip={() => setIsSupporterModalOpen(true)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onNavigateTerms={handleNavigateTerms}
         />
@@ -490,6 +490,7 @@ export const AppContent: React.FC = () => {
       <TermsConsentModal />
       <MovieDetailModal />
       <ProModal />
+      <SupporterModal />
       <TipModal />
       <SettingsModal
         isOpen={isSettingsModalOpen}

@@ -45,7 +45,15 @@ test('real PostgreSQL: creation, media identity, cancellation, idempotency and c
     await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
       create schema auth;
       create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
-      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;`);
+      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;
+      -- Table profils déjà présente en production : le script y ajoute les colonnes Supporter.
+      create table public.profiles (
+        id uuid primary key,
+        email text,
+        is_pro boolean not null default false,
+        expires_at timestamptz,
+        updated_at timestamptz not null default now()
+      );`);
     await db.exec(await readFile(new URL('../../supabase/movie_alerts_setup.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../../supabase/migrations/20260922010000_release_email_alerts.sql', import.meta.url), 'utf8'));
     const subscribe = async type => (await db.query(`select subscribe_release_alert($1,$2,$3,$4,$5::jsonb) as alert`,
@@ -110,7 +118,15 @@ test('the single-file script handed to the dashboard can be pasted twice and wor
     await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
       create schema auth;
       create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
-      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;`);
+      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;
+      -- La table profiles existe déjà en production : le script y ajoute les colonnes Supporter.
+      create table public.profiles (
+        id uuid primary key,
+        email text,
+        is_pro boolean not null default false,
+        expires_at timestamptz,
+        updated_at timestamptz not null default now()
+      );`);
     const script = await readFile(new URL('../../supabase/APPLY_SUPABASE_SETUP.sql', import.meta.url), 'utf8');
     await db.exec(script);
     await db.exec(script);
@@ -118,6 +134,29 @@ test('the single-file script handed to the dashboard can be pasted twice and wor
     assert.equal((await db.query(`select to_regclass('public.user_movie_alerts')::text as table`)).rows[0].table, 'user_movie_alerts');
     assert.equal((await db.query(`select to_regclass('public.release_email_deliveries')::text as table`)).rows[0].table, 'release_email_deliveries');
     assert.equal((await db.query(`select to_regclass('public.user_search_history')::text as table`)).rows[0].table, 'user_search_history');
+    assert.equal((await db.query(`select to_regclass('public.supporter_contributions')::text as table`)).rows[0].table, 'supporter_contributions');
+    assert.equal((await db.query(`select to_regclass('public.paddle_webhook_events')::text as table`)).rows[0].table, 'paddle_webhook_events');
+    // Les colonnes Supporter sont ajoutées au profil sans toucher au statut Pro.
+    const profileColumns = (await db.query(`select column_name from information_schema.columns
+      where table_schema='public' and table_name='profiles'
+        and column_name in ('is_supporter','supporter_total_cents','is_pro') order by column_name`)).rows.map(row => row.column_name);
+    assert.deepEqual(profileColumns, ['is_pro', 'is_supporter', 'supporter_total_cents']);
+
+    // Le RPC de soutien est idempotent et ne touche jamais is_pro.
+    await db.exec(`insert into profiles(id, email, is_pro, expires_at) values
+      ('11111111-1111-1111-1111-111111111111','owner@example.com', false, null)`);
+    const firstSupport = (await db.query(`select record_supporter_contribution($1,$2,$3,$4,$5,$6,$7) as result`,
+      ['evt_supporter_a', 'owner@example.com', '11111111-1111-1111-1111-111111111111', 500, 'EUR', 'txn_1', '2026-09-23T10:00:00Z'])).rows[0].result;
+    const replay = (await db.query(`select record_supporter_contribution($1,$2,$3,$4,$5,$6,$7) as result`,
+      ['evt_supporter_a', 'owner@example.com', '11111111-1111-1111-1111-111111111111', 500, 'EUR', 'txn_1', '2026-09-23T10:00:00Z'])).rows[0].result;
+    assert.equal(firstSupport.recorded, true);
+    assert.equal(firstSupport.profilesUpdated, 1);
+    assert.equal(replay.recorded, false);
+    assert.equal(replay.duplicate, true);
+    const supporterProfile = (await db.query(`select is_supporter, supporter_total_cents, is_pro from profiles where id = '11111111-1111-1111-1111-111111111111'`)).rows[0];
+    assert.equal(supporterProfile.is_supporter, true);
+    assert.equal(supporterProfile.supporter_total_cents, 500, 'un rejeu ne crédite pas une seconde fois');
+    assert.equal(supporterProfile.is_pro, false, 'un soutien ponctuel n’active jamais Pro');
     const alert = (await db.query(`select subscribe_release_alert($1,$2,$3,$4,$5::jsonb) as alert`,
       ['11111111-1111-1111-1111-111111111111', 'owner@example.com', 42, 'movie', JSON.stringify({ movie_title: 'Dune', release_date: '2026-10-01' })])).rows[0].alert;
     assert.equal(alert.movie_title, 'Dune');

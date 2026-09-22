@@ -22,6 +22,7 @@ import {
   recordPaddleEventProcessed,
   resolvePaddleIdentity
 } from './_paddle-activation.js';
+import { applyPaddleSupporter, isSupporterTransaction } from './_paddle-supporter.js';
 
 // ─── Configuration des variables d'environnement ──────────────────────────────
 const RESEND_API_KEY = (
@@ -549,6 +550,30 @@ export async function processPaddleWebhookEvent(eventPayload: any, options: {
     event,
     fetchCustomer: options.fetchCustomer || fetchPaddleCustomer
   });
+
+  // ─── Produit « Eliciné Supporter » : soutien ponctuel, jamais un Pass Pro ───
+  // Traité avant le flux d'abonnement et retourné tôt : appliquer un paiement one-time
+  // Supporter ne doit ni activer Pro, ni envoyer l'e-mail de bienvenue Pro.
+  if (isSupporterTransaction(event)) {
+    const supporter = await applyPaddleSupporter({ supabase: runtimeSupabase, identity, event });
+    if (!supporter.processed && supporter.retryable) {
+      console.error('[Paddle Webhook] ❌ Soutien Supporter non enregistré :', supporter);
+      return { success: false, received: true, ...supporter, eventType, eventId };
+    }
+    const supporterRecord = await recordPaddleEventProcessed({ supabase: runtimeSupabase, event });
+    console.log(`[Paddle Webhook] 💛 Soutien Supporter ${supporter.amountCents} ${supporter.currency} enregistré (${eventId}).`);
+    return {
+      success: true,
+      received: true,
+      processed: Boolean(supporter.processed),
+      duplicate: Boolean(supporter.duplicate || supporterRecord.duplicate),
+      supporter: true,
+      isPro: false,
+      eventType,
+      eventId,
+      ...supporter
+    };
+  }
 
   if (!identity?.email) {
     console.error('[Paddle Webhook] ❌ Utilisateur Supabase introuvable (user_id / customer_id / subscription_id).');

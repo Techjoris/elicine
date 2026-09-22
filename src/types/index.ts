@@ -83,10 +83,13 @@ export interface UserProfile {
   expires_at?: string | null;
   pro_expires_at?: string | null;
   subscription_ends_at?: string | null;
-  expiresAt?: string | null;
-  daysRemaining?: number | null;
-  days_remaining?: number | null;
-  referralCode: string;
+    expiresAt?: string | null;
+    daysRemaining?: number | null;
+    days_remaining?: number | null;
+    /** Soutien ponctuel Paddle (Eliciné Supporter) — sans lien avec le Pass Pro. */
+    is_supporter?: boolean;
+    supporter_total_cents?: number;
+    referralCode: string;
   referredBy?: string | null;
   createdAt: string;
   myList?: Movie[];

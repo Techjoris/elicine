@@ -10,6 +10,8 @@
     "test:alerts": "node --test tests/alerts/",
     "test:upcoming": "node --import tsx --test tests/upcoming/",
     "test:history": "node --import tsx --test tests/history/",
+    "test:supporter": "node --import tsx --test tests/supporter/",
+    "test:paddle": "node --import tsx --test tests/paddle/",
     "search:diagnose": "node scripts/search-diagnose.mjs",
     "search:benchmark": "node --import tsx scripts/search-benchmark.mjs",
     "search:recall": "node scripts/narrative-recall-benchmark.mjs"

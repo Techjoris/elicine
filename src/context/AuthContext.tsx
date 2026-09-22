@@ -75,6 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let fullName = rawUser.user_metadata?.full_name || rawUser.name;
     let expiresAt: string | null = rawUser.expires_at || rawUser.pro_expires_at || rawUser.expiresAt || null;
     let daysRemaining: number | null = null;
+    // Statut « Supporter » (soutiens ponctuels Paddle) : indépendant du Pass Pro.
+    let isSupporter = Boolean(rawUser.is_supporter || rawUser.user_metadata?.is_supporter);
+    let supporterTotalCents = Number(rawUser.supporter_total_cents) || 0;
 
     try {
       const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
@@ -106,6 +109,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         role = isMaster ? 'admin' : (prof.role || role);
         if (prof.full_name) fullName = prof.full_name;
+        if (prof.is_supporter === true) isSupporter = true;
+        if (Number.isFinite(Number(prof.supporter_total_cents))) supporterTotalCents = Number(prof.supporter_total_cents) || 0;
       }
     } catch (err) {
       console.warn('[AuthContext] enrichUserWithProfile warning:', err);
@@ -144,6 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pro_expires_at: expiresAt,
       expiresAt,
       daysRemaining,
+      is_supporter: isSupporter,
+      supporter_total_cents: supporterTotalCents,
       role,
       name: fullName || email.split('@')[0] || 'Cinéphile',
       user_metadata: {
@@ -153,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pass_status: passStatus,
         expires_at: expiresAt,
         daysRemaining,
+        is_supporter: isSupporter,
         full_name: fullName
       }
     };
