@@ -207,6 +207,23 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.8. ROUTE /api/releases — classement « Prochainement » par degré d'attente
+            if (pathname === '/api/releases') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/releases.js')).href;
+                const releasesHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await releasesHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 4. ROUTE /api/auth (login, register, send-verification, google)
             if (pathname.startsWith('/api/auth')) {
               adaptResponse();

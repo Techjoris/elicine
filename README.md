@@ -40,7 +40,8 @@
 - Écouteur de paramètre `?ref=` pour le système de parrainage.
 
 ### 7. Prochainement & Alertes de sortie (Pass Pro)
-- Colonne **Prochainement** : films et séries à venir (TMDB, tri par date de sortie puis popularité, filtres Films / Séries).
+- Colonne **Prochainement** : films et séries à venir des 6 prochains mois, **classés par degré d'attente** (filtres Films / Séries). Le rang combine le buzz TMDB ramené à la fenêtre de sortie, la présence dans les tendances jour/semaine, le poids de la saga (audience des opus précédents) et de la plateforme pour les séries. La date de sortie ne participe pas au score : elle ne départage que les égalités.
+- Classement calculé côté serveur par `GET /api/releases` (cache CDN 15 min), pour ne pas consommer le quota de recherche du client.
 - **Alertes e-mail J-2 et jour J** réservées aux comptes Pass Pro, programmées depuis la colonne ou n'importe quelle fiche.
 - Envoi quotidien via Resend, avec verrou anti-doublon en base, vérification du statut de livraison et arrêt automatique si l'abonnement expire.
 - Exploitation, variables d'environnement et tests : [`supabase/RELEASE_ALERTS.md`](supabase/RELEASE_ALERTS.md).
@@ -66,4 +67,9 @@ npm run build
 ### Tester les alertes de sortie (J-2 / jour J) :
 ```bash
 npm run test:alerts
+```
+
+### Tester le classement « Prochainement » :
+```bash
+npm run test:upcoming
 ```

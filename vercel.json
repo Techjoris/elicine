@@ -114,6 +114,9 @@
   "functions": {
     "api/activate-pro.js": {
       "maxDuration": 300
+    },
+    "api/releases.js": {
+      "maxDuration": 30
     }
   }
 }
