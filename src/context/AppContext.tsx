@@ -19,7 +19,7 @@ import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } 
 import { subscriptionService } from '../services/subscriptionService';
 import { movieAlertsService, alertMediaType } from '../services/movieAlertsService';
 import { searchHistoryService, mergeHistory, cleanQuery } from '../services/searchHistoryService';
-import { initPaddle, openPaddleCheckout } from '../services/paddleService';
+import { initPaddle, openPaddleCheckout, PADDLE_PRICE_IDS } from '../services/paddleService';
 
 interface AppContextType {
   // Quota & AI
@@ -933,10 +933,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    */
   const openPaddleProCheckout = async (priceId?: string): Promise<boolean> => {
     const currentUser = user || authService.getStoredUser();
+    // L'identité part avec le paiement : le webhook active alors le bon compte directement,
+    // sans dépendre d'une correspondance d'e-mail ni de l'API client Paddle.
+    const plan = priceId === PADDLE_PRICE_IDS.yearly ? 'yearly' : 'monthly';
     return openPaddleCheckout({
       priceId,
       userEmail: currentUser?.email,
       userName: currentUser?.name,
+      userId: currentUser?.id,
+      customData: { product_type: 'elicine_pro', plan, purchase_type: 'subscription' },
       onSuccess: async () => {
         setIsProModalOpen(false);
         confetti({

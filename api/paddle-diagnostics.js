@@ -137,7 +137,7 @@ export async function auditPaddle({ key, base }) {
 }
 
 /** Vérifie les tables et les derniers soutiens côté Supabase. */
-export async function auditDatabase() {
+export async function auditDatabase({ email } = {}) {
   const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
   const key = clean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) return { configured: false, tables: {}, warnings: ['SUPABASE_SERVICE_ROLE_KEY absente : audit base impossible.'] };
@@ -161,7 +161,22 @@ export async function auditDatabase() {
   }
   const { error: profileError } = await db.from('profiles').select('is_supporter, supporter_total_cents').limit(1);
   if (profileError) warnings.push('Colonnes Supporter absentes de la table profiles.');
-  return { configured: true, tables, supporters, processedEvents, supporterColumns: !profileError, warnings };
+
+  // Compte précis : utile pour vérifier qu'un paiement réel a bien activé le bon profil.
+  let account = null;
+  if (clean(email)) {
+    const { data: profiles, error } = await db.from('profiles')
+      .select('id,email,is_pro,expires_at,is_supporter,supporter_total_cents,supporter_last_at')
+      .ilike('email', clean(email)).limit(1);
+    if (error) warnings.push(`Lecture du profil impossible : ${error.message}`);
+    const profile = profiles?.[0] || null;
+    const contributions = tables.supporter_contributions
+      ? (await db.from('supporter_contributions').select('event_id,amount_cents,currency,created_at').ilike('email', clean(email)).order('created_at', { ascending: false }).limit(5)).data || []
+      : [];
+    account = { found: Boolean(profile), profile, contributions };
+  }
+
+  return { configured: true, tables, supporters, processedEvents, supporterColumns: !profileError, account, warnings };
 }
 
 export default async function handler(req, res) {
@@ -195,7 +210,7 @@ export default async function handler(req, res) {
   if (!report.env.RESEND_API_KEY) report.warnings.push('RESEND_API_KEY absente : aucun e-mail transactionnel ne part.');
 
   try {
-    report.database = await auditDatabase();
+    report.database = await auditDatabase({ email: req.query?.email });
     report.warnings.push(...(report.database.warnings || []));
   } catch (error) {
     report.warnings.push(`Audit base impossible : ${error?.message || error}`);
