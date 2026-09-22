@@ -48,10 +48,20 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
-  // Saturation sits at the top of the computed range: the displayed percentage
-  // keeps discriminating inside the whole useful band instead of flattening
-  // every strong candidate at 100%.
-  publicMatch: Object.freeze({ floor: 22, spread: 78, saturation: 1, gamma: 1.15 })
+  // Saturation sits at the top of the computed range the engine really reaches
+  // (0.8 on a precise request, less on a rich thematic one): the displayed
+  // percentage then spreads the whole useful band over the documented ladder -
+  // excellent near the top, average around the middle - and keeps
+  // discriminating inside it instead of flattening every strong candidate
+  // between 50 and 70% as a saturation of 1 did.
+  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.8, gamma: 1 }),
+  // A temporal word in the request ("moderne", "récent", "contemporain") says
+  // WHEN the described work belongs, and it is a graded preference rather than
+  // a filter: the whole catalogue stays admissible, a contemporary work is
+  // pushed up and a very old one down by the same bounded amount, and nothing
+  // moves when the request states no period. The preference is calibrated on
+  // the computed score only - no year, no decade and no title is ever hardcoded.
+  temporalPreference: Object.freeze({ weight: 0.07, horizonYears: 45 })
 });
 
 export function isElicineRankingEnabled(env = process.env) {
@@ -114,6 +124,57 @@ function candidateYear(candidate) {
   const value = candidate.releaseDate || candidate.firstAirDate;
   const year = Number.parseInt(String(value || '').slice(0, 4), 10);
   return Number.isInteger(year) ? year : null;
+}
+
+/**
+ * Vocabulary that places a request in the present. Bilingual on purpose: the
+ * interpreter writes its concepts in English while the user writes in French,
+ * and the ranking reads both channels with the same bounded list. It carries no
+ * title and no identifier, and it never filters a candidate.
+ */
+const RECENCY_TERMS = Object.freeze([
+  'moderne', 'modernes', 'modern',
+  'contemporain', 'contemporaine', 'contemporains', 'contemporaines', 'contemporary',
+  'recent', 'recente', 'recents', 'recentes',
+  'actuel', 'actuelle', 'actuels', 'actuelles', 'current',
+  'aujourd hui', 'de nos jours', 'modern day', 'present day',
+  'nouvelle generation', 'new generation',
+  '21st century', '21e siecle', 'xxie siecle', 'post 2000', 'apres 2000'
+]);
+
+/** A listed wording is matched as a whole token or phrase, never as a prefix. */
+function statesContemporaryRequest(text) {
+  const normalized = normalizeTerm(text);
+  if (!normalized) return false;
+  const padded = ` ${normalized} `;
+  return RECENCY_TERMS.some(term => padded.includes(` ${term} `));
+}
+
+/**
+ * Affinity of the request for contemporary works, in 0..1. Explicit year bounds
+ * always win: a request that names its decade already carries the period, so the
+ * derived preference stays inert and an era search keeps its own works.
+ */
+export function contemporaryAffinity(intent = {}, queryText = '') {
+  if (intent.yearMin != null || intent.yearMax != null) return 0;
+  if (statesContemporaryRequest(queryText)) return 1;
+  const concepts = [...array(intent.genres), ...array(intent.moods),
+    ...array(intent.themes), ...array(intent.keywords)];
+  return concepts.some(concept => statesContemporaryRequest(concept)) ? 1 : 0;
+}
+
+/**
+ * Graded recency of one work: 1 for a work released this year, 0 at the horizon
+ * and below. An unknown year is neutral, so a candidate the catalogue does not
+ * date is never penalised.
+ */
+export function recencyFit(year, { horizonYears, referenceYear } = {}) {
+  const configured = ELICINE_RANKING_CONFIG.temporalPreference.horizonYears;
+  const horizon = Number.isFinite(Number(horizonYears)) ? Number(horizonYears) : configured;
+  const reference = Number.isFinite(Number(referenceYear)) ? Number(referenceYear)
+    : new Date().getFullYear();
+  if (!Number.isInteger(year) || !(horizon > 0)) return null;
+  return clamp(1 - Math.max(0, reference - year) / horizon);
 }
 
 function sourceSimilarity(candidate) {
@@ -294,7 +355,7 @@ function boundedYearScore(candidate, intent) {
   return year >= intent.yearMin && year <= intent.yearMax ? 1 : 0;
 }
 
-export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {}) {
+export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {}, { queryText = '' } = {}) {
   const data = candidate.constraintData || {};
   const text = candidateText(candidate);
   const semanticTerms = [...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)];
@@ -318,6 +379,12 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const describesNarrative = narrativeTerms.some(term =>
     conceptSpecificity(term, { genres: conceptGenres }) > CONCEPT_WEIGHTS.genreRestatement);
   const genericCredit = describesNarrative ? discriminatingScore : 1;
+  // A temporal word in the request ("moderne", "récent") describes the period of
+  // the work, not its content: it never enters the coverage average, which would
+  // reward every candidate of that period equally, and instead moves the computed
+  // score by a bounded, graded amount. Nothing is filtered out of the catalogue.
+  const temporalFit = contemporaryAffinity(intent, queryText) > 0
+    ? recencyFit(candidateYear(candidate)) : null;
   const components = {
     semanticScore: round(semanticScore),
     genreScore: round(genreOverlap(candidate, intent) * genericCredit),
@@ -339,7 +406,10 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
       Number(data.countries.some(country => intent.countries.includes(country))) : 0.5) : 0,
     qualityScore: round(qualityScore(candidate)), popularityScore: round(popularityScore(candidate)),
     sourceConfidenceScore: round(sourceConfidenceScore(candidate)),
-    narrativeCandidateScore: round(narrativeCandidateScore(candidate, semanticTerms, conceptGenres))
+    narrativeCandidateScore: round(narrativeCandidateScore(candidate, semanticTerms, conceptGenres)),
+    // Unsigned by construction: 0 means "no temporal preference, or a work too
+    // old to count as contemporary", 1 a work released this year.
+    temporalScore: round(temporalFit ?? 0)
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
   components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.discriminatingScore));
@@ -377,8 +447,13 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // identified work the formula is exactly the historical one.
   const identifiedBonus = components.identifiedWorkScore * ELICINE_RANKING_CONFIG.identifiedWorkWeight;
   const narrativeBonus = components.narrativeCandidateScore * ELICINE_RANKING_CONFIG.narrativeCandidateWeight;
+  // Symmetric and bounded: a contemporary work gains what a very old one loses,
+  // so the request keeps discriminating without any hard cut on the period.
+  const temporalAdjustment = temporalFit == null ? 0
+    : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight;
   const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus);
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus +
+    temporalAdjustment);
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
@@ -393,8 +468,8 @@ function compareRanked(left, right) {
   const a = left.ranking;
   const b = right.ranking;
   if (Math.abs(b.finalScore - a.finalScore) > ELICINE_RANKING_CONFIG.tieEpsilon) return b.finalScore - a.finalScore;
-  for (const field of ['intentScore', 'identifiedWorkScore', 'narrativeCandidateScore', 'entityScore', 'referenceScore',
-    'semanticScore', 'qualityScore']) {
+  for (const field of ['intentScore', 'identifiedWorkScore', 'temporalScore', 'narrativeCandidateScore', 'entityScore',
+    'referenceScore', 'semanticScore', 'qualityScore']) {
     if (b[field] !== a[field]) return b[field] - a[field];
   }
   const voteDifference = Number(right.metadata?.vote_count || 0) - Number(left.metadata?.vote_count || 0);
@@ -405,13 +480,13 @@ function compareRanked(left, right) {
 }
 
 export function rankSearchCandidates(candidates, intent, resolvedContext, {
-  telemetry = {}, env = process.env, enabled = isElicineRankingEnabled(env), accumulate = true
+  telemetry = {}, env = process.env, enabled = isElicineRankingEnabled(env), accumulate = true, queryText = ''
 } = {}) {
   const input = Array.isArray(candidates) ? candidates : [];
   if (!enabled) return input;
   const startedAt = Date.now();
   const ranked = input.map(candidate => ({ ...candidate,
-    ranking: scoreSearchCandidate(candidate, intent, resolvedContext) })).sort(compareRanked);
+    ranking: scoreSearchCandidate(candidate, intent, resolvedContext, { queryText }) })).sort(compareRanked);
   const priorCount = accumulate && telemetry.rankingAttempted ? Number(telemetry.rankingCandidateCount || 0) : 0;
   const priorTotal = priorCount * Number(telemetry.rankingAverageScore || 0);
   const currentTotal = ranked.reduce((sum, candidate) => sum + candidate.ranking.finalScore, 0);

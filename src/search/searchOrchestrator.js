@@ -54,7 +54,11 @@ export async function orchestrateSearch({
       orchestrationFallbackToLegacy: error !== null,
       orchestrationError: error
     });
-    return { path: 'legacy', interpreted, canonicalIntent: null, resolvedIntentContext: createResolvedIntentContext() };
+    return { path: 'legacy', interpreted, canonicalIntent: null,
+      resolvedIntentContext: createResolvedIntentContext(),
+      // The wording of the request is carried for the ranking only: the temporal
+      // preference reads it, the retrieval never does.
+      userQuery: typeof cleanQuery === 'string' ? cleanQuery : '' };
   };
 
   if (!isCanonicalSearchEngineEnabled(env)) {
@@ -114,7 +118,8 @@ export async function orchestrateSearch({
       path: 'canonical',
       interpreted: projectedInterpretation,
       canonicalIntent,
-      resolvedIntentContext
+      resolvedIntentContext,
+      userQuery: typeof cleanQuery === 'string' ? cleanQuery : ''
     };
   } catch {
     // Fixed code only: exception text can include provider output.
@@ -158,7 +163,8 @@ export async function orchestrateCandidateRetrieval({
     let ranked;
     try {
       ranked = rankCandidates(admissible, orchestration.canonicalIntent,
-        orchestration.resolvedIntentContext, { telemetry: context.telemetry, env });
+        orchestration.resolvedIntentContext, { telemetry: context.telemetry, env,
+          queryText: orchestration.userQuery || '' });
     } catch {
       recordFallback(context.telemetry, { reason: FALLBACK_REASONS.RANKING_ERROR, source: 'ranking' });
       return [];

@@ -74,7 +74,7 @@ if (!query) {
   const expectedSources = ['tmdb_person_credits', 'tmdb_search', 'tmdb_discover', 'tmdb_similar', 'tmdb_recommendations',
     'supabase_vector', 'supabase_lexical', 'legacy'];
   const results = await orchestrateCandidateRetrieval({
-    orchestration: { canonicalIntent: intent, resolvedIntentContext },
+    orchestration: { canonicalIntent: intent, resolvedIntentContext, userQuery: query },
     services,
     context: { telemetry, evaluationTrace: trace, semanticIntentContext: interpretation.semanticContext }
   });

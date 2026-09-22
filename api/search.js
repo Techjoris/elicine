@@ -3048,7 +3048,8 @@ export default async function handler(req, res) {
             const fallbackCandidates = admissibleFallback
               .map(movie => toRetrievalCandidate(movie, 'fallback')).filter(Boolean);
             const rankedFallback = rankSearchCandidates(fallbackCandidates, orchestration.canonicalIntent,
-              orchestration.resolvedIntentContext, { telemetry });
+              orchestration.resolvedIntentContext, { telemetry,
+                queryText: req.body?.rawQuery || cleanQuery || '' });
             resolvedMovies = diversifyRankedCandidates(rankedFallback, orchestration.canonicalIntent,
               orchestration.resolvedIntentContext, { telemetry }).slice(0, 6).map(candidate =>
               toElicineRankedResult(candidate, 'Recommandations Éliciné pour votre atmosphère'));
