@@ -13,8 +13,16 @@
 import crypto from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
+import { supabaseAdmin } from './_pro-activation.js';
 import { sendProWelcomeEmail } from './_email.js';
+import {
+  applyPaddleSubscription,
+  extractPaddleEmail,
+  hasProcessedPaddleEvent,
+  normalizePaddleEvent,
+  recordPaddleEventProcessed,
+  resolvePaddleIdentity
+} from './_paddle-activation.js';
 
 // ─── Configuration des variables d'environnement ──────────────────────────────
 const RESEND_API_KEY = (
@@ -24,10 +32,24 @@ const RESEND_API_KEY = (
 ).trim();
 
 const PADDLE_WEBHOOK_SECRET_KEY = (
+  process.env.PADDLE_WEBHOOK_SECRET ||
   process.env.PADDLE_WEBHOOK_SECRET_KEY ||
+  process.env.VITE_PADDLE_WEBHOOK_SECRET ||
   process.env.VITE_PADDLE_WEBHOOK_SECRET_KEY ||
   ''
 ).trim();
+
+const PADDLE_API_KEY = (
+  process.env.PADDLE_API_KEY ||
+  process.env.VITE_PADDLE_API_KEY ||
+  ''
+).trim();
+
+const PADDLE_ENV = (
+  process.env.PADDLE_ENV ||
+  process.env.VITE_PADDLE_ENV ||
+  ''
+).trim().toLowerCase();
 
 const SUPABASE_URL = (
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -440,403 +462,277 @@ export function getPaddleProWelcomeHtml({
   `.trim();
 }
 
+const PADDLE_SUBSCRIPTION_EVENTS = new Set([
+  'subscription.created', 'subscription.updated', 'subscription.activated',
+  'subscription.trialing', 'subscription.past_due', 'subscription.canceled',
+  'subscription.cancelled', 'subscription.paused', 'subscription.resumed'
+]);
+const PADDLE_TRANSACTION_EVENTS = new Set(['transaction.completed', 'transaction.paid']);
+
+function isEligiblePaddleEvent(eventType: string) {
+  return PADDLE_SUBSCRIPTION_EVENTS.has(eventType) || PADDLE_TRANSACTION_EVENTS.has(eventType);
+}
+
+async function fetchPaddleCustomer(customerId: string) {
+  if (!PADDLE_API_KEY || !customerId) return null;
+  const baseUrl = PADDLE_ENV === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+  const response = await fetch(`${baseUrl}/customers/${encodeURIComponent(customerId)}`, {
+    headers: { Authorization: `Bearer ${PADDLE_API_KEY}` }
+  });
+  if (!response.ok) throw new Error(`PADDLE_CUSTOMER_${response.status}`);
+  const payload: any = await response.json();
+  return payload?.data || payload;
+}
+
 /**
- * Traite l'événement Paddle et effectue l'activation Supabase + envoi Resend
- * en réutilisant exactement la logique interne de /api/activate-pro et /api/saspay (activateUserPassPro).
+ * Apply one Paddle Billing event to Supabase.
+ *
+ * The old flow required an email in the payload. Paddle subscription events
+ * carry data.customer_id and data.custom_data.user_id, but not necessarily an
+ * email, so a real subscription.created stopped before writing anything. The
+ * identity now resolves through user_id, stored Paddle identifiers or the
+ * Paddle customer API. Access is applied from the real subscription status.
  */
-export async function processPaddleWebhookEvent(eventPayload: any) {
-  const body = eventPayload || {};
-  const data = body?.data || {};
+export async function processPaddleWebhookEvent(eventPayload: any, options: {
+  rawBody?: string;
+  signatureVerified?: boolean | null;
+  supabase?: SupabaseClient | null;
+  fetchCustomer?: ((customerId: string) => Promise<any>) | null;
+} = {}) {
+  const event = normalizePaddleEvent(eventPayload, options.rawBody || '');
+  const { eventType, eventId, subscriptionId, transactionId, customerId } = event;
+  const runtimeSupabase = options.supabase || effectiveSupabase;
 
-  const eventType = (
-    body?.event_type ||
-    body?.type ||
-    body?.eventType ||
-    ''
-  ).trim().toLowerCase();
+  console.log(`[Paddle Webhook] 🔔 Événement reçu : "${eventType}" (ID: ${eventId || 'N/A'} | Sub: ${subscriptionId || 'N/A'} | Tx: ${transactionId || 'N/A'} | Customer: ${customerId || 'N/A'})`);
 
-  const transactionId = (
-    data?.id ||
-    data?.transaction_id ||
-    body?.data?.id ||
-    body?.id ||
-    ''
-  ).trim();
-
-  console.log(`[Paddle Webhook] 🔔 Événement reçu : "${eventType}" (ID Event: ${body?.event_id || 'N/A'} | TxID: ${transactionId || 'N/A'})`);
-
-  // 1. INSPECTION DU PAYLOAD PADDLE :
-  // Récupérer l'e-mail du payeur selon les spécifications :
-  // const email = body?.data?.customer?.email || body?.data?.details?.customer?.email || body?.data?.custom_data?.email;
-  let email = (
-    body?.data?.customer?.email ||
-    body?.data?.details?.customer?.email ||
-    body?.data?.custom_data?.email ||
-    data?.customer?.email ||
-    data?.details?.customer?.email ||
-    data?.custom_data?.email ||
-    body?.customer?.email ||
-    body?.details?.customer?.email ||
-    body?.custom_data?.email ||
-    body?.customer_email ||
-    data?.customer_email ||
-    data?.user_email ||
-    data?.email ||
-    ''
-  ).trim().toLowerCase();
-
-  // Si l'e-mail n'est pas trouvé dans les champs classiques, inspecter body.data pour trouver l'adresse
-  if (!email || !email.includes('@')) {
-    email = extractEmailFromPayload(data) || extractEmailFromPayload(body) || '';
-  }
-
-  // 4. PRISE EN CHARGE IMMÉDIATE : Fallback explicite
-  // Si le webhook reçoit la transaction txn_01m2xa1c14bzjhz75hnw6n4en0 ou l'adresse sandytini07@gmail.com,
-  // forcer l'activation immédiate de sandytini07@gmail.com et l'envoi du mail.
-  const rawString = JSON.stringify(body);
-  const isSandyTransaction =
-    transactionId === 'txn_01m2xa1c14bzjhz75hnw6n4en0' ||
-    rawString.includes('txn_01m2xa1c14bzjhz75hnw6n4en0') ||
-    rawString.includes('sandytini07@gmail.com') ||
-    email === 'sandytini07@gmail.com';
-
-  if (isSandyTransaction) {
-    console.log(`[Paddle Webhook] 🎯 Prise en charge immédiate pour sandytini07@gmail.com (Tx: ${transactionId || 'txn_01m2xa1c14bzjhz75hnw6n4en0'})`);
-    email = 'sandytini07@gmail.com';
-  }
-
-  // Événements éligibles pour l'activation Pro
-  const isEligibleEvent =
-    eventType === 'transaction.completed' ||
-    eventType === 'transaction.paid' ||
-    eventType === 'subscription.created' ||
-    eventType === 'subscription.activated' ||
-    eventType === 'subscription.updated' ||
-    eventType.includes('transaction.completed') ||
-    eventType.includes('subscription.activated') ||
-    eventType.includes('subscription.created') ||
-    eventType.includes('transaction.paid') ||
-    isSandyTransaction;
-
-  if (!isEligibleEvent) {
-    console.log(`[Paddle Webhook] ℹ️ Événement "${eventType}" acquitté avec 200 (non lié à l'activation Pro immédiate).`);
+  if (!isEligiblePaddleEvent(eventType)) {
     return {
       success: true,
       received: true,
       processed: false,
       eventType,
-      message: `Événement ${eventType} acquitté avec succès`
+      message: `Événement ${eventType} acquitté sans traitement métier.`
     };
   }
 
-  if (!email || !email.includes('@')) {
-    console.warn('[Paddle Webhook] ⚠️ Adresse email client introuvable après inspection complète du payload Paddle.');
+  if (!runtimeSupabase) {
+    console.error('[Paddle Webhook] ❌ Supabase service role absent : impossible d’activer Pro.');
+    return {
+      success: false,
+      received: true,
+      processed: false,
+      retryable: true,
+      error: 'SUPABASE_NOT_CONFIGURED'
+    };
+  }
+
+  if (await hasProcessedPaddleEvent({ supabase: runtimeSupabase, eventId })) {
+    console.log(`[Paddle Webhook] ♻️ Événement déjà traité : ${eventId}`);
     return {
       success: true,
       received: true,
       processed: false,
-      warning: 'Adresse email client introuvable dans le payload Paddle.'
+      duplicate: true,
+      eventType,
+      eventId
     };
   }
 
-  // Extraction et normalisation des métadonnées du plan
-  const priceId = (
-    data?.items?.[0]?.price?.id ||
-    data?.items?.[0]?.price_id ||
-    data?.custom_data?.price_id ||
-    ''
-  ).trim();
+  const identity = await resolvePaddleIdentity({
+    supabase: runtimeSupabase,
+    event,
+    fetchCustomer: options.fetchCustomer || fetchPaddleCustomer
+  });
 
-  const rawTotal = data?.details?.totals?.total || data?.details?.totals?.grand_total || '1.99';
-  const currency = (data?.currency_code || data?.details?.totals?.currency_code || 'EUR').toUpperCase();
-
-  const isYearly =
-    priceId === 'pri_01m2x8yc8y1k9b5bej81me7dbd' ||
-    data?.custom_data?.plan === 'yearly' ||
-    data?.custom_data?.billing_cycle === 'yearly' ||
-    Number(rawTotal) >= 10;
-
-  const plan = isYearly ? 'yearly' : 'monthly';
-  const numericAmount = isYearly
-    ? (Number(rawTotal) >= 10 ? Number(rawTotal) : 17.90)
-    : (Number(rawTotal) > 0 && Number(rawTotal) < 10 ? Number(rawTotal) : 1.99);
-
-  let userId: string | null = (
-    data?.custom_data?.user_id ||
-    data?.custom_data?.userId ||
-    data?.custom_data?.supabase_user_id ||
-    body?.data?.custom_data?.user_id ||
-    null
-  );
-
-  const customerName = (
-    data?.customer?.name ||
-    data?.details?.customer?.name ||
-    data?.custom_data?.user_name ||
-    data?.custom_data?.customer_name ||
-    (email ? email.split('@')[0] : 'Cinéphile')
-  );
-
-  const effectiveTxId = transactionId || (isSandyTransaction ? 'txn_01m2xa1c14bzjhz75hnw6n4en0' : `txn_paddle_${Date.now()}`);
-  const subscriptionId = (
-    data?.subscription_id ||
-    data?.custom_data?.subscription_id ||
-    effectiveTxId
-  );
-
-  console.log(`[Paddle Webhook] 🚀 Lancement de l'activation pour ${email} | Plan: ${plan} | Montant: ${numericAmount} ${currency} | Tx: ${effectiveTxId}`);
-
-  // 2. ACTIVATION VIA LE FLUX EXISTANT :
-  // Appel direct de activateUserPassPro (identique à /api/activate-pro et /api/saspay)
-  let activationResult: any = { success: false, dbUpdated: false, emailSent: false };
-  try {
-    activationResult = await activateUserPassPro(email, {
-      userId,
-      customerName,
-      plan,
-      amount: numericAmount,
-      currency,
-      gateway: 'paddle',
-      paymentReference: effectiveTxId,
+  if (!identity?.email) {
+    console.error('[Paddle Webhook] ❌ Utilisateur Supabase introuvable (user_id / customer_id / subscription_id).');
+    return {
+      success: false,
+      received: true,
+      processed: false,
+      retryable: true,
+      error: 'PADDLE_IDENTITY_NOT_RESOLVED',
+      eventType,
+      eventId,
       subscriptionId,
-      isDonation: false
-    });
-    console.log(`[Paddle Webhook] ✅ activateUserPassPro résultat :`, activationResult);
-  } catch (actErr: any) {
-    console.error(`[Paddle Webhook] ❌ Erreur lors de activateUserPassPro :`, actErr);
+      customerId
+    };
   }
 
-  // 2.B. Mise à jour de sécurité directe Supabase (profiles & subscriptions) pour garantir la synchronisation
-  let manualDbUpdated = false;
-  const nowIso = new Date().toISOString();
-  const durationDays = isYearly ? 365 : 30;
-  const expiresAtIso = activationResult.expiresAt || new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+  const result = await applyPaddleSubscription({
+    supabase: runtimeSupabase,
+    identity,
+    event,
+    now: new Date().toISOString()
+  });
 
-  if (effectiveSupabase) {
-    try {
-      // Mettre is_pro: true sur le profil correspondant à cet e-mail
-      const { error: profErr } = await effectiveSupabase
-        .from('profiles')
-        .update({
-          is_pro: true,
-          expires_at: expiresAtIso,
-          updated_at: nowIso
-        })
-        .ilike('email', email);
-
-      if (!profErr) {
-        console.log(`[Paddle Webhook] ✅ Table profiles mise à jour directement (is_pro = true) pour ${email}`);
-        manualDbUpdated = true;
-      } else {
-        console.warn(`[Paddle Webhook] Note profiles direct update:`, profErr.message);
-      }
-
-      // Mettre à jour la table des abonnements/souscriptions avec le statut actif
-      const subPayload = {
-        id: subscriptionId,
-        user_id: userId || `usr_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        email: email,
-        customer_name: customerName,
-        plan: isYearly ? 'yearly' : 'monthly',
-        amount: numericAmount,
-        currency: currency || 'EUR',
-        status: 'active',
-        payment_reference: effectiveTxId,
-        payment_provider: 'paddle',
-        terms_accepted: true,
-        expires_at: expiresAtIso,
-        updated_at: nowIso
-      };
-
-      const { error: subErr } = await effectiveSupabase
-        .from('subscriptions')
-        .upsert(subPayload);
-
-      if (!subErr) {
-        console.log(`[Paddle Webhook] ✅ Table subscriptions mise à jour directement (status = active) pour ${email}`);
-        manualDbUpdated = true;
-      } else {
-        console.warn(`[Paddle Webhook] Note subscriptions direct upsert:`, subErr.message);
-      }
-    } catch (sbErr: any) {
-      console.warn(`[Paddle Webhook] Note exception direct Supabase:`, sbErr?.message || sbErr);
-    }
+  if (!result.processed) {
+    console.error('[Paddle Webhook] ❌ Synchronisation Supabase échouée :', result);
+    return {
+      success: false,
+      received: true,
+      ...result,
+      eventType,
+      eventId
+    };
   }
 
-  // 3. ENVOI DU MAIL VIA RESEND :
-  // Déclencher l'envoi d'e-mail Resend avec RESEND_API_KEY depuis "support@elicine.app" vers cet e-mail
-  let emailSent = Boolean(activationResult.emailSent);
+  const record = await recordPaddleEventProcessed({ supabase: runtimeSupabase, event });
+  if (record.duplicate) {
+    return {
+      success: true,
+      received: true,
+      processed: false,
+      duplicate: true,
+      eventType,
+      eventId
+    };
+  }
 
-  if (!emailSent) {
-    // Si l'e-mail n'a pas été envoyé lors de activateUserPassPro, envoi de sécurité direct via Resend
+  let emailSent = false;
+  const welcomeEvents = new Set(['subscription.created', 'subscription.activated',
+    'transaction.completed', 'transaction.paid']);
+  if (result.isPro && welcomeEvents.has(eventType)) {
+    const amount = Number(event.data?.details?.totals?.total || event.data?.details?.totals?.grand_total || 1.99);
+    const currency = String(event.data?.currency_code || event.data?.details?.totals?.currency_code || 'EUR').toUpperCase();
+    const customerName = event.data?.customer?.name || event.customData?.user_name || identity.email.split('@')[0];
     try {
-      console.log(`[Paddle Webhook] ✉️ Tentative d'envoi de secours Resend depuis support@elicine.app vers ${email}...`);
-      const welcomeRes = await sendProWelcomeEmail(email, {
+      const welcome = await sendProWelcomeEmail(identity.email, {
         customerName,
-        plan,
-        amount: numericAmount,
+        plan: result.plan || 'monthly',
+        amount,
         currency,
-        expiresAt: expiresAtIso
+        expiresAt: result.expiresAt
       });
-
-      if (welcomeRes?.success) {
-        emailSent = true;
-        console.log(`[Paddle Webhook] ✉️ E-mail Resend envoyé avec succès via sendProWelcomeEmail à ${email}`);
-      } else if (resend || RESEND_API_KEY) {
-        const client = resend || new Resend(RESEND_API_KEY);
-        const emailHtml = getPaddleProWelcomeHtml({
-          customerName,
-          amount: `${String(numericAmount).replace('.', ',')} €`,
-          expiresAt: expiresAtIso
-        });
-
-        const resendRes = await client.emails.send({
+      emailSent = Boolean(welcome?.success);
+      if (!emailSent && resend) {
+        const fallback = await resend.emails.send({
           from: 'Éliciné <support@elicine.app>',
-          to: [email],
+          to: [identity.email],
           subject: 'Bienvenue dans Éliciné Pro ! 🎬',
-          html: emailHtml
+          html: getPaddleProWelcomeHtml({
+            customerName,
+            amount: `${String(amount).replace('.', ',')} €`,
+            expiresAt: result.expiresAt
+          })
         });
-
-        if (!resendRes.error) {
-          emailSent = true;
-          console.log(`[Paddle Webhook] ✉️ E-mail Resend fallback envoyé avec succès à ${email} (ID: ${resendRes.data?.id})`);
-        } else {
-          console.error(`[Paddle Webhook] Erreur Resend direct:`, resendRes.error);
-        }
+        emailSent = !fallback.error;
       }
-    } catch (mailErr: any) {
-      console.error(`[Paddle Webhook] ❌ Erreur lors de l'envoi du mail Resend:`, mailErr?.message || mailErr);
+    } catch (mailError: any) {
+      console.error('[Paddle Webhook] Erreur envoi email:', mailError?.message || mailError);
     }
   }
 
+  console.log(`[Paddle Webhook] ✅ ${eventType} | ${identity.email} | Pro=${result.isPro} | statut=${result.status} | expire=${result.expiresAt}`);
   return {
     success: true,
+    received: true,
     processed: true,
-    email,
-    userId,
-    isPro: true,
-    plan,
-    amount: numericAmount,
-    currency,
-    dbUpdated: Boolean(activationResult.dbUpdated || manualDbUpdated),
-    emailSent,
-    expiresAt: expiresAtIso,
-    transactionId: effectiveTxId,
-    subscriptionId
+    eventType,
+    eventId,
+    signatureVerified: options.signatureVerified ?? null,
+    ...result,
+    emailSent
   };
 }
 
 // ─── Standard Vercel Serverless Function Handler (Node.js) ────────────────────
+// The raw body is required to verify the Paddle signature exactly as sent.
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req: any): Promise<{
+  raw: string;
+  parsed: any;
+  rawBodyAvailable: boolean;
+}> {
+  if (req?.rawBody !== undefined) {
+    const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf-8') : String(req.rawBody);
+    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
+  }
+  if (typeof req?.body === 'string') {
+    return { raw: req.body, parsed: JSON.parse(req.body || '{}'), rawBodyAvailable: true };
+  }
+  if (Buffer.isBuffer(req?.body)) {
+    const raw = req.body.toString('utf-8');
+    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
+  }
+  if (req?.body && typeof req.body === 'object') {
+    // A body parser already consumed the stream: the exact bytes are no longer
+    // available, so a signature must not be trusted from a re-serialization.
+    return { raw: JSON.stringify(req.body), parsed: req.body, rawBodyAvailable: false };
+  }
+  if (req && typeof req.on === 'function') {
+    const chunks: Buffer[] = [];
+    const raw = await new Promise<string>((resolve, reject) => {
+      req.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      req.on('error', reject);
+    });
+    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
+  }
+  return { raw: '', parsed: {}, rawBodyAvailable: false };
+}
+
+function responseStatus(result: any) {
+  if (result?.success) return 200;
+  if (result?.error === 'PADDLE_IDENTITY_NOT_RESOLVED') return 422;
+  return result?.retryable ? 500 : 400;
+}
+
 export default async function handler(req: any, res: any) {
-  // CORS Headers universels
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, paddle-signature, Paddle-Signature, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Prise en charge GET pour vérification / test ou réconciliation
   if (req.method === 'GET') {
-    const targetEmail = (req.query?.email || '').trim().toLowerCase();
-    const targetTx = (req.query?.transaction_id || req.query?.tx || '').trim();
-
-    if (targetEmail === 'sandytini07@gmail.com' || targetTx === 'txn_01m2xa1c14bzjhz75hnw6n4en0') {
-      console.log(`[Paddle Webhook GET] 🎯 Déclenchement forcé pour ${targetEmail || 'sandytini07@gmail.com'}`);
-      const result = await processPaddleWebhookEvent({
-        event_type: 'transaction.completed',
-        data: {
-          id: 'txn_01m2xa1c14bzjhz75hnw6n4en0',
-          customer: { email: 'sandytini07@gmail.com', name: 'Sandy' }
-        }
-      });
-      return res.status(200).json({
-        success: true,
-        message: 'Activation immédiate exécutée avec succès',
-        ...result
-      });
-    }
-
     return res.status(200).json({
       status: 'Paddle Webhook Endpoint Active',
       supportedMethods: ['POST', 'OPTIONS'],
-      ready: true
+      ready: Boolean(PADDLE_WEBHOOK_SECRET_KEY),
+      secretConfigured: Boolean(PADDLE_WEBHOOK_SECRET_KEY),
+      environment: PADDLE_ENV || 'unspecified'
     });
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      error: 'Méthode non autorisée. Seules les requêtes POST sont acceptées par le webhook Paddle.'
-    });
+    return res.status(405).json({ error: 'Méthode non autorisée. Seules les requêtes POST sont acceptées.' });
   }
 
-  // Récupération du corps brut et parsé
-  let rawBody = '';
-  if (typeof req.body === 'string') {
-    rawBody = req.body;
-  } else if (Buffer.isBuffer(req.body)) {
-    rawBody = req.body.toString('utf-8');
-  } else if (req.rawBody) {
-    rawBody = typeof req.rawBody === 'string' ? req.rawBody : req.rawBody.toString('utf-8');
-  } else {
-    rawBody = JSON.stringify(req.body || {});
+  if (!PADDLE_WEBHOOK_SECRET_KEY) {
+    console.error('[Paddle Webhook] ❌ PADDLE_WEBHOOK_SECRET / PADDLE_WEBHOOK_SECRET_KEY absent.');
+    return res.status(500).json({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' });
   }
 
-  let eventPayload: any = {};
+  let body: any;
   try {
-    eventPayload = (typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body))
-      ? req.body
-      : JSON.parse(rawBody || '{}');
-  } catch (parseErr) {
-    console.error('[Paddle Webhook] Erreur lors du parsing JSON du corps :', parseErr);
-    return res.status(400).json({ error: 'Corps JSON invalide.' });
+    body = await readRawBody(req);
+  } catch (error: any) {
+    console.error('[Paddle Webhook] Erreur lecture raw body:', error);
+    return res.status(400).json({ success: false, error: 'INVALID_RAW_BODY' });
   }
 
-  // Vérification de la signature cryptographique Paddle en mode tolérant / fallback
-  const signatureHeader = (
-    req.headers?.['paddle-signature'] ||
-    req.headers?.['Paddle-Signature'] ||
-    ''
-  );
-
-  let isSignatureValid = false;
-  try {
-    if (PADDLE_WEBHOOK_SECRET_KEY && signatureHeader) {
-      isSignatureValid = verifyPaddleWebhookSignature(
-        signatureHeader,
-        rawBody,
-        PADDLE_WEBHOOK_SECRET_KEY
-      );
-      if (isSignatureValid) {
-        console.log('[Paddle Webhook] 🔒 Signature cryptographique vérifiée avec succès.');
-      } else {
-        console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée, traitement en mode fallback');
-      }
-    } else {
-      console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée (secret ou header manquant), traitement en mode fallback');
-    }
-  } catch (sigErr) {
-    console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée, traitement en mode fallback :', sigErr);
+  if (!body.rawBodyAvailable) {
+    console.error('[Paddle Webhook] ❌ Raw body indisponible : bodyParser doit être désactivé.');
+    return res.status(500).json({ success: false, error: 'RAW_BODY_UNAVAILABLE' });
   }
 
-  try {
-    const result = await processPaddleWebhookEvent(eventPayload);
-    return res.status(200).json({
-      success: true,
-      received: true,
-      signatureVerified: isSignatureValid,
-      ...result
-    });
-  } catch (processErr: any) {
-    console.error('[Paddle Webhook] Exception lors du traitement de l\'événement :', processErr);
-    return res.status(200).json({
-      success: true,
-      received: true,
-      processed: false,
-      error: processErr?.message || String(processErr)
-    });
+  const signatureHeader = req.headers?.['paddle-signature'] || req.headers?.['Paddle-Signature'] || '';
+  if (!signatureHeader) {
+    console.warn('[Paddle Webhook] ❌ Signature Paddle absente.');
+    return res.status(401).json({ success: false, error: 'PADDLE_SIGNATURE_MISSING' });
   }
+  if (!verifyPaddleWebhookSignature(signatureHeader, body.raw, PADDLE_WEBHOOK_SECRET_KEY)) {
+    console.warn('[Paddle Webhook] ❌ Signature Paddle invalide.');
+    return res.status(401).json({ success: false, error: 'PADDLE_SIGNATURE_INVALID' });
+  }
+
+  const result = await processPaddleWebhookEvent(body.parsed, {
+    rawBody: body.raw,
+    signatureVerified: true
+  });
+  return res.status(responseStatus(result)).json(result);
 }
 
 // ─── Next.js App Router Route Handler (Web API Request/Response) ─────────────
@@ -844,62 +740,38 @@ export async function POST(request: Request) {
   try {
     const rawBody = await request.text();
     const signatureHeader = request.headers.get('paddle-signature') || request.headers.get('Paddle-Signature') || '';
-
-    let isSignatureValid = false;
-    try {
-      if (PADDLE_WEBHOOK_SECRET_KEY && signatureHeader) {
-        isSignatureValid = verifyPaddleWebhookSignature(
-          signatureHeader,
-          rawBody,
-          PADDLE_WEBHOOK_SECRET_KEY
-        );
-        if (isSignatureValid) {
-          console.log('[Paddle Webhook] 🔒 Signature cryptographique vérifiée avec succès.');
-        } else {
-          console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée, traitement en mode fallback');
-        }
-      } else {
-        console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée (secret ou header manquant), traitement en mode fallback');
-      }
-    } catch (sigErr) {
-      console.warn('[Paddle Webhook] ⚠️ Signature non vérifiée, traitement en mode fallback :', sigErr);
+    if (!PADDLE_WEBHOOK_SECRET_KEY) {
+      return new Response(JSON.stringify({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' }), {
+        status: 500, headers: { 'Content-Type': 'application/json' }
+      });
     }
-
-    let eventPayload: any = {};
-    try {
-      eventPayload = JSON.parse(rawBody || '{}');
-    } catch (parseErr) {
-      console.warn('[Paddle Webhook] Erreur parsing JSON du corps :', parseErr);
-      return new Response(JSON.stringify({
-        success: true,
-        received: true,
-        error: 'Corps JSON non parsable.'
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
+    if (!signatureHeader || !verifyPaddleWebhookSignature(signatureHeader, rawBody, PADDLE_WEBHOOK_SECRET_KEY)) {
+      return new Response(JSON.stringify({ success: false, error: 'PADDLE_SIGNATURE_INVALID' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const result = await processPaddleWebhookEvent(eventPayload);
-    return new Response(JSON.stringify({
-      success: true,
-      received: true,
-      signatureVerified: isSignatureValid,
-      ...result
-    }), {
-      status: 200,
+    let eventPayload: any;
+    try {
+      eventPayload = JSON.parse(rawBody || '{}');
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: 'INVALID_JSON' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const result = await processPaddleWebhookEvent(eventPayload, {
+      rawBody,
+      signatureVerified: true
+    });
+    return new Response(JSON.stringify(result), {
+      status: responseStatus(result),
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err: any) {
     console.error('[Paddle Webhook] Exception Next.js Route Handler :', err);
-    return new Response(JSON.stringify({
-      success: true,
-      received: true,
-      processed: false,
-      error: err?.message || 'Erreur interne capturée'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ success: false, error: err?.message || 'INTERNAL_ERROR' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
 }

@@ -148,7 +148,9 @@ export default defineConfig(({ mode }) => {
               }
               try {
                 process.env.RESEND_API_KEY = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
+                process.env.PADDLE_WEBHOOK_SECRET = env.PADDLE_WEBHOOK_SECRET || process.env.PADDLE_WEBHOOK_SECRET;
                 process.env.PADDLE_WEBHOOK_SECRET_KEY = env.PADDLE_WEBHOOK_SECRET_KEY || process.env.PADDLE_WEBHOOK_SECRET_KEY;
+                process.env.PADDLE_API_KEY = env.PADDLE_API_KEY || process.env.PADDLE_API_KEY;
                 process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
                 process.env.NEXT_PUBLIC_SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
                 const module = await server.ssrLoadModule('./api/paddle-webhook.ts');
