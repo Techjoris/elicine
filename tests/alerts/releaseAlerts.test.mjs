@@ -218,3 +218,33 @@ test('the three step files sent to the dashboard each run twice and prove themse
     }
   } finally { await db.close(); }
 });
+
+test('the single-paste script creates everything and proves it in one query', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+      create schema auth;
+      create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
+      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;
+      create table public.profiles (
+        id uuid primary key, email text, is_pro boolean not null default false,
+        expires_at timestamptz, updated_at timestamptz not null default now()
+      );`);
+    const script = await readFile(new URL('../../supabase/ONE_PASTE.sql', import.meta.url), 'utf8');
+    await db.exec(script);
+    await db.exec(script);
+    const proof = (await db.query(`select 'ELICINE-OK' as resultat,
+      (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r' and c.relname in
+          ('user_movie_alerts','release_email_deliveries','user_search_history','supporter_contributions','paddle_webhook_events')) as nb_tables,
+      (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname in
+          ('subscribe_release_alert','claim_release_email','record_supporter_contribution')) as nb_fonctions`)).rows[0];
+    assert.equal(proof.nb_tables, 5);
+    assert.equal(proof.nb_fonctions, 3);
+    await db.exec(`insert into public.profiles(id, email) values ('11111111-1111-1111-1111-111111111111','owner@example.com')`);
+    const support = (await db.query(`select record_supporter_contribution('evt_one_paste','owner@example.com','11111111-1111-1111-1111-111111111111',500,'EUR','txn','2026-09-23T10:00:00Z') as r`)).rows[0].r;
+    assert.equal(support.recorded, true);
+    assert.equal((await db.query(`select is_pro, is_supporter, supporter_total_cents from public.profiles`)).rows[0].is_pro, false);
+  } finally { await db.close(); }
+});
