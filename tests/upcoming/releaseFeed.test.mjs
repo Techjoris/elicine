@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import handler, { buildUpcomingFeed, buildUpcomingReport, releaseWindowRange, tmdbKey } from '../../api/_releases.js';
+import handler, { buildUpcomingFeed, buildUpcomingReport, releaseWindowRange, tmdbKey } from '../../api/releases.js';
 import { fetchUpcoming, fetchUpcomingFromTmdb } from '../../src/services/upcomingService.ts';
 
 const NOW = new Date('2026-09-22T09:00:00Z');
