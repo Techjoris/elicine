@@ -15,13 +15,13 @@ import {
   Sparkles,
   Youtube,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Globe2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
 import { getMovieTrailer, fetchMovieDetails } from '../../services/tmdb';
-import { getVpnAffiliateUrl } from '../../config/affiliates';
 import { 
   getMediaProviders, 
   MediaProvidersResult,
@@ -31,6 +31,7 @@ import {
 import { isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
 import { isSeriesMedia } from '../../lib/mediaType';
+import { PrivateConnectionModal } from './PrivateConnectionModal';
 
 export const MovieDetailModal: React.FC = () => {
   const { 
@@ -56,6 +57,7 @@ export const MovieDetailModal: React.FC = () => {
     vod: []
   });
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const [isPrivateConnectionOpen, setIsPrivateConnectionOpen] = useState(false);
 
   const mediaHeroRef = useRef<HTMLDivElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
@@ -599,39 +601,26 @@ export const MovieDetailModal: React.FC = () => {
                   </div>
                 )}
 
-                {/* Cas étranger : VPN */}
+                {/* Disponibilité dans d'autres régions */}
                 {providerData.svod.status === 'vpn_needed' && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-100 dark:bg-black/60 p-3.5 rounded-xl border border-slate-200 dark:border-white/10">
-                    <div>
-                      <p className="text-xs text-slate-700 dark:text-zinc-300 font-medium">
-                        {t.vpnNeededDesc} <strong>{providerData.svod.flag} {providerData.svod.targetCountry}</strong> :
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                        {Array.isArray(providerData.svod.providers) && providerData.svod.providers.map((p, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              redirectToStreamingProvider(selectedMovie, p, showToast);
-                            }}
-                            className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 hover:border-slate-300 dark:hover:border-white/40 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 cursor-pointer transition-all"
-                            title={`Regarder "${selectedMovie.title}" sur ${p.name}`}
-                          >
-                            {p.logo && <img src={p.logo} alt="" className="w-4 h-4 rounded object-cover" />}
-                            <span>Regarder sur {p.name} ↗</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <a
-                      href={getVpnAffiliateUrl('nordvpn')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3.5 py-2 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-xs font-bold whitespace-nowrap shadow-md text-center transition-all hover:scale-105 flex-shrink-0"
-                    >
-                      {t.vpnButton} ⚡
-                    </a>
+                  <div className="rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-white/[0.03] p-3.5">
+                    <p className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                      <Globe2 className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+                      <span>{t.vpnNeededTitle}</span>
+                    </p>
+                    <p className="mt-1.5 text-xs text-slate-600 dark:text-zinc-300">
+                      <span>{providerData.svod.flag} </span>
+                      <strong className="font-semibold">{providerData.svod.targetCountry}</strong>
+                      <span className="text-slate-400 dark:text-zinc-500"> : </span>
+                      <span>
+                        {Array.isArray(providerData.svod.providers)
+                          ? providerData.svod.providers.map((provider) => provider.name).join(' · ')
+                          : ''}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-500">
+                      {t.vpnNeededDesc}
+                    </p>
                   </div>
                 )}
 
@@ -644,6 +633,33 @@ export const MovieDetailModal: React.FC = () => {
               </>
             )}
           </div>
+
+          {/* Encart secondaire : connexion privée en déplacement */}
+          {!isLoadingProviders && providerData.svod.status === 'vpn_needed' && (
+            <div className="rounded-xl border border-slate-200/70 dark:border-white/[0.07] bg-slate-50/80 dark:bg-white/[0.02] p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <span className="text-base leading-none mt-0.5" aria-hidden="true">🌐</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    {t.vpnTravelTitle}
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
+                    {t.vpnTravelText}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsPrivateConnectionOpen(true);
+                }}
+                className="flex-shrink-0 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+              >
+                {t.vpnButton}
+              </button>
+            </div>
+          )}
 
           {/* 2. SECTION ACHAT & LOCATION NUMÉRIQUE (VOD) */}
           {!isLoadingProviders && Array.isArray(providerData.vod) && providerData.vod.length > 0 && (
@@ -699,6 +715,11 @@ export const MovieDetailModal: React.FC = () => {
         </div>
 
       </div>
+
+      <PrivateConnectionModal
+        open={isPrivateConnectionOpen}
+        onClose={() => setIsPrivateConnectionOpen(false)}
+      />
 
     </div>
   );

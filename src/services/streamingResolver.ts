@@ -116,7 +116,7 @@ export async function getMediaProviders(
     const results = data.results || {};
 
     const majorMarkets = [
-      { code: 'US', label: 'USA', flag: '🇺🇸' },
+      { code: 'US', label: 'États-Unis', flag: '🇺🇸' },
       { code: 'FR', label: 'France', flag: '🇫🇷' },
       { code: 'GB', label: 'Royaume-Uni', flag: '🇬🇧' },
       { code: 'CA', label: 'Canada', flag: '🇨🇦' }
@@ -187,7 +187,7 @@ export async function getMediaProviders(
           foreignFlatrate.slice(0, 3).forEach((p: any) => {
             if (p.provider_id && !uniqueForeign.has(p.provider_id)) {
               uniqueForeign.set(p.provider_id, {
-                name: `${p.provider_name} (${m.label})`,
+                name: p.provider_name,
                 logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null
               });
             }

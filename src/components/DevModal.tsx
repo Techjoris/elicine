@@ -225,7 +225,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
     localStorage.setItem('notch_mode', 'production');
     localStorage.setItem('cinéia_api_mode', 'production');
 
-    // 5. Sauvegarde Liens Affiliation VPN
+    // 5. Sauvegarde des liens externes de connexion
     if (nordvpnUrl.trim()) {
       localStorage.setItem('elicine_nordvpn_url', nordvpnUrl.trim());
     }
@@ -480,17 +480,17 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* SECTION 3: Liens d'Affiliation VPN */}
+        {/* SECTION 3: Liens externes de connexion */}
         <div className="space-y-3 pt-4 border-t border-slate-800/80">
           <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5" />
-            3. Liens d'Affiliation VPN
+            3. Liens externes de connexion
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-400">
-                Lien Partenaire NordVPN
+                Lien recommandé NordVPN
               </label>
               <input
                 type="text"
@@ -503,7 +503,7 @@ export const DevModal: React.FC<DevModalProps> = ({ isOpen, onClose }) => {
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-400">
-                Lien Partenaire Surfshark
+                Lien recommandé Surfshark
               </label>
               <input
                 type="text"

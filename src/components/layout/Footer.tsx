@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { ElicineLogo } from '../ElicineLogo';
 import { ShieldCheck, Heart, Mail, Clapperboard, Crown } from 'lucide-react';
 
@@ -11,6 +12,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
   const { user: appUser, setActiveView, setIsTipModalOpen, setIsProModalOpen, openFeedbackModal } = useApp();
   const { user: authUser } = useAuth();
+  const { t } = useTranslation();
 
   const isPro = Boolean(
     (appUser?.email || authUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com' ||
@@ -146,7 +148,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
 
       {/* Micro Copyright Bar */}
       <div className="border-t border-slate-200/60 dark:border-white/5 py-3 text-center text-[10px] text-slate-500 dark:text-zinc-600">
-        © 2026 Éliciné. Tous droits réservés.
+        <p className="mb-1 text-slate-400 dark:text-zinc-600">{t.affiliateDisclosure}</p>
+        <p>© 2026 Éliciné. Tous droits réservés.</p>
       </div>
     </footer>
   );
