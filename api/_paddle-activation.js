@@ -8,8 +8,6 @@
  * subscription status. It is deliberately separate from the SASPay activation
  * path.
  */
-import crypto from 'crypto';
-
 export const PADDLE_SUBSCRIPTION_STATUSES = Object.freeze([
   'active', 'trialing', 'past_due', 'canceled', 'cancelled', 'paused'
 ]);
@@ -21,6 +19,18 @@ const array = value => Array.isArray(value) ? value : value == null ? [] : [valu
 
 export function isPaddleUuid(value) {
   return UUID_RE.test(clean(value));
+}
+
+function payloadHash(rawBody) {
+  // Small deterministic fingerprint for telemetry/idempotency inspection. The
+  // signature remains the cryptographic guarantee; this hash is never used to
+  // authenticate a request.
+  let hash = 2166136261;
+  for (let index = 0; index < rawBody.length; index += 1) {
+    hash ^= rawBody.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 export function extractPaddleEmail(target) {
@@ -112,7 +122,7 @@ export function normalizePaddleEvent(payload = {}, rawBody = '') {
       customData.supabase_user_id
     ) || null,
     email: extractPaddleEmail(data) || extractPaddleEmail(body),
-    payloadHash: rawBody ? crypto.createHash('sha256').update(rawBody).digest('hex') : null
+    payloadHash: rawBody ? payloadHash(rawBody) : null
   };
 }
 

@@ -10,7 +10,6 @@
  * 5. Prise en charge immédiate avec fallback explicite pour la transaction txn_01m2xa1c14bzjhz75hnw6n4en0 et sandytini07@gmail.com
  */
 
-import crypto from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { supabaseAdmin } from './_pro-activation.js';
@@ -81,41 +80,48 @@ const effectiveSupabase: SupabaseClient | null = supabaseAdmin || supabase;
  * Valide la signature cryptographique du Webhook Paddle Billing v2 (HMAC-SHA256).
  * Format attendu du header paddle-signature : ts=1671552777;h1=eb3864d4d03e9447...
  */
-export function verifyPaddleWebhookSignature(
+function parsePaddleSignatureHeader(signatureHeader: string | null | undefined) {
+  const parts = String(signatureHeader || '').split(';');
+  let ts = '';
+  let h1 = '';
+  for (const part of parts) {
+    const [key, ...valueParts] = part.split('=');
+    const normalizedKey = key?.trim().toLowerCase();
+    const value = valueParts.join('=').trim();
+    if (normalizedKey === 'ts') ts = value;
+    if (normalizedKey === 'h1') h1 = value;
+  }
+  return { ts, h1 };
+}
+
+export async function verifyPaddleWebhookSignature(
   signatureHeader: string | null | undefined,
   rawBody: string,
   secretKey: string
-): boolean {
+): Promise<boolean> {
   if (!signatureHeader || !secretKey) return false;
 
   try {
-    const parts = signatureHeader.split(';');
-    let ts = '';
-    let h1 = '';
-
-    for (const part of parts) {
-      const [key, ...valParts] = part.split('=');
-      const k = key?.trim().toLowerCase();
-      const v = valParts.join('=').trim();
-      if (k === 'ts') ts = v;
-      if (k === 'h1') h1 = v;
-    }
+    const { ts, h1 } = parsePaddleSignatureHeader(signatureHeader);
 
     if (!ts || !h1) return false;
 
-    // Le payload signé par Paddle correspond à : `${ts}:${rawBody}`
-    const signedPayload = `${ts}:${rawBody}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', secretKey)
-      .update(signedPayload)
-      .digest('hex');
-
-    if (h1.length !== expectedSignature.length) return false;
-
-    return crypto.timingSafeEqual(
-      Buffer.from(h1, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
+    // The signed payload is exactly `${ts}:${rawBody}`. Web Crypto keeps the
+    // handler compatible with the Edge runtime where the raw request body is
+    // available without a JSON body parser.
+    const encoder = new TextEncoder();
+    const key = await globalThis.crypto.subtle.importKey(
+      'raw', encoder.encode(secretKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
     );
+    const signature = new Uint8Array(await globalThis.crypto.subtle.sign(
+      'HMAC', key, encoder.encode(`${ts}:${rawBody}`)
+    ));
+    let difference = 0;
+    if (h1.length !== signature.length * 2) return false;
+    for (let index = 0; index < signature.length; index += 1) {
+      difference |= parseInt(h1.slice(index * 2, index * 2 + 2), 16) ^ signature[index];
+    }
+    return difference === 0;
   } catch (err) {
     console.error('[Paddle Webhook] Erreur lors de la vérification de signature :', err);
     return false;
@@ -636,42 +642,17 @@ export async function processPaddleWebhookEvent(eventPayload: any, options: {
   };
 }
 
-// ─── Standard Vercel Serverless Function Handler (Node.js) ────────────────────
-// The raw body is required to verify the Paddle signature exactly as sent.
-export const config = { api: { bodyParser: false } };
+// ─── Edge runtime: request.text() preserves the exact Paddle-signed body ──────
+// Vercel's Node runtime parses application/json before the handler, which makes
+// the HMAC impossible to verify. The Edge runtime exposes the raw request.
+export const config = { runtime: 'edge' };
 
-async function readRawBody(req: any): Promise<{
-  raw: string;
-  parsed: any;
-  rawBodyAvailable: boolean;
-}> {
-  if (req?.rawBody !== undefined) {
-    const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf-8') : String(req.rawBody);
-    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
-  }
-  if (typeof req?.body === 'string') {
-    return { raw: req.body, parsed: JSON.parse(req.body || '{}'), rawBodyAvailable: true };
-  }
-  if (Buffer.isBuffer(req?.body)) {
-    const raw = req.body.toString('utf-8');
-    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
-  }
-  if (req?.body && typeof req.body === 'object') {
-    // A body parser already consumed the stream: the exact bytes are no longer
-    // available, so a signature must not be trusted from a re-serialization.
-    return { raw: JSON.stringify(req.body), parsed: req.body, rawBodyAvailable: false };
-  }
-  if (req && typeof req.on === 'function') {
-    const chunks: Buffer[] = [];
-    const raw = await new Promise<string>((resolve, reject) => {
-      req.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
-      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-      req.on('error', reject);
-    });
-    return { raw, parsed: JSON.parse(raw || '{}'), rawBodyAvailable: true };
-  }
-  return { raw: '', parsed: {}, rawBodyAvailable: false };
-}
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, paddle-signature, Paddle-Signature, Authorization',
+  'Content-Type': 'application/json'
+};
 
 function responseStatus(result: any) {
   if (result?.success) return 200;
@@ -679,15 +660,17 @@ function responseStatus(result: any) {
   return result?.retryable ? 500 : 400;
 }
 
-export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, paddle-signature, Paddle-Signature, Authorization');
+function jsonResponse(payload: any, status = 200) {
+  return new Response(JSON.stringify(payload), { status, headers: CORS_HEADERS });
+}
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+export async function handlePaddleRequest(request: Request): Promise<Response> {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
 
-  if (req.method === 'GET') {
-    return res.status(200).json({
+  if (request.method === 'GET') {
+    return jsonResponse({
       status: 'Paddle Webhook Endpoint Active',
       supportedMethods: ['POST', 'OPTIONS'],
       ready: Boolean(PADDLE_WEBHOOK_SECRET_KEY),
@@ -696,82 +679,39 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée. Seules les requêtes POST sont acceptées.' });
+  if (request.method !== 'POST') {
+    return jsonResponse({ error: 'Méthode non autorisée. Seules les requêtes POST sont acceptées.' }, 405);
   }
 
   if (!PADDLE_WEBHOOK_SECRET_KEY) {
     console.error('[Paddle Webhook] ❌ PADDLE_WEBHOOK_SECRET / PADDLE_WEBHOOK_SECRET_KEY absent.');
-    return res.status(500).json({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' });
+    return jsonResponse({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' }, 500);
   }
 
-  let body: any;
-  try {
-    body = await readRawBody(req);
-  } catch (error: any) {
-    console.error('[Paddle Webhook] Erreur lecture raw body:', error);
-    return res.status(400).json({ success: false, error: 'INVALID_RAW_BODY' });
-  }
-
-  if (!body.rawBodyAvailable) {
-    console.error('[Paddle Webhook] ❌ Raw body indisponible : bodyParser doit être désactivé.');
-    return res.status(500).json({ success: false, error: 'RAW_BODY_UNAVAILABLE' });
-  }
-
-  const signatureHeader = req.headers?.['paddle-signature'] || req.headers?.['Paddle-Signature'] || '';
+  const rawBody = await request.text();
+  const signatureHeader = request.headers.get('paddle-signature') || request.headers.get('Paddle-Signature') || '';
   if (!signatureHeader) {
     console.warn('[Paddle Webhook] ❌ Signature Paddle absente.');
-    return res.status(401).json({ success: false, error: 'PADDLE_SIGNATURE_MISSING' });
+    return jsonResponse({ success: false, error: 'PADDLE_SIGNATURE_MISSING' }, 401);
   }
-  if (!verifyPaddleWebhookSignature(signatureHeader, body.raw, PADDLE_WEBHOOK_SECRET_KEY)) {
+  if (!(await verifyPaddleWebhookSignature(signatureHeader, rawBody, PADDLE_WEBHOOK_SECRET_KEY))) {
     console.warn('[Paddle Webhook] ❌ Signature Paddle invalide.');
-    return res.status(401).json({ success: false, error: 'PADDLE_SIGNATURE_INVALID' });
+    return jsonResponse({ success: false, error: 'PADDLE_SIGNATURE_INVALID' }, 401);
   }
 
-  const result = await processPaddleWebhookEvent(body.parsed, {
-    rawBody: body.raw,
+  let eventPayload: any;
+  try {
+    eventPayload = JSON.parse(rawBody || '{}');
+  } catch {
+    return jsonResponse({ success: false, error: 'INVALID_JSON' }, 400);
+  }
+
+  const result = await processPaddleWebhookEvent(eventPayload, {
+    rawBody,
     signatureVerified: true
   });
-  return res.status(responseStatus(result)).json(result);
+  return jsonResponse(result, responseStatus(result));
 }
 
-// ─── Next.js App Router Route Handler (Web API Request/Response) ─────────────
-export async function POST(request: Request) {
-  try {
-    const rawBody = await request.text();
-    const signatureHeader = request.headers.get('paddle-signature') || request.headers.get('Paddle-Signature') || '';
-    if (!PADDLE_WEBHOOK_SECRET_KEY) {
-      return new Response(JSON.stringify({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' }), {
-        status: 500, headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    if (!signatureHeader || !verifyPaddleWebhookSignature(signatureHeader, rawBody, PADDLE_WEBHOOK_SECRET_KEY)) {
-      return new Response(JSON.stringify({ success: false, error: 'PADDLE_SIGNATURE_INVALID' }), {
-        status: 401, headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    let eventPayload: any;
-    try {
-      eventPayload = JSON.parse(rawBody || '{}');
-    } catch {
-      return new Response(JSON.stringify({ success: false, error: 'INVALID_JSON' }), {
-        status: 400, headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const result = await processPaddleWebhookEvent(eventPayload, {
-      rawBody,
-      signatureVerified: true
-    });
-    return new Response(JSON.stringify(result), {
-      status: responseStatus(result),
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (err: any) {
-    console.error('[Paddle Webhook] Exception Next.js Route Handler :', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'INTERNAL_ERROR' }), {
-      status: 500, headers: { 'Content-Type': 'application/json' }
-    });
-  }
-}
+export default handlePaddleRequest;
+export const POST = handlePaddleRequest;

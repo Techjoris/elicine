@@ -207,15 +207,15 @@ test('events are idempotent through paddle_webhook_events', async () => {
   assert.equal(duplicate.duplicate, true);
 });
 
-test('Paddle-Signature is verified on the exact raw body', () => {
+test('Paddle-Signature is verified on the exact raw body', async () => {
   const secret = 'pdl_ntfset_test_secret';
   const rawBody = JSON.stringify(subscriptionCreated());
   const timestamp = '1770000000';
   const signature = crypto.createHmac('sha256', secret)
     .update(`${timestamp}:${rawBody}`).digest('hex');
-  assert.equal(verifyPaddleWebhookSignature(`ts=${timestamp};h1=${signature}`, rawBody, secret), true);
-  assert.equal(verifyPaddleWebhookSignature(`ts=${timestamp};h1=${signature}`, `${rawBody} `, secret), false);
-  assert.equal(verifyPaddleWebhookSignature(`ts=${timestamp};h1=deadbeef`, rawBody, secret), false);
+  assert.equal(await verifyPaddleWebhookSignature(`ts=${timestamp};h1=${signature}`, rawBody, secret), true);
+  assert.equal(await verifyPaddleWebhookSignature(`ts=${timestamp};h1=${signature}`, `${rawBody} `, secret), false);
+  assert.equal(await verifyPaddleWebhookSignature(`ts=${timestamp};h1=deadbeef`, rawBody, secret), false);
 });
 
 test('the webhook handler activates a paid subscription and acknowledges the duplicate idempotently', async () => {
