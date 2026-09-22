@@ -57,13 +57,18 @@ matchScore       = round(100 * clamp(finalScore / 0.9))
   on its own. Nothing is filtered: ordering, retrieval, embeddings, LLM
   interpretation, narrative candidates and diversification are untouched.
 
-## Measured, on the captured live grids
+## Measured, on the published endpoint
 
-| Grid | Before | After |
+| Grid | Before (Phase 16) | After (Phase 17) |
 | --- | --- | --- |
-| `un film d'horreur` | 95-100 (19 results) | 63-92 (Shining 91, The Thing 89, Exorciste 85, unseen 2026 titles 63-75) |
-| `film de guerre des années 1940 avec des avions` | 97-100 | era-correct works 74-85, weak evidence 13-31 |
-| `film récent d'aviation militaire` | 69-100 | coverage-driven 42-80 in the replay; the live values are published in the delivery report |
+| `un film d'horreur` | 95-100 (19 results) | 62-100: `L'Exorciste` / `Shining` / `The Thing` 100, `Hérédité` 98, `Midsommar` 91, unseen 2026 titles 62-80 |
+| `film de guerre moderne avec des avions de combat` | 36-81, `Les Ailes` (1927) 2ⁿᵈ at 61 | 35-76: `Top Gun : Maverick` 76, some 2001-2005 works 46-55, `Les Ailes` (1927) 52, `La Patrouille de l'aube` (1930) 35 |
+| `film de guerre des années 1940 avec des avions` | 63-100 mixed with non-aviation era films | 60-87, only era-correct aviation works |
+| `film récent d'aviation militaire` | 69-100 (all ≥ 69) | 34-100: `Top Gun : Maverick` 100, `Devotion` 96, `Dunkerque` 59, `Aviator` 51 |
+
+The horizontal spread of a grid goes from ~20 points to ~40-60 points, and the
+order inside it now follows the strength of the answer instead of the rank a
+single generic dimension gave to every member of the category.
 
 Quality corpus (18 cases, `npm run search:benchmark`): top1 1.000, coverage
 0.941, off-topic 0.053 - unchanged, and the intended works display 90-100.
