@@ -16,7 +16,8 @@ import {
   Youtube,
   Loader2,
   AlertCircle,
-  Globe2
+  Globe2,
+  ShieldCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
@@ -603,24 +604,55 @@ export const MovieDetailModal: React.FC = () => {
 
                 {/* Disponibilité dans d'autres régions */}
                 {providerData.svod.status === 'vpn_needed' && (
-                  <div className="rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-white/[0.03] p-3.5">
-                    <p className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                      <Globe2 className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+                  <div className="rounded-xl border border-slate-200/90 dark:border-white/10 bg-white/80 dark:bg-white/[0.035] p-4">
+                    <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-zinc-400">
+                      <Globe2 className="w-3.5 h-3.5 text-sky-600/70 dark:text-sky-400/80" />
                       <span>{t.vpnNeededTitle}</span>
                     </p>
-                    <p className="mt-1.5 text-xs text-slate-600 dark:text-zinc-300">
+                    <p className="mt-2 text-xs text-slate-700 dark:text-zinc-200">
                       <span>{providerData.svod.flag} </span>
                       <strong className="font-semibold">{providerData.svod.targetCountry}</strong>
-                      <span className="text-slate-400 dark:text-zinc-500"> : </span>
-                      <span>
+                      <span className="mx-1 text-slate-300 dark:text-zinc-600">·</span>
+                      <span className="text-slate-600 dark:text-zinc-300">
                         {Array.isArray(providerData.svod.providers)
                           ? providerData.svod.providers.map((provider) => provider.name).join(' · ')
                           : ''}
                       </span>
                     </p>
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-500">
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500 dark:text-zinc-500">
                       {t.vpnNeededDesc}
                     </p>
+                  </div>
+                )}
+
+                {/* Sous-carte : accès selon la localisation */}
+                {providerData.svod.status === 'vpn_needed' && (
+                  <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-slate-50/70 dark:bg-white/[0.02] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/15 flex items-center justify-center flex-shrink-0">
+                          <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                            {t.vpnTravelTitle}
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
+                            {t.vpnTravelText}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsPrivateConnectionOpen(true);
+                        }}
+                        className="w-full sm:w-auto flex-shrink-0 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] px-3.5 py-2 text-[11px] font-semibold text-slate-700 dark:text-zinc-200 hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                      >
+                        {t.vpnButton}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -633,33 +665,6 @@ export const MovieDetailModal: React.FC = () => {
               </>
             )}
           </div>
-
-          {/* Encart secondaire : connexion privée en déplacement */}
-          {!isLoadingProviders && providerData.svod.status === 'vpn_needed' && (
-            <div className="rounded-xl border border-slate-200/70 dark:border-white/[0.07] bg-slate-50/80 dark:bg-white/[0.02] p-3.5 flex items-center justify-between gap-3">
-              <div className="flex items-start gap-2.5 min-w-0">
-                <span className="text-base leading-none mt-0.5" aria-hidden="true">🌐</span>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    {t.vpnTravelTitle}
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
-                    {t.vpnTravelText}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsPrivateConnectionOpen(true);
-                }}
-                className="flex-shrink-0 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:border-slate-300 dark:hover:border-white/20 transition-colors"
-              >
-                {t.vpnButton}
-              </button>
-            </div>
-          )}
 
           {/* 2. SECTION ACHAT & LOCATION NUMÉRIQUE (VOD) */}
           {!isLoadingProviders && Array.isArray(providerData.vod) && providerData.vod.length > 0 && (
