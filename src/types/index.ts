@@ -214,6 +214,8 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   mood?: string;
+  /** ISO date of the search, used to order and merge the account history. */
+  createdAt?: string;
 }
 
 export type ActiveView = 'home' | 'trending' | 'upcoming' | 'catalog' | 'platforms' | 'alerts' | 'surprise' | 'watchlist' | 'admin' | 'terms' | 'reset-password' | 'update-password' | 'payment-callback';

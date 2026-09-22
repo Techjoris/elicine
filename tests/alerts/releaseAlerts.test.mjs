@@ -111,16 +111,36 @@ test('the single-file script handed to the dashboard can be pasted twice and wor
       create schema auth;
       create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
       create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;`);
-    const script = await readFile(new URL('../../supabase/APPLY_RELEASE_ALERTS.sql', import.meta.url), 'utf8');
+    const script = await readFile(new URL('../../supabase/APPLY_SUPABASE_SETUP.sql', import.meta.url), 'utf8');
     await db.exec(script);
     await db.exec(script);
 
     assert.equal((await db.query(`select to_regclass('public.user_movie_alerts')::text as table`)).rows[0].table, 'user_movie_alerts');
     assert.equal((await db.query(`select to_regclass('public.release_email_deliveries')::text as table`)).rows[0].table, 'release_email_deliveries');
+    assert.equal((await db.query(`select to_regclass('public.user_search_history')::text as table`)).rows[0].table, 'user_search_history');
     const alert = (await db.query(`select subscribe_release_alert($1,$2,$3,$4,$5::jsonb) as alert`,
       ['11111111-1111-1111-1111-111111111111', 'owner@example.com', 42, 'movie', JSON.stringify({ movie_title: 'Dune', release_date: '2026-10-01' })])).rows[0].alert;
     assert.equal(alert.movie_title, 'Dune');
     const claim = (await db.query(`select claim_release_email($1,'j_minus_2',gen_random_uuid(),'{}') as delivery`, [alert.id])).rows[0].delivery;
     assert.equal(claim.alert_id, alert.id);
+
+    // Historique : chaque membre ne voit et n'écrit que ses propres lignes, et une même
+    // recherche relancée remonte au lieu de créer un doublon.
+    await db.exec('set role authenticated');
+    await db.exec(`insert into user_search_history(user_id,query,query_key) values('11111111-1111-1111-1111-111111111111','Un braquage','un braquage')`);
+    await db.exec(`insert into user_search_history(user_id,query,query_key) values('11111111-1111-1111-1111-111111111111','Un braquage','un braquage')
+      on conflict(user_id,query_key) do update set updated_at = now()`);
+    assert.equal((await db.query(`select count(*)::int as total from user_search_history`)).rows[0].total, 1);
+    await assert.rejects(
+      db.exec(`insert into user_search_history(user_id,query,query_key) values('22222222-2222-2222-2222-222222222222','Chez un autre','chez un autre')`),
+      /row-level security/);
+    await db.exec('reset role');
+    await db.exec(`insert into user_search_history(user_id,query,query_key) values('22222222-2222-2222-2222-222222222222','Chez un autre','chez un autre')`);
+    await db.exec('set role authenticated');
+    assert.equal((await db.query(`select count(*)::int as total from user_search_history`)).rows[0].total, 1, 'RLS hides the other member rows');
+    await db.exec(`delete from user_search_history`);
+    assert.equal((await db.query(`select count(*)::int as total from user_search_history`)).rows[0].total, 0);
+    await db.exec('reset role');
+    assert.equal((await db.query(`select count(*)::int as total from user_search_history`)).rows[0].total, 1, 'the other member row is untouched');
   } finally { await db.close(); }
 });

@@ -1,8 +1,10 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- ÉLICINÉ — À EXÉCUTER EN UNE SEULE FOIS dans Supabase → SQL Editor → New query.
--- Crée les alertes de sortie (J-2 / jour J) et leur suivi d'envoi.
+-- ÉLICINÉ — CONFIGURATION BACKEND, À EXÉCUTER EN UNE SEULE FOIS
+-- Supabase → SQL Editor → New query → coller → Run.
+-- Contient : alertes de sortie (J-2 / jour J) + historique de recherche par compte.
 -- Rejouable sans risque : tout est en CREATE IF NOT EXISTS / CREATE OR REPLACE.
--- Contenu = supabase/movie_alerts_setup.sql + supabase/migrations/20260922010000_release_email_alerts.sql
+-- Contenu = movie_alerts_setup.sql + 20260922010000_release_email_alerts.sql
+--           + la table user_search_history (historique rattaché au compte).
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- 1. Création de la table user_movie_alerts
@@ -196,6 +198,58 @@ grant execute on function public.subscribe_release_alert(text,text,bigint,text,j
 grant execute on function public.claim_release_email(uuid,text,uuid,jsonb) to service_role;
 commit;
 
--- 8. Contrôle : les deux tables doivent apparaître dans le résultat.
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 8. Historique de recherche rattaché au compte (et non à l'appareil).
+--    L'appareil n'est plus qu'un affichage : se connecter ailleurs retrouve l'historique.
+-- ══════════════════════════════════════════════════════════════════════════════
+create table if not exists public.user_search_history (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null check (user_id <> ''),
+  query text not null check (char_length(query) between 1 and 300),
+  -- Clé de dédoublonnage : relancer la même recherche la remonte au lieu de la dupliquer.
+  query_key text not null check (char_length(query_key) between 1 and 300),
+  results_count integer not null default 0 check (results_count >= 0),
+  mood text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, query_key)
+);
+
+create index if not exists user_search_history_recent
+  on public.user_search_history(user_id, updated_at desc);
+
+alter table public.user_search_history enable row level security;
+revoke all on public.user_search_history from anon, authenticated;
+grant select, insert, update, delete on public.user_search_history to authenticated;
+grant all on public.user_search_history to service_role;
+
+drop policy if exists "Members read their own search history" on public.user_search_history;
+create policy "Members read their own search history"
+  on public.user_search_history for select
+  to authenticated using (user_id = auth.uid()::text);
+
+drop policy if exists "Members insert their own search history" on public.user_search_history;
+create policy "Members insert their own search history"
+  on public.user_search_history for insert
+  to authenticated with check (user_id = auth.uid()::text);
+
+drop policy if exists "Members update their own search history" on public.user_search_history;
+create policy "Members update their own search history"
+  on public.user_search_history for update
+  to authenticated using (user_id = auth.uid()::text) with check (user_id = auth.uid()::text);
+
+drop policy if exists "Members delete their own search history" on public.user_search_history;
+create policy "Members delete their own search history"
+  on public.user_search_history for delete
+  to authenticated using (user_id = auth.uid()::text);
+
+drop policy if exists "Service role full access on search history" on public.user_search_history;
+create policy "Service role full access on search history"
+  on public.user_search_history for all
+  to service_role using (true) with check (true);
+
+-- 9. Contrôle : ces trois tables doivent apparaître dans le résultat.
 select table_name from information_schema.tables
-where table_schema = 'public' and table_name in ('user_movie_alerts', 'release_email_deliveries');
+where table_schema = 'public'
+  and table_name in ('user_movie_alerts', 'release_email_deliveries', 'user_search_history')
+order by table_name;

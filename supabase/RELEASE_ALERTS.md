@@ -18,10 +18,11 @@ au plus un e-mail J-2 et un e-mail jour J, jamais deux fois le même jalon.
 
 ## Ordre de mise en production
 
-1. Coller **`supabase/APPLY_RELEASE_ALERTS.sql`** dans Supabase → SQL Editor → New query, puis Run.
-   Ce fichier unique contient `movie_alerts_setup.sql` + `20260922010000_release_email_alerts.sql`,
-   il est rejouable sans risque et se termine par un `select` de contrôle qui doit afficher
-   `user_movie_alerts` et `release_email_deliveries`.
+1. Coller **`supabase/APPLY_SUPABASE_SETUP.sql`** dans Supabase → SQL Editor → New query, puis Run.
+   Ce fichier unique contient `movie_alerts_setup.sql` + `20260922010000_release_email_alerts.sql`
+   + la table `user_search_history` (historique rattaché au compte), il est rejouable sans risque
+   et se termine par un `select` de contrôle qui doit afficher
+   `release_email_deliveries`, `user_movie_alerts` et `user_search_history`.
    Sans cette étape, l'API répond « Impossible d'enregistrer les alertes » (les tables n'existent pas).
 2. Vérifier les variables d'environnement Vercel :
    - `RESEND_API_KEY` (obligatoire, sans lui aucune alerte ne peut être activée ni envoyée) ;

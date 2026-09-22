@@ -18,6 +18,7 @@ import { useAuth } from './AuthContext';
 import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 import { subscriptionService } from '../services/subscriptionService';
 import { movieAlertsService, alertMediaType } from '../services/movieAlertsService';
+import { searchHistoryService, mergeHistory, cleanQuery } from '../services/searchHistoryService';
 import { initPaddle, openPaddleCheckout } from '../services/paddleService';
 
 interface AppContextType {
@@ -289,20 +290,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 7. Search History & Interactive Input
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>(() => {
-    const saved = localStorage.getItem('cineia_history');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
+  // Anonymous visitors keep a device history; signed-in members get the one stored on their account.
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>(() => searchHistoryService.readLocal());
+
+  // Historique IA rattaché au compte : le contenu local est envoyé une seule fois au premier
+  // login, puis l'appareil n'est plus qu'un affichage de ce que le compte contient.
+  useEffect(() => {
+    let current = true;
+    const userId = user?.id;
+    if (!userId) {
+      setSearchHistory(searchHistoryService.readLocal());
+      return () => { current = false; };
     }
-    return [
-      { id: '1', query: 'Film de braquage à fin twist', timestamp: 'Hier', resultsCount: 4, mood: 'Néo-Noir' },
-      { id: '2', query: 'je veux un film qui va me f...', timestamp: 'Il y a 3 jours', resultsCount: 3, mood: 'Émotion' }
-    ];
-  });
+    const sync = async () => {
+      const local = searchHistoryService.readLocal();
+      let remote = await searchHistoryService.list(userId);
+      if (local.length) {
+        remote = await searchHistoryService.migrate(userId, mergeHistory(local));
+        searchHistoryService.clearLocal();
+      }
+      if (!current) return;
+      setSearchHistory(remote);
+      searchHistoryService.prune(userId, remote).catch(() => { /* pruning is best effort */ });
+    };
+    sync().catch(error => {
+      console.warn('[Historique] synchronisation indisponible:', error?.message);
+      if (current) setSearchHistory([]);
+    });
+    return () => { current = false; };
+  }, [user?.id]);
 
   // 8. Navigation & Modals
   const [activeView, setActiveView] = useState<ActiveView>('home');
@@ -417,8 +433,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [alerts]);
 
   useEffect(() => {
-    localStorage.setItem('cineia_history', JSON.stringify(searchHistory));
-  }, [searchHistory]);
+    // Only the anonymous history lives on the device: a signed-in member's history is on the account.
+    if (!user?.id) searchHistoryService.writeLocal(searchHistory);
+  }, [searchHistory, user?.id]);
 
   // Handle URL Affiliate/Referral ?ref=
   useEffect(() => {
@@ -1089,19 +1106,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Search History Actions
   const addHistoryItem = (query: string, count: number, mood?: string) => {
+    const cleaned = cleanQuery(query);
+    if (!cleaned) return;
     const item: SearchHistoryItem = {
-      id: 'h_' + Date.now(),
-      query,
-      timestamp: 'À l\'instant',
+      id: `h_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      query: cleaned,
+      timestamp: 'À l’instant',
+      createdAt: new Date().toISOString(),
       resultsCount: count,
       mood
     };
-    setSearchHistory(prev => [item, ...prev.slice(0, 15)]);
+    setSearchHistory(prev => mergeHistory([item], prev));
+    const userId = user?.id;
+    if (!userId) return;
+    searchHistoryService.add(userId, item)
+      .then(saved => { if (saved) setSearchHistory(prev => mergeHistory([saved], prev)); })
+      .catch(error => console.warn('[Historique] enregistrement indisponible:', error?.message));
   };
 
   const clearHistory = () => {
     setSearchHistory([]);
     showToast('Historique IA vidé.');
+    const userId = user?.id;
+    if (userId) searchHistoryService.clear(userId).catch(error => console.warn('[Historique] suppression indisponible:', error?.message));
+    else searchHistoryService.clearLocal();
   };
 
   const triggerSearch = (query: string) => {

@@ -46,6 +46,13 @@
 - Envoi quotidien via Resend, avec verrou anti-doublon en base, vérification du statut de livraison et arrêt automatique si l'abonnement expire.
 - Exploitation, variables d'environnement et tests : [`supabase/RELEASE_ALERTS.md`](supabase/RELEASE_ALERTS.md).
 
+### 8. Historique IA rattaché au compte
+- L'historique de recherche appartient au **compte**, plus à l'appareil : se connecter depuis un autre téléphone ou ordinateur affiche le même historique (table `user_search_history`, RLS par membre).
+- Une même recherche relancée remonte en tête au lieu de créer un doublon, et l'historique est plafonné à 50 entrées par compte.
+- Les visiteurs non connectés gardent un historique local à l'appareil ; il est **migré automatiquement** vers le compte au premier login, puis effacé de l'appareil.
+- « Vider » supprime l'historique du compte, sur tous les appareils à la fois.
+- Tests : `npm run test:history`.
+
 ---
 
 ## 🚀 Démarrage Rapide
@@ -72,4 +79,9 @@ npm run test:alerts
 ### Tester le classement « Prochainement » :
 ```bash
 npm run test:upcoming
+```
+
+### Tester l'historique rattaché au compte :
+```bash
+npm run test:history
 ```

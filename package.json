@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:alerts": "node --test tests/alerts/",
     "test:upcoming": "node --import tsx --test tests/upcoming/",
+    "test:history": "node --import tsx --test tests/history/",
     "search:diagnose": "node scripts/search-diagnose.mjs",
     "search:benchmark": "node --import tsx scripts/search-benchmark.mjs",
     "search:recall": "node scripts/narrative-recall-benchmark.mjs"
