@@ -39,7 +39,7 @@ strengthFactor   = floor + (1 - floor) * strength
 strength         = 0.65 * qualityScore + 0.15 * voteConfidenceScore
                  + 0.10 * popularityScore + 0.10 * sourceConfidenceScore
 floor            = 0.15 (bare category) .. 0.85 (described request)
-matchScore       = round(100 * clamp(finalScore / 0.85))
+matchScore       = round(100 * clamp(finalScore / 0.9))
 ```
 
 - `voteConfidenceScore` (`log1p(votes)/log1p(5000)`) is new: an average over a
@@ -49,6 +49,9 @@ matchScore       = round(100 * clamp(finalScore / 0.85))
   (concepts, keywords, hard constraints, named works), never a title, a year or
   a genre. A bare category lets the strength of the work decide, a described
   request keeps content coverage dominant.
+- The temporal preference of Phase 16 now weighs `0.12` on this scale, so a very
+  old work loses about fifteen displayed points on a modern request while a
+  contemporary one gains them.
 - Because the two factors multiply, a famous work that answers nothing stays
   low and a work carried by a bare genre tag cannot display an excellent match
   on its own. Nothing is filtered: ordering, retrieval, embeddings, LLM

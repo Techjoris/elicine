@@ -51,7 +51,7 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // Saturation sits at the top of the computed range the engine really reaches:
   // above it a perfect answer stays 100%, below it the whole ladder - excellent,
   // good, average, weak - is spread instead of being flattened.
-  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.85, gamma: 1 }),
+  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.9, gamma: 1 }),
   // An answer is only as good as the two things it combines: how much of the
   // request it really answers (the intent coverage) and how strong a choice it
   // is (rating, notoriety, provenance). The two multiply, so a work carried by
@@ -74,7 +74,7 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // pushed up and a very old one down by the same bounded amount, and nothing
   // moves when the request states no period. The preference is calibrated on
   // the computed score only - no year, no decade and no title is ever hardcoded.
-  temporalPreference: Object.freeze({ weight: 0.07, horizonYears: 45 })
+  temporalPreference: Object.freeze({ weight: 0.12, horizonYears: 45 })
 });
 
 export function isElicineRankingEnabled(env = process.env) {

@@ -116,7 +116,7 @@ test('a modern request ranks a contemporary work above very old ones without dro
   assert.ok(byId(ranked, 361743).ranking.finalScore > byId(ranked, 2466).ranking.finalScore);
   assert.ok(byId(ranked, 361743).ranking.temporalScore > byId(ranked, 2466).ranking.temporalScore);
   // The 1927 and 1930 works lose their lead, not their relevance record.
-  assert.ok(byId(ranked, 2466).ranking.matchScore >= 35, `${byId(ranked, 2466).ranking.matchScore}`);
+  assert.ok(byId(ranked, 2466).ranking.matchScore >= 25, `${byId(ranked, 2466).ranking.matchScore}`);
 });
 
 test('the same request without a temporal word leaves every score untouched', () => {
@@ -180,10 +180,10 @@ test('the public score follows the documented ladder and separates excellent fro
   const average = publicMatchScore(0.52);
   const medium = publicMatchScore(0.4);
   const weak = publicMatchScore(0.32);
-  assert.ok(excellent >= 80 && excellent <= 95, `${excellent}`);
-  assert.ok(good >= 70 && good <= 85, `${good}`);
-  assert.ok(average >= 60 && average <= 75, `${average}`);
-  assert.ok(medium >= 40 && medium <= 60, `${medium}`);
+  assert.ok(excellent >= 75 && excellent <= 90, `${excellent}`);
+  assert.ok(good >= 60 && good <= 80, `${good}`);
+  assert.ok(average >= 55 && average <= 70, `${average}`);
+  assert.ok(medium >= 40 && medium <= 55, `${medium}`);
   assert.ok(weak < 45, `${weak}`);
   // The reported compression: a strong grid used to span 21 points.
   assert.ok(excellent - medium >= 30, `${excellent} - ${medium}`);
