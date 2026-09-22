@@ -103,3 +103,24 @@ test('the migration can be replayed safely on a database that already holds lega
       values('11111111-1111-1111-1111-111111111111','owner@example.com',7,'duplicate','movie')`), /release_alert_identity/);
   } finally { await db.close(); }
 });
+
+test('the single-file script handed to the dashboard can be pasted twice and works', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+      create schema auth;
+      create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
+      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;`);
+    const script = await readFile(new URL('../../supabase/APPLY_RELEASE_ALERTS.sql', import.meta.url), 'utf8');
+    await db.exec(script);
+    await db.exec(script);
+
+    assert.equal((await db.query(`select to_regclass('public.user_movie_alerts')::text as table`)).rows[0].table, 'user_movie_alerts');
+    assert.equal((await db.query(`select to_regclass('public.release_email_deliveries')::text as table`)).rows[0].table, 'release_email_deliveries');
+    const alert = (await db.query(`select subscribe_release_alert($1,$2,$3,$4,$5::jsonb) as alert`,
+      ['11111111-1111-1111-1111-111111111111', 'owner@example.com', 42, 'movie', JSON.stringify({ movie_title: 'Dune', release_date: '2026-10-01' })])).rows[0].alert;
+    assert.equal(alert.movie_title, 'Dune');
+    const claim = (await db.query(`select claim_release_email($1,'j_minus_2',gen_random_uuid(),'{}') as delivery`, [alert.id])).rows[0].delivery;
+    assert.equal(claim.alert_id, alert.id);
+  } finally { await db.close(); }
+});

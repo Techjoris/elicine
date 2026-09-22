@@ -15,11 +15,16 @@ class QueryBuilder {
   eq(column, value) { this.predicates.push(row => row[column] === value); return this; }
   in(column, values) { this.predicates.push(row => values.includes(row[column])); return this; }
   gt(column, value) { this.predicates.push(row => row[column] > value); return this; }
+  ilike(column, value) { this.predicates.push(row => String(row[column] || '').toLowerCase() === String(value).toLowerCase()); return this; }
   order() { return this; }
   limit(count) { this.max = count; return this; }
   maybeSingle() { this.single = true; return this; }
   then(resolve, reject) { return Promise.resolve(this.run()).then(resolve, reject); }
   run() {
+    if (this.mode === 'missing') {
+      // Mirrors PostgREST answering for a table the project does not contain.
+      return { data: null, error: { code: 'PGRST205', message: `Could not find the table 'public.${this.table}'` } };
+    }
     const rows = this.state[this.table].filter(row => this.predicates.every(predicate => predicate(row)));
     if (this.mode === 'update') {
       for (const row of rows) Object.assign(row, this.payload);
@@ -31,15 +36,20 @@ class QueryBuilder {
 }
 
 function fakeDatabase(state) {
+  const modeFor = name => (Array.isArray(state[name]) ? null : 'missing');
+  const missingTable = name => ({ data: null, error: { code: 'PGRST205', message: `Could not find the table 'public.${name}'` } });
   return {
-    from(table) {
+    from(name) {
       return {
-        select: () => new QueryBuilder(state, table, 'select'),
-        update: patch => new QueryBuilder(state, table, 'update', patch)
+        select: () => new QueryBuilder(state, name, modeFor(name) || 'select'),
+        update: patch => new QueryBuilder(state, name, modeFor(name) || 'update', patch)
       };
     },
     rpc(name, args) {
       assert.equal(name, 'claim_release_email');
+      for (const table of ['user_movie_alerts', 'release_email_deliveries']) {
+        if (modeFor(table)) return Promise.resolve(missingTable(table));
+      }
       const alert = state.user_movie_alerts.find(row => row.id === args.p_alert_id);
       const alreadyNotified = alert && (args.p_milestone === 'j_minus_2' ? alert.notified_j_minus_2 : alert.notified_release_day);
       const alreadyClaimed = state.release_email_deliveries.some(row => row.alert_id === args.p_alert_id && row.milestone === args.p_milestone);
@@ -159,6 +169,42 @@ test('an unconfirmed email address is never used', async () => {
     const counts = await processReleaseAlerts(fakeDatabase(state), { now: NOW });
     assert.equal(counts.skipped, 1);
     assert.equal(env.posts.length, 0);
+  } finally { env.restore(); }
+});
+
+test('a project without the subscriptions table still serves a profile that grants Pro', async () => {
+  const state = stateWith([{ id: 'a7', user_id: 'u1', movie_id: 707, movie_title: 'Dune', release_date: J_MINUS_2 }], { isPro: true });
+  delete state.subscriptions;
+  const env = useEnvironment({ tmdb: confirmed(J_MINUS_2), resend: delivered });
+  try {
+    const counts = await processReleaseAlerts(fakeDatabase(state), { now: NOW });
+    assert.equal(counts.accepted, 1);
+    assert.equal(env.posts.length, 1);
+  } finally { env.restore(); }
+});
+
+test('a free account is refused without crashing when the subscriptions table is missing', async () => {
+  const state = stateWith([{ id: 'a8', user_id: 'u1', movie_id: 808, movie_title: 'Dune', release_date: J_MINUS_2 }], { isPro: false });
+  delete state.subscriptions;
+  const env = useEnvironment({ tmdb: confirmed(J_MINUS_2), resend: delivered });
+  try {
+    const counts = await processReleaseAlerts(fakeDatabase(state), { now: NOW });
+    assert.equal(counts.skipped, 1);
+    assert.equal(env.posts.length, 0);
+  } finally { env.restore(); }
+});
+
+test('the owner account is Pro even with no profile row at all', async () => {
+  const state = stateWith([{ id: 'a9', user_id: 'u1', movie_id: 909, movie_title: 'Dune', release_date: J_MINUS_2 }], { isPro: false });
+  state.profiles = [];
+  state.user_movie_alerts[0].email = 'ivanjoris959@gmail.com';
+  state.users.u1.email = 'ivanjoris959@gmail.com';
+  delete state.subscriptions;
+  const env = useEnvironment({ tmdb: confirmed(J_MINUS_2), resend: delivered });
+  try {
+    const counts = await processReleaseAlerts(fakeDatabase(state), { now: NOW });
+    assert.equal(counts.accepted, 1);
+    assert.deepEqual(env.posts[0].to, ['ivanjoris959@gmail.com']);
   } finally { env.restore(); }
 });
 

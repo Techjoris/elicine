@@ -8,11 +8,26 @@ function database() {
   return key && url ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function checked(result) { if (result.error) throw new Error(`DATABASE_${result.error.code || 'ERROR'}`); return result.data; }
+
+/** Owner accounts are Pro everywhere else in the product; the alert API must agree. */
+const FOUNDER_EMAILS = ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'];
+
 export async function hasPro(db, user, now = new Date()) {
-  const profile = checked(await db.from('profiles').select('is_pro, expires_at').eq('id', user.id).maybeSingle());
+  const email = String(user?.email || '').toLowerCase().trim();
+  if (FOUNDER_EMAILS.includes(email)) return true;
+  const columns = 'is_pro, expires_at';
+  let profile = checked(await db.from('profiles').select(columns).eq('id', user.id).maybeSingle());
+  if (!profile && email) profile = checked(await db.from('profiles').select(columns).ilike('email', email).maybeSingle());
   if (profile?.is_pro === true && (!profile.expires_at || Date.parse(profile.expires_at) > now.getTime())) return true;
-  const subs = checked(await db.from('subscriptions').select('expires_at').eq('user_id', user.id).eq('status', 'active'));
-  return (subs || []).some(s => s.expires_at && Date.parse(s.expires_at) > now.getTime());
+  // A project without the subscriptions table must not turn alert activation into a server error
+  // for the accounts whose profile already carries the entitlement.
+  try {
+    const subs = checked(await db.from('subscriptions').select('expires_at').eq('user_id', user.id).eq('status', 'active'));
+    return (subs || []).some(s => s.expires_at && Date.parse(s.expires_at) > now.getTime());
+  } catch (error) {
+    console.warn('[Release alerts] subscriptions lookup unavailable:', error.message);
+    return false;
+  }
 }
 async function authenticate(db, req) {
   const token = /^Bearer (.+)$/.exec(req.headers?.authorization || '')?.[1];
@@ -92,7 +107,7 @@ export async function processReleaseAlerts(db, { now = new Date(), onlyAlertIds,
       lastId = alert.id;
       try {
         const milestone = dueMilestone(alert.release_date, now);
-        if (!milestone || !await hasPro(db, { id: alert.user_id }, now)) { counts.skipped++; continue; }
+        if (!milestone || !await hasPro(db, { id: alert.user_id, email: alert.email }, now)) { counts.skipped++; continue; }
         const { data: auth, error: authError } = await db.auth.admin.getUserById(alert.user_id);
         if (authError || !auth.user?.email_confirmed_at || !auth.user.email) { counts.skipped++; continue; }
         const latest = await releaseDetails(alert.movie_id, alert.media_type);
