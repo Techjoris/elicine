@@ -219,12 +219,12 @@ test('the public score is monotone, bounded and discriminating', () => {
   for (let index = 1; index < values.length; index += 1) {
     assert.ok(values[index] >= values[index - 1], `not monotone at ${grid[index]}`);
   }
-  assert.ok(values.every(value => Number.isInteger(value) && value >= 0 && value <= 100));
+  assert.ok(values.every(value => Number.isInteger(value) && value >= 0 && value <= 99));
   // The curve is calibrated on the range the engine really reaches: a computed
   // score of zero is no match at all, and the top of the useful band is
   // saturated, so the whole ladder above it stays discriminating.
   assert.equal(publicMatchScore(0), 0);
-  assert.equal(publicMatchScore(1), 100);
+  assert.equal(publicMatchScore(1), 99);
   assert.ok(publicMatchScore(0.8) - publicMatchScore(0.4) >= 25);
 });
 

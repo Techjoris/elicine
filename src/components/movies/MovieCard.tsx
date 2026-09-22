@@ -21,6 +21,7 @@ import {
 import { redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
 import { getVpnAffiliateUrl } from '../../config/affiliates';
+import { mediaTypeBadge, mediaTypeEndpoint } from '../../lib/mediaType';
 
 interface MovieCardProps {
   movie: Movie;
@@ -60,8 +61,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   const alertActive = isMovieAlertActive(movie.id);
 
   const releaseYear = movie.release_date ? movie.release_date.split('-')[0] : '2026';
-  const mediaType = movie.media_type || (movie.title.toLowerCase().includes('série') ? 'SÉRIE' : 'FILM');
-  const typeEndpoint = mediaType === 'SÉRIE' ? 'tv' : 'movie';
+  const typeEndpoint = mediaTypeEndpoint(movie.media_type);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,7 +139,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
           <div className="flex items-center gap-1">
             <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
-              {mediaType === 'SÉRIE' ? t.badgeSerie : t.badgeFilm}
+              {mediaTypeBadge(movie.media_type, { series: t.badgeSerie, film: t.badgeFilm })}
             </span>
             {showAiMatch && movie.match_rate !== undefined && movie.match_rate > 0 && (
               <span 

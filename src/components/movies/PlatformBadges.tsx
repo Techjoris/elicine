@@ -5,6 +5,7 @@ import { getWatchProviders, getDirectStreamingUrl, isIntermediaryWatchLink } fro
 import { isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { buildStreamingUrl } from '../../services/streamingResolver';
 import { useApp } from '../../context/AppContext';
+import { mediaTypeEndpoint } from '../../lib/mediaType';
 
 interface PlatformBadgesProps {
   movie: Movie;
@@ -28,7 +29,7 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
     }
 
     let isMounted = true;
-    const mediaType = movie.media_type === 'SÉRIE' ? 'tv' : 'movie';
+    const mediaType = mediaTypeEndpoint(movie.media_type);
     getWatchProviders(movie.id, mediaType, undefined, undefined, movie.title, movie)
       .then((data) => {
         if (isMounted) {

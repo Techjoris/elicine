@@ -174,7 +174,7 @@ test('recency is a graded ramp, from a work released today down to the horizon',
 
 test('the public score follows the documented ladder and separates excellent from average', () => {
   assert.equal(publicMatchScore(0), 0);
-  assert.equal(publicMatchScore(1), 100);
+  assert.equal(publicMatchScore(1), 99);
   const excellent = publicMatchScore(0.74);
   const good = publicMatchScore(0.6);
   const average = publicMatchScore(0.52);

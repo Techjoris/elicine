@@ -30,6 +30,7 @@ import {
 } from '../../services/streamingResolver';
 import { isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
+import { isSeriesMedia } from '../../lib/mediaType';
 
 export const MovieDetailModal: React.FC = () => {
   const { 
@@ -74,11 +75,7 @@ export const MovieDetailModal: React.FC = () => {
     setIsLoadingProviders(true);
     setTrailerKey(selectedMovie.trailer_key || null);
 
-    const isTv = (
-      selectedMovie.media_type === 'SÉRIE' || 
-      selectedMovie.media_type === 'tv' ||
-      selectedMovie.title.toLowerCase().includes('série')
-    );
+    const isTv = isSeriesMedia(selectedMovie.media_type);
     const mediaTypeEndpoint = isTv ? 'tv' : 'movie';
 
     // 1. Recharger les métadonnées localisées (titre, synopsis, genres) dans la langue choisie
@@ -179,11 +176,7 @@ export const MovieDetailModal: React.FC = () => {
     )
   );
 
-  const isTv = (
-    selectedMovie.media_type === 'SÉRIE' ||
-    selectedMovie.media_type === 'tv' ||
-    selectedMovie.title.toLowerCase().includes('série')
-  );
+  const isTv = isSeriesMedia(selectedMovie.media_type);
   const mediaTypeBadge = isTv ? 'SÉRIE' : 'FILM';
 
   const displayTitle = localizedDetails?.title || selectedMovie.title;

@@ -47,8 +47,10 @@ test('a bare category is answered by the strength of the work, not by its genre 
   const weak = score('unseen', unseen, horror);
   assert.equal(strong.intentScore, 1);
   assert.equal(weak.intentScore, 1);
-  assert.ok(strong.matchScore >= 80, `${strong.matchScore}`);
-  assert.ok(weak.matchScore < 70, `${weak.matchScore}`);
+  // A bare category is answered by the work itself, never by the exceptional
+  // band reserved for a described request whose independent signals converge.
+  assert.ok(strong.matchScore >= 75 && strong.matchScore < 85, `${strong.matchScore}`);
+  assert.ok(weak.matchScore < 65, `${weak.matchScore}`);
   assert.ok(strong.matchScore - weak.matchScore >= 15, `${strong.matchScore} vs ${weak.matchScore}`);
   assert.equal(strong.matchScore, publicMatchScore(strong.finalScore));
 });
@@ -101,7 +103,7 @@ test('the strength share follows how much the request describes, never a title',
 test('the public curve stays monotone, bounded and derived from the computed score', () => {
   const values = Array.from({ length: 101 }, (_, index) => publicMatchScore(index / 100));
   assert.equal(values[0], 0);
-  assert.equal(values[100], 100);
+  assert.equal(values[100], 99);
   for (let index = 1; index < values.length; index += 1) {
     assert.ok(values[index] >= values[index - 1], `not monotone at ${index}`);
   }
@@ -110,4 +112,58 @@ test('the public curve stays monotone, bounded and derived from the computed sco
   const weakScore = scoreSearchCandidate(weak, warAviation, {});
   assert.equal(weakScore.matchScore, publicMatchScore(weakScore.finalScore));
   assert.ok(weakScore.matchScore < 20, `${weakScore.matchScore}`);
+});
+
+test('a near-perfect, multi-signal answer reaches the exceptional band', () => {
+  const described = intent({ mediaType: 'movie', genres: ['Action', 'Thriller'],
+    themes: ['cia', 'russian spy', 'fugitive'], keywords: ['cia', 'spy', 'double agent'],
+    moods: ['tense'] });
+  const row = {
+    id: 27576, media_type: 'movie', title: 'Salt', original_title: 'Salt',
+    overview: '', release_date: '2024-01-01', original_language: 'en', genre_ids: [28, 53],
+    vote_average: 7.6, vote_count: 9000, popularity: 60
+  };
+  const proposed = toRetrievalCandidate(row, 'llm_candidates', { sourceRank: 1,
+    narrativeCandidateRank: 1,
+    narrativeCandidateReason: 'A CIA agent accused of being a Russian spy must flee as a fugitive.' });
+  proposed.sources.push('tmdb_person_credits');
+  proposed.retrievalSignals.push({ source: 'tmdb_person_credits', personTmdbId: 11701 });
+  const resolved = { resolvedPeople: [{ tmdbId: 11701, name: 'Angelina Jolie',
+    inputName: 'angelina jolie', resolutionConfidence: 1 }] };
+  const scored = scoreSearchCandidate(proposed, described, resolved, {
+    queryText: 'un film récent avec Angelina Jolie où une agente de la CIA accusée '
+      + 'd’être une espionne russe doit fuir'
+  });
+  assert.ok(scored.matchScore >= 95 && scored.matchScore <= 99, `${scored.matchScore}`);
+  assert.ok(scored.convergenceScore >= 0.8, `${scored.convergenceScore}`);
+  assert.ok(scored.entityScore >= 0.8, `${scored.entityScore}`);
+  assert.ok(scored.relationScore >= 0.8, `${scored.relationScore}`);
+});
+
+test('multiple independent signals clearly beat one signal of comparable strength', () => {
+  const described = intent({ mediaType: 'movie', genres: ['Action', 'Thriller'],
+    themes: ['cia', 'russian spy', 'fugitive'], keywords: ['cia', 'spy', 'double agent'],
+    moods: ['tense'] });
+  const strongRow = {
+    id: 27576, media_type: 'movie', title: 'Salt', original_title: 'Salt',
+    overview: '', release_date: '2024-01-01', original_language: 'en', genre_ids: [28, 53],
+    vote_average: 7.6, vote_count: 9000, popularity: 60
+  };
+  const singleRow = { ...strongRow, id: 2, title: 'Generic Action', original_title: 'Generic Action' };
+  const multi = toRetrievalCandidate(strongRow, 'llm_candidates', { sourceRank: 1,
+    narrativeCandidateRank: 1,
+    narrativeCandidateReason: 'A CIA agent accused of being a Russian spy must flee as a fugitive.' });
+  multi.sources.push('tmdb_person_credits');
+  multi.retrievalSignals.push({ source: 'tmdb_person_credits', personTmdbId: 11701 });
+  const single = toRetrievalCandidate(singleRow, 'tmdb_discover');
+  const resolved = { resolvedPeople: [{ tmdbId: 11701, name: 'Angelina Jolie',
+    inputName: 'angelina jolie', resolutionConfidence: 1 }] };
+  const queryText = 'un film récent avec Angelina Jolie où une agente de la CIA accusée '
+    + 'd’être une espionne russe doit fuir';
+  const multiScore = scoreSearchCandidate(multi, described, resolved, { queryText });
+  const singleScore = scoreSearchCandidate(single, described, resolved, { queryText });
+  assert.ok(multiScore.finalScore - singleScore.finalScore >= 0.35,
+    `${multiScore.finalScore} vs ${singleScore.finalScore}`);
+  assert.ok(multiScore.matchScore - singleScore.matchScore >= 30,
+    `${multiScore.matchScore} vs ${singleScore.matchScore}`);
 });

@@ -3,6 +3,7 @@ import { normalizeTerm, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { expandSemanticTerms } from './semanticExpansion.js';
 import { characterSimilarity } from './requestedWork.js';
 import { CONCEPT_WEIGHTS, conceptMatch, conceptSpecificity } from './semanticLexicon.js';
+import { scoreRankingPreferences } from './rankingPreferences.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -29,8 +30,13 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // Multi-signal convergence: a bounded share of the final score reserved for
   // candidates supported by several independent strong signals instead of a
   // single generic genre or keyword.
-  convergenceWeight: 0.095,
-  convergence: Object.freeze({ strongSignalThreshold: 0.6, targetSignalCount: 4, breadthShare: 0.2 }),
+  // Multi-signal convergence carries two bounded effects: its share of the
+  // blend and a floor reserved for candidates whose evidence really converges.
+  // The floor is gated by how much the request describes, so a bare category
+  // can never reach an exceptional match through provenance alone.
+  convergenceWeight: 0.18,
+  convergence: Object.freeze({ strongSignalThreshold: 0.6, targetSignalCount: 4,
+    breadthShare: 0.15, floorWeight: 1 }),
   // A work the query names is not a weighted component among others: it is the
   // answer. It earns an explicit share of the final score, activated only when
   // the query really requests that work ("Inception") and never when it merely
@@ -43,15 +49,16 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // with the same concept primitive as the rest of the engine: an unexplained
   // proposal earns half the share, a coherent one earns all of it. With no
   // proposal the blend is exactly the historical one.
-  narrativeCandidateWeight: 0.28,
+  narrativeCandidateWeight: 0.32,
   narrativeCandidate: Object.freeze({ rankSpan: 10, reasonFloor: 0.5 }),
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
   // Saturation sits at the top of the computed range the engine really reaches:
-  // above it a perfect answer stays 100%, below it the whole ladder - excellent,
-  // good, average, weak - is spread instead of being flattened.
-  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.9, gamma: 1 }),
+  // above it an answer stays in the exceptional band (95-99), below it the whole
+  // ladder - excellent, good, average, weak - is spread instead of being
+  // flattened. The curve is monotone in `finalScore`.
+  publicMatch: Object.freeze({ floor: 0, spread: 99, saturation: 0.98, gamma: 0.88 }),
   // An answer is only as good as the two things it combines: how much of the
   // request it really answers (the intent coverage) and how strong a choice it
   // is (rating, notoriety, provenance). The two multiply, so a work carried by
@@ -130,7 +137,13 @@ function candidateText(candidate) {
   const metadata = candidate.metadata || {};
   return [candidate.title, candidate.originalTitle, metadata.overview, metadata.setting,
     data.overview, ...array(data.genres), ...array(data.keywords), ...array(data.themes),
-    ...array(data.moods)].filter(Boolean).join(' ');
+    ...array(data.moods),
+    // The model's justification is already a bounded ranking signal. When the
+    // catalogue confirms the work, the reason it gives is read with the same
+    // concept primitive as the metadata: a coherent reason fills a sparse
+    // overview, an incoherent one still earns almost nothing.
+    ...array(candidate.retrievalSignals).map(signal => signal?.narrativeCandidateReason)]
+    .filter(Boolean).join(' ');
 }
 
 function candidateYear(candidate) {
@@ -276,8 +289,13 @@ function convergenceScore(components, candidate) {
   const { strongSignalThreshold, targetSignalCount, breadthShare } = ELICINE_RANKING_CONFIG.convergence;
   const evidence = [components.entityScore, components.referenceScore, components.titleScore,
     components.themeScore, components.keywordScore, components.moodScore, components.genreScore,
-    components.semanticScore, components.identifiedWorkScore, components.narrativeCandidateScore];
-  const satisfied = evidence.filter(value => value >= strongSignalThreshold).length;
+    components.semanticScore, components.identifiedWorkScore, components.narrativeCandidateScore,
+    components.relationScore, components.preferenceScore, components.temporalScore];
+  // Graded convergence: four signals that are merely above the floor are not
+  // the same evidence as four signals that answer the request almost fully.
+  const strength = value => value <= strongSignalThreshold ? 0
+    : clamp((value - strongSignalThreshold) / (1 - strongSignalThreshold));
+  const satisfied = evidence.reduce((sum, value) => sum + strength(value), 0);
   const breadth = clamp(Math.max(0, (candidate.sources || []).length - 1) / 2);
   return clamp(clamp(satisfied / targetSignalCount) * (1 - breadthShare) + breadth * breadthShare);
 }
@@ -311,7 +329,7 @@ function narrativeCandidateScore(candidate, semanticTerms, genres) {
 export function publicMatchScore(finalScore) {
   const { floor, spread, saturation, gamma } = ELICINE_RANKING_CONFIG.publicMatch;
   const normalized = clamp(clamp(finalScore) / saturation) ** gamma;
-  return Math.round(Math.min(100, Math.max(0, floor + spread * normalized)));
+  return Math.round(Math.min(99, Math.max(0, floor + spread * normalized)));
 }
 
 function referenceScore(candidate, resolvedContext, semanticScore) {
@@ -410,9 +428,43 @@ function boundedYearScore(candidate, intent) {
   return year >= intent.yearMin && year <= intent.yearMax ? 1 : 0;
 }
 
+/**
+ * Explicit constraints are still bounded preferences inside the ranking, not a
+ * second filter: a work outside a stated period, runtime, language or country
+ * keeps a real but reduced score instead of disappearing silently. This keeps
+ * the ranker honest when it is exercised directly, and is idempotent with the
+ * strict filter when that stage already ran.
+ */
+function explicitConstraintFactor(candidate, intent, data = {}) {
+  let factor = 1;
+  const year = candidateYear(candidate);
+  if (intent.yearMin != null || intent.yearMax != null) {
+    if (year == null) factor *= 0.9;
+    else if ((intent.yearMin != null && year < intent.yearMin) ||
+      (intent.yearMax != null && year > intent.yearMax)) factor *= 0.55;
+  }
+  const runtime = Number(data.runtime);
+  if (intent.runtimeMin != null || intent.runtimeMax != null) {
+    if (!Number.isFinite(runtime) || runtime <= 0) factor *= 0.9;
+    else if ((intent.runtimeMin != null && runtime < intent.runtimeMin) ||
+      (intent.runtimeMax != null && runtime > intent.runtimeMax)) factor *= 0.7;
+  }
+  if (array(intent.languages).length) {
+    if (!candidate.originalLanguage) factor *= 0.9;
+    else if (!intent.languages.map(value => String(value).toLowerCase())
+      .includes(String(candidate.originalLanguage).toLowerCase())) factor *= 0.7;
+  }
+  if (array(intent.countries).length) {
+    if (!data.countries?.length) factor *= 0.9;
+    else if (!data.countries.some(country => intent.countries.includes(country))) factor *= 0.7;
+  }
+  return clamp(factor);
+}
+
 export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {}, { queryText = '' } = {}) {
   const data = candidate.constraintData || {};
   const text = candidateText(candidate);
+  const preferences = scoreRankingPreferences(candidate, intent, resolvedContext, { queryText });
   const semanticTerms = [...array(intent.themes), ...array(intent.moods), ...array(intent.keywords)];
   const conceptGenres = array(intent.genres);
   const expansion = expandSemanticTerms(intent);
@@ -463,12 +515,19 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     voteConfidenceScore: round(voteConfidenceScore(candidate)),
     sourceConfidenceScore: round(sourceConfidenceScore(candidate)),
     narrativeCandidateScore: round(narrativeCandidateScore(candidate, semanticTerms, conceptGenres)),
+    relationScore: round(preferences.relationScore ?? 0),
+    preferenceScore: round(preferences.preferenceScore ?? 0),
     // Unsigned by construction: 0 means "no temporal preference, or a work too
     // old to count as contemporary", 1 a work released this year.
     temporalScore: round(temporalFit ?? 0)
   };
   components.referenceScore = round(referenceScore(candidate, resolvedContext, components.semanticScore));
-  components.entityScore = round(entityScore(candidate, intent, resolvedContext, components.discriminatingScore));
+  // A person credit is narrative evidence when the model's verified proposal
+  // also answers the described concepts: the two independent signals reinforce
+  // each other instead of the credit being discounted to its metadata-only
+  // coverage.
+  components.entityScore = round(entityScore(candidate, intent, resolvedContext,
+    Math.max(components.discriminatingScore, components.narrativeCandidateScore)));
   // The work the query names is the answer: it must not be pushed under its own
   // recommendations by the anti-monopoly rule that keeps a style seed out of the
   // grid. A comparison seed keeps its zero, a requested work earns the title.
@@ -505,7 +564,15 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const { floor: floorConfig } = ELICINE_RANKING_CONFIG.answerStrength;
   const strengthFloor = floorConfig.bare + (floorConfig.described - floorConfig.bare) * intentSpecificity(intent);
   const strengthFactor = strengthFloor + (1 - strengthFloor) * answerStrengthScore(components);
-  const answerScore = intentScore * strengthFactor;
+  // Relation and comparative preferences are soft: they move the ranking by a
+  // bounded factor, never by a hard filter. A work that answers both connected
+  // concepts keeps its full answer score; one that only matched a loose word
+  // loses a fraction of it.
+  const relationFactor = preferences.relationRequired && preferences.relationScore != null
+    ? 0.85 + 0.15 * preferences.relationScore : 1;
+  const preferenceFactor = preferences.preferenceApplied && preferences.preferenceScore != null
+    ? 0.9 + 0.1 * preferences.preferenceScore : 1;
+  const answerScore = intentScore * strengthFactor * relationFactor * preferenceFactor;
   // The documented weights stay untouched (they sum to 1): convergence is
   // blended in as an explicit share so the historical signal proportions are
   // preserved while genuine multi-signal agreement is rewarded.
@@ -519,12 +586,22 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // so the request keeps discriminating without any hard cut on the period.
   const temporalAdjustment = temporalFit == null ? 0
     : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight;
-  const finalScore = clamp(answerScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus +
-    temporalAdjustment);
+  const blendedScore = answerScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight;
+  // Several independent strong signals agreeing on the same work is itself
+  // evidence: the bounded floor lets such a candidate reach the exceptional
+  // band even when one metadata channel is sparse. A thin request cannot use
+  // it, because the floor is gated by how much the request actually describes.
+  const describedEvidence = clamp(intentSpecificity(intent) * 2);
+  const convergenceFloor = components.convergenceScore *
+    ELICINE_RANKING_CONFIG.convergence.floorWeight * describedEvidence;
+  const constraintFactor = explicitConstraintFactor(candidate, intent, data);
+  const finalScore = clamp(Math.max(blendedScore, convergenceFloor) * constraintFactor + identifiedBonus +
+    narrativeBonus + temporalAdjustment);
   return { ...components, intentScore: round(intentScore), answerStrengthScore: round(answerStrengthScore(components)),
-    answerScore: round(answerScore), finalScore: round(finalScore),
-    matchScore: publicMatchScore(finalScore) };
+    relationFactor: round(relationFactor), preferenceFactor: round(preferenceFactor),
+    convergenceFloor: round(convergenceFloor), constraintFactor: round(constraintFactor),
+    answerScore: round(answerScore), finalScore: round(finalScore), matchScore: publicMatchScore(finalScore) };
 }
 
 function compareRanked(left, right) {
