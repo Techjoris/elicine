@@ -21,6 +21,12 @@ const EXPECTED_EVENTS = [
   'subscription.canceled'
 ];
 
+/** Paddle renvoie chaque événement sous forme d'objet { name, description, group }. */
+const eventNames = setting => {
+  const events = Array.isArray(setting?.subscribed_events) ? setting.subscribed_events : [];
+  return events.map(event => clean(event?.name || event)).filter(Boolean);
+};
+
 const clean = value => String(value ?? '').trim();
 const present = name => Boolean(clean(process.env[name]));
 
@@ -84,13 +90,16 @@ export async function auditPaddle({ key, base }) {
     type: setting?.type || null,
     active: setting?.active !== false,
     destination: setting?.destination || null,
-    events: Array.isArray(setting?.subscribed_events) ? setting.subscribed_events : []
+    events: eventNames(setting),
+    subscribesToEverything: eventNames(setting).includes('*')
   }));
   const webhook = destinations.find(entry => /paddle-webhook/.test(entry.destination || '') && /elicine\.app/i.test(entry.destination || ''))
     || destinations.find(entry => /paddle-webhook/.test(entry.destination || ''));
   if (!webhook) warnings.push('Aucune notification Paddle ne pointe vers https://elicine.app/api/paddle-webhook.');
   else if (!webhook.active) warnings.push('La notification Paddle vers notre webhook est désactivée.');
-  const missingEvents = webhook ? EXPECTED_EVENTS.filter(event => !webhook.events.includes(event)) : EXPECTED_EVENTS;
+  const missingEvents = webhook
+    ? (webhook.subscribesToEverything ? [] : EXPECTED_EVENTS.filter(event => !webhook.events.includes(event)))
+    : EXPECTED_EVENTS;
   if (webhook && missingEvents.length) warnings.push(`Événements non souscrits : ${missingEvents.join(', ')}.`);
 
   let recentTransactions = [];

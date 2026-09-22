@@ -48,6 +48,7 @@ const goodConfiguration = () => stubPaddleApi({
     id: 'ntf_1', type: 'url', active: true,
     destination: 'https://elicine.app/api/paddle-webhook',
     subscribed_events: ['transaction.completed', 'subscription.created', 'subscription.updated', 'subscription.canceled']
+      .map(name => ({ name, group: 'Transaction', available_versions: [1] }))
   }],
   transactions: [{ id: 'txn_1', status: 'completed', created_at: '2026-09-23T09:00:00Z', currency_code: 'EUR', details: { totals: { grand_total: '500' } } }]
 });
@@ -85,7 +86,7 @@ test('the audit names exactly what is missing or misconfigured', async () => {
     notifications: [{
       id: 'ntf_2', type: 'url', active: false,
       destination: 'https://exemple.test/webhook',
-      subscribed_events: ['transaction.completed']
+      subscribed_events: [{ name: 'transaction.completed' }]
     }]
   });
   try {
@@ -109,7 +110,7 @@ test('an inactive webhook subscription and missing events are reported', async (
     notifications: [{
       id: 'ntf_3', type: 'url', active: false,
       destination: 'https://elicine.app/api/paddle-webhook',
-      subscribed_events: ['transaction.completed']
+      subscribed_events: [{ name: 'transaction.completed' }]
     }]
   });
   try {
@@ -118,6 +119,22 @@ test('an inactive webhook subscription and missing events are reported', async (
     assert.match(warnings, /La notification Paddle vers notre webhook est désactivée/);
     assert.match(warnings, /Événements non souscrits : subscription.created, subscription.updated, subscription.canceled/);
     assert.equal(audit.webhook.id, 'ntf_3');
+  } finally { stub.restore(); }
+});
+
+test('a wildcard subscription counts as everything and raises no event warning', async () => {
+  const stub = stubPaddleApi({
+    products: [
+      { id: 'pro_elicline', name: 'Éliciné Pass Pro', status: 'active' },
+      { id: 'pro_supporter', name: 'Eliciné Supporter', status: 'active', custom_data: { product_type: 'elicine_supporter' } }
+    ],
+    prices: [recurring(PRO_MONTHLY, 1.99), recurring(PRO_YEARLY, 19.9, 'year'), ...[1, 2, 3, 5, 7, 10, 50].map(amount => oneTime(`pri_supporter_${amount}`, amount))],
+    notifications: [{ id: 'ntf_4', type: 'url', active: true, destination: 'https://elicine.app/api/paddle-webhook', subscribed_events: [{ name: '*' }] }]
+  });
+  try {
+    const audit = await auditPaddle({ key: 'pdl_test', base: 'https://api.paddle.com' });
+    assert.deepEqual(audit.warnings, []);
+    assert.equal(audit.webhook.subscribesToEverything, true);
   } finally { stub.restore(); }
 });
 
