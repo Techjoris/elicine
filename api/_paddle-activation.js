@@ -312,15 +312,20 @@ async function syncSubscription({ supabase, identity, event, access, isPro, expi
 async function readExistingExpiry({ supabase, identity, calls = [] }) {
   try {
     calls.push({ table: 'profiles', op: 'select', by: identity.userId ? 'id' : 'email',
-      value: identity.userId || identity.email, columns: 'expires_at' });
-    const query = supabase.from('profiles').select('id,email,expires_at');
+      value: identity.userId || identity.email, columns: 'is_pro,expires_at' });
+    const query = supabase.from('profiles').select('id,email,is_pro,expires_at');
     const { data } = isPaddleUuid(identity.userId)
       ? await query.eq('id', identity.userId).maybeSingle()
       : await query.ilike('email', identity.email).maybeSingle();
     const expiresAt = data?.expires_at || null;
-    return expiresAt && !Number.isNaN(new Date(expiresAt).getTime()) ? new Date(expiresAt).toISOString() : null;
+    return {
+      // Un accès Pro sans date est un accès illimité (fondateur, Pass à vie) : un nouvel achat
+      // ne doit pas le transformer en accès daté.
+      unlimited: data?.is_pro === true && !data?.expires_at,
+      expiresAt: expiresAt && !Number.isNaN(new Date(expiresAt).getTime()) ? new Date(expiresAt).toISOString() : null
+    };
   } catch {
-    return null;
+    return { unlimited: false, expiresAt: null };
   }
 }
 
@@ -336,10 +341,13 @@ export async function applyPaddleSubscription({ supabase, identity, event, now =
   const eventStatus = isTransaction
     ? (['completed', 'paid', '', null, undefined].includes(event.status) ? 'active' : event.status)
     : (event.status || 'unknown');
-  const existingExpiry = await readExistingExpiry({ supabase, identity, calls });
+  const existing = await readExistingExpiry({ supabase, identity, calls });
+  const existingExpiry = existing.expiresAt;
   const computedExpiry = paddleExpiresAt(event, { now });
-  const expiresAt = event.expiresAt || (existingExpiry &&
-    new Date(existingExpiry).getTime() > Date.parse(now) ? existingExpiry : computedExpiry);
+  const expiresAt = existing.unlimited
+    ? null
+    : event.expiresAt || (existingExpiry &&
+      new Date(existingExpiry).getTime() > Date.parse(now) ? existingExpiry : computedExpiry);
   const access = mapPaddleStatus(eventStatus, { expiresAt, now: Date.parse(now) });
   const profile = await syncProfile({ supabase, identity, isPro: access.isPro, expiresAt, now, calls });
   const subscription = await syncSubscription({

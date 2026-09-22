@@ -246,3 +246,22 @@ test('the webhook handler activates a paid subscription and acknowledges the dup
   assert.equal(second.duplicate, true);
   assert.equal(fake.state.profiles[0].expires_at, '2026-10-22T18:00:00.000Z');
 });
+
+test('a new purchase never turns an unlimited Pro account into a dated one', async () => {
+  const fake = createFakeSupabase({ profiles: [{
+    id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com', is_pro: true, expires_at: null
+  }] });
+  const event = normalizePaddleEvent({
+    event_id: 'evt_pro_lifetime',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_lifetime', status: 'completed', currency_code: 'EUR',
+      custom_data: { user_id: '11111111-1111-4111-8111-111111111111', plan: 'monthly' },
+      items: [{ price: { id: 'pri_01m2x2nctwa8k7cqazmebqnxm3' } }],
+      details: { totals: { grand_total: '199' } }
+    }
+  });
+  const result = await applyPaddleSubscription({ supabase: fake.client, identity: await resolvePaddleIdentity({ supabase: fake.client, event }), event });
+  assert.equal(result.isPro, true);
+  assert.equal(result.expiresAt, null, 'un accès illimité reste illimité');
+});
