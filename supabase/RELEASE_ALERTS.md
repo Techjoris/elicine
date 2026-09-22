@@ -18,7 +18,16 @@ au plus un e-mail J-2 et un e-mail jour J, jamais deux fois le même jalon.
 
 ## Ordre de mise en production
 
-1. Coller **`supabase/APPLY_SUPABASE_SETUP.sql`** dans Supabase → SQL Editor → New query, puis Run.
+1. Coller les trois blocs dans Supabase → SQL Editor → New query, un par un (chacun affiche sa
+   preuve : `ALERTES-OK`, `HISTORIQUE-OK`, `SUPPORTER-OK`). Cette version courte évite qu'une
+   seule instruction fasse annuler tout le script, l'éditeur exécutant chaque Run en transaction.
+
+   1. `supabase/SETUP_1_ALERTES.sql`
+   2. `supabase/SETUP_2_HISTORIQUE.sql`
+   3. `supabase/SETUP_3_SUPPORTER.sql`
+
+   Le fichier **`supabase/APPLY_SUPABASE_SETUP.sql`** reste disponible : il contient exactement
+   les trois blocs à la suite, à coller en une seule fois si vous préférez.
    Ce fichier unique contient `movie_alerts_setup.sql` + `20260922010000_release_email_alerts.sql`
    + la table `user_search_history` (historique rattaché au compte) + le socle « Eliciné
    Supporter » (`supporter_contributions`, `paddle_webhook_events`, colonnes Supporter du profil).

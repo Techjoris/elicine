@@ -183,3 +183,38 @@ test('the single-file script handed to the dashboard can be pasted twice and wor
     assert.equal((await db.query(`select count(*)::int as total from user_search_history`)).rows[0].total, 1, 'the other member row is untouched');
   } finally { await db.close(); }
 });
+
+test('the three step files sent to the dashboard each run twice and prove themselves', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+      create schema auth;
+      create function auth.uid() returns uuid language sql as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
+      create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;
+      create table public.profiles (
+        id uuid primary key, email text, is_pro boolean not null default false,
+        expires_at timestamptz, updated_at timestamptz not null default now()
+      );`);
+    const steps = {
+      'SETUP_1_ALERTES.sql': ['user_movie_alerts', 'release_email_deliveries'],
+      'SETUP_2_HISTORIQUE.sql': ['user_search_history'],
+      'SETUP_3_SUPPORTER.sql': ['supporter_contributions', 'paddle_webhook_events']
+    };
+    for (const [step, expectedTables] of Object.entries(steps)) {
+      const script = await readFile(new URL(`../../supabase/${step}`, import.meta.url), 'utf8');
+      await db.exec(script);
+      await db.exec(script); // rejouable : deux passages sans erreur
+      for (const table of expectedTables) {
+        assert.equal((await db.query(`select to_regclass('public.${table}')::text as created`)).rows[0].created, table, `${step} crée ${table}`);
+      }
+    }
+    const columns = (await db.query(`select column_name from information_schema.columns
+      where table_schema='public' and table_name='profiles' and column_name like 'supporter%' or column_name = 'is_supporter'
+      order by column_name`)).rows.map(row => row.column_name);
+    assert.deepEqual(columns, ['is_supporter', 'supporter_last_amount_cents', 'supporter_last_at', 'supporter_total_cents']);
+    const tables = (await db.query(`select table_name from information_schema.tables where table_schema='public' order by table_name`)).rows.map(row => row.table_name);
+    for (const expected of ['paddle_webhook_events', 'release_email_deliveries', 'supporter_contributions', 'user_movie_alerts', 'user_search_history']) {
+      assert.ok(tables.includes(expected), `${expected} créée par les blocs`);
+    }
+  } finally { await db.close(); }
+});
