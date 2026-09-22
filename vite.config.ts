@@ -241,6 +241,23 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // 3.10. ROUTE /api/paddle-diagnostics — audit de configuration Paddle
+            if (pathname === '/api/paddle-diagnostics') {
+              adaptResponse();
+              const query: Record<string, string> = {};
+              url.searchParams.forEach((v, k) => { query[k] = v; });
+              (req as any).query = query;
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/paddle-diagnostics.js')).href;
+                const diagnosticsHandler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await diagnosticsHandler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: err.message }));
+              }
+            }
+
             // 4. ROUTE /api/auth (login, register, send-verification, google)
             if (pathname.startsWith('/api/auth')) {
               adaptResponse();
