@@ -42,9 +42,10 @@ derived preference stays inert and the era keeps its own works.
 
 `publicMatch` becomes `floor 0, spread 100, saturation 0.8, gamma 1`: the top of
 the computed range is saturated, so the whole useful band is spread over the
-documented ladder instead of being flattened. The score remains
-`round(100 * clamp(finalScore / 0.8))` - a pure calibration of the real
-`finalScore`, no per-title value, no relative normalisation.
+documented ladder instead of being flattened. The score remains a pure
+calibration of the real `finalScore` - no per-title value, no relative
+normalisation. (Phase 17 re-calibrates the curve again, on top of the answer
+score it introduces; see `PHASE17.md`.)
 
 Measured on the live computed scores of the reported request (recovered from the
 published percentages): the grid now spans ~46 % to ~93 % instead of 48 % to 69 %.

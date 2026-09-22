@@ -48,13 +48,26 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // Public match curve. The displayed percentage must be credible: a clearly
   // stronger match displays a clearly stronger score. Pure calibration of the
   // computed score, never a per-title value.
-  // Saturation sits at the top of the computed range the engine really reaches
-  // (0.8 on a precise request, less on a rich thematic one): the displayed
-  // percentage then spreads the whole useful band over the documented ladder -
-  // excellent near the top, average around the middle - and keeps
-  // discriminating inside it instead of flattening every strong candidate
-  // between 50 and 70% as a saturation of 1 did.
-  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.8, gamma: 1 }),
+  // Saturation sits at the top of the computed range the engine really reaches:
+  // above it a perfect answer stays 100%, below it the whole ladder - excellent,
+  // good, average, weak - is spread instead of being flattened.
+  publicMatch: Object.freeze({ floor: 0, spread: 100, saturation: 0.85, gamma: 1 }),
+  // An answer is only as good as the two things it combines: how much of the
+  // request it really answers (the intent coverage) and how strong a choice it
+  // is (rating, notoriety, provenance). The two multiply, so a work carried by
+  // a bare genre tag can never display an excellent match on its own, and a
+  // described request keeps its own works in front whatever their fame.
+  // `floor` is the share of the score a work keeps when its strength is nil: it
+  // is high for a request that describes its content, low for a bare category,
+  // where the strength of the work IS the answer. The floor is derived from the
+  // request itself, never from a title, a year or a genre.
+  answerStrength: Object.freeze({
+    weights: Object.freeze({ qualityScore: 0.65, voteConfidenceScore: 0.15,
+      popularityScore: 0.10, sourceConfidenceScore: 0.10 }),
+    floor: Object.freeze({ bare: 0.15, described: 0.85 }),
+    describedDimensions: 2,
+    voteReference: 5000
+  }),
   // A temporal word in the request ("moderne", "récent", "contemporain") says
   // WHEN the described work belongs, and it is a graded preference rather than
   // a filter: the whole catalogue stays admissible, a contemporary work is
@@ -203,12 +216,54 @@ function popularityScore(candidate) {
   return clamp(Math.log1p(popularity) / Math.log1p(ELICINE_RANKING_CONFIG.popularityScale));
 }
 
+/**
+ * How much a work is vouched for by the audience: a 7.3 average over a handful
+ * of votes and the same average over twenty thousand votes are not the same
+ * answer, and the Bayesian quality alone cannot say so strongly enough on a
+ * request that only names a category.
+ */
+function voteConfidenceScore(candidate) {
+  const votes = Math.max(0, Number(candidate.metadata?.vote_count) || 0);
+  return clamp(Math.log1p(votes) / Math.log1p(ELICINE_RANKING_CONFIG.answerStrength.voteReference));
+}
+
 function sourceConfidenceScore(candidate) {
   const sources = [...new Set(candidate.sources || [])];
   const base = Math.max(0, ...sources.map(source => ELICINE_RANKING_CONFIG.sourceConfidence[source] || 0));
   const bonus = Math.min(ELICINE_RANKING_CONFIG.sourceMultiBonusCap,
     Math.max(0, sources.length - 1) * ELICINE_RANKING_CONFIG.sourceMultiBonus);
   return clamp(base * 0.85 + bonus);
+}
+
+/**
+ * How much the request describes, in independent dimensions. A bare category
+ * ("un film d'horreur") describes nothing: any horror work answers it and the
+ * strength of the work is the only thing left to rank. Concepts, hard
+ * constraints, a named reference, a person or an exclusion are what make a
+ * request answerable by content.
+ */
+export function intentSpecificity(intent = {}) {
+  const described = [
+    array(intent.themes).length + array(intent.moods).length > 0,
+    array(intent.keywords).length > 0,
+    intent.yearMin != null || intent.yearMax != null || intent.runtimeMin != null || intent.runtimeMax != null ||
+      intent.minRating != null || array(intent.languages).length > 0 || array(intent.countries).length > 0 ||
+      array(intent.semanticExclusions).length > 0,
+    array(intent.knownTitles).length > 0 || array(intent.excludedTitles).length > 0
+  ].filter(Boolean).length;
+  return clamp(described / ELICINE_RANKING_CONFIG.answerStrength.describedDimensions);
+}
+
+/**
+ * Bounded strength of one candidate as an answer: how well rated it is, how
+ * many people vouch for it, how visible it is and where it comes from. Weights
+ * are relative and sum to one; the floor that turns this strength into a score
+ * factor belongs to the request, not to the candidate.
+ */
+function answerStrengthScore(components) {
+  const { weights } = ELICINE_RANKING_CONFIG.answerStrength;
+  return clamp(Object.entries(weights)
+    .reduce((sum, [name, weight]) => sum + clamp(components[name]) * weight, 0));
 }
 
 /**
@@ -405,6 +460,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     countryScore: intent.countries?.length ? (data.countries?.length ?
       Number(data.countries.some(country => intent.countries.includes(country))) : 0.5) : 0,
     qualityScore: round(qualityScore(candidate)), popularityScore: round(popularityScore(candidate)),
+    voteConfidenceScore: round(voteConfidenceScore(candidate)),
     sourceConfidenceScore: round(sourceConfidenceScore(candidate)),
     narrativeCandidateScore: round(narrativeCandidateScore(candidate, semanticTerms, conceptGenres)),
     // Unsigned by construction: 0 means "no temporal preference, or a work too
@@ -435,32 +491,39 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     qualityScore: true, popularityScore: true, sourceConfidenceScore: true
   };
   const weighted = Object.entries(ELICINE_RANKING_CONFIG.weights).filter(([name]) => active[name]);
-  const weightTotal = weighted.reduce((sum, [, weight]) => sum + weight, 0);
-  const coverageScore = weightTotal
-    ? weighted.reduce((sum, [name, weight]) => sum + components[name] * weight, 0) / weightTotal : 0;
-  // The documented weights stay untouched (they sum to 1): convergence is
-  // blended in as an explicit share so the historical signal proportions are
-  // preserved while genuine multi-signal agreement is rewarded.
-  // The named work earns a bounded bonus on top of the historical blend: its
-  // other signals are never discounted, so an identification cannot be pushed
-  // below a recommendation that merely matches the same concepts. With no
-  // identified work the formula is exactly the historical one.
-  const identifiedBonus = components.identifiedWorkScore * ELICINE_RANKING_CONFIG.identifiedWorkWeight;
-  const narrativeBonus = components.narrativeCandidateScore * ELICINE_RANKING_CONFIG.narrativeCandidateWeight;
-  // Symmetric and bounded: a contemporary work gains what a very old one loses,
-  // so the request keeps discriminating without any hard cut on the period.
-  const temporalAdjustment = temporalFit == null ? 0
-    : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight;
-  const finalScore = clamp(coverageScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
-    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus +
-    temporalAdjustment);
+  // Coverage: how much of what the request describes the work answers, as the
+  // documented weighted average over the intent components the request makes
+  // meaningful. Strength components are excluded on purpose - they say how good
+  // a choice the work is, not whether it answers the request - and are combined
+  // with it as a bounded factor, in their own relative proportions.
   const intentNames = ['semanticScore', 'genreScore', 'themeScore', 'moodScore', 'keywordScore',
     'referenceScore', 'entityScore', 'titleScore', 'yearScore', 'languageScore', 'countryScore'];
   const intentWeighted = weighted.filter(([name]) => intentNames.includes(name));
   const intentWeight = intentWeighted.reduce((sum, [, weight]) => sum + weight, 0);
   const intentScore = intentWeight ? intentWeighted.reduce((sum, [name, weight]) =>
     sum + components[name] * weight, 0) / intentWeight : 0;
-  return { ...components, intentScore: round(intentScore), finalScore: round(finalScore),
+  const { floor: floorConfig } = ELICINE_RANKING_CONFIG.answerStrength;
+  const strengthFloor = floorConfig.bare + (floorConfig.described - floorConfig.bare) * intentSpecificity(intent);
+  const strengthFactor = strengthFloor + (1 - strengthFloor) * answerStrengthScore(components);
+  const answerScore = intentScore * strengthFactor;
+  // The documented weights stay untouched (they sum to 1): convergence is
+  // blended in as an explicit share so the historical signal proportions are
+  // preserved while genuine multi-signal agreement is rewarded.
+  // The named work earns a bounded bonus on top of the answer: its other signals
+  // are never discounted, so an identification cannot be pushed below a
+  // recommendation that merely matches the same concepts. With no identified
+  // work the formula is exactly the historical one.
+  const identifiedBonus = components.identifiedWorkScore * ELICINE_RANKING_CONFIG.identifiedWorkWeight;
+  const narrativeBonus = components.narrativeCandidateScore * ELICINE_RANKING_CONFIG.narrativeCandidateWeight;
+  // Symmetric and bounded: a contemporary work gains what a very old one loses,
+  // so the request keeps discriminating without any hard cut on the period.
+  const temporalAdjustment = temporalFit == null ? 0
+    : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight;
+  const finalScore = clamp(answerScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
+    components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight + identifiedBonus + narrativeBonus +
+    temporalAdjustment);
+  return { ...components, intentScore: round(intentScore), answerStrengthScore: round(answerStrengthScore(components)),
+    answerScore: round(answerScore), finalScore: round(finalScore),
     matchScore: publicMatchScore(finalScore) };
 }
 

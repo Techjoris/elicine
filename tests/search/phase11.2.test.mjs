@@ -137,12 +137,20 @@ test('exact person plus dream semantics makes Inception clearly outrank dream-on
   });
 
   assert.equal(results[0].tmdbId, 27205);
-  const inceptionScore = results.find(candidate => candidate.tmdbId === 27205).ranking;
-  const yourNameScore = results.find(candidate => candidate.tmdbId === 372058).ranking;
+  // The described work is the answer: the ranking layer measures the margin on
+  // the ranked pool, and the grid is allowed to stop there when the identified
+  // work is unambiguous and the dream-only candidate falls under the relevance
+  // floor (the budget never pads an identification).
+  const ranked = trace.scoresPhase8;
+  const inceptionScore = ranked.find(entry => entry.tmdbId === 27205).scores;
+  const yourNameEntry = ranked.find(entry => entry.tmdbId === 372058);
+  const yourNameScore = yourNameEntry.scores;
   assert.ok(inceptionScore.entityScore > 0.7);
   assert.equal(yourNameScore.entityScore, 0);
   assert.ok(inceptionScore.finalScore - yourNameScore.finalScore >= 0.08);
   assert.ok(inceptionScore.matchScore > yourNameScore.matchScore);
+  const gridIndex = results.findIndex(candidate => candidate.tmdbId === 372058);
+  if (gridIndex >= 0) assert.ok(gridIndex > 0);
   assert.ok(trace.sources.tmdb_person_credits.topIds.includes(27205));
   assert.equal(trace.canonicalIntent.mediaType, 'movie');
   assert.equal(trace.resolvedIntentContext.resolvedPeople[0].tmdbId, 6193);
