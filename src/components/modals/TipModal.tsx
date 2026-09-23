@@ -355,7 +355,7 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
                       required
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder={`${MIN_SASPAY_AMOUNT}`}
+                      placeholder=""
                       className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 focus:border-sky-500 rounded-xl px-4 py-3 text-base font-black text-slate-900 dark:text-white focus:outline-none pr-16 transition-all shadow-inner font-mono"
                     />
                     <span className="absolute right-4 text-xs font-bold text-sky-600 dark:text-sky-400 select-none">
