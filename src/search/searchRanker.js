@@ -4,6 +4,7 @@ import { expandSemanticTerms } from './semanticExpansion.js';
 import { characterSimilarity } from './requestedWork.js';
 import { CONCEPT_WEIGHTS, conceptMatch, conceptSpecificity } from './semanticLexicon.js';
 import { scoreRankingPreferences } from './rankingPreferences.js';
+import { buildSignalLedger } from './signalLedger.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -177,6 +178,26 @@ function statesContemporaryRequest(text) {
 }
 
 /**
+ * Wordings that pull the request towards older works. Symmetric to the
+ * contemporary vocabulary: "ancien", "d'époque" or "classique" is a period
+ * direction just as "moderne" is, and it must move the ranking by its meaning
+ * instead of being ignored because only recency was modelled.
+ */
+const VINTAGE_TERMS = Object.freeze([
+  'ancien', 'ancienne', 'anciens', 'anciennes', 'vieux', 'vieille', 'vieilles',
+  'd epoque', 'epoque', 'classique', 'classiques', 'retro', 'old school', 'oldschool',
+  'vintage', 'd antan', 'annees 70', 'annees 80', 'annees 90', '20e siecle', 'xxe siecle'
+]);
+
+/** A listed vintage wording is matched as a whole token or phrase, never as a prefix. */
+function statesVintageRequest(text) {
+  const normalized = normalizeTerm(text);
+  if (!normalized) return false;
+  const padded = ` ${normalized} `;
+  return VINTAGE_TERMS.some(term => padded.includes(` ${term} `));
+}
+
+/**
  * Affinity of the request for contemporary works, in 0..1. Explicit year bounds
  * always win: a request that names its decade already carries the period, so the
  * derived preference stays inert and an era search keeps its own works.
@@ -201,6 +222,20 @@ export function recencyFit(year, { horizonYears, referenceYear } = {}) {
     : new Date().getFullYear();
   if (!Number.isInteger(year) || !(horizon > 0)) return null;
   return clamp(1 - Math.max(0, reference - year) / horizon);
+}
+
+/**
+ * Period direction of the request: +1 towards contemporary works, -1 towards
+ * older ones, 0 when no period is stated. Explicit year bounds always win,
+ * because a request that names its decade already carries its own period.
+ */
+export function temporalDirection(intent = {}, queryText = '') {
+  if (intent.yearMin != null || intent.yearMax != null) return 0;
+  if (contemporaryAffinity(intent, queryText) > 0) return 1;
+  const concepts = [...array(intent.genres), ...array(intent.moods),
+    ...array(intent.themes), ...array(intent.keywords)];
+  if (statesVintageRequest(queryText) || concepts.some(concept => statesVintageRequest(concept))) return -1;
+  return 0;
 }
 
 function sourceSimilarity(candidate) {
@@ -490,8 +525,10 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // the work, not its content: it never enters the coverage average, which would
   // reward every candidate of that period equally, and instead moves the computed
   // score by a bounded, graded amount. Nothing is filtered out of the catalogue.
-  const temporalFit = contemporaryAffinity(intent, queryText) > 0
-    ? recencyFit(candidateYear(candidate)) : null;
+  // The direction is symmetric: "ancien" or "d'époque" pulls the other way by
+  // the same bounded amount, so both period words are handled by their meaning.
+  const periodDirection = temporalDirection(intent, queryText);
+  const temporalFit = periodDirection !== 0 ? recencyFit(candidateYear(candidate)) : null;
   const components = {
     semanticScore: round(semanticScore),
     genreScore: round(genreOverlap(candidate, intent) * genericCredit),
@@ -533,6 +570,23 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // grid. A comparison seed keeps its zero, a requested work earns the title.
   components.identifiedWorkScore = identifiedWorkScore(candidate, resolvedContext);
   if (components.identifiedWorkScore > 0) components.titleScore = 1;
+  // Composition: the intersection of the independent dimensions the request
+  // describes, read from the evidence that has just been measured. The ledger
+  // returns one family per described dimension, so a bare category keeps a
+  // single family and its ranking is unchanged.
+  const ledger = buildSignalLedger({
+    intent, resolvedContext, candidate, components, text,
+    structured: structuredConcepts, temporalActive: temporalFit != null,
+    relationRequired: preferences.relationRequired === true,
+    preferenceApplied: preferences.preferenceApplied === true
+  });
+  components.compositionScore = round(ledger.compositionScore);
+  components.compositionIntersection = round(ledger.intersection);
+  components.compositionCoverage = round(ledger.coverage);
+  // Normalised breadth so every exposed component stays a 0..1 score.
+  components.compositionBreadth = round(clamp(ledger.familyCount / 4));
+  components.compositionSatisfiedShare = round(ledger.satisfiedShare);
+  components.partialPenalty = round(ledger.partialPenalty);
   components.convergenceScore = round(convergenceScore(components, candidate));
 
   const active = {
@@ -572,7 +626,15 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
     ? 0.85 + 0.15 * preferences.relationScore : 1;
   const preferenceFactor = preferences.preferenceApplied && preferences.preferenceScore != null
     ? 0.9 + 0.1 * preferences.preferenceScore : 1;
-  const answerScore = intentScore * strengthFactor * relationFactor * preferenceFactor;
+  // Composition replaces part of the plain coverage average by the intersection
+  // of the described dimensions: satisfying four independent criteria must score
+  // clearly above satisfying one of them very well. The partial-match penalty
+  // stays bounded and only applies when the request really describes several
+  // families, so a simple category keeps exactly its historical behaviour.
+  const composedIntentScore = intentScore * (1 - ledger.compositionWeight) +
+    ledger.compositionScore * ledger.compositionWeight;
+  const partialFactor = 1 - ledger.partialPenalty;
+  const answerScore = composedIntentScore * strengthFactor * relationFactor * preferenceFactor * partialFactor;
   // The documented weights stay untouched (they sum to 1): convergence is
   // blended in as an explicit share so the historical signal proportions are
   // preserved while genuine multi-signal agreement is rewarded.
@@ -585,7 +647,7 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   // Symmetric and bounded: a contemporary work gains what a very old one loses,
   // so the request keeps discriminating without any hard cut on the period.
   const temporalAdjustment = temporalFit == null ? 0
-    : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight;
+    : (2 * temporalFit - 1) * ELICINE_RANKING_CONFIG.temporalPreference.weight * periodDirection;
   const blendedScore = answerScore * (1 - ELICINE_RANKING_CONFIG.convergenceWeight) +
     components.convergenceScore * ELICINE_RANKING_CONFIG.convergenceWeight;
   // Several independent strong signals agreeing on the same work is itself
@@ -598,7 +660,9 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const constraintFactor = explicitConstraintFactor(candidate, intent, data);
   const finalScore = clamp(Math.max(blendedScore, convergenceFloor) * constraintFactor + identifiedBonus +
     narrativeBonus + temporalAdjustment);
-  return { ...components, intentScore: round(intentScore), answerStrengthScore: round(answerStrengthScore(components)),
+  return { ...components, intentScore: round(intentScore),
+    composedIntentScore: round(composedIntentScore), partialFactor: round(partialFactor),
+    answerStrengthScore: round(answerStrengthScore(components)),
     relationFactor: round(relationFactor), preferenceFactor: round(preferenceFactor),
     convergenceFloor: round(convergenceFloor), constraintFactor: round(constraintFactor),
     answerScore: round(answerScore), finalScore: round(finalScore), matchScore: publicMatchScore(finalScore) };

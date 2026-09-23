@@ -93,6 +93,12 @@ const VIOLENT = ['graphic violence', 'extreme violence', 'ultraviolent', 'ultra 
   'brutal', 'brutale', 'brutalite', 'violent', 'violente', 'violents', 'violence'];
 const GENTLE = ['nonviolent', 'non violent', 'non violente', 'sans violence', 'peu violent', 'peu violente',
   'non graphic', 'gentle', 'doux', 'paisible', 'pacifique', 'family friendly', 'tout public', 'tous publics'];
+const REALISTIC = ['based on a true story', 'true story', 'true events', 'biopic', 'biographical', 'documentary',
+  'documentaire', 'historical', 'historique', 'realistic', 'realiste', 'realisme', 'authentique', 'credible',
+  'procedural', 'procedural drama', 'faits reels', 'inspire de faits reels', 'tire de faits reels', 'ancré dans le réel',
+  'histoire vraie'];
+const DREAMLIKE = ['surreal', 'surrealistic', 'surreel', 'surreelle', 'fantastique', 'fantasy', 'dreamlike',
+  'onirique', 'stylise', 'stylisee', 'stylized', 'stylised', 'hallucinatoire', 'hallucinatory'];
 const anyPhrase = (text, terms) => terms.some(term => phrase(text, term));
 
 function moodLevel(candidate) {
@@ -124,6 +130,30 @@ function violenceLevel(candidate) {
   const violent = anyPhrase(text, VIOLENT);
   if (!gentle && !violent) return null;
   return gentle && violent ? 0.5 : violent ? 0.95 : 0.1;
+}
+
+/**
+ * How anchored in reality a work reads. Built from its own metadata, exactly
+ * like the mood and violence levels: only explicit markers count, and silence
+ * never certifies realism, so a sparse overview stays neutral.
+ */
+function realismLevel(candidate) {
+  const text = facts(candidate).text;
+  if (!text) return null;
+  const realistic = anyPhrase(text, REALISTIC);
+  const dreamlike = anyPhrase(text, DREAMLIKE);
+  if (!realistic && !dreamlike) return null;
+  return realistic && dreamlike ? 0.5 : realistic ? 0.95 : 0.15;
+}
+
+/**
+ * Narrative pace, read as the opposite of the action level the engine already
+ * measures. "Lent" and "rythmé" are the same dimension read from both ends, so
+ * one bounded measure serves both without any query-specific rule.
+ */
+function paceLevel(candidate) {
+  const level = actionLevel(candidate);
+  return level == null ? null : 1 - level;
 }
 
 function relativeFit(level, references, measure, direction = 1) {
@@ -165,6 +195,25 @@ export function scoreRankingPreferences(candidate, intent = {}, resolvedContext 
   }
   if (/\b((moins|peu|pas trop) violent\w*|(moins|peu|pas trop) (de )?violence|less violen\w*|mild violence)\b/.test(text)) {
     preferences.push(relativeFit(violenceLevel(candidate), references, violenceLevel, -1));
+  }
+  if (/\b((plus|davantage) (de )?violence|more violen\w*|plus violent\w*|gorier|plus gore)\b/.test(text)) {
+    preferences.push(relativeFit(violenceLevel(candidate), references, violenceLevel));
+  }
+  // Rhythm: a slow, contemplative request and a fast-paced one are the two ends
+  // of the same measured dimension.
+  if (/\b(lent\w*|pose\w*|contemplati\w*|calme|tranquille\w*|meditati\w*|slow burn|slow paced|slow burn)\b/.test(text)) {
+    preferences.push(relativeFit(paceLevel(candidate), references, paceLevel));
+  }
+  if (/\b(rythm\w*|rapide\w*|nerveu\w*|frénéti\w*|freneti\w*|haletant\w*|fast paced|fast-paced|up tempo)\b/.test(text)) {
+    preferences.push(relativeFit(paceLevel(candidate), references, paceLevel, -1));
+  }
+  // Anchoring in reality: "réaliste" and "moins réaliste / plus onirique" are
+  // the same measure read in opposite directions.
+  if (/\b(realiste\w*|realism\w*|credible\w*|authentique\w*|ancr\w* dans le reel|realistic|realism|true story|faits reels|biopic)\b/.test(text)) {
+    preferences.push(relativeFit(realismLevel(candidate), references, realismLevel));
+  }
+  if (/\b(moins realiste\w*|plus onirique\w*|plus surrealiste\w*|plus fantastique\w*|dreamlike|surreal|less realistic)\b/.test(text)) {
+    preferences.push(relativeFit(realismLevel(candidate), references, realismLevel, -1));
   }
 
   return {

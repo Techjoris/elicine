@@ -113,11 +113,31 @@ export function mergeCandidates(candidates, limit = 50, { narrative = false } = 
   }
   // Retrieval admission only. The final ranking and its public scores are unchanged.
   const evidence = (candidate, field) => Math.max(0, ...candidate.retrievalSignals.map(signal => signal[field] || 0));
+  /**
+   * How specifically a candidate was retrieved, as opposed to how popular it is.
+   * A work surfaced by a keyword-restricted Discover, a person credit, a vector
+   * neighbour or the narrative channel carries a described concept; a work that
+   * merely sits high in a popularity-ordered list does not. Used only to break
+   * admission ties, so a relevant but less popular title is not crowded out of
+   * the bounded pool by broad sources.
+   */
+  const specificEvidence = candidate => Math.max(0, ...candidate.retrievalSignals.map(signal => {
+    const keywordWidth = Array.isArray(signal.keywordIds) ? signal.keywordIds.length : 0;
+    return Math.max(
+      Number(signal.narrativeMatched) || 0,
+      Number(signal.narrativeCoverage) || 0,
+      Number(signal.keywordConjunctionSize) > 0 ? 1 : 0,
+      keywordWidth > 0 ? 0.6 : 0,
+      signal.source === 'tmdb_person_credits' ? 0.6 : 0,
+      signal.source === 'supabase_vector' ? Number(signal.sourceScore) || 0 : 0
+    );
+  }));
   const merged = [...byIdentity.values()].sort((a, b) =>
     (narrative ? evidence(b, 'narrativeMatched') - evidence(a, 'narrativeMatched') ||
       evidence(b, 'narrativeCoverage') - evidence(a, 'narrativeCoverage') : 0) ||
     b.sources.length - a.sources.length ||
     Math.max(...b.sources.map(s => strength[s] ?? 0)) - Math.max(...a.sources.map(s => strength[s] ?? 0)) ||
+    specificEvidence(b) - specificEvidence(a) ||
     Math.min(...a.retrievalSignals.map(s => s.sourceRank ?? 0)) - Math.min(...b.retrievalSignals.map(s => s.sourceRank ?? 0)) ||
     `${a.mediaType}:${a.tmdbId}`.localeCompare(`${b.mediaType}:${b.tmdbId}`));
   return { afterDedup: merged.length, candidates: merged.slice(0, Math.max(0, Math.min(50, limit))) };
