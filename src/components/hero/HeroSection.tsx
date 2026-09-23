@@ -420,6 +420,37 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     };
   }, [setSearchQuery]);
 
+  /**
+   * Préremplissage : un clic dans l'historique écrit la requête dans la barre et
+   * place le curseur, sans lancer de recherche. L'utilisateur relit, modifie,
+   * puis soumet quand il le souhaite.
+   */
+  useEffect(() => {
+    const handlePrefillSearch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ prompt?: string }>;
+      const prompt = customEvent?.detail?.prompt;
+      if (!prompt || typeof prompt !== 'string') return;
+      const cleanPrompt = prompt.trim();
+      if (!cleanPrompt) return;
+      setSearchPrompt(cleanPrompt);
+      setSearchQuery(cleanPrompt);
+      const searchInput = (document.getElementById('main-ai-search') || textareaRef.current) as HTMLTextAreaElement | null;
+      if (searchInput) {
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          searchInput.focus();
+          searchInput.setSelectionRange(cleanPrompt.length, cleanPrompt.length);
+          adjustTextareaHeight();
+        }, 80);
+      }
+    };
+
+    window.addEventListener('elicine-prefill-search', handlePrefillSearch);
+    return () => {
+      window.removeEventListener('elicine-prefill-search', handlePrefillSearch);
+    };
+  }, [setSearchQuery]);
+
   return (
     <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
       

@@ -17,6 +17,7 @@ import {
   Settings,
   Download,
   Search,
+  Pencil,
   Sun,
   Moon
 } from 'lucide-react';
@@ -58,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setActiveView,
     searchHistory,
     clearHistory,
-    triggerSearch,
+    prefillSearch,
     watchlist,
     quota,
     showToast,
@@ -392,19 +393,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      triggerSearch(cleanQuery);
-                      showToast(`${t.historySearchToast || 'Recherche'} : "${cleanQuery}"`);
+                      // Un clic remplit la barre de recherche sans la soumettre :
+                      // la requête passée reste modifiable avant validation.
+                      prefillSearch(cleanQuery);
+                      showToast(t.historyEditHint || 'Requête chargée dans la barre de recherche — modifiez-la puis validez.');
                     }}
                     className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] border border-transparent hover:border-slate-200 dark:hover:border-white/10 cursor-pointer transition-all duration-150 group select-none"
-                    title={`${t.historySearchToast || 'Recherche'} : "${cleanQuery}"`}
+                    title={`${t.historyEditHint || 'Modifier cette recherche'} : "${cleanQuery}"`}
                   >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <Search className="w-3 h-3 text-slate-400 dark:text-zinc-500 group-hover:text-red-500 dark:group-hover:text-red-400 flex-shrink-0 transition-colors" />
                       <span className="truncate">{formattedQuery}</span>
                     </div>
-                    <span className="opacity-0 group-hover:opacity-100 text-[10px] text-slate-400 dark:text-zinc-500 font-mono transition-opacity flex-shrink-0 pl-1">
-                      ↵
-                    </span>
+                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 text-slate-400 dark:text-zinc-500 transition-opacity flex-shrink-0 ml-1" />
                   </button>
                 );
               })

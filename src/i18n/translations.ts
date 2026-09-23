@@ -67,6 +67,7 @@ export interface TranslationSchema {
   historyTitle: string;
   historyClear: string;
   historyEmpty: string;
+  historyEditHint: string;
   historySearchToast: string;
   proActive: string;
   proUnlimited: string;
@@ -175,6 +176,7 @@ export const I18N_KEY_MAP: Record<string, keyof TranslationSchema> = {
   'history.title': 'historyTitle',
   'history.clear': 'historyClear',
   'history.empty': 'historyEmpty',
+  'history.edit_hint': 'historyEditHint',
   'history.search_toast': 'historySearchToast',
   'nav.support': 'supportProject',
   'nav.settings': 'settings',
@@ -251,6 +253,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     historyTitle: "HISTORIQUE",
     historyClear: "Vider",
     historyEmpty: "Aucune recherche récente",
+    historyEditHint: "Requête chargée dans la barre de recherche — modifiez-la puis validez.",
     historySearchToast: "Recherche",
     proActive: "Éliciné Pro Actif",
     proUnlimited: "ILLIMITÉ",
@@ -395,6 +398,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     historyTitle: "HISTORY",
     historyClear: "Clear",
     historyEmpty: "No recent searches",
+    historyEditHint: "Query loaded in the search bar — edit it, then submit.",
     historySearchToast: "Search",
     proActive: "Éliciné Pro Active",
     proUnlimited: "UNLIMITED",
@@ -539,6 +543,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     historyTitle: "HISTORIAL",
     historyClear: "Vaciar",
     historyEmpty: "Sin búsquedas recientes",
+    historyEditHint: "Consulta cargada en la barra de búsqueda — edítala y envíala.",
     historySearchToast: "Búsqueda",
     proActive: "Éliciné Pro Activo",
     proUnlimited: "ILIMITADO",
@@ -683,6 +688,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     historyTitle: "VERLAUF",
     historyClear: "Leeren",
     historyEmpty: "Keine letzten Suchen",
+    historyEditHint: "Suchanfrage in die Suchleiste geladen — bearbeiten und absenden.",
     historySearchToast: "Suche",
     proActive: "Éliciné Pro Aktiv",
     proUnlimited: "UNBEGRENZT",
@@ -827,6 +833,7 @@ const baseTranslations: Record<Language, TranslationSchema> = {
     historyTitle: "CRONOLOGIA",
     historyClear: "Cancella",
     historyEmpty: "Nessuna ricerca recente",
+    historyEditHint: "Ricerca caricata nella barra — modificala e invia.",
     historySearchToast: "Ricerca",
     proActive: "Éliciné Pro Attivo",
     proUnlimited: "ILLIMITATO",

@@ -69,6 +69,8 @@ interface AppContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   triggerSearch: (query: string) => void;
+  /** Remplit la barre de recherche sans lancer la recherche. */
+  prefillSearch: (query: string) => void;
   searchHistory: SearchHistoryItem[];
   addHistoryItem: (query: string, count: number, mood?: string) => void;
   clearHistory: () => void;
@@ -1156,6 +1158,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 100);
   };
 
+  /**
+   * Remplit la barre de recherche sans soumettre : l'utilisateur relit, modifie
+   * puis valide lui-même. Utilisé par l'historique, où un clic ne doit pas
+   * relancer une requête passée telle quelle.
+   */
+  const prefillSearch = (query: string) => {
+    const cleanQuery = (query || '').replace(/^#\s*/, '').trim();
+    if (!cleanQuery) return;
+    setSearchQuery(cleanQuery);
+    setActiveView('home');
+    if (isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+    window.dispatchEvent(new CustomEvent('elicine-prefill-search', { detail: { prompt: cleanQuery } }));
+    // Même sécurité que la recherche : la vue d'accueil peut se monter juste après.
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('elicine-prefill-search', { detail: { prompt: cleanQuery } }));
+    }, 100);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1194,6 +1216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         searchQuery,
         setSearchQuery,
         triggerSearch,
+        prefillSearch,
         searchHistory,
         addHistoryItem,
         clearHistory,
