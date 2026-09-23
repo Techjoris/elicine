@@ -152,6 +152,25 @@ test('period words work in both directions without a hard cut', () => {
   assert.equal(classicFirst.length, 2, 'nothing is filtered by a period preference');
 });
 
+test('at equal concept coverage, the stated period is the signal that decides', () => {
+  const build = (id, title, year) => candidate(id, {
+    title, genreIds: [WAR], release: `${year}-05-01`,
+    overview: "Des avions de combat livrent un combat aerien de haute intensite pendant la guerre.",
+    themes: ['military aviation'], keywords: ['aerial combat']
+  });
+  const canonical = intent({ mediaType: 'movie', genres: ['War'],
+    themes: ['military aviation'], keywords: ['aerial combat'] });
+  const older = build(43, 'Older Aviation', 2009);
+  const recent = build(44, 'Recent Aviation', 2022);
+  const modernRequest = rank([older, recent], canonical, 'film de guerre moderne avec des avions de combat');
+  assert.equal(modernRequest[0].tmdbId, 44);
+  const vintageRequest = rank([older, recent], canonical, 'film de guerre ancien avec des avions de combat');
+  assert.equal(vintageRequest[0].tmdbId, 43);
+  // Both directions stay bounded: the same two works, never a filtered pool.
+  assert.equal(modernRequest.length, 2);
+  assert.equal(vintageRequest.length, 2);
+});
+
 test('mood and narrative elements are measured as separate families', () => {
   const canonical = intent({ mediaType: 'movie', genres: ['Thriller'],
     moods: ['dark'], keywords: ['heist'] });
