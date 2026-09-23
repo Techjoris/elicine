@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronRight, CreditCard, Heart, Loader2, ShieldCheck, Smartphone, TriangleAlert } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { ElicineLogo } from '../ElicineLogo';
 import { TipModal } from './TipModal';
 import {
   SUPPORTER_TIERS, SupporterTier, formatSupporterAmount, isSupporterTierAvailable,
@@ -8,24 +9,14 @@ import {
 } from '../../services/supporterService';
 
 type Stage = 'choose' | 'processing' | 'success' | 'error';
-type Tab = 'paddle' | 'mobile';
-
-/** Perforations de la bobine : petits trous réguliers sur les bords du cadre. */
-const sprocketStyle: React.CSSProperties = {
-  backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.30) 0 5px, transparent 5px 15px)'
-};
-
-const Spockets: React.FC = () => (
-  <>
-    <span aria-hidden className="pointer-events-none absolute inset-y-3 left-1.5 w-1.5 rounded-full" style={sprocketStyle} />
-    <span aria-hidden className="pointer-events-none absolute inset-y-3 right-1.5 w-1.5 rounded-full" style={sprocketStyle} />
-  </>
-);
+type Mode = 'paddle' | 'mobile';
 
 /**
- * Fenêtre « Soutenir le projet » : une bobine de cinéma.
- * Deux onglets (carte bancaire Paddle / Mobile Money SASPay), sept séances = sept montants.
- * Aucun de ces paiements n'active le Pass Pro.
+ * Fenêtre « Soutenir le projet ».
+ * Même palette et mêmes composants que la modale Pass Pro : badge ambre, pastilles bleues,
+ * cartes à sélection émeraude, grand bouton dégradé émeraude → cyan.
+ * Sept soutiens ponctuels (1 à 50 €) et deux moyens de paiement : carte (Paddle) ou Mobile
+ * Money (SASPay). Aucun de ces paiements n'active le Pass Pro.
  */
 export const SupportProjectModal: React.FC = () => {
   const {
@@ -35,20 +26,22 @@ export const SupportProjectModal: React.FC = () => {
     refreshUserProStatus
   } = useApp();
 
-  const [tab, setTab] = useState<Tab>('paddle');
+  const [mode, setMode] = useState<Mode>('paddle');
   const [stage, setStage] = useState<Stage>('choose');
-  const [selected, setSelected] = useState<SupporterTier | null>(null);
+  const [selected, setSelected] = useState<SupporterTier>(SUPPORTER_TIERS[3]);
+  const [paidTier, setPaidTier] = useState<SupporterTier | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [, setPriceRevision] = useState(0);
   const completedRef = useRef(false);
 
   const availableTiers = SUPPORTER_TIERS.filter(isSupporterTierAvailable);
+  const chosen = isSupporterTierAvailable(selected) ? selected : availableTiers[0] || selected;
   const alreadySupporter = Boolean((user as any)?.is_supporter);
+  const canPay = availableTiers.length > 0;
 
   const handleClose = () => {
     setStage('choose');
-    setSelected(null);
     setErrorMessage('');
     setIsSupporterModalOpen(false);
   };
@@ -56,7 +49,6 @@ export const SupportProjectModal: React.FC = () => {
   useEffect(() => {
     if (!isSupporterModalOpen) return;
     setStage('choose');
-    setSelected(null);
     setErrorMessage('');
     completedRef.current = false;
 
@@ -81,8 +73,8 @@ export const SupportProjectModal: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSupporterModalOpen]);
 
-  const handleSelect = async (tier: SupporterTier) => {
-    setSelected(tier);
+  const handleSupport = async () => {
+    const tier = chosen;
     setErrorMessage('');
     setStage('processing');
     let handled = false;
@@ -90,12 +82,13 @@ export const SupportProjectModal: React.FC = () => {
       onSuccess: () => {
         handled = true;
         completedRef.current = true;
+        setPaidTier(tier);
         setStage('success');
         Promise.resolve(refreshUserProStatus?.()).catch(() => { /* rafraîchi au prochain passage */ });
       },
       onCancel: () => {
         handled = true;
-        // Paddle ferme l'overlay juste après un paiement réussi : on ne revient à la bobine
+        // Paddle ferme l'overlay juste après un paiement réussi : on ne revient au formulaire
         // que si rien n'a été réglé.
         if (!completedRef.current) setStage('choose');
       },
@@ -119,197 +112,269 @@ export const SupportProjectModal: React.FC = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="support-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={(event) => { if (event.target === event.currentTarget) handleClose(); }}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="relative w-full max-w-[420px] mx-auto my-auto rounded-[26px] overflow-hidden border border-slate-200 dark:border-amber-500/20 bg-white dark:bg-[#0d0d11] shadow-2xl text-slate-800 dark:text-slate-100"
+        className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl p-5 sm:p-6 text-slate-800 dark:text-slate-200 flex flex-col gap-4 relative"
       >
-        {/* Halo de projecteur */}
-        <div aria-hidden className="pointer-events-none absolute -top-28 left-1/2 h-52 w-[140%] -translate-x-1/2 rounded-full bg-amber-400/25 blur-3xl dark:bg-amber-400/20" />
-
         <button
           type="button"
           onClick={handleClose}
           aria-label="Fermer"
-          className="absolute top-3.5 right-3.5 z-20 w-8 h-8 rounded-full bg-white/70 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-white/10 flex items-center justify-center transition-all cursor-pointer backdrop-blur"
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors z-10 cursor-pointer"
         >
-          <span className="text-sm font-bold leading-none select-none">✕</span>
+          ✕
         </button>
 
-        <header className="relative px-6 pt-7 pb-4">
-          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">
-            <span aria-hidden>✦</span> Éliciné Supporter
-          </p>
-          <h2 id="support-modal-title" className="mt-2.5 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            Soutenir le projet
+        {/* En-tête */}
+        <div className="text-center flex flex-col items-center gap-1.5 pt-1">
+          <ElicineLogo variant="full" size="md" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold uppercase tracking-wider mt-1">
+            💛 Soutien ponctuel
+          </div>
+          <h2 id="support-modal-title" className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+            Gardez Éliciné indépendant
           </h2>
-          <p className="mt-1.5 text-[11.5px] leading-relaxed text-slate-600 dark:text-zinc-400">
-            Chaque soutien est une place de cinéma offerte à Éliciné : un geste ponctuel,
-            sans abonnement, qui finance l’infrastructure et l’indépendance de la plateforme.
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
+            Un geste unique, sans abonnement : il finance directement les serveurs, la recherche IA
+            et l’absence de publicité.
           </p>
-        </header>
 
-        {stage === 'choose' && (
-          <div role="tablist" aria-label="Moyen de soutien" className="relative mx-4 mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100/80 dark:bg-white/[0.04] p-1">
-            {([
-              { id: 'paddle' as Tab, label: 'Carte bancaire', hint: 'Paddle · €', Icon: CreditCard },
-              { id: 'mobile' as Tab, label: 'Mobile Money', hint: 'SASPay · FCFA', Icon: Smartphone }
-            ]).map(({ id, label, hint, Icon }) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${
-                  tab === id
-                    ? 'bg-white dark:bg-white/[0.09] shadow-sm ring-1 ring-amber-400/60'
-                    : 'hover:bg-white/60 dark:hover:bg-white/[0.05]'
-                }`}
-              >
-                <Icon className={`w-4 h-4 shrink-0 ${tab === id ? 'text-amber-500' : 'text-slate-400 dark:text-zinc-500'}`} />
-                <span className="min-w-0">
-                  <span className={`block truncate text-[11px] font-bold ${tab === id ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-300'}`}>{label}</span>
-                  <span className="block truncate text-[9px] text-slate-500 dark:text-zinc-500">{hint}</span>
-                </span>
-              </button>
-            ))}
+          {user && (
+            <div className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold mt-1">
+              <span>
+                ✓ {alreadySupporter ? 'Supporter' : 'Compte actif'} : <strong>{user.name || user.email}</strong>
+              </span>
+            </div>
+          )}
+        </div>
+
+        {stage === 'success' && (
+          <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center flex flex-col items-center gap-1.5">
+              <span className="text-2xl">💛</span>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                Soutien enregistré — merci infiniment
+              </p>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">
+                {paidTier ? formatSupporterAmount(paidTier.amount) : ''}
+              </p>
+              <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{paidTier?.label}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {' · '}reçu Paddle envoyé par e-mail
+              </p>
+            </div>
+            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 leading-relaxed">
+              Votre nom rejoint celles et ceux qui gardent Éliciné libre. Ce soutien n’active pas le Pass Pro
+              et ne modifie aucun abonnement.
+            </p>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:via-teal-400 hover:to-cyan-400 text-slate-950 font-black text-sm transition-all shadow-lg shadow-emerald-500/25 cursor-pointer"
+            >
+              Fermer
+            </button>
           </div>
         )}
 
-        <div className="relative px-4 sm:px-5 pb-5 max-h-[56vh] overflow-y-auto">
-          {stage === 'success' && (
-            <div className="animate-fade-in space-y-4">
-              {/* Contremarque détachée */}
-              <div className="relative overflow-hidden rounded-2xl border border-amber-400/40 bg-[#0b0b0f] px-5 py-6 text-center">
-                <Spockets />
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 shadow-lg shadow-amber-500/30">
-                  <Heart className="h-6 w-6" fill="currentColor" />
-                </div>
-                <p className="mt-3 text-[9.5px] font-black uppercase tracking-[0.3em] text-amber-400">Admis · Supporter</p>
-                <p className="mt-1 text-3xl font-black text-white">
-                  {selected ? formatSupporterAmount(selected.amount) : ''}
-                </p>
-                <p className="text-[11px] font-semibold text-zinc-300">{selected?.label}</p>
-                <p className="mt-3 text-[10px] text-zinc-500">
-                  {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              </div>
-              <p className="text-center text-[12px] leading-relaxed text-slate-600 dark:text-zinc-300">
-                Merci infiniment 💛 Votre nom rejoint celles et ceux qui gardent Éliciné libre et indépendant.
-                Le reçu Paddle vous parvient par e-mail ; ce soutien n’active pas le Pass Pro.
-              </p>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-3 text-[12px] font-black uppercase tracking-wider text-slate-950 transition-all hover:from-amber-400 hover:to-orange-400 cursor-pointer"
-              >
-                Fermer
-              </button>
-            </div>
-          )}
-
-          {stage === 'error' && (
-            <div className="animate-fade-in space-y-4">
-              <div className="flex items-start gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/10 p-3.5 text-[11px] font-semibold text-red-600 dark:text-red-300">
-                <TriangleAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                <div className="space-y-0.5">
-                  <p className="font-bold">Le paiement n’a pas abouti</p>
-                  <p className="break-words text-[10px] font-medium opacity-90">{errorMessage}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setStage('choose'); setErrorMessage(''); }}
-                className="w-full rounded-xl bg-slate-100 py-3 text-[12px] font-bold text-slate-800 transition-all hover:bg-slate-200 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 cursor-pointer"
-              >
-                Revenir à la bobine
-              </button>
-            </div>
-          )}
-
-          {(stage === 'choose' || stage === 'processing') && tab === 'paddle' && (
-            <div className="space-y-3">
-              {alreadySupporter && (
-                <p className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                  <Heart className="h-3.5 w-3.5 shrink-0" fill="currentColor" />
-                  Vous êtes déjà Supporter. Merci — rien ne vous oblige à recommencer.
-                </p>
-              )}
-
-              {/* La bobine : 7 séances, du coup de pouce au soutien exceptionnel */}
-              <div className="relative overflow-hidden rounded-2xl border border-amber-500/25 bg-[#0b0b0f] px-5 py-2">
-                <Spockets />
-                <div className="divide-y divide-dashed divide-white/10">
-                  {SUPPORTER_TIERS.map((tier) => {
-                    const available = isSupporterTierAvailable(tier);
-                    const busy = stage === 'processing' && selected?.amount === tier.amount;
-                    return (
-                      <button
-                        key={tier.amount}
-                        type="button"
-                        disabled={stage === 'processing' || !available}
-                        onClick={() => handleSelect(tier)}
-                        className={`group relative flex w-full items-center gap-3 py-2.5 text-left transition-all ${
-                          busy ? 'bg-amber-400/10'
-                            : available ? 'hover:bg-amber-400/[0.07] cursor-pointer'
-                              : 'cursor-not-allowed opacity-45'
-                        } ${stage === 'processing' && !busy ? 'opacity-45' : ''}`}
-                      >
-                        <span className="w-[62px] shrink-0 text-right text-[17px] font-black tabular-nums leading-none text-white">
-                          {formatSupporterAmount(tier.amount)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className={`block truncate text-[10.5px] font-bold uppercase tracking-[0.12em] ${busy ? 'text-amber-300' : 'text-amber-400/90'}`}>
-                            {tier.label}
-                          </span>
-                          <span className="block truncate text-[9.5px] text-zinc-400">
-                            {available ? tier.tagline : 'Bientôt disponible'}
-                          </span>
-                        </span>
-                        {busy
-                          ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-400" />
-                          : <ChevronRight className={`h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 ${available ? 'text-amber-400/70' : 'text-zinc-600'}`} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {stage === 'processing' && (
-                <p className="flex items-center justify-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" /> Séance en préparation · Paddle sécurisé
-                </p>
-              )}
-
-              {loadingPrices && (
-                <p className="flex items-center justify-center gap-2 text-[10px] text-slate-500 dark:text-zinc-500">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Chargement de la bobine…
-                </p>
-              )}
-
-              {!loadingPrices && availableTiers.length === 0 && (
-                <p className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-[10px] leading-relaxed text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300">
-                  Les séances carte bancaire ne sont pas encore ouvertes côté Paddle.
-                  Le soutien par Mobile Money reste disponible dans l’onglet ci-dessus.
-                </p>
-              )}
-
-              <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[9px] text-slate-500 dark:text-zinc-500">
-                <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3 w-3 text-emerald-500" /> Paiement sécurisé Paddle</span>
-                <span aria-hidden>·</span>
-                <span>Paiement unique</span>
-                <span aria-hidden>·</span>
-                <span>N’active pas le Pass Pro</span>
+        {stage === 'error' && (
+          <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2.5">
+              <span className="text-lg shrink-0 mt-0.5">⚠️</span>
+              <div className="flex-1">
+                <p className="font-bold text-xs text-rose-800 dark:text-rose-300">Paiement non abouti</p>
+                <p className="text-[11px] mt-0.5 opacity-90 leading-relaxed break-words">{errorMessage}</p>
               </div>
             </div>
-          )}
+            <button
+              type="button"
+              onClick={() => { setStage('choose'); setErrorMessage(''); }}
+              className="w-full py-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-sm transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+            >
+              Réessayer
+            </button>
+          </div>
+        )}
 
-          {stage === 'choose' && tab === 'mobile' && (
-            <TipModal embedded onClose={handleClose} />
-          )}
-        </div>
+        {(stage === 'choose' || stage === 'processing') && (
+          <>
+            {/* 1. Les 3 raisons */}
+            <div className="grid grid-cols-3 gap-2 py-1 text-center">
+              {[
+                { icon: '🖥️', label: 'Serveurs & IA' },
+                { icon: '🚫', label: 'Aucune publicité' },
+                { icon: '🎬', label: 'Cinéma indépendant' }
+              ].map(benefit => (
+                <div key={benefit.label} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800/80 flex flex-col items-center gap-1">
+                  <span className="text-base">{benefit.icon}</span>
+                  <span className="text-[10px] font-bold text-slate-900 dark:text-white leading-tight">{benefit.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* 2. Montants */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Choisissez votre montant
+              </label>
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                {SUPPORTER_TIERS.map(tier => {
+                  const available = isSupporterTierAvailable(tier);
+                  const active = chosen?.amount === tier.amount;
+                  return (
+                    <button
+                      key={tier.amount}
+                      type="button"
+                      disabled={!available}
+                      onClick={() => setSelected(tier)}
+                      title={available ? tier.tagline : 'Bientôt disponible'}
+                      className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        tier.amount === 50 ? 'col-span-2' : ''
+                      } ${
+                        active
+                          ? 'bg-sky-500 text-white shadow-sm cursor-pointer'
+                          : available
+                            ? 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer'
+                            : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {formatSupporterAmount(tier.amount)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Récapitulatif */}
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 p-3.5 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                  {chosen?.label || 'Soutien'}
+                </span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+                    {chosen ? formatSupporterAmount(chosen.amount) : '—'}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">/une fois</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block">Sans engagement</span>
+                <span className="text-[10px] text-slate-400">Paiement unique</span>
+              </div>
+            </div>
+
+            {/* 4. Moyens de paiement */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Choisissez votre mode de paiement
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div
+                  onClick={() => setMode('mobile')}
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
+                    mode === 'mobile'
+                      ? 'bg-sky-500/10 border-sky-500 shadow-md ring-1 ring-sky-500/30'
+                      : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl">📱</span>
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                      mode === 'mobile' ? 'border-sky-400 bg-sky-500' : 'border-slate-300 dark:border-slate-600'
+                    }`}>
+                      {mode === 'mobile' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 dark:text-white">Mobile Money</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Orange, MTN, Wave (SasPay)</p>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setMode('paddle')}
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 relative ${
+                    mode === 'paddle'
+                      ? 'bg-emerald-500/10 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-90'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl">💳</span>
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                      mode === 'paddle' ? 'border-emerald-400 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                    }`}>
+                      {mode === 'paddle' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 dark:text-white">Carte Bancaire &amp; Apple Pay</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Visa, Mastercard (Paddle)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Action */}
+            {mode === 'paddle' ? (
+              <div className="flex flex-col gap-3">
+                {alreadySupporter && (
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-semibold">
+                    💛 Vous êtes déjà Supporter. Merci — rien ne vous oblige à recommencer.
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSupport}
+                  disabled={stage === 'processing' || !canPay}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:via-teal-400 hover:to-cyan-400 text-slate-950 font-black text-sm sm:text-base transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+                >
+                  {stage === 'processing' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Ouverture du paiement sécurisé...</span>
+                    </>
+                  ) : (
+                    <span>
+                      Soutenir Éliciné - {chosen ? formatSupporterAmount(chosen.amount) : ''} (Paiement Sécurisé)
+                    </span>
+                  )}
+                </button>
+
+                {loadingPrices && (
+                  <p className="flex items-center justify-center gap-2 text-[10px] text-slate-400">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Récupération des montants Paddle…
+                  </p>
+                )}
+
+                {!loadingPrices && !canPay && (
+                  <p className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Les soutiens par carte ne sont pas encore ouverts côté Paddle. Le Mobile Money
+                    reste disponible en sélectionnant « Mobile Money » ci-dessus.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <TipModal embedded onClose={handleClose} />
+            )}
+
+            <div className="text-center pt-1 border-t border-slate-200/60 dark:border-white/5">
+              <div className="flex items-center justify-center gap-3 text-[10px] text-slate-400 flex-wrap">
+                <span>🔒 Chiffrement SSL 256-bit</span>
+                <span>•</span>
+                <span>⚡ Reçu immédiat</span>
+                <span>•</span>
+                <span>✓ N’active pas le Pass Pro</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
