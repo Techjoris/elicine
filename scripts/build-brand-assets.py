@@ -56,10 +56,16 @@ def emblem(mark: Image.Image, size: int, *, fill: tuple[int, int, int, int] | No
     return canvas
 
 
-def save(image: Image.Image, path: Path) -> None:
+def save(image: Image.Image, path: Path, *, quantize: bool = True) -> None:
+    """Écrit le PNG. Le logo n'a que quelques aplats : une palette de 128 couleurs
+    sans tramage divise le poids par dix sans différence visible."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(path, optimize=True)
-    print(f"  {path.relative_to(ROOT)}  {image.size[0]}x{image.size[1]}")
+    written = image
+    if quantize and image.mode == "RGBA":
+        written = image.quantize(colors=128, method=Image.FASTOCTREE, dither=Image.NONE).convert("RGBA")
+    written.save(path, optimize=True)
+    print(f"  {path.relative_to(ROOT)}  {image.size[0]}x{image.size[1]}  "
+          f"{path.stat().st_size // 1024} Ko")
 
 
 def svg_wrapper(png: bytes, size: int) -> str:
@@ -80,7 +86,9 @@ def main() -> None:
     mark = cut_out_background(Image.open(SOURCE))
 
     print("assets web")
-    save(emblem(mark, 512), PUBLIC / "logo-mark.png")
+    # L'emblème d'interface n'est jamais affiché au-delà de ~80 px : 256 px
+    # couvrent les écrans 3x pour un poids négligeable.
+    save(emblem(mark, 256), PUBLIC / "logo-mark.png")
     save(emblem(mark, 192), PUBLIC / "icon-192.png")
     save(emblem(mark, 512), PUBLIC / "icon-512.png")
     # Maskable : carré plein, emblème réduit dans la zone sûre (80 %).
@@ -94,7 +102,7 @@ def main() -> None:
     save(emblem(mark, 512), PUBLIC / "icons" / "icon-512x512.png")
 
     print("favicon.ico (16, 32, 48, 64)")
-    ico = emblem(mark, 256)
+    ico = emblem(mark, 256).quantize(colors=128, method=Image.FASTOCTREE, dither=Image.NONE).convert("RGBA")
     ico.save(PUBLIC / "favicon.ico", format="ICO",
              sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
     print("  public/favicon.ico")
