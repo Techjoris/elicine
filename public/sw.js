@@ -1,4 +1,5 @@
-const CACHE_NAME = 'elicine-pwa-v2';
+// v3 : changement de logo, les icônes précachées doivent être retéléchargées.
+const CACHE_NAME = 'elicine-pwa-v3';
 const ASSETS = [
   '/',
   '/manifest.json',
@@ -48,4 +49,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-
