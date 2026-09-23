@@ -137,7 +137,7 @@ export async function auditPaddle({ key, base }) {
 }
 
 /** Vérifie les tables et les derniers soutiens côté Supabase. */
-export async function auditDatabase({ email } = {}) {
+export async function auditDatabase({ email, events = false } = {}) {
   const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
   const key = clean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) return { configured: false, tables: {}, warnings: ['SUPABASE_SERVICE_ROLE_KEY absente : audit base impossible.'] };
@@ -155,9 +155,16 @@ export async function auditDatabase({ email } = {}) {
     supporters = count ?? 0;
   }
   let processedEvents = null;
+  let recentEvents = [];
   if (tables.paddle_webhook_events) {
     const { count } = await db.from('paddle_webhook_events').select('*', { count: 'exact', head: true });
     processedEvents = count ?? 0;
+    if (events) {
+      const { data } = await db.from('paddle_webhook_events')
+        .select('event_id,event_type,transaction_id,subscription_id,status,processed_at')
+        .order('processed_at', { ascending: false }).limit(10);
+      recentEvents = data || [];
+    }
   }
   const { error: profileError } = await db.from('profiles').select('is_supporter, supporter_total_cents').limit(1);
   if (profileError) warnings.push('Colonnes Supporter absentes de la table profiles.');
@@ -176,7 +183,7 @@ export async function auditDatabase({ email } = {}) {
     account = { found: Boolean(profile), profile, contributions };
   }
 
-  return { configured: true, tables, supporters, processedEvents, supporterColumns: !profileError, account, warnings };
+  return { configured: true, tables, supporters, processedEvents, recentEvents, supporterColumns: !profileError, account, warnings };
 }
 
 export default async function handler(req, res) {
@@ -210,7 +217,7 @@ export default async function handler(req, res) {
   if (!report.env.RESEND_API_KEY) report.warnings.push('RESEND_API_KEY absente : aucun e-mail transactionnel ne part.');
 
   try {
-    report.database = await auditDatabase({ email: req.query?.email });
+    report.database = await auditDatabase({ email: req.query?.email, events: clean(req.query?.events) === '1' });
     report.warnings.push(...(report.database.warnings || []));
   } catch (error) {
     report.warnings.push(`Audit base impossible : ${error?.message || error}`);
