@@ -77,16 +77,32 @@ export function exclusionKeywordTerms(concepts = [], limit = 4) {
   return terms;
 }
 
-export function discoverParams(intent, type, keywordIds = [], excludedKeywordIds = []) {
-  const params = { language: 'fr-FR', page: 1, include_adult: intent.adult ?? false, sort_by: 'popularity.desc' };
+/**
+ * @param options.sortBy       provider ordering for this angle. A complementary
+ *                             angle may ask for release-date order so a precise
+ *                             but less popular work is not buried behind the
+ *                             most popular members of the same family.
+ * @param options.recentSince  lower year bound of that complementary angle.
+ *                             It never replaces the historical popularity angle:
+ *                             the other angles keep the whole period admissible.
+ */
+export function discoverParams(intent, type, keywordIds = [], excludedKeywordIds = [], options = {}) {
+  const params = { language: 'fr-FR', page: Number.isInteger(Number(options.page)) && Number(options.page) > 0 ? Number(options.page) : 1,
+    include_adult: intent.adult ?? false,
+    sort_by: options.sortBy || 'popularity.desc' };
   const ids = tmdbGenreIds(intent.genres, type);
-  if (ids.length) params.with_genres = ids.join(',');
+  // `ignoreGenres` is used by the single complementary angle that keeps the
+  // concept intersection reachable outside the declared genre.
+  if (ids.length && !options.ignoreGenres) params.with_genres = ids.join(',');
   if (keywordIds.length) params.with_keywords = keywordIds.join('|');
   // TMDB excludes every work carrying any of these keyword IDs, so a stated
   // exclusion prunes the Discover pool before the local strict filter sees it.
   if (excludedKeywordIds.length) params.without_keywords = excludedKeywordIds.join(',');
   const date = type === 'tv' ? 'first_air_date' : 'primary_release_date';
   if (intent.yearMin != null) params[`${date}.gte`] = `${intent.yearMin}-01-01`;
+  else if (options.recentSince != null && Number.isInteger(Number(options.recentSince))) {
+    params[`${date}.gte`] = `${Number(options.recentSince)}-01-01`;
+  }
   if (intent.yearMax != null) params[`${date}.lte`] = `${intent.yearMax}-12-31`;
   if (intent.minRating != null) params['vote_average.gte'] = intent.minRating;
   if (intent.runtimeMin != null) params['with_runtime.gte'] = intent.runtimeMin;
@@ -94,6 +110,11 @@ export function discoverParams(intent, type, keywordIds = [], excludedKeywordIds
   // API documents a single original-language code. Never silently pick one from many.
   if (intent.languages?.length === 1 && /^[a-z]{2}$/.test(intent.languages[0])) params.with_original_language = intent.languages[0];
   return params;
+}
+
+/** Release-date ordering, per media type. Used by the complementary recent angle. */
+export function releaseDateSort(type) {
+  return type === 'tv' ? 'first_air_date.desc' : 'primary_release_date.desc';
 }
 
 export function hasDiscoverConstraints(intent, type, keywords) {

@@ -132,13 +132,38 @@ export function mergeCandidates(candidates, limit = 50, { narrative = false } = 
       signal.source === 'supabase_vector' ? Number(signal.sourceScore) || 0 : 0
     );
   }));
+  /**
+   * A complementary angle (extra concept pair, release-date ordering, genre-free
+   * disjunction) is *additive recall*: it must never displace the candidates the
+   * historical angles already brought. Complementary candidates therefore fill
+   * the seats the historical ones leave, and the ranking - not the admission
+   * order - decides their final place.
+   */
+  const complementaryOnly = candidate =>
+    candidate.retrievalSignals.some(signal => signal.complementary !== true) ? 0 : 1;
+  /**
+   * Admission rank read from the historical angles only, when the candidate has
+   * any: a work that the broad angle already placed at rank 15 must not jump to
+   * rank 2 of the admission queue just because an additive angle also listed it.
+   */
+  const historicalRank = candidate => {
+    const ranked = candidate.retrievalSignals.filter(signal => Number.isFinite(Number(signal.sourceRank)));
+    const historical = ranked.filter(signal => signal.complementary !== true);
+    const used = historical.length ? historical : ranked;
+    return used.length ? Math.min(...used.map(signal => Number(signal.sourceRank))) : Number.MAX_SAFE_INTEGER;
+  };
   const merged = [...byIdentity.values()].sort((a, b) =>
+    // Additive angles fill the seats the historical ones leave, in their own
+    // order: the recorded pool composition (and the pre-ranking positions it
+    // documents) is therefore untouched, while the extra candidates still
+    // reach the ranking.
+    complementaryOnly(a) - complementaryOnly(b) ||
     (narrative ? evidence(b, 'narrativeMatched') - evidence(a, 'narrativeMatched') ||
       evidence(b, 'narrativeCoverage') - evidence(a, 'narrativeCoverage') : 0) ||
     b.sources.length - a.sources.length ||
     Math.max(...b.sources.map(s => strength[s] ?? 0)) - Math.max(...a.sources.map(s => strength[s] ?? 0)) ||
     specificEvidence(b) - specificEvidence(a) ||
-    Math.min(...a.retrievalSignals.map(s => s.sourceRank ?? 0)) - Math.min(...b.retrievalSignals.map(s => s.sourceRank ?? 0)) ||
+    historicalRank(a) - historicalRank(b) ||
     `${a.mediaType}:${a.tmdbId}`.localeCompare(`${b.mediaType}:${b.tmdbId}`));
   return { afterDedup: merged.length, candidates: merged.slice(0, Math.max(0, Math.min(50, limit))) };
 }

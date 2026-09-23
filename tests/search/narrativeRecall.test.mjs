@@ -45,17 +45,23 @@ test('one embedding receives rich context even across repeated consumers', async
 
 for (const type of ['movie', 'tv']) test(`${type}: narrative conjunction finds a work absent from a broad top 20`, async () => {
   const queries = [];
+  const genreFilters = [];
   const trace = createSearchEvaluationTrace();
   const pool = await hybridRetrieve({ intent: createCanonicalIntent({ ...intent, mediaType: type }),
     context: { semanticIntentContext: semantic, evaluationTrace: trace }, services: {
       keyword: async term => [{ id: ['federal investigators', 'prison interviews', 'serial killers', 'criminal psychology'].indexOf(term) + 1, name: term }],
       discover: async (mediaType, params) => {
         queries.push(params.with_keywords);
+        genreFilters.push(params.with_genres ?? null);
         return params.with_keywords.includes(',') ? [row(99, mediaType)] : Array.from({ length: 20 }, (_, i) => row(i + 1, mediaType));
       }
     } });
-  assert.equal(queries.length, 3);
+  // Two keyword intersections, the broad backoff, and the genre-free angle -
+  // which goes three pages deep so a less popular multi-concept work is not
+  // eliminated by the popularity ordering of page one.
+  assert.equal(queries.length, 6);
   assert.equal(queries.filter(query => query.split(',').length === 2).length, 2);
+  assert.equal(genreFilters.filter(filter => filter === null).length, 3, 'the concept angle drops the declared genre on every page');
   assert.equal(pool.length, 21);
   assert.equal(pool[0].tmdbId, 99);
   assert.equal(trace.sources.tmdb_discover.uniqueCandidateCount, 21);

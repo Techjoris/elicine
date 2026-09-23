@@ -36,22 +36,104 @@ export function buildNarrativeRetrievalPlan(intent = {}, semanticContext = {}) {
   const expansion = expandSemanticTerms({ ...intent,
     themes: unique([...(intent.themes || []), ...semantic.semanticConcepts, ...semantic.narrativeMotifs]) });
   const informative = [...concepts].sort((a, b) => conceptSpecificity(b) - conceptSpecificity(a));
-  // Preserve channel breadth before taking more formulations of the same idea.
-  const keywordQueries = unique([...concepts, ...informative.flatMap(conceptVariants), ...expansion.addedTerms])
-    .filter(term => term.length >= 3 && term.length <= 80).slice(0, 8);
+  // Provider wordings, interleaved by concept: every described concept gives its
+  // first formulation before any concept gives a second one. A concept that
+  // looks redundant locally ("fighter pilots" beside "military aviation") can
+  // still be the only wording the provider taxonomy actually tags, so it must
+  // reach the keyword resolution instead of being crowded out by the variants
+  // of the first concept.
+  const variantsByConcept = informative.map(concept =>
+    conceptVariants(concept).filter(variant => variant !== concept));
+  const interleavedVariants = [];
+  for (let depth = 0; depth < 5; depth++) {
+    for (const variants of variantsByConcept) if (variants[depth]) interleavedVariants.push(variants[depth]);
+  }
+  const keywordQueries = unique([...concepts, ...interleavedVariants, ...expansion.addedTerms])
+    .filter(term => term.length >= 3 && term.length <= 80).slice(0, 16);
   return { rich, semanticConcepts: semantic.semanticConcepts, narrativeMotifs: semantic.narrativeMotifs,
     concepts, keywordQueries, people: collectSemanticPeople(semantic), expansion,
     intentType: semantic.intentType, maxVariants: 5 };
 }
 
-/** Two precise angles and one backoff on the SAME concepts. Sparse provider
- * tagging must not turn AND into an exclusion of the described work.
+/** How far back a "modern" request is read when no year bound is stated. */
+export const RECENT_ANGLE_HORIZON_YEARS = 25;
+
+/**
+ * Complementary keyword angles for a rich request.
+ *
+ * A multi-concept request is answered by the *intersection* of its concepts,
+ * and one broad OR angle ordered by popularity buries that intersection under
+ * the most popular works of the genre. This generator therefore builds, from
+ * the concepts the interpreter already wrote:
+ *
+ *  - the most discriminating **pairs** of concepts as AND angles (specificity
+ *    of the two concepts named, never a fixed anchor on the first one);
+ *  - when the request states a modern period, the same leading pair sorted by
+ *    release date instead of popularity, so a precise contemporary work is not
+ *    crowded out of the provider's first page;
+ *  - one broad OR backoff, because sparse provider tagging must not turn AND
+ *    into an exclusion of the described work.
+ *
+ * Bounded by construction (four angles at most) and derived only from the
+ * intent: no title, no identifier, no per-query rule.
  */
-export function narrativeKeywordAngles(ids = []) {
-  const keys = [...new Set(ids)].slice(0, 3);
+export function narrativeKeywordAngles(resolved = [], {
+  temporalDirection = 0, precisePairs = 2, complementaryPairs = 0, includeRecent = temporalDirection > 0,
+  includeGenreFree = false, broadLimit = 3
+} = {}) {
+  const entries = (Array.isArray(resolved) ? resolved : [])
+    .map(item => (item && typeof item === 'object' ? { term: item.term, id: Number(item.id) } : { term: null, id: Number(item) }))
+    .filter(entry => Number.isSafeInteger(entry.id) && entry.id > 0)
+    .filter((entry, index, all) => all.findIndex(other => other.id === entry.id) === index);
+  const keys = entries.map(entry => entry.id);
+  // One concept (or none) has no intersection to build: keep the historical
+  // broad angle, which is the only Discover channel in that case.
   if (keys.length < 2) return [{ ids: keys, conjunction: false }];
-  const precise = keys.length === 2 ? [keys] : [[keys[0], keys[1]], [keys[0], keys[2]]];
-  return [...precise.map(ids => ({ ids, conjunction: true })), { ids: keys, conjunction: false }];
+
+  // Historical angles first: the two pairs anchored on the leading concept that
+  // the recorded retrieval corpus was built on. The complementary pairs come
+  // after, so the historical request set is never reordered.
+  const anchored = [];
+  for (let index = 1; index < Math.min(entries.length, 1 + Math.max(1, precisePairs)); index++) {
+    anchored.push({ ids: [entries[0].id, entries[index].id], left: 0, right: index });
+  }
+  const pairs = [];
+  for (let left = 0; left < entries.length; left++) {
+    for (let right = left + 1; right < entries.length; right++) {
+      const first = entries[left];
+      const second = entries[right];
+      const score = (first.term ? conceptSpecificity(first.term) : 0.6) + (second.term ? conceptSpecificity(second.term) : 0.6);
+      const alreadyAnchored = anchored.some(pair => pair.left === left && pair.right === right);
+      if (!alreadyAnchored) pairs.push({ ids: [first.id, second.id], score, left, right });
+    }
+  }
+  pairs.sort((a, b) => b.score - a.score || a.left - b.left || a.right - b.right);
+  const extra = pairs.slice(0, Math.max(0, complementaryPairs)).map(pair => ({ ...pair, complementary: true }));
+  const precise = [...anchored, ...extra];
+  if (!precise.length) precise.push({ ids: [entries[0].id, entries[1].id] });
+  const angles = precise.map(pair => ({ ids: pair.ids, conjunction: true }));
+  if (includeRecent && temporalDirection > 0 && precise.length) {
+    // The recent angle carries the WHOLE concept set in disjunction, ordered by
+    // release date: an intersection of two provider keywords is often empty, and
+    // it is exactly the popular-ordering of the broad angle that buries a
+    // precise contemporary work. Both are additive: no other angle changes.
+    angles.push({ ids: keys, conjunction: false, recentFirst: true, complementary: true,
+      recentSinceYears: RECENT_ANGLE_HORIZON_YEARS });
+  }
+  // The historical broad angle keeps its original width: widening it would
+  // reorder the very pool the recorded corpus was built on. The concepts beyond
+  // that width are explored by the additive angles below.
+  angles.push({ ids: keys.slice(0, Math.max(2, broadLimit)), conjunction: false });
+  // A declared genre is a dimension of the request, not a gate: a work that
+  // answers several described concepts can legitimately belong to another
+  // genre (a science-fiction film about fighter jets and aerial combat answers
+  // a war-and-aviation request). One disjunctive angle therefore drops the
+  // genre constraint, so the intersection is reachable before the ranking
+  // decides - the ranking still weights the genre family.
+  if (includeGenreFree && keys.length >= 2) {
+    angles.push({ ids: keys, conjunction: false, withoutGenre: true, complementary: true });
+  }
+  return angles;
 }
 
 const labels = value => (Array.isArray(value) ? value : [value]).flatMap(item =>

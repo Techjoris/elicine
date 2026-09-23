@@ -1,15 +1,20 @@
 import { mergeCandidates, toRetrievalCandidate } from './retrievalCandidate.js';
 import { discoverParams, exclusionKeywordTerms, hasDiscoverConstraints, keywordTerms, normalizeTerm,
-  reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
+  releaseDateSort, reliableKeywordId, tmdbGenreIds } from './tmdbRetrievalParams.js';
 import { SEMANTIC_EXPANSION_LIMIT } from './semanticExpansion.js';
 import { createFallbackTelemetry, failedSourceLabel, FALLBACK_REASONS, recordFallback } from './fallbackPolicy.js';
 import { recordEvaluationSource, summarizeEvaluationCandidates } from './searchEvaluation.js';
 import { normalizeSemanticExclusions } from './strictConstraintFilter.js';
 import { buildNarrativeRetrievalPlan, narrativeEvidence, narrativeKeywordAngles, narrativeKeywordId, prioritizeNarrativeRows } from './narrativeRetrieval.js';
+import { temporalDirection } from './searchRanker.js';
 
 export const HYBRID_RETRIEVAL_FLAG = 'HYBRID_RETRIEVAL_ENABLED';
 export const RETRIEVAL_LIMITS = Object.freeze({ pool: 50, seeds: 3, searchTitles: 2,
-  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 3, exclusionTerms: 4, llmCandidates: 6,
+  // Every resolved concept participates in the disjunctive angle: the whole
+  // point of the intersection recall is that a work tagged with ANY of the
+  // described concepts reaches the pool. The lookups are already performed for
+  // all of them (the provider ids were simply truncated before).
+  terms: SEMANTIC_EXPANSION_LIMIT, keywordIds: 8, exclusionTerms: 4, llmCandidates: 6,
   sourceResults: 20, sourceTimeoutMs: 4000 });
 export function isHybridRetrievalEnabled(env = process.env) {
   // Hybrid is the validated default; explicit false is the operational rollback.
@@ -181,6 +186,22 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
   // Keywords are a dependency only of Discover; seeds/lexical/legacy already run.
   // Positive concepts restrict the pool (with_keywords), stated exclusions prune
   // it (without_keywords): both read TMDB's own taxonomy, never a work list.
+  // Period direction of the canonical intent (never the raw wording): it only
+  // decides whether the complementary release-date angle is worth one more call.
+  const periodDirection = temporalDirection(intent);
+  // A modern request unlocks two optional angles (a complementary concept pair
+  // and the release-date ordering). They are only scheduled when the remaining
+  // request budget can pay for them with a margin, so the historical angles are
+  // never displaced and no source ends in TMDB_BUDGET_EXHAUSTED.
+  const extraCalls = (intent.mediaType ? 1 : 2) * 2;
+  const budgetForExtras = (services.remainingBudget?.() ?? Number.POSITIVE_INFINITY) - extraCalls;
+  const wantsComplementary = periodDirection > 0 && budgetForExtras >= 6;
+  const includeRecentAngle = periodDirection > 0 && budgetForExtras >= (intent.mediaType ? 1 : 2);
+  // One genre-free angle when the request declares a genre: it is the only way
+  // a multi-concept work outside that genre can still reach the pool.
+  const includeGenreFree = (intent.genres || []).length > 0 && (services.remainingBudget?.() ?? 30) >= 8;
+  const anglesPerType = 3 + (wantsComplementary ? 1 : 0) + (includeRecentAngle ? 1 : 0) + (includeGenreFree ? 1 : 0);
+  const discoverAngleBudget = intent.mediaType ? anglesPerType : anglesPerType * 2;
   const keywordsTask = (async () => {
     // Let already scheduled source transports debit the shared request budget.
     await Promise.resolve();
@@ -191,37 +212,67 @@ export async function hybridRetrieve({ intent, resolvedContext = {}, services = 
           const rows = await withSourceTimeout(signal => services.keyword(term, { signal, context }), timeout);
           const id = narrative ? narrativeKeywordId(term, rows) : reliableKeywordId(term, rows);
           if (evaluationTrace) (evaluationTrace.keywordResolution ||= []).push({ term, id });
-          return id;
+          // The concept is kept next to its provider id: the complementary
+          // angles rank their pairs by the specificity of the concepts named.
+          return id ? { term, id } : null;
         } catch (error) {
           errors.push({ source: 'tmdb_keyword', code: error?.message === 'RETRIEVAL_TIMEOUT' ? 'TIMEOUT' : 'SOURCE_FAILED' });
           return null;
         }
       }));
-      return [...new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean))].slice(0, limit);
+      const resolved = results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(Boolean);
+      return resolved.filter((entry, index) => resolved.findIndex(other => other.id === entry.id) === index).slice(0, limit);
     };
     const exclusionTerms = exclusionKeywordTerms(normalizeSemanticExclusions(intent.semanticExclusions), RETRIEVAL_LIMITS.exclusionTerms);
     const terms = narrativePlan.rich ? narrativePlan.keywordQueries : keywordTerms(intent, RETRIEVAL_LIMITS.terms);
     const available = services.remainingBudget?.() ?? 30;
-    const reservedDiscover = narrativePlan.rich ? (intent.mediaType ? 3 : 6) : (intent.mediaType ? 1 : 2);
+    const reservedDiscover = narrativePlan.rich ? discoverAngleBudget : (intent.mediaType ? 1 : 2);
     const [included, excluded] = await Promise.all([
       resolveIds(terms.slice(0, Math.max(0, available - reservedDiscover - exclusionTerms.length)), RETRIEVAL_LIMITS.keywordIds, narrativePlan.rich),
       resolveIds(exclusionTerms, RETRIEVAL_LIMITS.exclusionTerms)
     ]);
     return { included, excluded };
   })();
-  const { included: keywordIds, excluded: excludedKeywordIds } = await keywordsTask;
+  const { included: resolvedKeywords, excluded: excludedEntries } = await keywordsTask;
+  const excludedKeywordIds = excludedEntries.map(entry => entry.id);
+  const keywordIds = resolvedKeywords.map(entry => entry.id);
   if (evaluationTrace) evaluationTrace.semanticExpansion.resolvedKeywordIds = [...keywordIds];
   metrics.semanticKeywordResolvedCount = keywordIds.length;
   metrics.semanticExclusionKeywordResolvedCount = excludedKeywordIds.length;
   if (services.discover) for (const type of intent.mediaType ? [intent.mediaType] : ['movie', 'tv']) {
     if (hasDiscoverConstraints(intent, type, keywordIds)) {
-      const angles = narrativePlan.rich ? narrativeKeywordAngles(keywordIds) : [{ ids: keywordIds, conjunction: false }];
-      for (const { ids, conjunction } of angles) {
-        const params = discoverParams(intent, type, ids, excludedKeywordIds);
-        if (conjunction) params.with_keywords = ids.join(',');
-        source('tmdb_discover', signal => services.discover(type, params, { signal, context }), type,
-          { keywordIds: ids, ...(conjunction ? { keywordConjunctionSize: ids.length } : {}) },
-          { mediaType: type, params });
+      // The period direction is read from the canonical intent, never from the
+      // wording: retrieval stays independent of the raw query text.
+      const angles = narrativePlan.rich
+        ? narrativeKeywordAngles(resolvedKeywords, {
+            temporalDirection: periodDirection,
+            complementaryPairs: wantsComplementary ? 1 : 0,
+            includeRecent: includeRecentAngle,
+            includeGenreFree
+          })
+        : [{ ids: keywordIds, conjunction: false }];
+      for (const { ids, conjunction, recentFirst, recentSinceYears, withoutGenre, complementary } of angles) {
+        const recentSince = recentFirst
+          ? new Date().getFullYear() - Number(recentSinceYears ?? 0) : null;
+        // The concept-only angle goes deeper than page one: a work that answers
+        // several described concepts but is far less popular than the genre
+        // landmarks is frequently on page 2 or 3, and popularity ordering must
+        // not eliminate it before the ranking ever sees it.
+        const conceptPages = withoutGenre
+          ? ((services.remainingBudget?.() ?? 30) >= (intent.mediaType ? 6 : 10) ? (intent.mediaType ? 3 : 2) : 1)
+          : 1;
+        for (let page = 1; page <= conceptPages; page++) {
+          const params = discoverParams(intent, type, ids, excludedKeywordIds, {
+            sortBy: recentFirst ? releaseDateSort(type) : null, recentSince,
+            ignoreGenres: withoutGenre === true, page
+          });
+          if (conjunction) params.with_keywords = ids.join(',');
+          source('tmdb_discover', signal => services.discover(type, params, { signal, context }), type,
+            { keywordIds: ids, ...(conjunction ? { keywordConjunctionSize: ids.length } : {}),
+              ...(recentFirst ? { recentAngle: true } : {}), ...(withoutGenre ? { genreFreeAngle: true } : {}),
+              ...(complementary ? { complementary: true } : {}) },
+            { mediaType: type, params });
+        }
       }
     }
   }
