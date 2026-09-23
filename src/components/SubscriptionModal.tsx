@@ -145,10 +145,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           setPaymentMethod('paddle');
         }
 
-        if (savedCurrency && PRICING[savedCurrency]) {
-          setCurrency(savedCurrency);
-        }
-
         if (savedPlan === 'yearly' || savedPlan === 'monthly') {
           setBillingCycle(savedPlan);
         }
@@ -159,10 +155,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   // Détection automatique de devise par défaut et ajustement du mode de paiement
   useEffect(() => {
     if (isOpen) {
-      const detected = appCurrency || 'EUR';
-      setCurrency(detected);
+      // La vitrine du Pass Pro s'ouvre toujours sur le tarif de référence en euros (1,99 €) :
+      // l'utilisateur peut ensuite changer de devise dans le sélecteur s'il le souhaite.
+      setCurrency('EUR');
       // Mode de paiement par défaut adapté à la région et à la disponibilité de SasPay
-      if (isSaspayAvailable && (detected === 'XOF' || detected === 'XAF')) {
+      if (isSaspayAvailable && (appCurrency === 'XOF' || appCurrency === 'XAF')) {
         setPaymentMethod('mobile_money');
       } else {
         setPaymentMethod('paddle');

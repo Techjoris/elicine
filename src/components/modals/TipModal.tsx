@@ -19,13 +19,8 @@ import {
 import { getUserGeoData, getSuggestedCurrencyForCountry } from '../../services/geoService';
 import { Currency } from '../../types';
 
-const presetsByCurrency: Record<Currency, { amounts: number[]; defaultAmount: number }> = {
-  XAF: { amounts: [500, 1000, 2500, 5000], defaultAmount: 1000 },
-  XOF: { amounts: [500, 1000, 2500, 5000], defaultAmount: 1000 },
-  EUR: { amounts: [2, 5, 10, 20], defaultAmount: 5 },
-  USD: { amounts: [2, 5, 10, 20], defaultAmount: 5 },
-  CAD: { amounts: [2, 5, 10, 25], defaultAmount: 5 }
-};
+/** Montant libre : SasPay encaisse en FCFA, on indique simplement le seuil. */
+const MIN_SASPAY_AMOUNT = 200;
 
 /**
  * @param embedded  rendu à l'intérieur de la fenêtre « Soutenir » (onglet Mobile Money),
@@ -46,7 +41,8 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
 
   const defaultSaspayCurr = getSaspayDefaultCurrency();
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => (isAfricanCurrency(currency) ? currency : defaultSaspayCurr));
-  const [amount, setAmount] = useState<string>('1000');
+  // Montant laissé libre : le donateur saisit ce qu'il veut, sans palier imposé.
+  const [amount, setAmount] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
@@ -61,8 +57,7 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
       const suggested = (getSuggestedCurrencyForCountry(geo.countryCode, geo.currency) as Currency) || 'EUR';
       setSelectedCurrency(suggested);
       const isAfr = isAfricanCurrency(suggested);
-      const defAmt = presetsByCurrency[suggested]?.defaultAmount || (isAfr ? 1000 : 5);
-      setAmount(defAmt.toString());
+      setAmount('');
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -106,8 +101,7 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
     setSelectedCurrency(newCurr);
     setCurrency(newCurr);
     setErrorMessage(null);
-    const def = presetsByCurrency[newCurr]?.defaultAmount || (isAfricanCurrency(newCurr) ? 1000 : 5);
-    setAmount(def.toString());
+    setAmount('');
   };
 
   const handleMobileMoneySubmit = async (e: React.FormEvent) => {
@@ -126,6 +120,11 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
       getSaspayDefaultCurrency(),
       false
     );
+
+    if (Number(cleanAmount) < MIN_SASPAY_AMOUNT) {
+      showToast(`Le montant minimum est de ${MIN_SASPAY_AMOUNT} FCFA.`);
+      return;
+    }
 
     setErrorMessage(null);
     setIsProcessing(true);
@@ -222,8 +221,6 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
   if (!embedded && !isTipModalOpen) return null;
 
   const currentConfig = CURRENCY_CONFIGS[selectedCurrency] || CURRENCY_CONFIGS['XAF'];
-  const presets = presetsByCurrency[selectedCurrency] || presetsByCurrency.XAF;
-
   return (
     <div 
       className={embedded
@@ -293,18 +290,20 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
           </div>
         ) : (
           <>
-            {/* Header compact & chaleureux */}
-            <div className="text-center space-y-2 w-full pt-1">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-inner">
-                <Coffee className="w-6 h-6" />
+        {/* En-tête : masqué quand le formulaire est intégré à la fenêtre « Soutenir » */}
+            {!embedded && (
+              <div className="text-center space-y-2 w-full pt-1">
+                <div className="w-12 h-12 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 flex items-center justify-center mx-auto shadow-inner">
+                  <Coffee className="w-6 h-6" />
+                </div>
+                <h2 id="tip-modal-title" className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                  Soutenir le projet <span className="bg-gradient-to-r from-sky-500 to-cyan-500 bg-clip-text text-transparent">Éliciné</span>
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto">
+                  Votre contribution libre finance directement l'infrastructure de recherche avancée et l'indépendance de la plateforme.
+                </p>
               </div>
-              <h2 id="tip-modal-title" className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                Soutenir le projet <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">Éliciné</span> ☕
-              </h2>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm w-full mx-auto">
-                Votre contribution libre finance directement l'infrastructure de recherche avancée et l'indépendance de la plateforme.
-              </p>
-            </div>
+            )}
 
             {/* Formulaire de soutien SasPay */}
             <form onSubmit={handleMobileMoneySubmit} className="w-full space-y-4 pt-1 animate-fade-in">
@@ -320,11 +319,11 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
                         key={c}
                         type="button"
                         onClick={() => handleCurrencyChange(c)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
-                          selectedCurrency === c
-                            ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                        }`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                      selectedCurrency === c
+                        ? 'bg-sky-500 text-white font-extrabold shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                       >
                         {c}
                       </button>
@@ -332,7 +331,7 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
                   </div>
 
                   {!isAfricanCurrency(selectedCurrency) && (
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1.5 mt-1">
+                    <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-700 dark:text-sky-300 text-[10px] flex items-center gap-1.5 mt-1">
                       <span>💡</span>
                       <span>
                         Mobile Money traite les transactions en FCFA ({defaultSaspayCurr}) via SasPay. Équivalent : ~{convertToSaspayCurrency(Number(amount) || 1, selectedCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA.
@@ -341,49 +340,33 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
                   )}
                 </div>
 
-                {/* Champ Montant & Suggestions rapides */}
+                {/* Montant libre : aucune suggestion imposée, juste le seuil SasPay indiqué */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    <span>Montant du don</span>
-                    <span>Libre</span>
+                    <span>Montant de votre soutien</span>
+                    <span className="text-sky-600 dark:text-sky-400">Libre</span>
                   </div>
 
                   <div className="relative flex items-center w-full">
                     <input
                       type="number"
-                      min="1"
+                      min={MIN_SASPAY_AMOUNT}
                       step="any"
                       required
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Montant du don..."
-                      className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 focus:border-amber-500 rounded-xl px-4 py-3 text-base font-black text-slate-900 dark:text-white focus:outline-none pr-16 transition-all shadow-inner font-mono"
+                      placeholder={`${MIN_SASPAY_AMOUNT}`}
+                      className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 focus:border-sky-500 rounded-xl px-4 py-3 text-base font-black text-slate-900 dark:text-white focus:outline-none pr-16 transition-all shadow-inner font-mono"
                     />
-                    <span className="absolute right-4 text-xs font-bold text-amber-600 dark:text-amber-400 select-none">
+                    <span className="absolute right-4 text-xs font-bold text-sky-600 dark:text-sky-400 select-none">
                       {currentConfig.symbol}
                     </span>
                   </div>
 
-                  {/* Boutons de montants suggérés */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {presets.amounts.map((amt) => {
-                      const isSelected = amount === amt.toString();
-                      return (
-                        <button
-                          key={amt}
-                          type="button"
-                          onClick={() => setAmount(amt.toString())}
-                          className={`py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer text-center ${
-                            isSelected
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm font-extrabold'
-                              : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {amt.toLocaleString()} {currentConfig.symbol}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Indication : <strong className="text-sky-600 dark:text-sky-400">{MIN_SASPAY_AMOUNT} FCFA</strong> minimum.
+                    Vous choisissez librement au-delà.
+                  </p>
                 </div>
 
                 {/* Message d'erreur explicite dans l'interface */}
@@ -401,17 +384,19 @@ export const TipModal: React.FC<{ embedded?: boolean; onClose?: () => void }> = 
                 <button
                   type="submit"
                   disabled={isProcessing || !amount || Number(amount) < 1}
-                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 via-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98]"
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Initialisation du paiement...</span>
                     </>
-                  ) : (
+                  ) : Number(amount) > 0 ? (
                     <span>
-                      Payer {convertToSaspayCurrency(Number(amount) || 1000, selectedCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA ({convertToSaspayCurrency(Number(amount) || 1000, selectedCurrency, defaultSaspayCurr).currency}) via SasPay →
+                      Soutenir avec {convertToSaspayCurrency(Number(amount), selectedCurrency, defaultSaspayCurr).amount.toLocaleString()} FCFA ({convertToSaspayCurrency(Number(amount), selectedCurrency, defaultSaspayCurr).currency}) via SasPay →
                     </span>
+                  ) : (
+                    <span>Soutenir via SasPay →</span>
                   )}
                 </button>
 

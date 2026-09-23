@@ -216,7 +216,9 @@ export const SupportProjectModal: React.FC = () => {
               ))}
             </div>
 
-            {/* 2. Montants */}
+            {/* 2. Montants — paliers Paddle uniquement : le Mobile Money reste un montant libre */}
+            {mode === 'paddle' && (
+            <>
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Choisissez votre montant
@@ -267,6 +269,8 @@ export const SupportProjectModal: React.FC = () => {
                 <span className="text-[10px] text-slate-400">Paiement unique</span>
               </div>
             </div>
+            </>
+            )}
 
             {/* 4. Moyens de paiement */}
             <div className="flex flex-col gap-2">
@@ -313,8 +317,10 @@ export const SupportProjectModal: React.FC = () => {
                     </span>
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-900 dark:text-white">Carte Bancaire &amp; Apple Pay</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Visa, Mastercard (Paddle)</p>
+                    <p className="text-xs font-black text-slate-900 dark:text-white">Carte, Apple Pay &amp; plus</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      Visa, Mastercard, Apple Pay, Google Pay, PayPal… (Paddle)
+                    </p>
                   </div>
                 </div>
               </div>
