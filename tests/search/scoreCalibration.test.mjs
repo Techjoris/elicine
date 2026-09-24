@@ -53,7 +53,9 @@ test('a bare category is answered by the strength of the work, not by its genre 
   // so the bound is the exceptional band, not the old saturating curve.
   assert.ok(strong.matchScore >= 85 && strong.matchScore < 95, `${strong.matchScore}`);
   assert.ok(weak.matchScore < 85, `${weak.matchScore}`);
-  assert.ok(strong.matchScore - weak.matchScore >= 15, `${strong.matchScore} vs ${weak.matchScore}`);
+  // Raising the ladder to the reported bands costs part of the span between a
+  // fine work and a poor one inside a bare category; the two must still differ.
+  assert.ok(strong.matchScore - weak.matchScore >= 10, `${strong.matchScore} vs ${weak.matchScore}`);
   assert.equal(strong.matchScore, publicMatchScore(strong.finalScore));
 });
 
@@ -106,8 +108,8 @@ test('the public ladder is the historical one, restored', () => {
   // Anchors of the ladder the product used before the unified engine, read on
   // the computed score of the new one (see PHASE21.md). A solid answer reads in
   // the high 80s, an excellent one above 95, and nothing real under 20.
-  const ladder = [[0, 0], [0.15, 20], [0.25, 38], [0.35, 50], [0.45, 66], [0.55, 77],
-    [0.65, 85], [0.75, 91], [0.85, 95], [0.92, 97], [0.98, 99], [1, 99]];
+  const ladder = [[0, 0], [0.15, 25], [0.25, 48], [0.35, 64], [0.45, 76], [0.55, 84],
+    [0.65, 90], [0.75, 94], [0.85, 96], [0.92, 98], [0.98, 99], [1, 99]];
   for (const [score, displayed] of ladder) {
     assert.equal(publicMatchScore(score), displayed, `${score} -> ${displayed}`);
   }
@@ -118,7 +120,7 @@ test('the public ladder is the historical one, restored', () => {
   // A grid of genuine answers no longer sits in the 45-70 band that was reported
   // as too low, and the exceptional band stays out of reach of a partial answer.
   assert.ok(publicMatchScore(0.72) >= 85, `${publicMatchScore(0.72)}`);
-  assert.ok(publicMatchScore(0.3) < 50, `${publicMatchScore(0.3)}`);
+  assert.ok(publicMatchScore(0.3) < 60, `${publicMatchScore(0.3)}`);
 });
 
 test('the public curve stays monotone, bounded and derived from the computed score', () => {

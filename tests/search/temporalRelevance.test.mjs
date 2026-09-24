@@ -183,13 +183,13 @@ test('the public score follows the documented ladder and separates excellent fro
   // Ladder restored from the pre-unified engine (PHASE21.md): a solid answer
   // reads in the high 80s, an exceptional one at 95-99, and nothing real sits
   // in the 40s any more.
-  assert.ok(excellent >= 85 && excellent <= 95, `${excellent}`);
-  assert.ok(good >= 76 && good <= 86, `${good}`);
-  assert.ok(average >= 70 && average <= 80, `${average}`);
-  assert.ok(medium >= 52 && medium <= 64, `${medium}`);
-  assert.ok(weak < 55, `${weak}`);
+  assert.ok(excellent >= 90 && excellent <= 97, `${excellent}`);
+  assert.ok(good >= 84 && good <= 90, `${good}`);
+  assert.ok(average >= 78 && average <= 86, `${average}`);
+  assert.ok(medium >= 66 && medium <= 74, `${medium}`);
+  assert.ok(weak < 65, `${weak}`);
   // The reported compression: a strong grid used to span 21 points.
-  assert.ok(excellent - medium >= 30, `${excellent} - ${medium}`);
+  assert.ok(excellent - medium >= 20, `${excellent} - ${medium}`);
   // Raising the ladder costs a little slope in the upper middle: the guard is
   // "the curve still separates two close answers", not a fixed slope.
   assert.ok(publicMatchScore(0.7) - publicMatchScore(0.64) >= 3);
@@ -216,9 +216,9 @@ test('through the real pipeline, the modern request leads with the contemporary 
   assert.ok(Array.isArray(results) && results.length > 0);
   assert.equal(results[0].title, 'Top Gun : Maverick');
   const displayed = results.map(entry => entry.ranking.matchScore);
-  assert.ok(displayed[0] >= 75, `top ${displayed[0]}`);
-  // The restored ladder reads a relevant answer in the high 80s, so the top of
-  // the grid stands 10+ points above the tail without the old 40-point cliff.
-  assert.ok(displayed[0] - displayed.at(-1) >= 10, displayed.join(','));
+  assert.ok(displayed[0] >= 95, `top ${displayed[0]}`);
+  // The restored ladder reads a relevant answer in the 90s, so the top of the
+  // grid stands clearly above the tail without the old 40-point cliff.
+  assert.ok(displayed[0] - displayed.at(-1) >= 8, displayed.join(','));
   assert.ok(results.every(entry => entry.ranking.finalScore <= 1 && entry.ranking.finalScore >= 0));
 });

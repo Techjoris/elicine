@@ -69,8 +69,8 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // the top is only reached by a genuinely converged answer.
   publicMatch: Object.freeze({
     points: Object.freeze([
-      [0, 0], [0.15, 20], [0.25, 38], [0.35, 50], [0.45, 66], [0.55, 77],
-      [0.65, 85], [0.75, 91], [0.85, 95], [0.92, 97], [0.98, 99], [1, 99]
+      [0, 0], [0.15, 25], [0.25, 48], [0.35, 64], [0.45, 76], [0.55, 84],
+      [0.65, 90], [0.75, 94], [0.85, 96], [0.92, 98], [0.98, 99], [1, 99]
     ])
   }),
   // An answer is only as good as the two things it combines: how much of the

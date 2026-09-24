@@ -2530,13 +2530,16 @@ export default async function handler(req, res) {
         });
       }
 
-      // Vérification des filtres avancés réservés aux membres Pro
+      // Vérification des filtres avancés réservés aux membres Pro.
+      // Le format (Tous / Films / Séries TV) n'en fait pas partie : c'est une
+      // lecture de la requête, pas un filtre payant. Le compter comme tel
+      // bloquait toute recherche contenant « film » ou « série », puisque le
+      // client renvoie au serveur le format qu'il vient d'en déduire.
       const filters = req.body?.filters;
       const hasActiveFilters = Boolean(
         filters && (
           (filters.platform && filters.platform !== 'all') ||
-          (filters.minRating && Number(filters.minRating) > 0) ||
-          (filters.mediaType && filters.mediaType !== 'Tous')
+          (filters.minRating && Number(filters.minRating) > 0)
         )
       );
 

@@ -41,15 +41,15 @@ linearly between them:
 
 ```
 finalScore  0.00 0.15 0.25 0.35 0.45 0.55 0.65 0.75 0.85 0.92 0.98 1.00
-displayed     0   20   38   50   66   77   85   91   95   97   99   99
+displayed     0   25   48   64   76   84   90   94   96   98   99   99
 ```
 
 - pure, monotone and bounded: no per-title, per-year or relative value is ever
   hardcoded, and the same `finalScore` always displays the same percentage;
 - the exceptional band (95-99) still requires a converged answer: a bare
-  category answered by a strong work reads 89, a described multi-signal request
-  reads 97-99;
-- a work answering nothing stays under the partial band (measured: 7-8), so
+  category answered by a strong work reads 93, a described multi-signal request
+  reads 98-99;
+- a work answering nothing stays under the partial band (measured: 9), so
   strength still never substitutes for the request.
 
 Nothing else moved. Weights, retrieval, the strict filter, the LLM
@@ -58,17 +58,35 @@ the ordering is identical, only the displayed percentage is re-read.
 
 ## Measured after the change
 
-The same live grid now reads **98, 89, 88, 82, 77, 72, 66** — the ordering is
-unchanged, the tail gains 20 points, and the top keeps its 30+ point lead.
+The same live grid now reads **95, 83, 82, 77, 68, 62** — the ordering is
+unchanged, the tail gains 27 points, and the top keeps its lead.
 
 Corpus fixtures, before → after:
 
 | Case | `finalScore` | Before | After |
 | --- | --- | --- | --- |
-| bare category, strong work | 0.722 | 81 | 89 |
-| bare category, weak work | 0.506 | 57 | 72 |
+| bare category, strong work | 0.722 | 81 | 93 |
+| bare category, weak work | 0.506 | 57 | 80 |
 | described multi-signal request | 1.000 | 99 | 99 |
-| strong work answering nothing | 0.054 | 5 | 7 |
+| strong work answering nothing | 0.054 | 5 | 9 |
+
+## A second defect, found while measuring
+
+The live replay exposed a blocking bug that had nothing to do with the curve:
+`api/search.js` counted the media **format** among the advanced filters
+reserved for Pass Pro. The server derives that format from the wording of the
+request ("film" → Films, "série" → Séries TV) and the client sends back what it
+just derived, so any free search containing the word "film" or "série" was
+rejected with `403 PRO_REQUIRED` — while the very same request without the
+format field answered in 200. Measured:
+
+| Request | Result |
+| --- | --- |
+| `un film d'action des années 90`, `mediaType: Tous` | 200, 12 results |
+| `un film d'action des années 90`, `mediaType: Films` | **403 PRO_REQUIRED** |
+
+The rating floor and the platform filter still require Pass Pro, and are still
+tested as such; the format is again free for everyone.
 
 ## Validation
 
