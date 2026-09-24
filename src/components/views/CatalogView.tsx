@@ -6,6 +6,7 @@ import { fetchDiscoverPage, fetchSearchPage, fetchTopRatedPage, FALLBACK_MOVIES 
 import { useInfiniteCatalog } from '../../hooks/useInfiniteCatalog';
 import { Movie } from '../../types';
 import { Film, Search, Star, Sparkles, Flame, Tv, Crown, X } from 'lucide-react';
+import { GENRES, GenreOption, genreAppliesTo, genreIdFor, resolveGenreFilter } from '../../utils/catalogGenres';
 
 type CatalogTab = 'popular' | 'top_rated' | 'series' | 'search';
 
@@ -15,38 +16,6 @@ const TABS: { id: CatalogTab; label: string; icon: any }[] = [
   { id: 'series',    label: '📺 Séries',        icon: Tv    },
   { id: 'search',    label: '🔍 Recherche',     icon: Search }
 ];
-
-/**
- * Genres du catalogue. TMDB n'utilise pas les mêmes identifiants en film et en
- * série (et n'a pas d'équivalent télé pour l'horreur, le thriller, la romance,
- * l'histoire ou la musique) : `tv: null` marque un genre indisponible en série,
- * plutôt que de filtrer sur un identifiant qui ne renverrait rien.
- */
-type GenreOption = { key: string; label: string; movie: number; tv: number | null };
-
-const GENRES: GenreOption[] = [
-  { key: 'action',      label: 'Action',          movie: 28,    tv: 10759 },
-  { key: 'adventure',   label: 'Aventure',        movie: 12,    tv: 10759 },
-  { key: 'animation',   label: 'Animation',       movie: 16,    tv: 16    },
-  { key: 'comedy',      label: 'Comédie',         movie: 35,    tv: 35    },
-  { key: 'crime',       label: 'Crime',           movie: 80,    tv: 80    },
-  { key: 'documentary', label: 'Documentaire',    movie: 99,    tv: 99    },
-  { key: 'drama',       label: 'Drame',           movie: 18,    tv: 18    },
-  { key: 'family',      label: 'Famille',         movie: 10751, tv: 10751 },
-  { key: 'fantasy',     label: 'Fantastique',     movie: 14,    tv: 10765 },
-  { key: 'history',     label: 'Histoire',        movie: 36,    tv: null  },
-  { key: 'horror',      label: 'Horreur',         movie: 27,    tv: null  },
-  { key: 'music',       label: 'Musique',         movie: 10402, tv: null  },
-  { key: 'mystery',     label: 'Mystère',         movie: 9648,  tv: 9648  },
-  { key: 'romance',     label: 'Romance',         movie: 10749, tv: null  },
-  { key: 'scifi',       label: 'Science-Fiction', movie: 878,   tv: 10765 },
-  { key: 'thriller',    label: 'Thriller',        movie: 53,    tv: null  },
-  { key: 'war',         label: 'Guerre',          movie: 10752, tv: 10768 },
-  { key: 'western',     label: 'Western',         movie: 37,    tv: 37    }
-];
-
-const genreIdFor = (option: GenreOption, mediaType: 'movie' | 'tv') =>
-  mediaType === 'tv' ? option.tv : option.movie;
 
 export const CatalogView: React.FC = () => {
   const { apiSettings, user, setIsProModalOpen, showToast } = useApp();
@@ -72,11 +41,13 @@ export const CatalogView: React.FC = () => {
   );
 
   const mediaTypeForTab: 'movie' | 'tv' = activeTab === 'series' ? 'tv' : 'movie';
-  const activeGenreIds = selectedGenres
-    .map(genreKey => GENRES.find(genre => genre.key === genreKey))
-    .filter((genre): genre is GenreOption => Boolean(genre))
-    .map(genre => genreIdFor(genre, mediaTypeForTab))
-    .filter((id): id is number => Number.isSafeInteger(id));
+
+  // Genres réellement applicables à l'onglet courant. Un genre sans équivalent
+  // télé (thriller, horreur, romance, histoire, musique) ne doit jamais partir
+  // dans la requête : TMDB ignore l'identifiant inconnu et renverrait alors un
+  // catalogue non filtré, tout en affichant un en-tête trompeur.
+  const { applied: activeGenreOptions, ignored: ignoredGenreOptions, ids: activeGenreIds, labels: activeGenreLabels } =
+    resolveGenreFilter(selectedGenres, mediaTypeForTab);
 
   const toggleGenre = (genre: GenreOption) => {
     setSelectedGenres(previous =>
@@ -138,9 +109,7 @@ export const CatalogView: React.FC = () => {
       const itemGenres = (Array.isArray(movie.genres) ? movie.genres : [])
         .map(genre => Number(genre?.id))
         .filter(id => Number.isSafeInteger(id) && id > 0);
-      const wanted = selectedGenres
-        .map(genreKey => GENRES.find(genre => genre.key === genreKey))
-        .filter((genre): genre is GenreOption => Boolean(genre))
+      const wanted = activeGenreOptions
         .map(genre => genreIdFor(genre, itemType))
         .filter((id): id is number => Number.isSafeInteger(id));
       if (wanted.length && !wanted.some(id => itemGenres.includes(id))) return false;
@@ -206,7 +175,7 @@ export const CatalogView: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             {GENRES.map(genre => {
-              const available = mediaTypeForTab !== 'tv' || genre.tv != null;
+              const available = genreAppliesTo(genre, mediaTypeForTab);
               const selected = selectedGenres.includes(genre.key);
               return (
                 <button
@@ -218,7 +187,9 @@ export const CatalogView: React.FC = () => {
                   title={available ? `Filtrer : ${genre.label}` : 'Genre sans équivalent en série sur TMDB'}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
                     selected
-                      ? 'bg-[#e50914] border-[#e50914] text-white shadow-sm cursor-pointer'
+                      ? available
+                        ? 'bg-[#e50914] border-[#e50914] text-white shadow-sm cursor-pointer'
+                        : 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 cursor-not-allowed'
                       : available
                         ? 'bg-slate-100 dark:bg-[#18181b] border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-white/20 cursor-pointer'
                         : 'bg-slate-50 dark:bg-[#141416] border-slate-200/60 dark:border-white/[0.06] text-slate-400 dark:text-zinc-600 cursor-not-allowed'
@@ -229,6 +200,12 @@ export const CatalogView: React.FC = () => {
               );
             })}
           </div>
+          {ignoredGenreOptions.length > 0 && (
+            <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              {ignoredGenreOptions.map(genre => genre.label).join(', ')} : genre(s) sans équivalent en série sur TMDB,
+              conservé(s) pour les films mais non appliqué(s) ici.
+            </p>
+          )}
         </div>
 
         {/* Search bar (always visible but active on search tab) */}
@@ -287,9 +264,9 @@ export const CatalogView: React.FC = () => {
         {(selectedGenres.length > 0 || ratingFloor > 0) && (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-zinc-400">
             <span className="font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-500">Filtres actifs :</span>
-            {selectedGenres.length > 0 && (
+            {activeGenreLabels.length > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-[#e50914]/10 border border-[#e50914]/25 text-[#e50914] font-semibold">
-                {selectedGenres.map(key => GENRES.find(genre => genre.key === key)?.label).filter(Boolean).join(' ou ')}
+                {activeGenreLabels.join(' ou ')}
               </span>
             )}
             {ratingFloor > 0 && (
@@ -321,9 +298,7 @@ export const CatalogView: React.FC = () => {
             activeTab === 'top_rated' ? '⭐ Films les Mieux Notés' :
             activeTab === 'series'    ? '📺 Séries Populaires' :
             `🔍 Résultats pour "${committedQuery.trim().replace(/^["'«»]+|["'«»]+$/g, '')}"`,
-            selectedGenres.length
-              ? selectedGenres.map(key => GENRES.find(genre => genre.key === key)?.label).filter(Boolean).join(' ou ')
-              : ''
+            activeGenreLabels.length ? activeGenreLabels.join(' ou ') : ''
           ].filter(Boolean).join(' · ')}
           subtitle={[
             `${filtered.length} titres chargés`,
