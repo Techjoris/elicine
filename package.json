@@ -13,6 +13,7 @@
     "test:supporter": "node --import tsx --test tests/supporter/",
     "test:paddle": "node --import tsx --test tests/paddle/",
     "test:catalog": "node --import tsx --test tests/catalog/",
+    "test:watchlink": "node --import tsx --test tests/watchlink/",
     "search:diagnose": "node scripts/search-diagnose.mjs",
     "search:benchmark": "node --import tsx scripts/search-benchmark.mjs",
     "search:recall": "node scripts/narrative-recall-benchmark.mjs"

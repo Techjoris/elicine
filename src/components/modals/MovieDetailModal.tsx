@@ -30,6 +30,7 @@ import {
   isIntermediaryWatchLink
 } from '../../services/streamingResolver';
 import { isNetflixProvider, handleStreamingClick, redirectToStreamingProvider } from '../../services/deepLinkHelper';
+import { fetchTitleWatchLinks, deepLinkForProvider, releaseYearOf } from '../../services/watchLinkResolver';
 import { getCachedCountryCode } from '../../services/geoService';
 import { isSeriesMedia } from '../../lib/mediaType';
 import { PrivateConnectionModal } from './PrivateConnectionModal';
@@ -58,6 +59,9 @@ export const MovieDetailModal: React.FC = () => {
     vod: []
   });
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  // Liens directs vers la fiche du film chez chaque plateforme, résolus une fois
+  // par œuvre pour que le clic reste instantané (pas de fenêtre bloquée).
+  const [watchLinks, setWatchLinks] = useState<Record<string, string>>({});
   const [isPrivateConnectionOpen, setIsPrivateConnectionOpen] = useState(false);
 
   const mediaHeroRef = useRef<HTMLDivElement>(null);
@@ -128,6 +132,21 @@ export const MovieDetailModal: React.FC = () => {
         if (isMounted) {
           setIsLoadingProviders(false);
         }
+      });
+
+    // 4. Résoudre le lien direct de la fiche chez chaque plateforme : sans cela
+    //    le clic retombait sur la page de recherche de la plateforme.
+    fetchTitleWatchLinks({
+      title: selectedMovie.title,
+      year: releaseYearOf(selectedMovie.release_date),
+      country: getCachedCountryCode(),
+      mediaType: mediaTypeEndpoint
+    })
+      .then((links) => {
+        if (isMounted && links) setWatchLinks(links);
+      })
+      .catch(() => {
+        // Le repli « recherche » reste disponible.
       });
 
     return () => {
@@ -591,7 +610,12 @@ export const MovieDetailModal: React.FC = () => {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          redirectToStreamingProvider(selectedMovie, p, showToast);
+                          redirectToStreamingProvider(
+                            selectedMovie,
+                            p,
+                            showToast,
+                            deepLinkForProvider(watchLinks, p.name)
+                          );
                         }}
                         className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-black border border-slate-200 dark:border-white/15 hover:border-slate-400 dark:hover:border-white/40 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
                         title={`Regarder "${selectedMovie.title}" sur ${p.name}`}

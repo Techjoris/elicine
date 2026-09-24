@@ -81,7 +81,7 @@ export const PlatformBadges: React.FC<PlatformBadgesProps> = ({ movie }) => {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    redirectToStreamingProvider(movie, p, showToast);
+                    redirectToStreamingProvider(movie, p, showToast, directHref);
                   }}
                   className="group/badge relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-sky-500/70 hover:bg-slate-800 transition-all shadow-sm cursor-pointer select-none"
                   title={`Regarder "${movie.title}" sur ${p.name}`}

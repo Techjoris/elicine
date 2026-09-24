@@ -47,6 +47,12 @@ export interface ProviderStreamingTarget {
  * Détecte et rejette formellement les pages intermédiaires TMDB et JustWatch
  * Empêche toute redirection parasite vers "themoviedb.org/.../watch"
  */
+/** Vrai si l'URL cible la recherche interne d'une plateforme (repli, pas une fiche). */
+export const isPlatformSearchUrl = (url?: string | null): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  return /\/(search|recherche|buscar)\b/i.test(url) || /[?&](q|query|phrase|term|k)=/i.test(url);
+};
+
 export const isIntermediaryWatchLink = (url?: string | null): boolean => {
   if (!url || typeof url !== 'string') return false;
   const lower = url.toLowerCase();
@@ -279,7 +285,8 @@ export const getUniversalStreamingUrl = (
 export const redirectToStreamingProvider = (
   movie: MovieStreamingTarget,
   provider: ProviderStreamingTarget | string,
-  showToast?: (msg: string, durationMs?: number) => void
+  showToast?: (msg: string, durationMs?: number) => void,
+  resolvedUrl?: string | null
 ): void => {
   const providerName = typeof provider === 'string'
     ? provider
@@ -287,8 +294,18 @@ export const redirectToStreamingProvider = (
 
   const movieTitle = (movie?.title || '').trim();
 
-  // 1. Smart Clipboard Helper
-  if (typeof navigator !== 'undefined' && navigator.clipboard && movieTitle) {
+  // Lien résolu en amont (fiche exacte du film sur la plateforme). Il doit être
+  // utilisé tel quel : le recalculer systématiquement ramenait l'utilisateur sur
+  // la page de recherche, en perdant l'identifiant de catalogue déjà trouvé.
+  const resolved = typeof resolvedUrl === 'string' && resolvedUrl.startsWith('http') && !isIntermediaryWatchLink(resolvedUrl)
+    ? resolvedUrl
+    : null;
+  // Une URL de recherche n'est pas une fiche : elle reste traitée comme le repli.
+  const directUrl = resolved && !isPlatformSearchUrl(resolved) ? resolved : null;
+
+  // Le presse-papier n'est copié que sur le repli « recherche » : il servait à
+  // compenser le champ de recherche vidé par certaines applications mobiles.
+  if (!directUrl && typeof navigator !== 'undefined' && navigator.clipboard && movieTitle) {
     try {
       navigator.clipboard.writeText(movieTitle).catch(() => {});
     } catch {
@@ -296,13 +313,17 @@ export const redirectToStreamingProvider = (
     }
   }
 
-  // 2. Toast feedback (1.5s)
   if (showToast) {
-    showToast(`Redirection vers ${providerName || 'la plateforme'}... (Titre copié)`, 1500);
+    showToast(
+      directUrl
+        ? `Ouverture de "${movieTitle}" sur ${providerName || 'la plateforme'}...`
+        : `Redirection vers ${providerName || 'la plateforme'}... (Titre copié)`,
+      1500
+    );
   }
 
-  // 3. Recherche interne directe sur la plateforme (nouvel onglet sécurisé)
-  const targetUrl = getUniversalStreamingUrl(movie, providerName);
+  // Nouvel onglet sécurisé, ouvert de façon synchrone (le lien est déjà résolu).
+  const targetUrl = directUrl || getUniversalStreamingUrl(movie, providerName);
   window.open(targetUrl, '_blank', 'noopener,noreferrer');
 };
 
