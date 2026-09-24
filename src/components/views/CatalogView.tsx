@@ -112,7 +112,10 @@ export const CatalogView: React.FC = () => {
       const wanted = activeGenreOptions
         .map(genre => genreIdFor(genre, itemType))
         .filter((id): id is number => Number.isSafeInteger(id));
-      if (wanted.length && !wanted.some(id => itemGenres.includes(id))) return false;
+      // Un candidat sans aucune information de genre n'est pas jugeable : on le
+      // laisse passer plutôt que de vider la page, le filtre ayant déjà été
+      // appliqué côté serveur.
+      if (wanted.length && itemGenres.length && !wanted.some(id => itemGenres.includes(id))) return false;
     }
     return true;
   });

@@ -2,6 +2,7 @@ import { Movie, StreamingProvider } from '../types';
 import { getPlatformDirectUrl, isIntermediaryWatchLink } from './deepLinkHelper';
 import { getCachedCountryCode, MOBILE_MONEY_COUNTRIES } from './geoService';
 import { KNOWN_TWIST_MOVIES, KNOWN_NON_TWIST_MOVIES, THEMATIC_LEXICON_CLUSTERS } from './searchRouterService';
+import { isSeriesMedia } from '../lib/mediaType';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 
@@ -191,7 +192,7 @@ export async function fetchTopRatedPage(
     const res = await fetchTmdbEndpoint(`${mediaType}/top_rated`, { page, language: lang }, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
-    return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
+    return { results: formatTmdbResults(data.results || [], mediaType), total_pages: data.total_pages || 1 };
   } catch {
     return { results: FALLBACK_MOVIES, total_pages: 1 };
   }
@@ -233,7 +234,7 @@ export async function fetchDiscoverPage(
     const res = await fetchTmdbEndpoint(`discover/${mediaType}`, params, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
-    return { results: formatTmdbResults(data.results || []), total_pages: data.total_pages || 1 };
+    return { results: formatTmdbResults(data.results || [], mediaType), total_pages: data.total_pages || 1 };
   } catch {
     return { results: FALLBACK_MOVIES, total_pages: 1 };
   }
@@ -1053,7 +1054,17 @@ export async function testAiApiKey(provider: 'groq' | 'openai', key?: string): P
   }
 }
 
-export function formatTmdbResults(results: any[]): Movie[] {
+/**
+ * Normalise une liste TMDB en `Movie[]`.
+ *
+ * `/discover/tv` et `/tv/top_rated` ne renvoient AUCUN champ `media_type` :
+ * sans repère, une série était étiquetée FILM. Le type d'affichage devient donc
+ * faux (badge FILM sur une série) et tout contrôle qui lit ce type — comme le
+ * filtre genre de la vue Catalogue, qui compare les identifiants de genre TMDB,
+ * différents entre film et série — se trompe de référentiel. `fallbackMediaType`
+ * porte le type réellement demandé à l'endpoint.
+ */
+export function formatTmdbResults(results: any[], fallbackMediaType?: 'movie' | 'tv'): Movie[] {
   if (!results || !Array.isArray(results)) return [];
 
   // Déplier les œuvres issues des fiches acteurs/réalisateurs (known_for)
@@ -1090,7 +1101,7 @@ export function formatTmdbResults(results: any[]): Movie[] {
     vote_average: Number(item.vote_average?.toFixed(1)) || 7.5,
     vote_count: item.vote_count || 100,
     runtime: 120,
-    media_type: item.media_type === 'tv' ? 'SÉRIE' : 'FILM',
+    media_type: isSeriesMedia(item.media_type || fallbackMediaType) ? 'SÉRIE' : 'FILM',
     primary_platform: item.id % 3 === 0 ? 'Prime Video' : item.id % 2 === 0 ? 'Canal+' : 'Netflix',
     genres: (Array.isArray(item.genre_ids) ? item.genre_ids : [18, 878]).map((gid: number) => ({
       id: gid,
