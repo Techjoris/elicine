@@ -49,8 +49,10 @@ test('a bare category is answered by the strength of the work, not by its genre 
   assert.equal(weak.intentScore, 1);
   // A bare category is answered by the work itself, never by the exceptional
   // band reserved for a described request whose independent signals converge.
-  assert.ok(strong.matchScore >= 75 && strong.matchScore < 85, `${strong.matchScore}`);
-  assert.ok(weak.matchScore < 65, `${weak.matchScore}`);
+  // The restored ladder (see PHASE21.md) reads a solid answer in the high 80s,
+  // so the bound is the exceptional band, not the old saturating curve.
+  assert.ok(strong.matchScore >= 85 && strong.matchScore < 95, `${strong.matchScore}`);
+  assert.ok(weak.matchScore < 85, `${weak.matchScore}`);
   assert.ok(strong.matchScore - weak.matchScore >= 15, `${strong.matchScore} vs ${weak.matchScore}`);
   assert.equal(strong.matchScore, publicMatchScore(strong.finalScore));
 });
@@ -98,6 +100,25 @@ test('the strength share follows how much the request describes, never a title',
     if (name === 'matchScore') continue;
     assert.ok(Number.isFinite(value) && value >= 0 && value <= 1, `${name}=${value}`);
   }
+});
+
+test('the public ladder is the historical one, restored', () => {
+  // Anchors of the ladder the product used before the unified engine, read on
+  // the computed score of the new one (see PHASE21.md). A solid answer reads in
+  // the high 80s, an excellent one above 95, and nothing real under 20.
+  const ladder = [[0, 0], [0.15, 20], [0.25, 38], [0.35, 50], [0.45, 66], [0.55, 77],
+    [0.65, 85], [0.75, 91], [0.85, 95], [0.92, 97], [0.98, 99], [1, 99]];
+  for (const [score, displayed] of ladder) {
+    assert.equal(publicMatchScore(score), displayed, `${score} -> ${displayed}`);
+  }
+  const values = Array.from({ length: 101 }, (_, index) => publicMatchScore(index / 100));
+  for (let index = 1; index < values.length; index += 1) {
+    assert.ok(values[index] >= values[index - 1], `not monotone at ${index / 100}`);
+  }
+  // A grid of genuine answers no longer sits in the 45-70 band that was reported
+  // as too low, and the exceptional band stays out of reach of a partial answer.
+  assert.ok(publicMatchScore(0.72) >= 85, `${publicMatchScore(0.72)}`);
+  assert.ok(publicMatchScore(0.3) < 50, `${publicMatchScore(0.3)}`);
 });
 
 test('the public curve stays monotone, bounded and derived from the computed score', () => {

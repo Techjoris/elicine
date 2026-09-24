@@ -52,14 +52,27 @@ export const ELICINE_RANKING_CONFIG = Object.freeze({
   // proposal the blend is exactly the historical one.
   narrativeCandidateWeight: 0.32,
   narrativeCandidate: Object.freeze({ rankSpan: 10, reasonFloor: 0.5 }),
-  // Public match curve. The displayed percentage must be credible: a clearly
-  // stronger match displays a clearly stronger score. Pure calibration of the
-  // computed score, never a per-title value.
-  // Saturation sits at the top of the computed range the engine really reaches:
-  // above it an answer stays in the exceptional band (95-99), below it the whole
-  // ladder - excellent, good, average, weak - is spread instead of being
-  // flattened. The curve is monotone in `finalScore`.
-  publicMatch: Object.freeze({ floor: 0, spread: 99, saturation: 0.98, gamma: 0.88 }),
+  // Public match curve - the ladder the product had before the unified engine.
+  //
+  // The historical engine read a work on two axes - how much of the request its
+  // description answered (`narrativeScore`) and how strong a choice it was
+  // (`genreScore`, Bayesian quality) - and displayed
+  // `min(99, max(25, round(0.70 * narrative + 0.30 * genre + qualityDelta)))`.
+  // That put a solid answer in the high 80s, an exceptional one at 95-99, and
+  // never left a real answer below ~25. The unified engine keeps a stricter,
+  // better spread internal score, which is why the same films dropped to the
+  // 45-70 band once the display became a saturating curve of `finalScore`.
+  //
+  // The ladder is therefore restored as an explicit calibration of the computed
+  // score: anchor points, linear in between, monotone and bounded. Nothing is
+  // per-title, a work answering nothing still stays under the partial band, and
+  // the top is only reached by a genuinely converged answer.
+  publicMatch: Object.freeze({
+    points: Object.freeze([
+      [0, 0], [0.15, 20], [0.25, 38], [0.35, 50], [0.45, 66], [0.55, 77],
+      [0.65, 85], [0.75, 91], [0.85, 95], [0.92, 97], [0.98, 99], [1, 99]
+    ])
+  }),
   // An answer is only as good as the two things it combines: how much of the
   // request it really answers (the intent coverage) and how strong a choice it
   // is (rating, notoriety, provenance). The two multiply, so a work carried by
@@ -359,12 +372,24 @@ function narrativeCandidateScore(candidate, semanticTerms, genres) {
 /**
  * Credible 0-100 public score for one candidate. Monotone in the computed
  * score, so the displayed grid never contradicts the ranking order, and
- * purely calibrated: no per-title value is ever hardcoded.
+ * purely calibrated: no per-title value is ever hardcoded. The curve is the
+ * historical ladder, read between its anchor points.
  */
 export function publicMatchScore(finalScore) {
-  const { floor, spread, saturation, gamma } = ELICINE_RANKING_CONFIG.publicMatch;
-  const normalized = clamp(clamp(finalScore) / saturation) ** gamma;
-  return Math.round(Math.min(99, Math.max(0, floor + spread * normalized)));
+  const points = ELICINE_RANKING_CONFIG.publicMatch.points;
+  const score = clamp(finalScore);
+  const last = points[points.length - 1];
+  if (score >= last[0]) return last[1];
+
+  for (let index = 1; index < points.length; index += 1) {
+    const [x, y] = points[index];
+    if (score > x) continue;
+    const [previousX, previousY] = points[index - 1];
+    const ratio = x === previousX ? 1 : (score - previousX) / (x - previousX);
+    return Math.round(Math.min(99, Math.max(0, previousY + (y - previousY) * ratio)));
+  }
+
+  return last[1];
 }
 
 function referenceScore(candidate, resolvedContext, semanticScore) {
