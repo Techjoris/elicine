@@ -6,6 +6,7 @@ import { AppProvider } from './context/AppContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 
 // 1. Capture globale immédiate du prompt PWA sans fuite de mémoire ni crash SSR
@@ -33,6 +34,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <AuthProvider>
             <AppProvider>
               <App />
+              {/* Vercel Web Analytics — mesure des visites, sans effet sur l'application */}
+              <Analytics />
             </AppProvider>
           </AuthProvider>
         </LanguageProvider>
