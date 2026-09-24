@@ -200,19 +200,36 @@ export async function fetchTopRatedPage(
 /** Paginated discover — genre / sort / media type */
 export async function fetchDiscoverPage(
   page: number,
-  options: { mediaType?: 'movie' | 'tv'; genreId?: number; sortBy?: string; apiKey?: string; language?: string } = {}
+  options: {
+    mediaType?: 'movie' | 'tv';
+    genreId?: number;
+    /** Plusieurs genres sont combinés en OU, comme le permet TMDB. */
+    genreIds?: number[];
+    /** Note minimale : filtre serveur, pour que le défilement infini reste utile. */
+    voteAverageGte?: number;
+    voteCountGte?: number;
+    sortBy?: string;
+    apiKey?: string;
+    language?: string;
+  } = {}
 ): Promise<{ results: Movie[]; total_pages: number }> {
-  const { mediaType = 'movie', genreId, sortBy = 'popularity.desc', apiKey, language } = options;
+  const { mediaType = 'movie', genreId, genreIds, sortBy = 'popularity.desc', apiKey, language,
+    voteAverageGte, voteCountGte } = options;
   try {
     const lang = getActiveTmdbLanguage(language);
+    const genres = [...new Set([...(Array.isArray(genreIds) ? genreIds : []), genreId].filter(Boolean))] as number[];
     const params: Record<string, any> = {
       sort_by: sortBy,
       page,
       language: lang,
       include_adult: false,
-      'vote_count.gte': 50
+      'vote_count.gte': Number.isFinite(Number(voteCountGte)) && Number(voteCountGte) > 0 ? Number(voteCountGte) : 50
     };
-    if (genreId) params.with_genres = genreId;
+    // '|' = OU : un film d'action OU un thriller, jamais l'intersection vide.
+    if (genres.length) params.with_genres = genres.join('|');
+    if (Number.isFinite(Number(voteAverageGte)) && Number(voteAverageGte) > 0) {
+      params['vote_average.gte'] = Number(voteAverageGte);
+    }
     const res = await fetchTmdbEndpoint(`discover/${mediaType}`, params, apiKey);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
     const data = await res.json();
