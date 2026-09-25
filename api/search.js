@@ -1,8 +1,10 @@
 import { checkRateLimit } from './_rateLimit.js';
-import { loadPreferenceProfile, savePreferenceProfile } from './_preferences.js';
+import { loadPreferenceProfile, recordPreferenceSignal, savePreferenceProfile } from './_preferences.js';
 import {
+  emptyPreferenceProfile,
   mergePreferenceSignal,
   preferenceSignalFromIntent,
+  preferenceSignalFromWork,
   suggestionsFor
 } from '../src/search/preferenceProfile.js';
 import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/searchOrchestrator.js';
@@ -2310,6 +2312,28 @@ export function enrichWithBadges(rawMovies, matches = [], badgeLabel = 'Sélecti
   });
 }
 
+/**
+ * Preuve de préférence envoyée par le client (œuvre gardée, alerte de sortie).
+ * Seuls ces deux gestes sont acceptés : un appelant ne peut pas inventer une
+ * preuve plus forte que ce que l'interface propose réellement.
+ */
+const CLIENT_PREFERENCE_KINDS = new Set(['watchlist', 'alert']);
+
+function readClientPreferenceSignal(body) {
+  const kind = String(body?.signal?.kind || '').toLowerCase();
+  if (!CLIENT_PREFERENCE_KINDS.has(kind)) return null;
+  const work = body?.work || {};
+  const signal = preferenceSignalFromWork({
+    genreIds: work.genreIds ?? work.genre_ids,
+    mediaType: work.mediaType ?? work.media_type,
+    originalLanguage: work.originalLanguage ?? work.original_language,
+    constraintData: { themes: work.themes, moods: work.moods }
+  }, { kind });
+  const hasEvidence = signal.genres.length > 0 || signal.themes.length > 0
+    || signal.moods.length > 0 || Boolean(signal.mediaType);
+  return hasEvidence ? signal : null;
+}
+
 export default async function handler(req, res) {
   // Phase 12: one request-scoped correlation ID follows the complete pipeline.
   // Only the POST search route is persisted; quota/TMDB/legacy vector proxy
@@ -2414,6 +2438,34 @@ export default async function handler(req, res) {
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }
+    }
+
+    // ─── Action : préférences du membre (GET lecture, POST nouvelle preuve) ────
+    // Servie par cette fonction plutôt que par une route dédiée : le projet
+    // regroupe déjà ses routes sur ses fonctions existantes (/api/tmdb, /api/geo).
+    if (action === 'preferences') {
+      if (req.method !== 'GET' && req.method !== 'POST') {
+        res.setHeader('Allow', 'GET, POST, OPTIONS');
+        return res.status(405).json({ success: false, error: 'Méthode non autorisée' });
+      }
+
+      const preferenceUserId = sessionInfo?.isAuthenticated ? String(sessionInfo.effectiveUserId || '') : '';
+      // Sans compte identifié, rien n'est enregistré et rien n'est renvoyé.
+      if (!preferenceUserId) {
+        return res.status(200).json({ success: true, profile: emptyPreferenceProfile(), recorded: false });
+      }
+
+      if (req.method === 'GET') {
+        return res.status(200).json({ success: true, profile: await loadPreferenceProfile(preferenceUserId) });
+      }
+
+      const signal = readClientPreferenceSignal(req.body);
+      const profile = signal ? await recordPreferenceSignal(preferenceUserId, signal) : null;
+      return res.status(200).json({
+        success: true,
+        recorded: Boolean(signal && profile),
+        profile: profile || await loadPreferenceProfile(preferenceUserId)
+      });
     }
 
     // ─── Action : Consultation du quota quotidien ──────────────────────────────

@@ -13,7 +13,9 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
 globalThis.console.log = globalThis.console.info = globalThis.console.warn = globalThis.console.error = () => {};
 
-const { default: handler } = await import('../../api/preferences.js');
+// Les préférences sont servies par la fonction de recherche, via la réécriture
+// `/api/preferences` → `/api/search?action=preferences`.
+const { default: handler } = await import('../../api/search.js');
 
 async function call(method, body) {
   const response = {
@@ -24,7 +26,8 @@ async function call(method, body) {
     end() { this.ended = true; return this; }
   };
   await handler({
-    method, query: {}, headers: {}, socket: { remoteAddress: '198.51.100.4' }, body: body || {}
+    method, query: { action: 'preferences' }, headers: {}, socket: { remoteAddress: '198.51.100.4' },
+    body: body || {}
   }, response);
   return response;
 }

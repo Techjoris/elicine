@@ -74,6 +74,11 @@ no toast, no error surface, and nothing at all without an identified account.
 Both answer `200` for a visitor and record nothing, so the endpoint never leaks
 that an account exists and never stores anything unauthenticated.
 
+The route is a rewrite onto the existing search function
+(`/api/preferences` → `/api/search?action=preferences`), the same pattern the
+project already uses for `/api/tmdb` and `/api/geo`: a serverless plan counts
+the functions deployed, so the feature adds none.
+
 ## Validation
 
 - `node --import tsx --test tests/search` — 524 tests pass, including 16 new

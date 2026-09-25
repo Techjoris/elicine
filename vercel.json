@@ -39,6 +39,10 @@
       "destination": "/api/search?action=tmdb"
     },
     {
+      "source": "/api/preferences",
+      "destination": "/api/search?action=preferences"
+    },
+    {
       "source": "/api/geo",
       "destination": "/api/saspay?action=geo"
     },
