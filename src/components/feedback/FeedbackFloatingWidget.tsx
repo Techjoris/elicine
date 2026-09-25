@@ -1,30 +1,60 @@
 import React, { useState } from 'react';
-import { Clapperboard, Sparkles, MessageSquareHeart, HelpCircle, X } from 'lucide-react';
+import { Clapperboard, UserPlus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface FeedbackFloatingWidgetProps {
   onOpenFeedback: (category?: any) => void;
 }
 
 export const FeedbackFloatingWidget: React.FC<FeedbackFloatingWidgetProps> = ({ onOpenFeedback }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const [isDismissedTemporarily, setIsDismissedTemporarily] = useState(false);
+  const { user } = useAuth();
+  const { user: appUser, openAuthModal } = useApp();
+
+  const activeUser = user || appUser;
+  const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
   if (isDismissedTemporarily) return null;
 
+  // Visiteur non inscrit : le bouton flottant invite à créer un compte, dans le
+  // même style que le widget de suggestions. Les suggestions, elles, restent
+  // accessibles depuis la barre latérale gauche.
+  if (!isConnected) {
+    return (
+      <div
+        className="fixed bottom-3 left-3 sm:bottom-6 sm:left-6 z-40 flex items-center select-none max-w-[calc(100vw-1.5rem)] animate-slide-up"
+        aria-label="Créer un compte Éliciné"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <button
+          type="button"
+          onClick={() => openAuthModal('signup')}
+          className="group flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#e50914] hover:bg-[#b80710] text-white border border-white/20 shadow-xl shadow-black/50 active:scale-95 transition-all duration-200 cursor-pointer"
+          title="S'inscrire gratuitement"
+          aria-label="S'inscrire gratuitement"
+        >
+          <UserPlus className="w-4 h-4 flex-shrink-0 group-hover:scale-110 transition-transform" />
+          <span className="text-xs font-bold tracking-wide whitespace-nowrap">
+            S'inscrire gratuitement
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div 
-      className="fixed bottom-6 left-6 z-40 flex items-center group select-none"
+      className="fixed bottom-3 left-3 sm:bottom-6 sm:left-6 z-40 flex items-center group select-none max-w-[calc(100vw-1.5rem)]"
       aria-label="Widget Signalement & Suggestions Éliciné"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="relative flex items-center">
         {/* Main Floating Trigger Button */}
         <button
           type="button"
           onClick={() => onOpenFeedback()}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          className="flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-2.5 rounded-full bg-[#121214]/90 hover:bg-[#1c1c20] text-white border border-white/15 hover:border-white/30 shadow-xl shadow-black/80 backdrop-blur-xl transition-all duration-300 transform active:scale-95 group-hover:scale-105 cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-2.5 rounded-full bg-[#121214]/90 hover:bg-[#1c1c20] text-white border border-white/15 hover:border-white/30 shadow-xl shadow-black/80 backdrop-blur-xl transition-all duration-300 transform active:scale-95 cursor-pointer"
           title="Signaler un film manquant, un bug ou proposer une idée"
         >
           {/* Animated Clapper Icon */}

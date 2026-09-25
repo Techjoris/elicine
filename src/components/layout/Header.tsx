@@ -244,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <div className="sticky top-0 z-[60] w-full flex flex-col">
         {/* Barre de navigation principale */}
-        <header className="sticky top-0 z-50 w-full h-14 px-3 sm:px-6 flex items-center justify-between backdrop-blur-xl bg-white/90 dark:bg-black/90 border-b border-slate-200/80 dark:border-zinc-800 transition-colors">
+        <header className="sticky top-0 z-50 w-full h-14 px-2 sm:px-6 flex items-center justify-between gap-2 backdrop-blur-xl bg-white/90 dark:bg-black/90 border-b border-slate-200/80 dark:border-zinc-800 transition-colors">
           {/* Menu burger / Logo */}
           <div className="flex items-center space-x-3">
             <button
@@ -263,17 +263,19 @@ export const Header: React.FC<HeaderProps> = ({
               title={t.navHome || "Accueil"}
             >
               <span className="bg-red-600 px-1.5 py-0.5 rounded text-white text-xs font-black">É</span>
-              <span>Éliciné</span>
+              {/* Sur les tout petits écrans, le sigle suffit : le nom complet
+                  faisait dépasser l'en-tête sous 360 px. */}
+              <span className="max-[360px]:hidden">Éliciné</span>
             </div>
           </div>
 
           {/* Actions de droite (Soutenir, Installer, Langue, Connexion / Profil) */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5">
+          <div className="flex items-center gap-1 sm:gap-2.5 min-w-0">
             {/* Bouton d'appel à l'action "Soutenir le projet" / "Café" */}
             <button
               type="button"
               onClick={handleOpenTip}
-              className="group relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
+              className="group relative hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
               title={`${t.supportProject || 'Soutenir le projet'} (${t.tipBadge || 'Don'})`}
               aria-label={t.supportProject || 'Soutenir le projet Éliciné'}
             >
@@ -298,7 +300,9 @@ export const Header: React.FC<HeaderProps> = ({
                   aria-label={t.installApp || "Installer l'application"}
                 >
                   <Download size={14} className="text-red-500 flex-shrink-0" />
-                  <span>{t.installApp || "Installer l'application"}</span>
+                  {/* Sur mobile, l'icône suffit : le libellé complet faisait
+                      déborder l'en-tête sur les petits écrans. */}
+                  <span className="hidden sm:inline">{t.installApp || "Installer l'application"}</span>
                 </button>
               </div>
             )}
@@ -355,7 +359,9 @@ export const Header: React.FC<HeaderProps> = ({
 
 
             {/* Sélecteur de langue compact */}
-            <div className="flex-shrink-0">
+            {/* Masqué sur mobile : la langue reste accessible depuis le menu
+                latéral et les paramètres. */}
+            <div className="hidden sm:block flex-shrink-0">
               <LanguageSelector compact={true} />
             </div>
 
@@ -383,11 +389,11 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Bulle / Tooltip d'Onboarding au premier chargement (Fermeture STRICTE au clic sur le bouton de thème) */}
               {showThemeOnboarding && (
                 <div 
-                  className="absolute right-0 top-full mt-2.5 z-50 w-64 sm:w-72 pointer-events-auto select-none animate-bounce-subtle"
+                  className="absolute right-0 top-full mt-2.5 z-50 w-64 sm:w-72 pointer-events-auto select-none animate-bounce-subtle max-sm:fixed max-sm:left-2 max-sm:right-2 max-sm:top-[60px] max-sm:w-auto"
                   role="tooltip"
                 >
                   {/* Flèche pointant vers le haut vers le bouton thème */}
-                  <div className="absolute right-3 -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-amber-500/50" />
+                  <div className="absolute right-3 -top-1.5 w-3 h-3 rotate-45 bg-slate-950 dark:bg-zinc-900 border-t border-l border-amber-500/50 max-sm:hidden" />
 
                   {/* Corps de la bulle d'onboarding */}
                   <div 
@@ -431,7 +437,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => openAuthModal('login')}
-                className="flex items-center gap-1.5 bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm flex-shrink-0"
+                className="flex items-center gap-1.5 bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm flex-shrink-0"
                 title={t.loginBtn || 'Se connecter'}
               >
                 <LogIn size={14} className="flex-shrink-0" />

@@ -19,9 +19,18 @@
 
 body {
   overflow-x: hidden;
+  max-width: 100%;
   font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
   letter-spacing: -0.01em;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Aucun élément ne doit élargir la page au-delà de l'écran : le débordement
+   horizontal restait visible sur Samsung Internet, où `overflow-x: hidden` sur
+   `body` seul ne suffit pas. */
+html {
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body.light {

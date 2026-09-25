@@ -19,7 +19,8 @@ import {
   Search,
   Pencil,
   Sun,
-  Moon
+  Moon,
+  MessageSquarePlus
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -41,6 +42,7 @@ export interface SidebarProps {
   onOpenTip?: () => void;
   onOpenSettings?: () => void;
   onNavigateTerms?: (section?: string) => void;
+  onOpenFeedback?: (category?: any) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -49,7 +51,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSupport,
   onOpenTip,
   onOpenSettings,
-  onNavigateTerms 
+  onNavigateTerms,
+  onOpenFeedback
 }) => {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -76,6 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleOpenTip = onOpenTip || onOpenSupport || (() => setIsTipModalOpen(true));
   const handleOpenSettings = onOpenSettings || (() => setIsSettingsModalOpen(true));
+  const sidebarActiveUser = user || appUser;
+  const isConnectedUser = Boolean(sidebarActiveUser && (sidebarActiveUser.email || sidebarActiveUser.id));
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState<boolean>(() => checkIsStandalone());
@@ -453,6 +458,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         {/* Bouton Installer l'application (Masqué si l'application est déjà installée en mode autonome) */}
+        {/* Visiteur non inscrit : les suggestions vivent ici, le bouton flottant
+            étant réservé à l'invitation à créer un compte. */}
+        {!isConnectedUser && onOpenFeedback && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenFeedback();
+              setIsMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer select-none group"
+            title="Signaler un film manquant, un bug ou proposer une idée"
+          >
+            <div className="flex items-center gap-2">
+              <MessageSquarePlus className="w-4 h-4 text-[#e50914] group-hover:scale-110 transition-transform" />
+              <span>Suggestions &amp; Retours</span>
+            </div>
+            <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-bold bg-slate-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">
+              24h
+            </span>
+          </button>
+        )}
+
         {!isStandalone && (
           <button
             type="button"
