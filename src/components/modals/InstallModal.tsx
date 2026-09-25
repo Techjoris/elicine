@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   X, 
   Share, 
   PlusSquare, 
@@ -15,6 +15,13 @@ import {
   Plus,
   Flame
 } from 'lucide-react';
+import {
+  hasNativeInstallPrompt,
+  openInstallShareSheet,
+  promptNativeInstall,
+  subscribeToInstallPrompt
+} from '../../hooks/usePWAInstall';
+import { pwaInstallMode } from '../../lib/pwaInstallMode';
 
 export type InstallTab = 'ios' | 'samsung' | 'firefox' | 'android' | 'desktop';
 
@@ -55,8 +62,21 @@ export const detectBrowserInfo = (): BrowserInfo => {
   const isAndroid = /Android/i.test(ua);
   const isFirefox = /Firefox|FxiOS/i.test(ua);
   const isEdge = /EdgA?|Edge/i.test(ua);
-  const isChrome = /Chrome|CriOS/i.test(ua) && !isSamsungBrowser && !isEdge;
+  // Les navigateurs dérivés de Chromium se déclarent aussi « Chrome » : l'ordre
+  // de ces tests compte pour nommer correctement celui que la personne utilise.
+  const isOpera = /\bOPR\/|\bOpera[ /]/i.test(ua);
+  const isBrave = /Brave/i.test(ua);
+  const isVivaldi = /Vivaldi/i.test(ua);
+  const isUcBrowser = /UCBrowser|UC Browser/i.test(ua);
+  const isMiBrowser = /MiuiBrowser|MiBrowser/i.test(ua);
+  const isChromiumDerived = isSamsungBrowser || isEdge || isOpera || isBrave || isVivaldi
+    || isUcBrowser || isMiBrowser;
+  const isChrome = /Chrome|CriOS/i.test(ua) && !isChromiumDerived;
   const isDesktop = !isIOS && !isAndroid;
+  // Safari ne se signale que par son moteur : utile pour macOS, où l'ajout se
+  // fait par « Fichier → Ajouter au dock » et non par un menu de navigateur.
+  const isDesktopSafari = isDesktop && /Safari/i.test(ua) && !isChrome && !isEdge
+    && !isFirefox && !isOpera && !isBrave && !isVivaldi;
 
   let recommendedTab: InstallTab = 'android';
   let browserName = 'Navigateur Web';
@@ -78,10 +98,21 @@ export const detectBrowserInfo = (): BrowserInfo => {
     browserName = isAndroid ? 'Firefox pour Android' : 'Mozilla Firefox';
   } else if (isAndroid) {
     recommendedTab = 'android';
-    browserName = isChrome ? 'Google Chrome (Android)' : 'Navigateur Android';
+    browserName = isEdge ? 'Microsoft Edge (Android)'
+      : isOpera ? 'Opera (Android)'
+        : isBrave ? 'Brave (Android)'
+          : isVivaldi ? 'Vivaldi (Android)'
+            : isUcBrowser ? 'UC Browser'
+              : isMiBrowser ? 'Mi Browser'
+                : isChrome ? 'Google Chrome (Android)' : 'Navigateur Android';
   } else if (isDesktop) {
     recommendedTab = 'desktop';
-    browserName = isEdge ? 'Microsoft Edge' : (isChrome ? 'Google Chrome' : 'Ordinateur (PC / Mac)');
+    browserName = isEdge ? 'Microsoft Edge'
+      : isOpera ? 'Opera'
+        : isBrave ? 'Brave'
+          : isVivaldi ? 'Vivaldi'
+            : isChrome ? 'Google Chrome'
+              : isDesktopSafari ? 'Safari (macOS)' : 'Ordinateur (PC / Mac)';
   }
 
   return {
@@ -115,6 +146,39 @@ export const InstallModal: React.FC<InstallModalProps> = ({
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo>(() => detectBrowserInfo());
   // Sélection automatique et instantanée dès le premier rendu pour éviter tout décalage
   const [activeTab, setActiveTab] = useState<InstallTab>(() => defaultTab || detectBrowserInfo().recommendedTab);
+  // Le navigateur peut proposer l'installation après l'ouverture de cette fenêtre :
+  // on écoute l'événement pour transformer le guide en installation en un clic.
+  const [canInstallNatively, setCanInstallNatively] = useState<boolean>(() => hasNativeInstallPrompt());
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [shareOpened, setShareOpened] = useState(false);
+
+  useEffect(() => subscribeToInstallPrompt(() => setCanInstallNatively(hasNativeInstallPrompt())), []);
+
+  const handleOneClickInstall = async () => {
+    if (isInstalling) return;
+    setIsInstalling(true);
+    try {
+      const outcome = await promptNativeInstall();
+      if (outcome === 'accepted') onClose();
+      else setCanInstallNatively(hasNativeInstallPrompt());
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleShareSheet = async () => {
+    const opened = await openInstallShareSheet();
+    setShareOpened(opened);
+  };
+
+  // Une seule décision, testée à part : installation native, feuille de partage
+  // sur iOS, ou guide pour les navigateurs qui n'offrent ni l'une ni l'autre.
+  const installMode = pwaInstallMode({
+    hasNativePrompt: canInstallNatively,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    platform: typeof navigator !== 'undefined' ? String((navigator as any).platform || '') : '',
+    maxTouchPoints: typeof navigator !== 'undefined' ? Number((navigator as any).maxTouchPoints) || 0 : 0
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -171,6 +235,47 @@ export const InstallModal: React.FC<InstallModalProps> = ({
         <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
           Installez Éliciné sur votre appareil pour un lancement direct en plein écran, sans publicité et sans passer par un store.
         </p>
+
+        {/* Installation directe : un seul geste dès que le navigateur le permet */}
+        <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3.5 space-y-2.5">
+          {installMode === 'native' ? (
+            <>
+              <button
+                type="button"
+                onClick={handleOneClickInstall}
+                disabled={isInstalling}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] disabled:opacity-70 text-white text-sm font-bold transition-colors cursor-pointer shadow-lg shadow-red-600/25"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isInstalling ? 'Installation en cours…' : 'Installer en 1 clic'}</span>
+              </button>
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400 text-center leading-relaxed">
+                Votre navigateur installe Éliciné directement. Aucune manipulation, rien à chercher dans les menus.
+              </p>
+            </>
+          ) : installMode === 'share' ? (
+            <>
+              <button
+                type="button"
+                onClick={handleShareSheet}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#e50914] hover:bg-[#b80710] text-white text-sm font-bold transition-colors cursor-pointer shadow-lg shadow-red-600/25"
+              >
+                <Share className="w-4 h-4" />
+                <span>Ouvrir le menu de partage</span>
+              </button>
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400 text-center leading-relaxed">
+                {shareOpened
+                  ? 'Choisissez « Sur l’écran d’accueil », puis « Ajouter » : Éliciné s’installe.'
+                  : 'iOS interdit l’installation automatique. Le menu de partage s’ouvre pour vous : choisissez « Sur l’écran d’accueil », puis « Ajouter ».'}
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">
+              <strong className="font-semibold text-slate-800 dark:text-zinc-200">{browserInfo.browserName}</strong> ne
+              propose pas l’installation automatique. Les trois étapes ci-dessous prennent dix secondes.
+            </p>
+          )}
+        </div>
 
         {/* Bannière de détection intelligente du navigateur */}
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100/90 dark:bg-zinc-900/90 border border-slate-200 dark:border-zinc-800 text-xs">
@@ -443,13 +548,13 @@ export const InstallModal: React.FC<InstallModalProps> = ({
               <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
                 <span>Appuyez sur </span>
                 <strong className="text-slate-900 dark:text-white inline-flex items-center gap-1 font-semibold">
-                  « Installer »
+                  « Ajouter à l'écran d'accueil »
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200">
                     <Download className="w-3.5 h-3.5" />
                   </span>
                 </strong>
                 <span className="block text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
-                  (ou « Ajouter à l'écran d'accueil »)
+                  (Firefox installe un raccourci : Éliciné s'ouvrira depuis votre écran d'accueil)
                 </span>
               </div>
             </div>
@@ -462,9 +567,9 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                 3
               </div>
               <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
-                <span>Validez sur </span>
-                <strong className="text-slate-900 dark:text-white font-semibold">« Ajouter automatiquement »</strong>
-                <span>. L'icône Éliciné s'installe directement sur votre écran d'accueil.</span>
+                <span>Touchez </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">« Ajouter »</strong>
+                <span>. L'icône Éliciné apparaît aussitôt sur votre écran d'accueil.</span>
               </div>
             </div>
           </div>
@@ -557,6 +662,23 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                 <strong className="text-slate-900 dark:text-white font-semibold">« ⋮ »</strong>
                 <span> du navigateur &gt; sélectionnez </span>
                 <strong className="text-slate-900 dark:text-white font-semibold">« Installer Éliciné »</strong>.
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200/60 dark:border-zinc-800/60 my-1" />
+
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-lg bg-slate-500/15 text-slate-600 dark:text-zinc-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                <Laptop className="w-3.5 h-3.5" />
+              </div>
+              <div className="text-slate-700 dark:text-zinc-300 leading-relaxed">
+                <span>Sur </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">Safari macOS</strong>
+                <span>, ouvrez le menu </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">Fichier → Ajouter au Dock</strong>
+                <span>. Sur </span>
+                <strong className="text-slate-900 dark:text-white font-semibold">Firefox</strong>
+                <span>, l'installation d'application n'existe pas : ajoutez Éliciné à vos favoris, ou passez à un navigateur qui la propose.</span>
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { isIosEnvironment } from '../lib/pwaInstallMode';
 
 declare global {
   interface Window {
@@ -12,6 +13,22 @@ declare global {
 let globalDeferredPrompt: any = null;
 let globalIsInstallable = false;
 const listeners = new Set<(installable: boolean) => void>();
+const promptListeners = new Set<() => void>();
+
+/** Le navigateur a-t-il réellement proposé une installation native ? */
+export function hasNativeInstallPrompt(): boolean {
+  if (typeof window === 'undefined') return false;
+  const fromWindow = (window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt;
+  return Boolean(globalDeferredPrompt || fromWindow);
+}
+
+/** Prévient dès que le navigateur devient installable (ou ne l'est plus). */
+export function subscribeToInstallPrompt(listener: () => void): () => void {
+  promptListeners.add(listener);
+  return () => { promptListeners.delete(listener); };
+}
+
+const notifyPromptListeners = () => promptListeners.forEach(listener => listener());
 
 if (typeof window !== 'undefined') {
   // Capture de l'événement système beforeinstallprompt
@@ -22,6 +39,7 @@ if (typeof window !== 'undefined') {
     (window as any).deferredPWAInstallPrompt = e;
     globalDeferredPrompt = e;
     globalIsInstallable = true;
+    notifyPromptListeners();
     window.dispatchEvent(new Event('pwa-install-ready'));
     listeners.forEach((cb) => cb(true));
   });
@@ -33,9 +51,94 @@ if (typeof window !== 'undefined') {
     (window as any).deferredPWAInstallPrompt = null;
     globalDeferredPrompt = null;
     globalIsInstallable = false;
+    notifyPromptListeners();
     window.dispatchEvent(new Event('pwa-installed'));
     listeners.forEach((cb) => cb(false));
   });
+}
+
+/** Attend brièvement l'événement système : il arrive parfois juste après un clic. */
+function waitForNativePrompt(timeoutMs: number): Promise<boolean> {
+  if (hasNativeInstallPrompt()) return Promise.resolve(true);
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (available: boolean) => {
+      if (settled) return;
+      settled = true;
+      unsubscribe();
+      window.removeEventListener('pwa-install-ready', onReady);
+      resolve(available);
+    };
+    const onReady = () => finish(hasNativeInstallPrompt());
+    const unsubscribe = subscribeToInstallPrompt(onReady);
+    window.addEventListener('pwa-install-ready', onReady);
+    setTimeout(() => finish(hasNativeInstallPrompt()), timeoutMs);
+  });
+}
+
+export type NativeInstallOutcome = 'accepted' | 'dismissed' | 'unavailable';
+
+/**
+ * Lance l'installation native du navigateur, en un seul geste.
+ *
+ * Chrome n'expose `beforeinstallprompt` qu'une fois ses critères remplis, ce
+ * qui peut survenir quelques instants après le chargement : plutôt que de
+ * renoncer et d'afficher un guide, on laisse une courte fenêtre à l'événement
+ * avant de répondre. L'activation utilisateur reste valide pendant ce délai,
+ * donc `prompt()` est accepté.
+ */
+export async function promptNativeInstall(timeoutMs = 2500): Promise<NativeInstallOutcome> {
+  const ready = await waitForNativePrompt(timeoutMs);
+  if (!ready) return 'unavailable';
+
+  const event = globalDeferredPrompt
+    || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
+  if (!event || typeof event.prompt !== 'function') return 'unavailable';
+
+  try {
+    await event.prompt();
+    const choice = await event.userChoice;
+    return choice?.outcome === 'accepted' ? 'accepted' : 'dismissed';
+  } catch {
+    return 'unavailable';
+  } finally {
+    // L'événement est à usage unique : le navigateur en émettra un nouveau si
+    // l'installation reste possible.
+    if (typeof window !== 'undefined') {
+      (window as any).deferredPrompt = null;
+      (window as any).deferredPWAInstallPrompt = null;
+    }
+    globalDeferredPrompt = null;
+    globalIsInstallable = false;
+    notifyPromptListeners();
+    listeners.forEach(cb => cb(false));
+  }
+}
+
+/**
+ * iOS n'expose aucune installation programmatique : la seule voie est la
+ * feuille de partage, qui contient « Sur l'écran d'accueil ».
+ */
+export function isIosDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return isIosEnvironment(navigator.userAgent || '', (navigator as any).platform || '',
+    Number((navigator as any).maxTouchPoints) || 0);
+}
+
+/** Ouvre la feuille de partage native, où se trouve « Sur l'écran d'accueil ». */
+export async function openInstallShareSheet(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || typeof (navigator as any).share !== 'function') return false;
+  try {
+    await (navigator as any).share({
+      title: 'Éliciné',
+      text: 'Éliciné — Le cinéma d’exception, élu pour vous.',
+      url: typeof window !== 'undefined' ? window.location.origin : 'https://elicine.app'
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function checkIsStandalone(): boolean {

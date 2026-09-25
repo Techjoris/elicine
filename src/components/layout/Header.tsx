@@ -7,6 +7,7 @@ import { useTheme, INSTALL_ONBOARDING_KEY } from '../../context/ThemeContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { ProfileMenu } from './ProfileMenu';
 import { InstallModal } from '../modals/InstallModal';
+import { promptNativeInstall } from '../../hooks/usePWAInstall';
 
 export { INSTALL_ONBOARDING_KEY };
 
@@ -219,34 +220,18 @@ export const Header: React.FC<HeaderProps> = ({
     // Marquer l'onboarding installation comme vu UNIQUEMENT lors du clic effectif
     dismissInstallOnboarding();
 
-    // Récupération de deferredPrompt (variable globale ou état)
-    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
-
-    // CONDITION A (Installation native directe) : Si deferredPrompt est présent
-    if (promptEvent && typeof promptEvent.prompt === 'function') {
-      try {
-        await promptEvent.prompt();
-        // Attendre le choix de l'utilisateur
-        const choice = await promptEvent.userChoice;
-        if (choice && choice.outcome === 'accepted') {
-          setIsStandalone(true);
-        }
-      } catch (err) {
-        console.warn('Erreur lors du prompt d\'installation native :', err);
-      } finally {
-        // Réinitialiser deferredPrompt = null
-        setDeferredPrompt(null);
-        if (typeof window !== 'undefined') {
-          (window as any).deferredPrompt = null;
-          (window as any).deferredPWAInstallPrompt = null;
-        }
-      }
-      // Ne rien afficher d'autre (aucune modale)
+    // Installation native en un clic. Le navigateur peut exposer l'événement
+    // quelques instants après le chargement : on lui laisse une courte fenêtre
+    // avant de proposer le guide.
+    const outcome = await promptNativeInstall();
+    if (outcome !== 'unavailable') {
+      setDeferredPrompt(null);
+      if (outcome === 'accepted') setIsStandalone(true);
+      // Un refus est respecté : on n'ouvre pas le guide par-dessus.
       return;
     }
 
-    // CONDITION B (Secours universel / Guide manuel) : Si deferredPrompt n'est PAS disponible
-    // (iOS Safari, Firefox, ou si Chrome a déjà consommé/bloqué l'événement) -> ouvrir modale
+    // Secours universel (iOS, Firefox, navigateur sans installation native).
     if (onOpenInstallModal) {
       onOpenInstallModal();
     } else {

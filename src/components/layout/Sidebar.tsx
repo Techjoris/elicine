@@ -31,6 +31,7 @@ import { LanguageSelector } from '../LanguageSelector';
 import { InstallModal } from '../modals/InstallModal';
 import { supabase } from '../../lib/supabase';
 import { checkIsStandalone } from './Header';
+import { promptNativeInstall } from '../../hooks/usePWAInstall';
 
 
 export interface SidebarProps {
@@ -237,34 +238,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       localStorage.setItem(INSTALL_ONBOARDING_KEY, 'true');
     } catch (e) {}
 
-    // Récupération de deferredPrompt (variable globale ou état)
-    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? ((window as any).deferredPrompt || (window as any).deferredPWAInstallPrompt) : null);
-
-    // CONDITION A (Installation native directe) : Si deferredPrompt est présent
-    if (promptEvent && typeof promptEvent.prompt === 'function') {
-      try {
-        await promptEvent.prompt();
-        // Attendre le choix de l'utilisateur
-        const choice = await promptEvent.userChoice;
-        if (choice && choice.outcome === 'accepted') {
-          setIsStandalone(true);
-        }
-      } catch (err) {
-        console.warn('Erreur prompt installation PWA native (Sidebar) :', err);
-      } finally {
-        // Réinitialiser deferredPrompt = null
-        setDeferredPrompt(null);
-        if (typeof window !== 'undefined') {
-          (window as any).deferredPrompt = null;
-          (window as any).deferredPWAInstallPrompt = null;
-        }
-      }
-      // Ne rien afficher d'autre (aucune modale)
+    // Installation native en un clic, avec une courte attente de l'événement
+    // système s'il n'est pas encore arrivé.
+    const outcome = await promptNativeInstall();
+    if (outcome !== 'unavailable') {
+      setDeferredPrompt(null);
+      if (outcome === 'accepted') setIsStandalone(true);
       return;
     }
 
-    // CONDITION B (Secours universel / Guide manuel) : Si deferredPrompt n'est PAS disponible
-    // (iOS Safari, Firefox, etc.) -> ouvrir modale
+    // Secours universel (iOS, Firefox, navigateur sans installation native).
     setIsInstallModalOpen(true);
   };
 
