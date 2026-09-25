@@ -141,6 +141,50 @@ export async function openInstallShareSheet(): Promise<boolean> {
   }
 }
 
+/**
+ * Éliciné est-elle déjà installée sur cet appareil ?
+ *
+ * Chrome ne repropose plus l'installation d'une application déjà présente, ce
+ * qui explique qu'un utilisateur voie les instructions manuelles alors que
+ * tout est en règle. `getInstalledRelatedApps` répond à cette question quand le
+ * manifeste déclare l'application web comme application liée.
+ */
+export async function isAppAlreadyInstalled(): Promise<boolean> {
+  if (typeof navigator === 'undefined') return false;
+  if (checkIsStandalone()) return true;
+  const api = (navigator as any).getInstalledRelatedApps;
+  if (typeof api !== 'function') return false;
+  try {
+    const apps = await api.call(navigator);
+    return Array.isArray(apps) && apps.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export interface InstallDiagnostic {
+  /** Le navigateur a-t-il annoncé pouvoir installer l'application ? */
+  promptReceived: boolean;
+  /** L'application est-elle déjà installée sur cet appareil ? */
+  alreadyInstalled: boolean;
+  /** Un service worker actif contrôle-t-il la page ? */
+  serviceWorkerActive: boolean;
+  /** La page tourne-t-elle dans l'application installée ? */
+  standalone: boolean;
+}
+
+/** État réel du navigateur, pour expliquer une installation qui ne se propose pas. */
+export async function describeInstallEnvironment(): Promise<InstallDiagnostic> {
+  const standalone = checkIsStandalone();
+  return {
+    promptReceived: hasNativeInstallPrompt(),
+    alreadyInstalled: standalone || await isAppAlreadyInstalled(),
+    serviceWorkerActive: typeof navigator !== 'undefined'
+      && Boolean((navigator as any).serviceWorker?.controller),
+    standalone
+  };
+}
+
 export function checkIsStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   try {

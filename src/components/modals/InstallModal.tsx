@@ -16,11 +16,13 @@ import {
   Flame
 } from 'lucide-react';
 import {
+  describeInstallEnvironment,
   hasNativeInstallPrompt,
   openInstallShareSheet,
   promptNativeInstall,
   subscribeToInstallPrompt
 } from '../../hooks/usePWAInstall';
+import type { InstallDiagnostic } from '../../hooks/usePWAInstall';
 import { pwaInstallMode } from '../../lib/pwaInstallMode';
 
 export type InstallTab = 'ios' | 'samsung' | 'firefox' | 'android' | 'desktop';
@@ -151,8 +153,20 @@ export const InstallModal: React.FC<InstallModalProps> = ({
   const [canInstallNatively, setCanInstallNatively] = useState<boolean>(() => hasNativeInstallPrompt());
   const [isInstalling, setIsInstalling] = useState(false);
   const [shareOpened, setShareOpened] = useState(false);
+  // État réel du navigateur : il explique pourquoi l'installation ne se propose
+  // pas, et distingue « déjà installée » d'un navigateur qui n'offre rien.
+  const [diagnostic, setDiagnostic] = useState<InstallDiagnostic | null>(null);
 
   useEffect(() => subscribeToInstallPrompt(() => setCanInstallNatively(hasNativeInstallPrompt())), []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    describeInstallEnvironment()
+      .then(result => { if (active) setDiagnostic(result); })
+      .catch(() => { /* le diagnostic est un confort, jamais un obstacle */ });
+    return () => { active = false; };
+  }, [isOpen, canInstallNatively]);
 
   const handleOneClickInstall = async () => {
     if (isInstalling) return;
@@ -270,10 +284,38 @@ export const InstallModal: React.FC<InstallModalProps> = ({
               </p>
             </>
           ) : (
-            <p className="text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">
-              <strong className="font-semibold text-slate-800 dark:text-zinc-200">{browserInfo.browserName}</strong> ne
-              propose pas l’installation automatique. Les trois étapes ci-dessous prennent dix secondes.
-            </p>
+            <div className="space-y-2">
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">
+                {diagnostic?.alreadyInstalled ? (
+                  <>
+                    <strong className="font-semibold text-slate-800 dark:text-zinc-200">
+                      Éliciné est déjà installée sur cet appareil.
+                    </strong>{' '}
+                    Ouvrez-la depuis votre écran d’accueil, votre Dock ou votre menu Démarrer : le navigateur ne
+                    repropose pas une installation déjà faite. Pour l’installer sur un autre appareil, utilisez les
+                    étapes ci-dessous.
+                  </>
+                ) : (
+                  <>
+                    <strong className="font-semibold text-slate-800 dark:text-zinc-200">{browserInfo.browserName}</strong>{' '}
+                    ne propose pas l’installation automatique. Cela arrive lorsque l’invite a déjà été refusée, ou
+                    lorsque le navigateur ne gère pas l’installation (Firefox). Les étapes ci-dessous prennent dix
+                    secondes.
+                  </>
+                )}
+              </p>
+              {diagnostic && (
+                <details className="text-[10px] text-slate-500 dark:text-zinc-500">
+                  <summary className="cursor-pointer select-none">Détails techniques</summary>
+                  <ul className="mt-1.5 space-y-0.5 font-mono">
+                    <li>invite d’installation reçue : {diagnostic.promptReceived ? 'oui' : 'non'}</li>
+                    <li>déjà installée : {diagnostic.alreadyInstalled ? 'oui' : 'non'}</li>
+                    <li>service worker actif : {diagnostic.serviceWorkerActive ? 'oui' : 'non'}</li>
+                    <li>lancée comme application : {diagnostic.standalone ? 'oui' : 'non'}</li>
+                  </ul>
+                </details>
+              )}
+            </div>
           )}
         </div>
 

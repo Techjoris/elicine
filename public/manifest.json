@@ -14,7 +14,12 @@
   "theme_color": "#0a0a0c",
   "categories": ["entertainment", "movies", "lifestyle"],
   "prefer_related_applications": false,
-  "related_applications": [],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://elicine.app/manifest.json"
+    }
+  ],
   "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ec4e53d7",
   "icons": [
     {
