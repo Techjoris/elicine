@@ -514,7 +514,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
                     <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-xs sm:text-sm uppercase tracking-wider">
                       <CheckCircle2 className="w-4 h-4 text-[#e50914]" />
-                      <span>Pourquoi créer un compte gratuit ?</span>
+                      <span>Pourquoi s'inscrire gratuitement ?</span>
                     </div>
                     <button
                       type="button"
@@ -615,7 +615,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* Header Title : Neutre en création standard, contextualisé en Pro */}
             <div className="text-center space-y-1">
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-                {isSignUp ? 'Créer un Compte' : 'Se Connecter'}
+                {isSignUp ? "S'inscrire gratuitement" : 'Se Connecter'}
               </h2>
               <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium">
                 {isCheckout && pendingIntent
@@ -631,7 +631,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer group pt-0.5"
                 >
                   <HelpCircle className="w-3.5 h-3.5 text-[#e50914] group-hover:scale-110 transition-transform" />
-                  <span className="underline underline-offset-2">Pourquoi créer un compte ?</span>
+                  <span className="underline underline-offset-2">Pourquoi s'inscrire gratuitement ?</span>
                 </button>
               </div>
             </div>
@@ -820,7 +820,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Chargement...</span>
                   </>
                 ) : (
-                  <span>{isSignUp ? 'Créer mon compte gratuitement' : 'Se connecter'}</span>
+                  <span>{isSignUp ? "S'inscrire gratuitement" : 'Se connecter'}</span>
                 )}
               </button>
             </form>
@@ -835,7 +835,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {isSignUp ? (
                   <span>Déjà inscrit ? <strong className="text-slate-900 dark:text-white underline underline-offset-2 ml-1">Se connecter</strong></span>
                 ) : (
-                  <span>Nouveau sur Éliciné ? <strong className="text-slate-900 dark:text-white underline underline-offset-2 ml-1">Créer un compte gratuit</strong></span>
+                  <span>Nouveau sur Éliciné ? <strong className="text-slate-900 dark:text-white underline underline-offset-2 ml-1">S'inscrire gratuitement</strong></span>
                 )}
               </button>
             </div>
