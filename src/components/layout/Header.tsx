@@ -275,7 +275,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={handleOpenTip}
-              className="group relative hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
+              className="group relative flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 shadow-sm hover:shadow-amber-500/10 active:scale-95 transition-all duration-200 cursor-pointer flex-shrink-0"
               title={`${t.supportProject || 'Soutenir le projet'} (${t.tipBadge || 'Don'})`}
               aria-label={t.supportProject || 'Soutenir le projet Éliciné'}
             >
