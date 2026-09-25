@@ -27,6 +27,19 @@ export function isIosEnvironment(userAgent = '', platform = '', maxTouchPoints =
   return platform === 'MacIntel' && Number(maxTouchPoints) > 1;
 }
 
+/**
+ * Le navigateur peut-il annoncer une installation native, même tardivement ?
+ *
+ * C'est le cas des navigateurs dérivés de Chromium. Ils n'émettent pas
+ * `beforeinstallprompt` au même moment : mesuré sur cette application, Chrome
+ * l'annonce vers 7 secondes et Edge vers 13. Tant que ce délai court, il serait
+ * faux de dire que le navigateur ne propose pas l'installation.
+ */
+export function canAwaitNativeInstall(userAgent = ''): boolean {
+  if (!userAgent) return false;
+  return /Chrome|CriOS|Chromium|Edg|OPR|Opera|Brave|Vivaldi|SamsungBrowser|UCBrowser|MiuiBrowser/i.test(userAgent);
+}
+
 export function pwaInstallMode({
   hasNativePrompt,
   userAgent = '',

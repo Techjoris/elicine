@@ -24,6 +24,8 @@ import {
 } from '../../hooks/usePWAInstall';
 import type { InstallDiagnostic } from '../../hooks/usePWAInstall';
 import { pwaInstallMode } from '../../lib/pwaInstallMode';
+import { canAwaitNativeInstall } from '../../lib/pwaInstallMode';
+import { Loader2 } from 'lucide-react';
 
 export type InstallTab = 'ios' | 'samsung' | 'firefox' | 'android' | 'desktop';
 
@@ -156,6 +158,17 @@ export const InstallModal: React.FC<InstallModalProps> = ({
   // État réel du navigateur : il explique pourquoi l'installation ne se propose
   // pas, et distingue « déjà installée » d'un navigateur qui n'offre rien.
   const [diagnostic, setDiagnostic] = useState<InstallDiagnostic | null>(null);
+  // Les navigateurs Chromium annoncent l'installation avec un délai variable
+  // (mesuré : ~7 s sur Chrome, ~13 s sur Edge). Pendant cette attente, dire que
+  // le navigateur ne propose rien serait faux.
+  const [waitedLongEnough, setWaitedLongEnough] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) { setWaitedLongEnough(false); return; }
+    setWaitedLongEnough(false);
+    const timer = setTimeout(() => setWaitedLongEnough(true), 20000);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   useEffect(() => subscribeToInstallPrompt(() => setCanInstallNatively(hasNativeInstallPrompt())), []);
 
@@ -193,6 +206,8 @@ export const InstallModal: React.FC<InstallModalProps> = ({
     platform: typeof navigator !== 'undefined' ? String((navigator as any).platform || '') : '',
     maxTouchPoints: typeof navigator !== 'undefined' ? Number((navigator as any).maxTouchPoints) || 0 : 0
   });
+  const browserUserAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isPreparing = installMode === 'guide' && !waitedLongEnough && canAwaitNativeInstall(browserUserAgent);
 
   useEffect(() => {
     if (isOpen) {
@@ -283,6 +298,17 @@ export const InstallModal: React.FC<InstallModalProps> = ({
                   : 'iOS interdit l’installation automatique. Le menu de partage s’ouvre pour vous : choisissez « Sur l’écran d’accueil », puis « Ajouter ».'}
               </p>
             </>
+          ) : isPreparing ? (
+            <div className="space-y-2">
+              <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-200/70 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 text-sm font-bold">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Votre navigateur prépare l’installation…</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400 text-center leading-relaxed">
+                Le bouton « Installer en 1 clic » apparaît ici dès que le navigateur est prêt — cela prend quelques
+                secondes. Les étapes manuelles restent disponibles juste en dessous.
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               <p className="text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">

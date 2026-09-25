@@ -88,7 +88,7 @@ export type NativeInstallOutcome = 'accepted' | 'dismissed' | 'unavailable';
  * avant de répondre. L'activation utilisateur reste valide pendant ce délai,
  * donc `prompt()` est accepté.
  */
-export async function promptNativeInstall(timeoutMs = 2500): Promise<NativeInstallOutcome> {
+export async function promptNativeInstall(timeoutMs = 5000): Promise<NativeInstallOutcome> {
   const ready = await waitForNativePrompt(timeoutMs);
   if (!ready) return 'unavailable';
 
@@ -98,22 +98,24 @@ export async function promptNativeInstall(timeoutMs = 2500): Promise<NativeInsta
 
   try {
     await event.prompt();
-    const choice = await event.userChoice;
-    return choice?.outcome === 'accepted' ? 'accepted' : 'dismissed';
   } catch {
+    // L'événement n'a pas pu être présenté (activation expirée par exemple) :
+    // on le garde pour une prochaine tentative au lieu de le consommer.
     return 'unavailable';
-  } finally {
-    // L'événement est à usage unique : le navigateur en émettra un nouveau si
-    // l'installation reste possible.
-    if (typeof window !== 'undefined') {
-      (window as any).deferredPrompt = null;
-      (window as any).deferredPWAInstallPrompt = null;
-    }
-    globalDeferredPrompt = null;
-    globalIsInstallable = false;
-    notifyPromptListeners();
-    listeners.forEach(cb => cb(false));
   }
+
+  const choice = await event.userChoice;
+  // L'événement est à usage unique : le navigateur en émettra un nouveau si
+  // l'installation reste possible.
+  if (typeof window !== 'undefined') {
+    (window as any).deferredPrompt = null;
+    (window as any).deferredPWAInstallPrompt = null;
+  }
+  globalDeferredPrompt = null;
+  globalIsInstallable = false;
+  notifyPromptListeners();
+  listeners.forEach(cb => cb(false));
+  return choice?.outcome === 'accepted' ? 'accepted' : 'dismissed';
 }
 
 /**
