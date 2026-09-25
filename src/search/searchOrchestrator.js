@@ -164,7 +164,8 @@ export async function orchestrateCandidateRetrieval({
     try {
       ranked = rankCandidates(admissible, orchestration.canonicalIntent,
         orchestration.resolvedIntentContext, { telemetry: context.telemetry, env,
-          queryText: orchestration.userQuery || '' });
+          queryText: orchestration.userQuery || '',
+          userProfile: orchestration.userProfile || null });
     } catch {
       recordFallback(context.telemetry, { reason: FALLBACK_REASONS.RANKING_ERROR, source: 'ranking' });
       return [];

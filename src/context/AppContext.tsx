@@ -19,6 +19,7 @@ import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } 
 import { subscriptionService } from '../services/subscriptionService';
 import { movieAlertsService, alertMediaType } from '../services/movieAlertsService';
 import { searchHistoryService, mergeHistory, cleanQuery } from '../services/searchHistoryService';
+import { recordPreferenceSignal } from '../services/preferenceService';
 import { initPaddle, openPaddleCheckout, PADDLE_PRICE_IDS } from '../services/paddleService';
 
 interface AppContextType {
@@ -1045,6 +1046,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           showToast(`Ajouté à votre liste : ${movie.title}`);
         }
+        // Œuvre gardée = préférence déclarée : elle affine les propositions suivantes.
+        if (user) recordPreferenceSignal('watchlist', movie);
         return [...prev, movie];
       }
     });
@@ -1092,6 +1095,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res.active && res.alert) {
       setAlerts(prev => [res.alert!, ...prev.filter(a => !(a.movieId === movie.id && alertMediaType(a.mediaType) === alertMediaType(movie.media_type)))]);
       showToast(`🔔 Alerte activée pour « ${movie.title} » ! Rappel par e-mail à J-2 et le jour J.`);
+      // Suivre une sortie est une préférence forte : elle rejoint le profil.
+      recordPreferenceSignal('alert', movie);
     } else {
       setAlerts(prev => prev.filter(a => !(a.movieId === movie.id && alertMediaType(a.mediaType) === alertMediaType(movie.media_type))));
       showToast(`Alerte de sortie désactivée pour « ${movie.title} »`);

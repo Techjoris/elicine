@@ -1,4 +1,10 @@
 import { checkRateLimit } from './_rateLimit.js';
+import { loadPreferenceProfile, savePreferenceProfile } from './_preferences.js';
+import {
+  mergePreferenceSignal,
+  preferenceSignalFromIntent,
+  suggestionsFor
+} from '../src/search/preferenceProfile.js';
 import { orchestrateSearch, orchestrateCandidateRetrieval } from '../src/search/searchOrchestrator.js';
 import { isHybridRetrievalEnabled } from '../src/search/hybridRetriever.js';
 import { candidateMediaType, toLegacyRankingCandidate, toRetrievalCandidate } from '../src/search/retrievalCandidate.js';
@@ -2360,6 +2366,12 @@ export default async function handler(req, res) {
     const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
     const effectiveUserKey = sessionInfo.effectiveUserId;
     const ipHash = sessionInfo.ipHash;
+    // Les préférences d'un membre : lues une seule fois, elles servent à la fois
+    // à ajuster les propositions de cette recherche et à être complétées à la fin.
+    const preferenceUserId = sessionInfo?.isAuthenticated ? String(sessionInfo.effectiveUserId || '') : '';
+    const userProfile = preferenceUserId ? await loadPreferenceProfile(preferenceUserId) : null;
+    /** Inspirations proposées sous les résultats, adaptées aux goûts du membre. */
+    const ideasFor = (defaults) => suggestionsFor(userProfile, defaults);
     const ipStorageKey = `ip_${ipHash}`;
     const todayDate = new Date().toISOString().split('T')[0];
 
@@ -2757,6 +2769,24 @@ export default async function handler(req, res) {
         }
       }
 
+      // Le profil voyage avec l'orchestration : le classement l'utilise comme une
+      // couche bornée, et l'enregistrement de la recherche se fait plus bas.
+      orchestration.userProfile = userProfile;
+
+      // Une recherche est une préférence déclarée : une fois l'intention lue, elle
+      // rejoint le profil du membre pour affiner ses prochaines propositions.
+      if (preferenceUserId) {
+        const searchSignal = preferenceSignalFromIntent(orchestration.canonicalIntent || {}, {
+          mediaType: requestedMediaType === 'Séries TV' ? 'tv'
+            : requestedMediaType === 'Films' ? 'movie' : null
+        });
+        const hasEvidence = searchSignal.genres.length > 0 || searchSignal.themes.length > 0
+          || searchSignal.moods.length > 0 || Boolean(searchSignal.mediaType);
+        if (hasEvidence) {
+          await savePreferenceProfile(preferenceUserId, mergePreferenceSignal(userProfile, searchSignal));
+        }
+      }
+
       const hybridPool = await orchestrateCandidateRetrieval({
         orchestration,
         services: {
@@ -2882,11 +2912,11 @@ export default async function handler(req, res) {
           is_transparency_mode: false,
           extractedTitles: candidateList.map(t => typeof t === 'string' ? t : t.title),
           providerUsed: provider || 'Algorithme Éliciné',
-          suggestedPrompts: [
+          suggestedPrompts: ideasFor([
             'Une série policière sombre et addictive',
             'Un film de science-fiction dystopique',
             'Une comédie feel-good et touchante'
-          ]
+          ])
         });
       }
 
@@ -3230,11 +3260,11 @@ export default async function handler(req, res) {
           transparency_notice: transparencyNotice,
           is_transparency_mode: Boolean(transparencyNotice),
           extractedTitles: referenceTitles,
-          suggestedPrompts: [
+          suggestedPrompts: ideasFor([
             'Un film de science-fiction dystopique sombre',
             'Un thriller psychologique avec un twist final',
             'Une comédie feel-good et touchante'
-          ]
+          ])
         });
       }
 
@@ -3250,12 +3280,12 @@ export default async function handler(req, res) {
         correctedQuery: effectiveCleanQuery !== cleanQuery ? effectiveCleanQuery : null,
         message: "L'algorithme Éliciné a cherché, mais cette description est trop mystérieuse pour notre catalogue actuel...",
         extractedTitles: referenceTitles,
-        suggestedPrompts: [
+        suggestedPrompts: ideasFor([
           "Un voyage dans l'espace avec des trous noirs",
           "Un film de braquage qui tourne mal",
           "Un film angoissant où des personnages sont coincés sous terre",
           "Un thriller psychologique avec un twist final"
-        ]
+        ])
       });
     }
 

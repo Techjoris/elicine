@@ -5,6 +5,7 @@ import { characterSimilarity } from './requestedWork.js';
 import { CONCEPT_WEIGHTS, conceptMatch, conceptSpecificity } from './semanticLexicon.js';
 import { scoreRankingPreferences } from './rankingPreferences.js';
 import { buildSignalLedger } from './signalLedger.js';
+import { personalizationBonus, personalizationScore } from './preferenceProfile.js';
 
 export const ELICINE_RANKING_FLAG = 'ELICINE_RANKING_ENABLED';
 
@@ -521,7 +522,7 @@ function explicitConstraintFactor(candidate, intent, data = {}) {
   return clamp(factor);
 }
 
-export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {}, { queryText = '' } = {}) {
+export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {}, { queryText = '', userProfile = null } = {}) {
   const data = candidate.constraintData || {};
   const text = candidateText(candidate);
   const preferences = scoreRankingPreferences(candidate, intent, resolvedContext, { queryText });
@@ -683,13 +684,20 @@ export function scoreSearchCandidate(candidate, intent = {}, resolvedContext = {
   const convergenceFloor = components.convergenceScore *
     ELICINE_RANKING_CONFIG.convergence.floorWeight * describedEvidence;
   const constraintFactor = explicitConstraintFactor(candidate, intent, data);
+  // Personalisation is the last, deliberately bounded, layer: it only weighs a
+  // candidate that already answers the current request, and it can never lift a
+  // work above what its relevance earned. With no profile it is exactly zero and
+  // the score is byte-for-byte the historical one.
+  const tasteScore = personalizationScore(candidate, userProfile);
+  const tasteBonus = personalizationBonus(candidate, userProfile);
   const finalScore = clamp(Math.max(blendedScore, convergenceFloor) * constraintFactor + identifiedBonus +
-    narrativeBonus + temporalAdjustment);
+    narrativeBonus + temporalAdjustment + tasteBonus);
   return { ...components, intentScore: round(intentScore),
     composedIntentScore: round(composedIntentScore), partialFactor: round(partialFactor),
     answerStrengthScore: round(answerStrengthScore(components)),
     relationFactor: round(relationFactor), preferenceFactor: round(preferenceFactor),
     convergenceFloor: round(convergenceFloor), constraintFactor: round(constraintFactor),
+    personalizationScore: round(tasteScore), personalizationBonus: round(tasteBonus),
     answerScore: round(answerScore), finalScore: round(finalScore), matchScore: publicMatchScore(finalScore) };
 }
 
@@ -709,13 +717,14 @@ function compareRanked(left, right) {
 }
 
 export function rankSearchCandidates(candidates, intent, resolvedContext, {
-  telemetry = {}, env = process.env, enabled = isElicineRankingEnabled(env), accumulate = true, queryText = ''
+  telemetry = {}, env = process.env, enabled = isElicineRankingEnabled(env), accumulate = true,
+  queryText = '', userProfile = null
 } = {}) {
   const input = Array.isArray(candidates) ? candidates : [];
   if (!enabled) return input;
   const startedAt = Date.now();
   const ranked = input.map(candidate => ({ ...candidate,
-    ranking: scoreSearchCandidate(candidate, intent, resolvedContext, { queryText }) })).sort(compareRanked);
+    ranking: scoreSearchCandidate(candidate, intent, resolvedContext, { queryText, userProfile }) })).sort(compareRanked);
   const priorCount = accumulate && telemetry.rankingAttempted ? Number(telemetry.rankingCandidateCount || 0) : 0;
   const priorTotal = priorCount * Number(telemetry.rankingAverageScore || 0);
   const currentTotal = ranked.reduce((sum, candidate) => sum + candidate.ranking.finalScore, 0);
