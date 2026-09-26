@@ -84,10 +84,8 @@ test('the search flow scrolls through the hardened helper', () => {
 });
 
 /*
- * Le même identifiant était posé sur la grille de résultats et sur celle des
- * tendances. La page visait « le premier élément trouvé » : au moment du clic,
- * les résultats n'étaient pas encore affichés, donc la page atterrissait sur
- * les tendances et l'utilisateur devait remonter pour lire ses résultats.
+ * Les résultats et les tendances doivent avoir deux cibles distinctes. Le
+ * défilement ne doit commencer qu'après le rendu de la grille des résultats.
  */
 test('each grid carries its own identifier, so the page can aim at the right one', () => {
   const grid = read('../../src/components/movies/MovieGrid.tsx');
@@ -104,8 +102,12 @@ test('each grid carries its own identifier, so the page can aim at the right one
 });
 
 test('the page waits for the results to exist before moving to them', () => {
+  const app = read('../../src/App.tsx');
   const hero = read('../../src/components/hero/HeroSection.tsx');
-  assert.match(hero, /scrollToSectionWhenReady\('ai-results-section'\)/);
+  assert.match(app, /React\.useLayoutEffect\(\(\) => \{[\s\S]*?scrollToSectionWhenReady\('ai-results-section'\)/,
+    'la page vise les résultats après leur insertion par React');
+  assert.equal(/scrollToSectionWhenReady\(/.test(hero), false,
+    'le formulaire ne doit pas défiler avant le rendu des résultats');
   assert.equal(
     /getElementById\('results-section'\)/.test(hero), false,
     "l'ancien identifiant partagé ne doit plus être visé"
@@ -115,6 +117,41 @@ test('the page waits for the results to exist before moving to them', () => {
 test('the waiting helper never throws outside a browser', () => {
   assert.equal(typeof window, 'undefined');
   assert.doesNotThrow(() => scrollToSectionWhenReady('ai-results-section'));
+});
+
+test('the waiting helper aims at search results once their section is mounted', () => {
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const scrollCalls = [];
+  let scheduledFrame;
+  let resultSection = null;
+
+  globalThis.window = {
+    scrollY: 100,
+    innerWidth: 390,
+    scrollTo({ top }) {
+      scrollCalls.push(top);
+      this.scrollY = top;
+    },
+    requestAnimationFrame(callback) { scheduledFrame = callback; },
+    setTimeout() { return 0; }
+  };
+  globalThis.document = {
+    getElementById(id) { return id === 'ai-results-section' ? resultSection : null; }
+  };
+
+  try {
+    scrollToSectionWhenReady('ai-results-section');
+    assert.equal(scrollCalls.length, 0, 'aucun défilement avant le rendu');
+    assert.equal(typeof scheduledFrame, 'function');
+
+    resultSection = { getBoundingClientRect() { return { top: 500, height: 900 }; } };
+    scheduledFrame();
+    assert.deepEqual(scrollCalls, [532], 'le titre des résultats doit arriver sous le bandeau');
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+  }
 });
 
 /*

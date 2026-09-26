@@ -33,7 +33,7 @@ import { FeedbackModal } from './components/feedback/FeedbackModal';
 import { FeedbackFloatingWidget } from './components/feedback/FeedbackFloatingWidget';
 import { InstallNudge } from './components/pwa/InstallNudge';
 import { supabase } from './lib/supabase';
-import { scrollToElement, scrollToTop } from './lib/scroll';
+import { scrollToElement, scrollToSectionWhenReady, scrollToTop } from './lib/scroll';
 import { subscriptionService } from './services/subscriptionService';
 import { 
   processSaspayCheckout, 
@@ -85,6 +85,15 @@ export const AppContent: React.FC = () => {
     mood?: string;
     suggestedPrompts?: string[];
   } | null>(null);
+
+  // Attendre que React ait réellement inséré ou mis à jour la grille avant de
+  // viser son titre. Sinon l'ancrage du navigateur peut garder « Tendances »
+  // visible quand les résultats sont ajoutés juste au-dessus.
+  React.useLayoutEffect(() => {
+    if (aiResults && activeView === 'home') {
+      scrollToSectionWhenReady('ai-results-section');
+    }
+  }, [aiResults, activeView]);
 
   // Success Thank-you modal state
   const [showThankYouModal, setShowThankYouModal] = useState(false);

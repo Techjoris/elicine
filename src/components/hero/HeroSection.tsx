@@ -13,7 +13,7 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
-import { scrollToElement, scrollToSectionWhenReady } from '../../lib/scroll';
+import { scrollToElement } from '../../lib/scroll';
 import { Movie } from '../../types';
 
 interface HeroSectionProps {
@@ -365,9 +365,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         showToast(`✨ ${res.recommendedMovies.length} films trouvés par l'algorithme !`);
       }
       
-      // La section des résultats n'est pas encore dans la page à cet instant :
-      // on l'attend pour arriver dessus, et non sur les tendances.
-      scrollToSectionWhenReady('ai-results-section');
     } catch (e: any) {
       console.error('[Éliciné AI Search Error]', e?.message || e);
       const msg = e?.message || 'Erreur lors de la recherche IA.';
@@ -384,8 +381,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             'Une fresque spatiale émouvante'
           ]
         });
-        // L'écran d'explication (« aucun résultat ») mérite d'être lu, pas deviné.
-        scrollToSectionWhenReady('ai-results-section');
       }
     } finally {
       setIsAiLoading(false);
