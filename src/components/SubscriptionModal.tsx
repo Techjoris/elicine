@@ -12,6 +12,7 @@ import {
 } from '../services/paddleService';
 import confetti from 'canvas-confetti';
 import { authService } from '../services/authService';
+import { isProCheckoutAccountMissing } from '../lib/proAccountGate';
 import { Sparkles } from 'lucide-react';
 
 export interface CheckoutPayload {
@@ -176,6 +177,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   const handlePaddleCheckout = async () => {
     setPaymentErrorMessage(null);
+
+    // Le Pass Pro se rattache à un compte : sans compte, on rend la main à
+    // l'appelant (ProModal), qui enregistre le panier et ouvre l'inscription.
+    // Cette vérification est faite ici, au moment du paiement, car le bouton
+    // Paddle ouvre l'overlay directement depuis cette modale.
+    const account = user || authService.getStoredUser();
+    if (isProCheckoutAccountMissing(account)) {
+      onPay({
+        currency,
+        amount: amountToPay,
+        numericAmount,
+        plan: billingCycle,
+        paymentMethod: 'paddle',
+        gateway: 'paddle'
+      });
+      return;
+    }
+
     const token = getPaddleClientToken();
     if (!token) {
       const warningMsg = "Configuration Paddle requise : veuillez renseigner VITE_PADDLE_CLIENT_TOKEN dans vos variables d'environnement Vercel / .env.";
@@ -189,12 +208,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       : 'pri_01m2x2nctwa8k7cqazmebqnxm3';
 
     try {
-      const currentUser = user || authService.getStoredUser();
       await openPaddleCheckout({
         priceId: activePriceId,
-        userEmail: currentUser?.email,
-        userName: currentUser?.name,
-        userId: currentUser?.id,
+        userEmail: account?.email,
+        userName: account?.name,
+        userId: account?.id,
         customData: {
           plan: billingCycle,
           billing_cycle: billingCycle,

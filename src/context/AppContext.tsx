@@ -21,6 +21,11 @@ import { movieAlertsService, alertMediaType } from '../services/movieAlertsServi
 import { searchHistoryService, mergeHistory, cleanQuery } from '../services/searchHistoryService';
 import { recordPreferenceSignal } from '../services/preferenceService';
 import { initPaddle, openPaddleCheckout, PADDLE_PRICE_IDS } from '../services/paddleService';
+import {
+  PRO_ACCOUNT_REQUIRED_TOAST,
+  isProCheckoutAccountMissing,
+  rememberProCheckoutBeforeSignup
+} from '../lib/proAccountGate';
 
 interface AppContextType {
   // Quota & AI
@@ -936,9 +941,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    */
   const openPaddleProCheckout = async (priceId?: string): Promise<boolean> => {
     const currentUser = user || authService.getStoredUser();
+    const plan: PricingBillingCycle = priceId === PADDLE_PRICE_IDS.yearly ? 'yearly' : 'monthly';
+
+    // Aucun paiement Pro ne doit partir sans compte : c'est le compte qui
+    // reçoit l'abonnement. On conserve le panier et on ouvre l'inscription.
+    if (isProCheckoutAccountMissing(currentUser)) {
+      const intent = {
+        plan,
+        currency,
+        amount: '',
+        numericAmount: 0,
+        paymentMethod: 'paddle' as const,
+        provider: 'paddle' as const,
+        gateway: 'paddle',
+        timestamp: Date.now()
+      };
+      rememberProCheckoutBeforeSignup(intent);
+      subscriptionService.setPendingCheckoutIntent(intent);
+      setIsProModalOpen(false);
+      openAuthModal('pro_upgrade');
+      showToast(PRO_ACCOUNT_REQUIRED_TOAST);
+      return false;
+    }
+
     // L'identité part avec le paiement : le webhook active alors le bon compte directement,
     // sans dépendre d'une correspondance d'e-mail ni de l'API client Paddle.
-    const plan = priceId === PADDLE_PRICE_IDS.yearly ? 'yearly' : 'monthly';
     return openPaddleCheckout({
       priceId,
       userEmail: currentUser?.email,
