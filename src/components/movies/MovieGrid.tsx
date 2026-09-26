@@ -6,6 +6,8 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 
 interface MovieGridProps {
+  /** Identifiant de la section, pour pouvoir s'y rendre directement. */
+  id?: string;
   title?: string;
   subtitle?: string;
   movies: Movie[];
@@ -46,6 +48,7 @@ const MovieCardSkeleton: React.FC = () => (
 );
 
 export const MovieGrid: React.FC<MovieGridProps> = ({
+  id,
   title,
   subtitle,
   movies,
@@ -119,7 +122,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   }, [cleanThought]);
 
   return (
-    <section id="results-section" className="w-full space-y-6">
+    <section id={id} className="w-full space-y-6">
 
       {/* Thought Banner Épuré / Transparence IA */}
       {cleanThought && (

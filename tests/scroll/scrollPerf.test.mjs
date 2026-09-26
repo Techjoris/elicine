@@ -14,6 +14,7 @@ import {
   NARROW_VIEWPORT_MAX,
   SMOOTH_SCROLL_MAX_DISTANCE_PX,
   prefersReducedMotion,
+  scrollToSectionWhenReady,
   shouldScrollSmoothly
 } from '../../src/lib/scroll.ts';
 
@@ -80,4 +81,73 @@ test('the search flow scrolls through the hardened helper', () => {
     /scrollIntoView\(\s*\{\s*behavior:\s*'smooth'/.test(hero), false,
     'plus aucune animation de défilement non bornée dans le parcours de recherche'
   );
+});
+
+/*
+ * Le même identifiant était posé sur la grille de résultats et sur celle des
+ * tendances. La page visait « le premier élément trouvé » : au moment du clic,
+ * les résultats n'étaient pas encore affichés, donc la page atterrissait sur
+ * les tendances et l'utilisateur devait remonter pour lire ses résultats.
+ */
+test('each grid carries its own identifier, so the page can aim at the right one', () => {
+  const grid = read('../../src/components/movies/MovieGrid.tsx');
+  assert.match(grid, /id\?: string/, 'identifiant optionnel attendu');
+  assert.equal(
+    /id="results-section"/.test(grid), false,
+    'plus aucun identifiant en dur dans la grille'
+  );
+  assert.match(grid, /<section id=\{id\}/, "l'identifiant reçu doit être posé sur la section");
+
+  const app = read('../../src/App.tsx');
+  assert.match(app, /<MovieGrid\s+id="ai-results-section"/, 'la grille de résultats a son identifiant');
+  assert.match(app, /<MovieGrid\s+id="trending-section"/, 'la grille des tendances a le sien');
+});
+
+test('the page waits for the results to exist before moving to them', () => {
+  const hero = read('../../src/components/hero/HeroSection.tsx');
+  assert.match(hero, /scrollToSectionWhenReady\('ai-results-section'\)/);
+  assert.equal(
+    /getElementById\('results-section'\)/.test(hero), false,
+    "l'ancien identifiant partagé ne doit plus être visé"
+  );
+});
+
+test('the waiting helper never throws outside a browser', () => {
+  assert.equal(typeof window, 'undefined');
+  assert.doesNotThrow(() => scrollToSectionWhenReady('ai-results-section'));
+});
+
+/*
+ * Le bandeau d'accueil tournait toutes les 8,5 s avec des images en pleine
+ * résolution : un décodage plein cadre relançait des à-coups pendant que
+ * l'utilisateur lisait ses résultats.
+ */
+test('the hero background no longer ships full-resolution images', () => {
+  const hero = read('../../src/components/hero/HeroSection.tsx');
+  assert.equal(
+    /image\.tmdb\.org\/t\/p\/original/.test(hero), false,
+    'aucune image 3840 px dans le bandeau'
+  );
+  assert.match(hero, /t\/p\/w1280/, 'le fond du bandeau passe par w1280');
+});
+
+test('the hero stops rotating as soon as it leaves the screen', () => {
+  const hero = read('../../src/components/hero/HeroSection.tsx');
+  assert.match(hero, /IntersectionObserver/, 'la visibilité du bandeau doit être observée');
+  assert.match(hero, /isHeroVisible/, 'la rotation dépend de la visibilité');
+});
+
+/*
+ * Les catalogues (tendances, prochainement, plateformes) affichaient la version
+ * « original » des affiches, soit environ 2000 x 3000 px pour une vignette de
+ * 176 px : le téléphone décodait des centaines de mégaoctets en défilant.
+ */
+test('catalog posters are requested at thumbnail size', () => {
+  const tmdb = read('../../src/services/tmdb.ts');
+  assert.equal(
+    /image\.tmdb\.org\/t\/p\/original/.test(tmdb), false,
+    'plus aucune affiche en pleine résolution dans les catalogues'
+  );
+  assert.match(tmdb, /TMDB_POSTER_BASE = 'https:\/\/image\.tmdb\.org\/t\/p\/w500'/);
+  assert.match(tmdb, /TMDB_BACKDROP_BASE = 'https:\/\/image\.tmdb\.org\/t\/p\/w1280'/);
 });

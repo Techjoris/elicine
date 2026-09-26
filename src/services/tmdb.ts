@@ -4,7 +4,15 @@ import { getCachedCountryCode, MOBILE_MONEY_COUNTRIES } from './geoService';
 import { KNOWN_TWIST_MOVIES, KNOWN_NON_TWIST_MOVIES, THEMATIC_LEXICON_CLUSTERS } from './searchRouterService';
 import { isSeriesMedia } from '../lib/mediaType';
 
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
+/*
+ * Tailles d'image adaptées à l'usage réel. Les grilles affichent des vignettes
+ * de 170 à 250 px de large : livrer la version « original » (souvent
+ * 2000 × 3000 px, plusieurs mégaoctets) faisait décoder des centaines de
+ * mégaoctets au défilement d'un catalogue, ce qui bloquait l'application sur
+ * téléphone. `w500` reste net même sur écran haute densité.
+ */
+const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
+const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
 
 export const PLATFORM_PROVIDER_IDS = {
   NETFLIX: 8,
@@ -1095,8 +1103,8 @@ export function formatTmdbResults(results: any[], fallbackMediaType?: 'movie' | 
     title: item.title || item.name,
     original_title: item.original_title || item.original_name,
     overview: item.overview || 'Synopsis à venir...',
-    poster_path: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80',
-    backdrop_path: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&q=80',
+    poster_path: item.poster_path ? `${TMDB_POSTER_BASE}${item.poster_path}` : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&q=80',
+    backdrop_path: item.backdrop_path ? `${TMDB_BACKDROP_BASE}${item.backdrop_path}` : 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&q=80',
     release_date: item.release_date || item.first_air_date || '2026',
     vote_average: Number(item.vote_average?.toFixed(1)) || 7.5,
     vote_count: item.vote_count || 100,

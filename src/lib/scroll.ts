@@ -93,4 +93,77 @@ export function scrollToTop(): void {
   }
 }
 
+/**
+ * Hauteur de l'en-tête collant. Une section visée pile en haut de la fenêtre
+ * passerait dessous : on laisse donc toujours cette marge.
+ */
+export const STICKY_HEADER_HEIGHT_PX = 56;
+/** Marge de confort entre l'en-tête et le titre de la section visée. */
+export const SECTION_TOP_MARGIN_PX = 12;
+
+function scrollWindowTo(top: number, smooth: boolean): void {
+  try {
+    window.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+  } catch {
+    window.scrollTo(0, top);
+  }
+}
+
+/** Position de défilement qui amène l'élément juste sous l'en-tête. */
+export function offsetTopFor(element: Element): number {
+  const rect = element.getBoundingClientRect();
+  return Math.max(
+    0,
+    (window.scrollY || 0) + rect.top - STICKY_HEADER_HEIGHT_PX - SECTION_TOP_MARGIN_PX
+  );
+}
+
+/**
+ * Se rend sur une section qui n'existe pas encore forcément dans la page.
+ *
+ * Les résultats d'une recherche apparaissent après le clic : viser la page au
+ * moment où la recherche se termine faisait atterrir l'utilisateur sur la
+ * section suivante (les tendances), et il devait remonter à la main pour lire
+ * ses résultats. On attend donc que la section soit mesurable, on s'y place,
+ * puis on recale une dernière fois le temps que les affiches se chargent.
+ */
+export function scrollToSectionWhenReady(
+  elementId: string,
+  { timeoutMs = 3000, settleMs = 500 }: { timeoutMs?: number; settleMs?: number } = {}
+): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const startedAt = Date.now();
+
+  const settle = (element: Element) => {
+    const drift = Math.round(offsetTopFor(element) - (window.scrollY || 0));
+    // Les images chargées ont déplacé la mise en page : on recale sans animation,
+    // pour ne jamais laisser l'utilisateur ailleurs que sur ses résultats.
+    if (Math.abs(drift) < 24) return;
+    scrollWindowTo(offsetTopFor(element), false);
+  };
+
+  const attempt = () => {
+    const element = document.getElementById(elementId);
+    const usable = Boolean(element && element.getBoundingClientRect().height > 0);
+
+    if (element && usable) {
+      const target = offsetTopFor(element);
+      scrollWindowTo(target, shouldScrollSmoothly({
+        distance: target - (window.scrollY || 0),
+        viewportWidth: window.innerWidth || 0,
+        reducedMotion: prefersReducedMotion()
+      }));
+      window.setTimeout(() => settle(element), settleMs);
+      return;
+    }
+
+    if (Date.now() - startedAt < timeoutMs) {
+      window.requestAnimationFrame(attempt);
+    }
+  };
+
+  attempt();
+}
+
 export default scrollToElement;

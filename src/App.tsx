@@ -443,6 +443,7 @@ export const AppContent: React.FC = () => {
               {/* 2. AI Generated Results (if a search has been performed) */}
               {aiResults && (
                 <MovieGrid
+                  id="ai-results-section"
                   title={`✨ ${t.resultsTitle}`}
                   subtitle={t.resultsSubtitle}
                   movies={aiResults.movies}
@@ -455,6 +456,7 @@ export const AppContent: React.FC = () => {
 
               {/* 3. SECTION BASSE ("🔥 Tendances populaires") */}
               <MovieGrid
+                id="trending-section"
                 title={t('sections.trending_title') || t.trendingTitle}
                 subtitle={t('sections.trending_subtitle') || t.trendingSubtitle}
                 movies={homeTrendingMovies}

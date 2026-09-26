@@ -13,7 +13,7 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
-import { scrollToElement } from '../../lib/scroll';
+import { scrollToElement, scrollToSectionWhenReady } from '../../lib/scroll';
 import { Movie } from '../../types';
 
 interface HeroSectionProps {
@@ -33,7 +33,7 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
     title: 'Dune : Deuxième Partie',
     original_title: 'Dune: Part Two',
     overview: "Paul Atreides s'unit à Chani et aux Fremen tout en préparant sa revanche contre les conspirateurs qui ont détruit sa famille.",
-    backdrop_path: 'https://image.tmdb.org/t/p/original/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
+    backdrop_path: 'https://image.tmdb.org/t/p/w1280/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
     poster_path: 'https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg',
     release_date: '2024-02-28',
     vote_average: 8.3,
@@ -47,7 +47,7 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
     title: 'Interstellar',
     original_title: 'Interstellar',
     overview: "Dans un futur proche, la Terre est devenue hostile. Une équipe d'astronautes traverse un trou de ver pour trouver un nouveau foyer pour l'humanité.",
-    backdrop_path: 'https://image.tmdb.org/t/p/original/rAiYTsqhk0II7MmXWP3vY9bHj4a.jpg',
+    backdrop_path: 'https://image.tmdb.org/t/p/w1280/rAiYTsqhk0II7MmXWP3vY9bHj4a.jpg',
     poster_path: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg',
     release_date: '2014-11-05',
     vote_average: 8.4,
@@ -61,7 +61,7 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
     title: 'Blade Runner 2049',
     original_title: 'Blade Runner 2049',
     overview: "En 2049, la société est fragilisée par les tensions entre humains et esclaves créés par bio-ingénierie. L'officier K déterre un secret enfoui.",
-    backdrop_path: 'https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg',
+    backdrop_path: 'https://image.tmdb.org/t/p/w1280/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg',
     poster_path: 'https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg',
     release_date: '2017-10-04',
     vote_average: 8.0,
@@ -75,7 +75,7 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
     title: 'Inception',
     original_title: 'Inception',
     overview: "Dom Cobb est un voleur expérimenté dans l'art périlleux de l'extraction : voler les secrets enfouis au plus profond du subconscient pendant le sommeil.",
-    backdrop_path: 'https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
+    backdrop_path: 'https://image.tmdb.org/t/p/w1280/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
     poster_path: 'https://image.tmdb.org/t/p/w500/edv5CZvWj09upOsy2Y6IwDhK8bt.jpg',
     release_date: '2010-07-16',
     vote_average: 8.4,
@@ -89,7 +89,7 @@ const DEFAULT_HERO_MOVIES: Movie[] = [
     title: 'À couteaux tirés',
     original_title: 'Knives Out',
     overview: "Célèbre auteur de polars, Harlan Thrombey est retrouvé mort dans son manoir. Le détective Benoit Blanc est engagé pour mener l'enquête.",
-    backdrop_path: 'https://image.tmdb.org/t/p/original/Ab8mkHmkYADjU7wQiOkia9BzGvS.jpg',
+    backdrop_path: 'https://image.tmdb.org/t/p/w1280/Ab8mkHmkYADjU7wQiOkia9BzGvS.jpg',
     poster_path: 'https://image.tmdb.org/t/p/w500/pThyQovXQrw2m0s9x82twj48Jq4.jpg',
     release_date: '2019-11-27',
     vote_average: 7.9,
@@ -140,7 +140,28 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const isSearchActive = internalHasSearched || Boolean(propHasSearched) || isAiLoading;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+  /*
+   * Le bandeau change d'image toutes les 8,5 s. Hors écran (pendant la lecture
+   * des résultats), cette rotation ne sert à rien mais relançait un décodage et
+   * une repeinte d'image plein cadre : on la met en pause dès qu'il est sorti
+   * de l'écran, ce qui supprimait les à-coups pendant le défilement.
+   */
+  const [isHeroVisible, setIsHeroVisible] = useState(true);
+
+  useEffect(() => {
+    const element = heroRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => setIsHeroVisible(entry.isIntersecting));
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -221,8 +242,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             title: m.title || m.name || 'Titre inconnu',
             original_title: m.original_title || m.original_name || '',
             overview: m.overview || 'Synopsis officiel à découvrir sur Éliciné.',
-            poster_path: m.poster_path ? `https://image.tmdb.org/t/p/original${m.poster_path}` : null,
-            backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/original${m.poster_path}` : null),
+            // Le bandeau couvre au plus la largeur d'un écran : `w1280` garde la
+            // netteté sur grand écran, là où `original` livrait des images de
+            // 3840 px (plusieurs mégaoctets) à décoder à chaque rotation.
+            poster_path: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            backdrop_path: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w780${m.poster_path}` : null),
             release_date: m.release_date || m.first_air_date || '2024',
             vote_average: Number(m.vote_average?.toFixed(1)) || 7.5,
             vote_count: m.vote_count || 100,
@@ -239,14 +263,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       });
   }, [apiSettings?.tmdbApiKey, t.tmdbLang]);
 
-  // Auto rotate carousel every 8.5 seconds
+  // Auto rotate carousel every 8.5 seconds, uniquement quand le bandeau est visible
   useEffect(() => {
     if (!trendingHeroMovies || trendingHeroMovies.length === 0) return;
+    if (!isHeroVisible) return;
     const timer = setInterval(() => {
       setFeaturedIndex((prev) => (prev + 1) % trendingHeroMovies.length);
     }, 8500);
     return () => clearInterval(timer);
-  }, [trendingHeroMovies?.length]);
+  }, [trendingHeroMovies?.length, isHeroVisible]);
 
   const currentMovie: Movie | null = (trendingHeroMovies && trendingHeroMovies.length > 0)
     ? (trendingHeroMovies[featuredIndex] || trendingHeroMovies[0] || null)
@@ -340,10 +365,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         showToast(`✨ ${res.recommendedMovies.length} films trouvés par l'algorithme !`);
       }
       
-      const resultsEl = document.getElementById('results-section');
-      if (resultsEl) {
-        scrollToElement(resultsEl);
-      }
+      // La section des résultats n'est pas encore dans la page à cet instant :
+      // on l'attend pour arriver dessus, et non sur les tendances.
+      scrollToSectionWhenReady('ai-results-section');
     } catch (e: any) {
       console.error('[Éliciné AI Search Error]', e?.message || e);
       const msg = e?.message || 'Erreur lors de la recherche IA.';
@@ -360,6 +384,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             'Une fresque spatiale émouvante'
           ]
         });
+        // L'écran d'explication (« aucun résultat ») mérite d'être lu, pas deviné.
+        scrollToSectionWhenReady('ai-results-section');
       }
     } finally {
       setIsAiLoading(false);
@@ -453,7 +479,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, [setSearchQuery]);
 
   return (
-    <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
+    <div ref={heroRef} className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 transition-all duration-700">
       
       {/* ─── 1. ARRIÈRE-PLAN CINÉMATOGRAPHIQUE IMMERSIF (Backdrop) ─── */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
@@ -464,6 +490,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             alt={currentMovie.title}
             className="w-full h-full object-cover object-center opacity-60 md:opacity-75 filter brightness-95 contrast-110 saturate-105 scale-105 transition-opacity duration-700"
             loading="eager"
+            decoding="async"
           />
         )}
 
