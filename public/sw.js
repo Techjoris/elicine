@@ -1,5 +1,5 @@
-// v4 : ne pas faire passer chaque affiche et ressource externe par CacheStorage.
-const CACHE_NAME = 'elicine-pwa-v4';
+// v5 : rafraîchir aussi la page d'accueil hors ligne après la correction du défilement.
+const CACHE_NAME = 'elicine-pwa-v5';
 const ASSETS = [
   '/',
   '/manifest.json',

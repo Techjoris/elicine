@@ -244,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <div className="sticky top-0 z-[60] w-full flex flex-col">
         {/* Barre de navigation principale */}
-        <header className="sticky top-0 z-50 w-full h-14 px-2 sm:px-6 flex items-center justify-between gap-2 backdrop-blur-xl bg-white/90 dark:bg-black/90 border-b border-slate-200/80 dark:border-zinc-800 transition-colors">
+        <header className="w-full h-14 px-2 sm:px-6 flex items-center justify-between gap-2 bg-white/95 dark:bg-black/95 border-b border-slate-200/80 dark:border-zinc-800 transition-colors">
           {/* Menu burger / Logo */}
           <div className="flex items-center space-x-3">
             <button

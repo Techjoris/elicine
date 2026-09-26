@@ -402,7 +402,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#f8f9fc] dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white transition-colors duration-200">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-[#f8f9fc] dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col selection:bg-[#e50914] selection:text-white transition-colors duration-200">
       
       {/* Fixed Header */}
       <Header onGoHome={handleResetHome} onOpenTip={() => setIsSupporterModalOpen(true)} />
