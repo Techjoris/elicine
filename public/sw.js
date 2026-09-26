@@ -1,5 +1,5 @@
-// v3 : changement de logo, les icônes précachées doivent être retéléchargées.
-const CACHE_NAME = 'elicine-pwa-v3';
+// v4 : ne pas faire passer chaque affiche et ressource externe par CacheStorage.
+const CACHE_NAME = 'elicine-pwa-v4';
 const ASSETS = [
   '/',
   '/manifest.json',
@@ -28,11 +28,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Ignorer les requetes non HTTP(S) et les requetes internes/dev
-  if (!url.protocol.startsWith('http')) return;
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/@') || url.pathname.includes('node_modules')) {
-    return;
-  }
+  // Laisser le navigateur charger directement les affiches TMDB, les polices,
+  // les API et les bundles versionnés. Le cache PWA ne contient que ASSETS.
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/@') || url.pathname.includes('node_modules')) return;
 
   // Pour les requetes de navigation (HTML), essayer le reseau d'abord, puis le cache racine
   if (event.request.mode === 'navigate') {
@@ -42,7 +41,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Pour les autres assets (images, statiques connus), servir depuis le cache puis reseau
+  if (!ASSETS.includes(url.pathname)) return;
+
+  // Servir seulement les quelques fichiers effectivement précachés.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return cached || fetch(event.request);

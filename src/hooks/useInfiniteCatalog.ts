@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * Universal True Infinite Scroll Hook.
  *
  * Features:
- * - Double initial load (Pages 1 & 2 fetched concurrently via Promise.all -> ~40 items).
- * - Aggressive anticipatory prefetching (rootMargin: '900px').
+ * - One initial page; subsequent pages arrive as the visitor approaches them.
+ * - Moderate anticipatory prefetching (rootMargin: '300px').
  * - Ultra-fast synchronous lock release (80ms re-arming delay).
  * - Hard stop on network/429 errors.
  * - TMDB 500-page limit safeguard.
@@ -41,25 +41,18 @@ export function useInfiniteCatalog<T extends { id: number }>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  // ─── Initial Double Load (Page 1 & 2 in parallel for 40 items) ───────────
+  // ─── Initial page ─────────────────────────────────────────────────────────
   const loadInitial = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setLoading(true);
 
     try {
-      const [res1, res2] = await Promise.all([
-        fetchFnRef.current(1),
-        fetchFnRef.current(2).catch(() => ({ results: [], total_pages: 1 }))
-      ]);
-
+      const res1 = await fetchFnRef.current(1);
       const list1 = Array.isArray(res1?.results) ? res1.results : [];
-      const list2 = Array.isArray(res2?.results) ? res2.results : [];
-
-      const combined = [...list1, ...list2];
       const existingKeys = new Set<string>();
       const deduplicated: T[] = [];
-      for (const item of combined) {
+      for (const item of list1) {
         if (!item) continue;
         const key = `${(item as any).media_type || ''}_${(item as any).id}`;
         if (!existingKeys.has(key)) {
@@ -68,18 +61,14 @@ export function useInfiniteCatalog<T extends { id: number }>(
         }
       }
 
-      const serverTotal = Math.min(
-        Math.max(res1?.total_pages ?? 1, res2?.total_pages ?? 1),
-        500
-      );
+      const serverTotal = Math.min(res1?.total_pages ?? 1, 500);
 
       setItems(deduplicated);
       setTotal(serverTotal);
 
       if (deduplicated.length > 0) {
-        const nextPageCursor = list2.length > 0 ? 2 : 1;
-        setPage(nextPageCursor);
-        setHasMore(nextPageCursor < serverTotal);
+        setPage(1);
+        setHasMore(1 < serverTotal);
       } else {
         setHasMore(false);
       }
@@ -134,7 +123,7 @@ export function useInfiniteCatalog<T extends { id: number }>(
     }
   }, []);
 
-  // ─── Trigger initial double load when list is empty ──────────────────────
+  // ─── Trigger initial load when list is empty ─────────────────────────────
   useEffect(() => {
     if (items.length === 0 && hasMore) {
       loadInitial();
@@ -142,7 +131,7 @@ export function useInfiniteCatalog<T extends { id: number }>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length, hasMore]);
 
-  // ─── Callback-ref sentinel with aggressive 900px prefetching ─────────────
+  // ─── Callback-ref sentinel with moderate prefetching ─────────────────────
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (observerRef.current) {
@@ -159,7 +148,7 @@ export function useInfiniteCatalog<T extends { id: number }>(
         },
         {
           root: null,
-          rootMargin: '900px', // Fetch 900px before user hits bottom
+          rootMargin: '300px', // Fetch shortly before the visitor reaches the end
           threshold: 0
         }
       );

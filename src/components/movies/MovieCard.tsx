@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Star, 
   Play, 
@@ -55,7 +55,8 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   const { t } = useTranslation();
 
   const [streamingAction, setStreamingAction] = useState<StreamingActionResult | null>(null);
-  const [isLoadingProviders, setIsLoadingProviders] = useState(true);
+  const [shouldLoadProviders, setShouldLoadProviders] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const inWatchlist = isInWatchlist(movie.id);
   const alertActive = isMovieAlertActive(movie.id, movie.media_type);
@@ -63,7 +64,26 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   const releaseYear = movie.release_date ? movie.release_date.split('-')[0] : '2026';
   const typeEndpoint = mediaTypeEndpoint(movie.media_type);
 
+  // Les longues grilles montent toutes leurs cartes en même temps. Ne demander
+  // les plateformes que pour celles que le visiteur est sur le point de voir.
   useEffect(() => {
+    const card = cardRef.current;
+    if (!card || typeof IntersectionObserver === 'undefined') {
+      setShouldLoadProviders(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setShouldLoadProviders(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '300px' });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoadProviders) return;
     let isMounted = true;
     const userCountry = getCachedCountryCode();
 
@@ -71,20 +91,16 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
       .then((action) => {
         if (isMounted) {
           setStreamingAction(action);
-          setIsLoadingProviders(false);
         }
       })
       .catch((err) => {
         console.warn('[Éliciné] resolveStreamingAction error:', err);
-        if (isMounted) {
-          setIsLoadingProviders(false);
-        }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey, movie]);
+  }, [shouldLoadProviders, movie.id, typeEndpoint, movie.title, apiSettings?.tmdbApiKey, movie]);
 
   const cleanBadge = (badge?: string) => {
     if (!badge) return '';
@@ -118,7 +134,8 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   const displayMatchReason = cleanMatchReason(movie.ai_match_reason);
 
   return (
-    <div 
+    <div
+      ref={cardRef}
       onClick={() => setSelectedMovie(movie)}
       className="perf-card group relative flex flex-col rounded-xl bg-white dark:bg-[#121212] border border-slate-200/80 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-md dark:hover:shadow-2xl"
     >
