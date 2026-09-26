@@ -31,7 +31,9 @@ import { SupportModal } from './components/SupportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { FeedbackModal } from './components/feedback/FeedbackModal';
 import { FeedbackFloatingWidget } from './components/feedback/FeedbackFloatingWidget';
+import { InstallNudge } from './components/pwa/InstallNudge';
 import { supabase } from './lib/supabase';
+import { scrollToElement, scrollToTop } from './lib/scroll';
 import { subscriptionService } from './services/subscriptionService';
 import { 
   processSaspayCheckout, 
@@ -380,7 +382,7 @@ export const AppContent: React.FC = () => {
     setAiResults(null);
     setSelectedMovie(null);
     setHeroResetKey(prev => prev + 1);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToTop();
   };
 
   // 2. NAVIGATION VERS /terms : Conditions & Confidentialité
@@ -392,10 +394,10 @@ export const AppContent: React.FC = () => {
     if (section) {
       setTimeout(() => {
         const el = document.getElementById(section);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        if (el) scrollToElement(el);
       }, 100);
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop();
     }
   };
 
@@ -419,8 +421,13 @@ export const AppContent: React.FC = () => {
           onOpenFeedback={openFeedbackModal}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-10 overflow-y-auto">
+        {/*
+          Le défilement est laissé au document, y compris sur mobile.
+          Un conteneur de défilement imbriqué dans une mise en page 100vh
+          piégeait le geste tactile dans l'application : au retour d'une
+          recherche, la grille de résultats devenait impossible à faire défiler.
+        */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-10">
           
           {/* Active View Switcher */}
           {activeView === 'home' && (
@@ -527,6 +534,9 @@ export const AppContent: React.FC = () => {
 
       {/* Floating Feedback & Suggestions Widget */}
       <FeedbackFloatingWidget onOpenFeedback={openFeedbackModal} />
+
+      {/* Rappel d'installation, mobile uniquement et jamais si déjà installée */}
+      <InstallNudge />
 
       {/* Interactive Feedback & Suggestions Popover / Modal */}
       <FeedbackModal

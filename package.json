@@ -15,6 +15,7 @@
     "test:catalog": "node --import tsx --test tests/catalog/",
     "test:watchlink": "node --import tsx --test tests/watchlink/",
     "test:pwa": "node --import tsx --test tests/pwa/",
+    "test:scroll": "node --import tsx --test tests/scroll/",
     "search:diagnose": "node scripts/search-diagnose.mjs",
     "search:benchmark": "node --import tsx scripts/search-benchmark.mjs",
     "search:recall": "node scripts/narrative-recall-benchmark.mjs"

@@ -33,6 +33,19 @@ html {
   max-width: 100%;
 }
 
+/*
+ * Les longues grilles de résultats bloquaient le défilement sur mobile : chaque
+ * carte hors écran restait rendue et peinte. `content-visibility: auto` laisse
+ * le navigateur ignorer le contenu invisible, ce qui allège nettement le
+ * défilement d'une grille de quarante affiches. Le second argument de
+ * `contain-intrinsic-size` permet de réutiliser la taille réelle une fois la
+ * carte affichée, donc aucun saut de mise en page.
+ */
+.perf-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
 body.light {
   background-color: #f8f9fc;
   color: #0f172a;

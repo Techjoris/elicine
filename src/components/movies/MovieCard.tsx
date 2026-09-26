@@ -120,7 +120,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   return (
     <div 
       onClick={() => setSelectedMovie(movie)}
-      className="group relative flex flex-col rounded-xl bg-white dark:bg-[#121212] border border-slate-200/80 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-md dark:hover:shadow-2xl"
+      className="perf-card group relative flex flex-col rounded-xl bg-white dark:bg-[#121212] border border-slate-200/80 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/30 transition-all duration-500 overflow-hidden cursor-pointer select-none shadow-sm hover:shadow-md dark:hover:shadow-2xl"
     >
       
       {/* Poster Image Container */}
@@ -130,6 +130,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
           alt={movie.title}
           className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out"
           loading="lazy"
+          decoding="async"
         />
 
         {/* Gradient Overlay Cinématographique */}
@@ -138,12 +139,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
         {/* Top-Left: Type & Match Rate & AI Badge */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
           <div className="flex items-center gap-1">
-            <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
+            <span className="px-1.5 py-0.5 rounded bg-black/80 border border-white/10 text-zinc-300 text-[9px] font-bold tracking-widest uppercase">
               {mediaTypeBadge(movie.media_type, { series: t.badgeSerie, film: t.badgeFilm })}
             </span>
             {showAiMatch && movie.match_rate !== undefined && movie.match_rate > 0 && (
               <span 
-                className="px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[9px] font-bold tracking-wide flex items-center gap-0.5"
+                className="px-1.5 py-0.5 rounded bg-black/85 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold tracking-wide flex items-center gap-0.5"
                 title={`Indice de correspondance Éliciné : ${movie.match_rate}% d'affinité avec votre requête`}
               >
                 <Sparkles className="w-2.5 h-2.5 text-emerald-400 flex-shrink-0" />
@@ -152,7 +153,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
             )}
           </div>
           {displayBadge && (
-            <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-[#e50914] to-amber-600 backdrop-blur-md border border-white/20 text-white text-[8px] font-extrabold tracking-wide uppercase shadow-sm">
+            <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-[#e50914] to-amber-600 border border-white/20 text-white text-[8px] font-extrabold tracking-wide uppercase shadow-sm">
               ✨ {displayBadge}
             </span>
           )}
@@ -168,7 +169,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
               e.stopPropagation();
               toggleWatchlist(movie);
             }}
-            className={`p-1.5 rounded-full backdrop-blur-md border transition-all active:scale-90 cursor-pointer ${
+            className={`p-1.5 rounded-full border transition-all active:scale-90 cursor-pointer ${
               inWatchlist 
                 ? 'bg-white text-black border-white' 
                 : 'bg-black/60 text-white border-white/20 hover:bg-black hover:border-white/50'
@@ -185,7 +186,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
               e.stopPropagation();
               addAlert(movie);
             }}
-            className={`p-1.5 rounded-full backdrop-blur-md border transition-all active:scale-90 cursor-pointer ${
+            className={`p-1.5 rounded-full border transition-all active:scale-90 cursor-pointer ${
               alertActive 
                 ? 'bg-[#e50914] text-white border-[#e50914]' 
                 : 'bg-black/60 text-white border-white/20 hover:bg-black hover:border-white/50'

@@ -13,6 +13,7 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
+import { scrollToElement } from '../../lib/scroll';
 import { Movie } from '../../types';
 
 interface HeroSectionProps {
@@ -341,7 +342,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       
       const resultsEl = document.getElementById('results-section');
       if (resultsEl) {
-        resultsEl.scrollIntoView({ behavior: 'smooth' });
+        scrollToElement(resultsEl);
       }
     } catch (e: any) {
       console.error('[Éliciné AI Search Error]', e?.message || e);
@@ -403,7 +404,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           setSearchQuery(cleanPrompt);
           const searchInput = (document.getElementById('main-ai-search') || textareaRef.current) as HTMLTextAreaElement | null;
           if (searchInput) {
-            searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            scrollToElement(searchInput, { block: 'center' });
             setTimeout(() => {
               searchInput.focus();
               adjustTextareaHeight();
@@ -436,7 +437,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       setSearchQuery(cleanPrompt);
       const searchInput = (document.getElementById('main-ai-search') || textareaRef.current) as HTMLTextAreaElement | null;
       if (searchInput) {
-        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollToElement(searchInput, { block: 'center' });
         setTimeout(() => {
           searchInput.focus();
           searchInput.setSelectionRange(cleanPrompt.length, cleanPrompt.length);

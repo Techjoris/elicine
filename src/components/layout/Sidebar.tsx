@@ -31,6 +31,7 @@ import { ElicineLogo } from '../ElicineLogo';
 import { LanguageSelector } from '../LanguageSelector';
 import { InstallModal } from '../modals/InstallModal';
 import { supabase } from '../../lib/supabase';
+import { scrollToElement } from '../../lib/scroll';
 import { checkIsStandalone } from './Header';
 import { promptNativeInstall } from '../../hooks/usePWAInstall';
 
@@ -282,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // Scroll to search bar smoothly
     const el = document.getElementById('main-ai-search');
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+      scrollToElement(el);
       el.focus();
     }
   };
