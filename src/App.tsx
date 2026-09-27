@@ -101,9 +101,9 @@ export const AppContent: React.FC = () => {
   // visible quand les résultats sont ajoutés juste au-dessus.
   React.useLayoutEffect(() => {
     if (aiResults && activeView === 'home') {
-      scrollToSectionWhenReady(guestPromptVisible ? 'guest-signup-prompt' : 'ai-results-section');
+      scrollToSectionWhenReady('ai-results-section');
     }
-  }, [aiResults, activeView, guestPromptVisible]);
+  }, [aiResults, activeView]);
 
   // Success Thank-you modal state
   const [showThankYouModal, setShowThankYouModal] = useState(false);
@@ -463,14 +463,6 @@ export const AppContent: React.FC = () => {
                 hasSearched={Boolean(aiResults && aiResults.movies && aiResults.movies.length > 0)}
               />
 
-              {guestPromptVisible && (
-                <GuestSignupPrompt
-                  onSignup={() => openAuthModal('signup')}
-                  onLogin={() => openAuthModal('login')}
-                  onDismiss={() => setGuestPromptDismissed(true)}
-                />
-              )}
-
               {/* 2. AI Generated Results (if a search has been performed) */}
               {aiResults && (
                 <MovieGrid
@@ -482,6 +474,14 @@ export const AppContent: React.FC = () => {
                   aiMood={aiResults.mood}
                   suggestedPrompts={aiResults.suggestedPrompts}
                   showAiMatch={true}
+                />
+              )}
+
+              {guestPromptVisible && (
+                <GuestSignupPrompt
+                  onSignup={() => openAuthModal('signup')}
+                  onLogin={() => openAuthModal('login')}
+                  onDismiss={() => setGuestPromptDismissed(true)}
                 />
               )}
 

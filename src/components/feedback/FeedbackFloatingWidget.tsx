@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clapperboard, UserPlus } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -10,38 +10,14 @@ interface FeedbackFloatingWidgetProps {
 export const FeedbackFloatingWidget: React.FC<FeedbackFloatingWidgetProps> = ({ onOpenFeedback }) => {
   const [isDismissedTemporarily, setIsDismissedTemporarily] = useState(false);
   const { user } = useAuth();
-  const { user: appUser, openAuthModal } = useApp();
+  const { user: appUser } = useApp();
 
   const activeUser = user || appUser;
   const isConnected = Boolean(activeUser && (activeUser.email || activeUser.id));
 
   if (isDismissedTemporarily) return null;
 
-  // Visiteur non inscrit : le bouton flottant invite à créer un compte, dans le
-  // même style que le widget de suggestions. Les suggestions, elles, restent
-  // accessibles depuis la barre latérale gauche.
-  if (!isConnected) {
-    return (
-      <div
-        className="fixed bottom-3 left-3 sm:bottom-6 sm:left-6 z-40 flex items-center select-none max-w-[calc(100vw-1.5rem)] animate-slide-up"
-        aria-label="Créer un compte Éliciné"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      >
-        <button
-          type="button"
-          onClick={() => openAuthModal('signup')}
-          className="group flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#e50914] hover:bg-[#b80710] text-white border border-white/20 shadow-xl shadow-black/50 active:scale-95 transition-all duration-200 cursor-pointer"
-          title="S'inscrire gratuitement"
-          aria-label="S'inscrire gratuitement"
-        >
-          <UserPlus className="w-4 h-4 flex-shrink-0 group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-bold tracking-wide whitespace-nowrap">
-            S'inscrire gratuitement
-          </span>
-        </button>
-      </div>
-    );
-  }
+  if (!isConnected) return null;
 
   return (
     <div 

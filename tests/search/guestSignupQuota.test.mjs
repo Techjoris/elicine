@@ -87,6 +87,8 @@ test('signup invitation is stronger than login and leaves results in the page fl
   assert.match(markup, /bg-\[#e50914\]/);
   assert.match(markup, /max-w-xl min-w-0/);
   assert.doesNotMatch(markup, /fixed inset-0|aria-modal|backdrop-blur/);
+  assert.match(markup, /Tes résultats restent disponibles juste au-dessus\./);
+  assert.doesNotMatch(markup, /role="status"/);
 });
 
 test.after(() => { globalThis.fetch = originalFetch; });

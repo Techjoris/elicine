@@ -7,11 +7,11 @@ interface GuestSignupPromptProps {
   onDismiss: () => void;
 }
 
-/** An in-flow floating card keeps the search results visible and scrollable. */
+/** An in-flow invitation shown after the search results. */
 export const GuestSignupPrompt: React.FC<GuestSignupPromptProps> = ({ onSignup, onLogin, onDismiss }) => (
-  <div
+  <aside
     id="guest-signup-prompt"
-    role="status"
+    aria-label="Inscription gratuite"
     className="relative z-10 mx-auto w-full max-w-xl min-w-0 rounded-2xl border border-[#e50914]/30 bg-white p-4 shadow-2xl dark:bg-[#181818] sm:p-5"
   >
     <button
@@ -26,7 +26,7 @@ export const GuestSignupPrompt: React.FC<GuestSignupPromptProps> = ({ onSignup, 
       Inscris-toi gratuitement pour profiter de 3 recherches par jour.
     </p>
     <p className="mt-1 text-sm text-slate-600 dark:text-zinc-300">
-      Tes résultats restent disponibles juste en dessous.
+      Tes résultats restent disponibles juste au-dessus.
     </p>
     <div className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
       <button
@@ -44,5 +44,5 @@ export const GuestSignupPrompt: React.FC<GuestSignupPromptProps> = ({ onSignup, 
         Se connecter
       </button>
     </div>
-  </div>
+  </aside>
 );

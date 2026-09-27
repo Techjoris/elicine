@@ -28,7 +28,6 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   const {
     quota,
     canPerformSearch,
-    openAuthModal,
     recordSuccessfulSearch,
     apiSettings,
     user,
@@ -222,11 +221,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
                   Il vous reste <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{quota.remaining}</strong> recherche{quota.remaining > 1 ? 's' : ''} gratuite{quota.remaining > 1 ? 's' : ''} aujourd'hui
                 </span>
               </span>
-            ) : !user ? (
-              <button type="button" onClick={() => openAuthModal('signup')} className="text-[#e50914] font-bold hover:underline">
-                Inscris-toi gratuitement pour 3 recherches par jour
-              </button>
-            ) : (
+            ) : !user ? null : (
               <span className="text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                 <span>🔒</span>
                 <span>Quota gratuit atteint (0 recherche restante) •</span>
