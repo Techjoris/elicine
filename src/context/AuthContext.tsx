@@ -22,11 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | any | null>(() => {
     if (typeof window !== 'undefined') {
       try {
-        // A. Compte utilisateur sauvegardé localement
-        const localUser = authService.getStoredUser();
-        if (localUser) return localUser;
-
-        // B. Jeton / Session Supabase standard
+        // Seule une session Supabase peut ouvrir un compte sur cet appareil.
         const authKey = Object.keys(localStorage).find(
           key => key.includes('auth-token') || key.startsWith('sb-')
         );
@@ -179,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('[AuthContext] refreshProfile error:', err);
     }
 
-    const currentUser = user || authService.getStoredUser();
+    const currentUser = session?.user ? user : null;
     if (currentUser) {
       const enriched = await enrichUserWithProfile(currentUser);
       setUser(enriched);
@@ -189,37 +185,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let active = true;
+    let authRevision = 0;
     // 2. Récupération initiale synchrone/asynchrone de la session et enrichissement du profil
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!active) return;
       if (session?.user) {
         const enriched = await enrichUserWithProfile(session.user);
+        if (!active) return;
         setUser(enriched);
         setSession(session);
       } else {
-        const stored = authService.getStoredUser();
-        if (stored) {
-          const enriched = await enrichUserWithProfile(stored);
-          setUser(enriched);
-        }
+        setUser(null);
+        setSession(null);
+        authService.logout();
       }
       setLoading(false);
-    }).catch(async err => {
-      console.warn('[AuthContext] getSession fallback to local:', err);
-      const stored = authService.getStoredUser();
-      if (stored) {
-        const enriched = await enrichUserWithProfile(stored);
-        setUser(enriched);
-      }
-      setLoading(false);
+    }).catch(err => {
+      console.warn('[AuthContext] getSession error:', err);
+      if (active) setLoading(false);
     });
 
     // 3. Écouteur en temps réel de tous les changements d'état (login, logout, OAuth callback)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const revision = event === 'USER_UPDATED' ? authRevision : ++authRevision;
       console.log('[AuthContext] onAuthStateChange event:', event, session?.user?.email);
+      if (event === 'USER_UPDATED') {
+        // La liste se recharge directement depuis le compte. Éviter de relancer
+        // toutes les vérifications de profil à chaque film ajouté ou retiré.
+        setLoading(false);
+        return;
+      }
       if (session?.user) {
-        const enriched = await enrichUserWithProfile(session.user);
-        setUser(enriched);
         setSession(session);
+        setUser(previous => previous?.id === session.user.id
+          ? { ...previous, user_metadata: session.user.user_metadata }
+          : session.user);
+
+        // Le callback doit finir avant tout appel Supabase : updateUser attend
+        // lui-même ce callback, et une requête ici bloquerait la sauvegarde.
+        setTimeout(async () => {
+          try {
+            const enriched = await enrichUserWithProfile(session.user);
+            if (active && revision === authRevision) setUser(enriched);
+          } catch (err) {
+            console.warn('[AuthContext] profile enrichment error:', err);
+          }
+        }, 0);
         
         // Nettoyage de l'URL après un callback OAuth réussi
         if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
@@ -239,6 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
+      active = false;
       subscription.unsubscribe();
     };
   }, []);

@@ -47,6 +47,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsProModalOpen, 
     setActiveView,
     watchlist,
+    watchlistSyncStatus,
     showToast 
   } = useApp();
 
@@ -152,16 +153,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (isSignUp) {
-        // 1. Notification immédiate à l'utilisateur de l'envoi de l'e-mail de confirmation
-        showToast(`✉️ Un e-mail de confirmation vous a été envoyé à ${cleanEmail}. Vérifiez votre boîte de réception !`, 7000);
-
-        // 2. Déclenchement / simulation instantané de l'envoi de l'e-mail en arrière-plan
-        void authService.sendVerificationEmail(cleanEmail, username.trim());
-
-        // 3. Enregistrement sécurisé du compte
         const res = await registerWithCredentials(username.trim(), cleanEmail, password);
         if (!res.success) {
           setErrorMessage(res.error || "Erreur lors de la création du compte.");
+          return;
+        }
+
+        if (res.pendingVerification) {
+          showToast(`✉️ Confirmez votre adresse ${cleanEmail}, puis connectez-vous pour synchroniser votre liste.`, 7000);
+          setIsAuthModalOpen(false);
+          setPassword('');
+          setUsername('');
+          setEmail('');
           return;
         }
 
@@ -344,7 +347,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Ma Liste Personnelle
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-zinc-300 font-medium">
-                    {watchlist.length} film{watchlist.length > 1 ? 's' : ''} synchronisé{watchlist.length > 1 ? 's' : ''}
+                    {watchlist.length} film{watchlist.length > 1 ? 's' : ''} enregistré{watchlist.length > 1 ? 's' : ''}
+                    {watchlistSyncStatus === 'synced' ? ' sur votre compte' : ' sur cet appareil'}
                   </p>
                 </div>
               </div>

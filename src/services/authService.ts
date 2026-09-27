@@ -1,5 +1,6 @@
 import { UserProfile, Movie, AdminUserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { mergeWatchlists } from './watchlistService';
 
 export const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
 
@@ -187,7 +188,7 @@ export const authService = {
     username: string,
     email: string,
     password: string
-  ): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
+  ): Promise<{ success: boolean; user?: UserProfile; token?: string; pendingVerification?: boolean; error?: string }> {
     const pwdCheck = this.validatePassword(password);
     if (!pwdCheck.valid) {
       return { success: false, error: pwdCheck.error };
@@ -200,14 +201,11 @@ export const authService = {
       return { success: false, error: "Veuillez fournir une adresse email valide (ex: utilisateur@domaine.com)." };
     }
 
-    // Déclencher instantanément l'envoi de l'e-mail de confirmation en arrière-plan
-    void this.sendVerificationEmail(cleanEmail, cleanUsername);
-
-    // Vérifier si l'adresse est déjà utilisée localement
+    // Conserver la liste d'un ancien compte local pour la rattacher au vrai compte.
     const existingAccounts = getStoredAccounts();
     const existing = existingAccounts.find(a => a.email.toLowerCase() === cleanEmail);
-    if (existing && existing.passwordHash) {
-      return { success: false, error: "Cette adresse email est déjà enregistrée. Veuillez vous connecter." };
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Connexion au service de comptes indisponible. Réessayez plus tard.' };
     }
 
     let supabaseUserId: string | null = null;
@@ -229,23 +227,34 @@ export const authService = {
           if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already in use')) {
             return { success: false, error: "Cette adresse email est déjà utilisée." };
           }
+          return { success: false, error: error.message };
         } else if (data?.user) {
           if (data.user.identities && data.user.identities.length === 0) {
             return { success: false, error: "Cette adresse email est déjà utilisée." };
           }
           supabaseUserId = data.user.id;
           supabaseToken = data.session?.access_token || null;
+          if (!supabaseToken) {
+            return { success: true, pendingVerification: true };
+          }
         }
       } catch (sbErr) {
         console.warn('[authService.register] Supabase exception:', sbErr);
+        return { success: false, error: 'Impossible de créer le compte pour le moment. Réessayez plus tard.' };
       }
+    }
+
+    if (!supabaseUserId || !supabaseToken) {
+      return { success: false, error: 'Le compte n’a pas pu être confirmé. Réessayez.' };
     }
 
     const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
     const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
 
-    const userId = supabaseUserId || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const sessionToken = supabaseToken || `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const userId = supabaseUserId;
+    const sessionToken = supabaseToken;
+    const previousList = existing ? this.getUserWatchlist(existing.id) : [];
+    if (previousList.length) this.saveUserWatchlist(userId, previousList);
     const fullUser: UserProfile = {
       id: userId,
       username: cleanUsername || cleanEmail.split('@')[0],
@@ -259,7 +268,7 @@ export const authService = {
       proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
       referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       createdAt: new Date().toISOString(),
-      myList: [],
+      myList: previousList,
       token: sessionToken
     };
 
@@ -288,9 +297,7 @@ export const authService = {
     return { success: true, user: fullUser, token: sessionToken };
   },
 
-  /**
-   * Connexion d'un utilisateur (Supabase + Résolution locale anti-blocage)
-   */
+  /** Connexion à un vrai compte Supabase, nécessaire à la synchronisation multi-appareils. */
   async login(
     email: string,
     password: string
@@ -308,6 +315,10 @@ export const authService = {
     const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
     const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
 
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Connexion au service de comptes indisponible. Réessayez plus tard.' };
+    }
+
     // 1. Tenter Supabase si configuré
     if (isSupabaseConfigured()) {
       try {
@@ -316,8 +327,13 @@ export const authService = {
           password: password
         });
 
-        if (!error && data?.user) {
-          const savedList = this.getUserWatchlist(data.user.id);
+        if (!error && data?.user && data.session?.access_token) {
+          const legacy = getStoredAccounts().find(account => account.email.toLowerCase() === cleanEmail);
+          const savedList = mergeWatchlists(
+            this.getUserWatchlist(data.user.id),
+            legacy && legacy.id !== data.user.id ? this.getUserWatchlist(legacy.id) : []
+          );
+          if (savedList.length) this.saveUserWatchlist(data.user.id, savedList);
           const fullUser: UserProfile = {
             id: data.user.id,
             username: data.user.email?.split('@')[0] || cleanEmail.split('@')[0],
@@ -358,117 +374,20 @@ export const authService = {
           return { success: true, user: fullUser, token: data.session?.access_token };
         }
 
-        // Si l'erreur est spécifiquement un mauvais mot de passe avéré
-        if (error && (error.message.toLowerCase().includes('invalid login credentials') || error.message.toLowerCase().includes('invalid credentials'))) {
-          const localAccounts = getStoredAccounts();
-          const localMatch = localAccounts.find(a => a.email.toLowerCase() === cleanEmail);
-          if (localMatch && localMatch.passwordHash) {
-            const salt = localMatch.id;
-            const expectedHash = await hashPassword(password, salt);
-            if (localMatch.passwordHash !== expectedHash && localMatch.passwordHash !== password) {
-              return { success: false, error: "Mot de passe incorrect. Veuillez vérifier votre saisie." };
-            }
-          }
-        }
+        const legacy = getStoredAccounts().some(account => account.email.toLowerCase() === cleanEmail);
+        return {
+          success: false,
+          error: legacy
+            ? 'Connexion impossible. Si ce compte était uniquement sur cet appareil, créez un compte avec la même adresse pour récupérer votre liste. Sinon, vérifiez le mot de passe ou réinitialisez-le.'
+            : (error?.message || 'Connexion impossible. Vérifiez vos identifiants ou confirmez votre adresse e-mail.')
+        };
       } catch (sbErr) {
-        console.warn('[authService.login] Supabase error, bascule sur la vérification locale:', sbErr);
+        console.warn('[authService.login] Supabase error:', sbErr);
+        return { success: false, error: 'Connexion au compte indisponible. Réessayez plus tard.' };
       }
     }
 
-    // 2. Vérification locale anti-blocage (comptes locaux enregistrés)
-    const accounts = getStoredAccounts();
-    const match = accounts.find(
-      acc => acc.email.toLowerCase() === cleanEmail || (acc.username && acc.username.toLowerCase() === cleanEmail)
-    );
-
-    if (match) {
-      const salt = match.id;
-      const expectedHash = await hashPassword(password, salt);
-      const isPasswordValid = 
-        !match.passwordHash || 
-        match.passwordHash === expectedHash || 
-        match.passwordHash === password;
-
-      if (!isPasswordValid) {
-        return { success: false, error: "Mot de passe incorrect. Veuillez vérifier votre saisie." };
-      }
-
-      const token = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      localStorage.setItem(SESSION_TOKEN_KEY, token);
-
-      const userProfile: UserProfile = {
-        id: match.id,
-        username: match.username || cleanEmail.split('@')[0],
-        email: match.email,
-        name: match.name || cleanEmail.split('@')[0],
-        avatar: match.avatar,
-        provider: match.provider || 'credentials',
-        role: isAdminUser ? 'admin' : (match.role || 'user'),
-        isPro: isMasterAdmin ? true : match.isPro,
-        proPlanType: isMasterAdmin ? 'yearly' : match.proPlanType,
-        proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : match.proPlanExpiresAt,
-        referralCode: match.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
-        createdAt: match.createdAt,
-        myList: this.getUserWatchlist(match.id),
-        token
-      };
-
-      localStorage.setItem('cineia_user', JSON.stringify(userProfile));
-      return { success: true, user: userProfile, token };
-    }
-
-    // 3. Vérification des utilisateurs seed de démonstration
-    const seedUser = ADMIN_SEED_USERS.find(
-      u => u.email.toLowerCase() === cleanEmail || (u.username && u.username.toLowerCase() === cleanEmail)
-    );
-    if (seedUser) {
-      const token = `tok_seed_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      const userProfile: UserProfile = {
-        id: seedUser.id,
-        username: seedUser.username,
-        email: seedUser.email,
-        name: seedUser.name,
-        avatar: seedUser.avatar,
-        provider: seedUser.provider || 'credentials',
-        role: isAdminUser ? 'admin' : (seedUser.role || 'user'),
-        isPro: isMasterAdmin ? true : seedUser.isPro,
-        proPlanType: isMasterAdmin ? 'yearly' : seedUser.proPlanType,
-        proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : seedUser.proPlanExpiresAt,
-        referralCode: seedUser.referralCode,
-        createdAt: seedUser.createdAt,
-        myList: this.getUserWatchlist(seedUser.id),
-        token
-      };
-      await this.saveLocalAccount(userProfile, password);
-      localStorage.setItem(SESSION_TOKEN_KEY, token);
-      localStorage.setItem('cineia_user', JSON.stringify(userProfile));
-      return { success: true, user: userProfile, token };
-    }
-
-    // 4. Authentification fluide résiliente : si identifiants valides
-    const autoUsername = cleanEmail.split('@')[0];
-    const autoName = autoUsername.charAt(0).toUpperCase() + autoUsername.slice(1);
-    const fallbackUser: UserProfile = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      username: autoUsername,
-      email: cleanEmail,
-      name: autoName,
-      provider: 'credentials',
-      role: isAdminUser ? 'admin' : 'user',
-      isPro: isMasterAdmin ? true : false,
-      proPlanType: isMasterAdmin ? 'yearly' : undefined,
-      proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
-      referralCode: `CINE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-      createdAt: new Date().toISOString(),
-      myList: [],
-      token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
-    };
-
-    await this.saveLocalAccount(fallbackUser, password);
-    localStorage.setItem(SESSION_TOKEN_KEY, fallbackUser.token!);
-    localStorage.setItem('cineia_user', JSON.stringify(fallbackUser));
-
-    return { success: true, user: fallbackUser, token: fallbackUser.token };
+    return { success: false, error: 'Connexion au compte indisponible. Réessayez plus tard.' };
   },
 
   /**
@@ -864,4 +783,3 @@ export const authService = {
     return { success: true };
   }
 };
-

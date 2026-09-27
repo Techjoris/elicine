@@ -21,6 +21,7 @@ import { ProModal } from './components/modals/ProModal';
 import { TipModal } from './components/modals/TipModal';
 import { SupportProjectModal } from './components/modals/SupportProjectModal';
 import { AuthModal } from './components/modals/AuthModal';
+import { GuestSignupPrompt } from './components/auth/GuestSignupPrompt';
 import { SuccessModal } from './components/modals/SuccessModal';
 import { ProSuccessModal } from './components/modals/ProSuccessModal';
 import { ApkInstallModal } from './components/modals/ApkInstallModal';
@@ -62,6 +63,8 @@ export const AppContent: React.FC = () => {
     showToast,
     upgradeToPro,
     user,
+    quota,
+    openAuthModal,
     setIsProModalOpen,
     setIsAuthModalOpen,
     isThankYouModalOpen,
@@ -85,15 +88,22 @@ export const AppContent: React.FC = () => {
     mood?: string;
     suggestedPrompts?: string[];
   } | null>(null);
+  const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
+  const [guestSearchCompleted, setGuestSearchCompleted] = useState(false);
+  const guestPromptVisible = !user && guestSearchCompleted && quota.remaining === 0 && aiResults !== null && !guestPromptDismissed;
+
+  useEffect(() => {
+    if (user) setGuestSearchCompleted(false);
+  }, [user?.id]);
 
   // Attendre que React ait réellement inséré ou mis à jour la grille avant de
   // viser son titre. Sinon l'ancrage du navigateur peut garder « Tendances »
   // visible quand les résultats sont ajoutés juste au-dessus.
   React.useLayoutEffect(() => {
     if (aiResults && activeView === 'home') {
-      scrollToSectionWhenReady('ai-results-section');
+      scrollToSectionWhenReady(guestPromptVisible ? 'guest-signup-prompt' : 'ai-results-section');
     }
-  }, [aiResults, activeView]);
+  }, [aiResults, activeView, guestPromptVisible]);
 
   // Success Thank-you modal state
   const [showThankYouModal, setShowThankYouModal] = useState(false);
@@ -389,6 +399,7 @@ export const AppContent: React.FC = () => {
     }
     setActiveView('home');
     setAiResults(null);
+    setGuestSearchCompleted(false);
     setSelectedMovie(null);
     setHeroResetKey(prev => prev + 1);
     scrollToTop();
@@ -445,9 +456,20 @@ export const AppContent: React.FC = () => {
               {/* 1. Central Hero Section with Watermark Carousel & Integrated Search */}
               <HeroSection 
                 key={heroResetKey}
-                onAiResultsFound={(res) => setAiResults(res)} 
+                onAiResultsFound={(res) => {
+                  setAiResults(res);
+                  if (!user) setGuestSearchCompleted(true);
+                }}
                 hasSearched={Boolean(aiResults && aiResults.movies && aiResults.movies.length > 0)}
               />
+
+              {guestPromptVisible && (
+                <GuestSignupPrompt
+                  onSignup={() => openAuthModal('signup')}
+                  onLogin={() => openAuthModal('login')}
+                  onDismiss={() => setGuestPromptDismissed(true)}
+                />
+              )}
 
               {/* 2. AI Generated Results (if a search has been performed) */}
               {aiResults && (

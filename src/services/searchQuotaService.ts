@@ -2,6 +2,7 @@ import { AIQuota, UserProfile } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const MAX_FREE_DAILY_SEARCHES = 3;
+export const MAX_GUEST_SEARCHES = 1;
 const LOCAL_STORAGE_QUOTA_KEY = 'elicine_daily_ai_quota';
 const LOCAL_STORAGE_DEVICE_ID_KEY = 'elicine_device_id';
 
@@ -54,13 +55,13 @@ export const resolveEffectiveUserId = (user: UserProfile | null): string => {
 /**
  * Lit le quota stocké localement
  */
-const readLocalQuotaRecord = (effectiveUserId: string, today: string): LocalQuotaRecord => {
+const readLocalQuotaRecord = (effectiveUserId: string, today: string, max: number): LocalQuotaRecord => {
   const fallbackRecord: LocalQuotaRecord = {
     userId: effectiveUserId,
     searchDate: today,
     searchCount: 0,
-    remaining: MAX_FREE_DAILY_SEARCHES,
-    max: MAX_FREE_DAILY_SEARCHES
+    remaining: max,
+    max
   };
 
   if (typeof window === 'undefined') return fallbackRecord;
@@ -79,8 +80,8 @@ const readLocalQuotaRecord = (effectiveUserId: string, today: string): LocalQuot
       userId: effectiveUserId,
       searchDate: today,
       searchCount: typeof parsed.searchCount === 'number' ? parsed.searchCount : 0,
-      remaining: Math.max(0, MAX_FREE_DAILY_SEARCHES - (parsed.searchCount || 0)),
-      max: MAX_FREE_DAILY_SEARCHES
+      remaining: Math.max(0, max - (parsed.searchCount || 0)),
+      max
     };
   } catch (e) {
     return fallbackRecord;
@@ -105,6 +106,7 @@ export const searchQuotaService = {
   async getQuota(user: UserProfile | null): Promise<AIQuota> {
     const today = getLocalTodayDateString();
     const effectiveUserId = resolveEffectiveUserId(user);
+    const max = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
 
     // Les membres Pro et l'administrateur principal ont des recherches illimitées
     const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
@@ -117,7 +119,7 @@ export const searchQuotaService = {
     }
 
     // 1. Lecture immédiate du cache local (optimiste)
-    let local = readLocalQuotaRecord(effectiveUserId, today);
+    let local = readLocalQuotaRecord(effectiveUserId, today, max);
 
     // 2. Synchronisation prioritaire avec le serveur (vérification du quota IP & Supabase)
     try {
@@ -141,13 +143,13 @@ export const searchQuotaService = {
             userId: effectiveUserId,
             searchDate: today,
             searchCount: mergedCount,
-            remaining: Math.max(0, MAX_FREE_DAILY_SEARCHES - mergedCount),
-            max: MAX_FREE_DAILY_SEARCHES
+            remaining: Math.max(0, max - mergedCount),
+            max
           };
           saveLocalQuotaRecord(local);
           return {
             remaining: local.remaining,
-            max: MAX_FREE_DAILY_SEARCHES,
+            max,
             lastResetDate: today
           };
         }
@@ -172,8 +174,8 @@ export const searchQuotaService = {
             userId: effectiveUserId,
             searchDate: today,
             searchCount: mergedCount,
-            remaining: Math.max(0, MAX_FREE_DAILY_SEARCHES - mergedCount),
-            max: MAX_FREE_DAILY_SEARCHES
+            remaining: Math.max(0, max - mergedCount),
+            max
           };
           saveLocalQuotaRecord(local);
         }
@@ -184,7 +186,7 @@ export const searchQuotaService = {
 
     return {
       remaining: local.remaining,
-      max: MAX_FREE_DAILY_SEARCHES,
+      max,
       lastResetDate: today
     };
   },
@@ -200,7 +202,7 @@ export const searchQuotaService = {
     }
     const today = getLocalTodayDateString();
     const effectiveUserId = resolveEffectiveUserId(user);
-    const local = readLocalQuotaRecord(effectiveUserId, today);
+    const local = readLocalQuotaRecord(effectiveUserId, today, user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES);
     return local.remaining > 0;
   },
 
@@ -211,6 +213,7 @@ export const searchQuotaService = {
   async recordSuccessfulSearch(user: UserProfile | null): Promise<AIQuota> {
     const today = getLocalTodayDateString();
     const effectiveUserId = resolveEffectiveUserId(user);
+    const max = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
 
     // Si Pro ou Administrateur principal : aucune décrémentation de quota
     const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
@@ -223,16 +226,16 @@ export const searchQuotaService = {
     }
 
     // 1. Incrémenter localement
-    const current = readLocalQuotaRecord(effectiveUserId, today);
+    const current = readLocalQuotaRecord(effectiveUserId, today, max);
     const nextCount = current.searchCount + 1;
-    const nextRemaining = Math.max(0, MAX_FREE_DAILY_SEARCHES - nextCount);
+    const nextRemaining = Math.max(0, max - nextCount);
 
     const updatedRecord: LocalQuotaRecord = {
       userId: effectiveUserId,
       searchDate: today,
       searchCount: nextCount,
       remaining: nextRemaining,
-      max: MAX_FREE_DAILY_SEARCHES
+      max
     };
     saveLocalQuotaRecord(updatedRecord);
 
@@ -272,7 +275,7 @@ export const searchQuotaService = {
 
     return {
       remaining: nextRemaining,
-      max: MAX_FREE_DAILY_SEARCHES,
+      max,
       lastResetDate: today
     };
   }

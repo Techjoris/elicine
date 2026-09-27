@@ -15,10 +15,11 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { authService } from '../services/authService';
 import { supabase, signInWithGoogle } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
+import { searchQuotaService, MAX_FREE_DAILY_SEARCHES, MAX_GUEST_SEARCHES, getLocalTodayDateString } from '../services/searchQuotaService';
 import { subscriptionService } from '../services/subscriptionService';
 import { movieAlertsService, alertMediaType } from '../services/movieAlertsService';
 import { searchHistoryService, mergeHistory, cleanQuery } from '../services/searchHistoryService';
+import { watchlistService, watchlistMovieKey } from '../services/watchlistService';
 import { recordPreferenceSignal } from '../services/preferenceService';
 import { initPaddle, openPaddleCheckout, PADDLE_PRICE_IDS } from '../services/paddleService';
 import {
@@ -42,7 +43,7 @@ interface AppContextType {
   setLoading: (l: boolean) => void;
   login: (emailOrUser: string | UserProfile, name?: string) => void;
   loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; pendingVerification?: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   upgradeToPro: (cycle?: PricingBillingCycle) => void;
@@ -62,8 +63,9 @@ interface AppContextType {
 
   // Watchlist & Alerts
   watchlist: Movie[];
+  watchlistSyncStatus: 'local' | 'syncing' | 'synced' | 'error';
   toggleWatchlist: (movie: Movie) => void;
-  isInWatchlist: (movieId: number) => boolean;
+  isInWatchlist: (movieId: number, mediaType?: Movie['media_type']) => boolean;
 
   alerts: AlertItem[];
   addAlert: (movie: Movie, email?: string) => void;
@@ -131,8 +133,8 @@ interface AppContextType {
 
 
 const DEFAULT_QUOTA: AIQuota = {
-  remaining: MAX_FREE_DAILY_SEARCHES,
-  max: MAX_FREE_DAILY_SEARCHES,
+  remaining: MAX_GUEST_SEARCHES,
+  max: MAX_GUEST_SEARCHES,
   lastResetDate: getLocalTodayDateString()
 };
 
@@ -260,29 +262,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // 5. Watchlist
-  const [watchlist, setWatchlist] = useState<Movie[]>(() => {
-    const savedUserRaw = localStorage.getItem('cineia_user');
-    if (savedUserRaw) {
-      try {
-        const u = JSON.parse(savedUserRaw);
-        if (u?.id) {
-          const userList = authService.getUserWatchlist(u.id);
-          if (userList && userList.length > 0) return userList;
-        }
-      } catch (e) {
-        console.error(e);
-      }
+  const [watchlist, setWatchlist] = useState<Movie[]>(() => watchlistService.readInitial(user?.id));
+  const watchlistRef = useRef(watchlist);
+  const watchlistUserIdRef = useRef(user?.id || null);
+  watchlistUserIdRef.current = user?.id || null;
+  const [watchlistSyncStatus, setWatchlistSyncStatus] = useState<'local' | 'syncing' | 'synced' | 'error'>(user ? 'syncing' : 'local');
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (userId && user?.email) watchlistService.stageLegacyAccount(userId, user.email);
+    const cached = watchlistService.readInitial(userId);
+    watchlistRef.current = cached;
+    setWatchlist(cached);
+    if (!userId) {
+      setWatchlistSyncStatus('local');
+      return;
     }
-    const saved = localStorage.getItem('cineia_watchlist');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
-  });
+
+    let active = true;
+    const sync = () => {
+      setWatchlistSyncStatus('syncing');
+      watchlistService.sync(userId).then(list => {
+        if (!active || watchlistUserIdRef.current !== userId) return;
+        watchlistRef.current = list;
+        setWatchlist(list);
+        setWatchlistSyncStatus('synced');
+      }).catch(error => {
+        if (!active || watchlistUserIdRef.current !== userId) return;
+        console.warn('[Watchlist] synchronisation en attente:', error?.message);
+        setWatchlistSyncStatus('error');
+      });
+    };
+    sync();
+    const onVisible = () => { if (document.visibilityState === 'visible') sync(); };
+    window.addEventListener('online', sync);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      window.removeEventListener('online', sync);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.id]);
 
   // 6. Alerts
   const [alerts, setAlerts] = useState<AlertItem[]>(() => {
@@ -433,13 +453,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currency]);
 
   useEffect(() => {
-    localStorage.setItem('cineia_watchlist', JSON.stringify(watchlist));
-    if (user?.id) {
-      authService.saveUserWatchlist(user.id, watchlist);
-    }
-  }, [watchlist, user]);
-
-  useEffect(() => {
     localStorage.setItem('cineia_alerts', JSON.stringify(alerts));
   }, [alerts]);
 
@@ -576,11 +589,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         currentUser = formatted;
         setIsAuthModalOpen(false);
-      } else {
-        const stored = authService.getStoredUser();
-        if (stored) {
-          currentUser = stored;
-        }
       }
 
       if (!currentUser) {
@@ -683,7 +691,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
     if ((user as any)?.isPro || isMasterAdmin) return true;
 
-    if (quota.remaining <= 0) {
+    const expectedMax = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
+    const hasSearchAvailable = quota.max === expectedMax
+      ? quota.remaining > 0
+      : searchQuotaService.canSearch(user);
+    if (!hasSearchAvailable) {
+      if (!user) {
+        openAuthModal('signup');
+        return false;
+      }
       showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99€) pour continuer !");
       setIsProModalOpen(true);
       return false;
@@ -714,8 +730,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetQuota = () => {
-    setQuota(DEFAULT_QUOTA);
-    showToast('⚡ Quota IA réinitialisé (3 recherches gratuites) !');
+    const max = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
+    setQuota({ ...DEFAULT_QUOTA, remaining: max, max });
+    showToast(`⚡ Quota IA réinitialisé (${max} recherche${max > 1 ? 's' : ''} gratuite${max > 1 ? 's' : ''}) !`);
   };
 
   // User Actions
@@ -758,6 +775,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanUsername = (username || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
     const res = await authService.register(cleanUsername, cleanEmail, password);
+    if (res.success && res.pendingVerification) {
+      return { success: true, pendingVerification: true };
+    }
     if (res.success && res.user) {
       setUser(res.user);
       setAuthUser(res.user);
@@ -772,7 +792,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch (_) {}
 
-      showToast(`✉️ Un e-mail de confirmation a été envoyé à ${res.user.email}. Bienvenue sur Éliciné !`, 7000);
+      showToast(`👋 Bienvenue sur Éliciné, ${res.user.name} !`);
       return { success: true };
     }
     return { success: false, error: res.error || "Erreur lors de l'inscription." };
@@ -1062,26 +1082,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Watchlist Actions
   const toggleWatchlist = (movie: Movie) => {
-    setWatchlist(prev => {
-      const exists = prev.some(m => m.id === movie.id);
-      if (exists) {
-        showToast(`Retiré de votre liste : ${movie.title}`);
-        return prev.filter(m => m.id !== movie.id);
-      } else {
-        if (!user) {
-          showToast("Film ajouté ! Connectez-vous pour synchroniser votre liste sur tous vos appareils.");
-        } else {
-          showToast(`Ajouté à votre liste : ${movie.title}`);
-        }
-        // Œuvre gardée = préférence déclarée : elle affine les propositions suivantes.
-        if (user) recordPreferenceSignal('watchlist', movie);
-        return [...prev, movie];
-      }
+    const key = watchlistMovieKey(movie);
+    const exists = watchlistRef.current.some(m => watchlistMovieKey(m) === key);
+    const next = exists
+      ? watchlistRef.current.filter(m => watchlistMovieKey(m) !== key)
+      : [...watchlistRef.current, movie];
+    watchlistRef.current = next;
+    setWatchlist(next);
+
+    if (exists) showToast(`Retiré de votre liste : ${movie.title}`);
+    else if (!user) showToast('Film ajouté ! Connectez-vous pour synchroniser votre liste sur tous vos appareils.');
+    else showToast(`Ajouté à votre liste : ${movie.title}`);
+
+    if (!user?.id) {
+      watchlistService.saveAnonymous(next);
+      return;
+    }
+    if (!exists) recordPreferenceSignal('watchlist', movie);
+    const userId = user.id;
+    watchlistService.saveLocal(userId, next);
+    watchlistService.queue(userId, exists ? 'remove' : 'add', movie);
+    setWatchlistSyncStatus('syncing');
+    watchlistService.sync(userId).then(list => {
+      if (watchlistUserIdRef.current !== userId) return;
+      watchlistRef.current = list;
+      setWatchlist(list);
+      setWatchlistSyncStatus('synced');
+    }).catch(error => {
+      if (watchlistUserIdRef.current !== userId) return;
+      console.warn('[Watchlist] sauvegarde en attente:', error?.message);
+      setWatchlistSyncStatus('error');
+      showToast('Liste conservée sur cet appareil. Synchronisation en attente.');
     });
   };
 
-  const isInWatchlist = (movieId: number) => {
-    return watchlist.some(m => m.id === movieId);
+  const isInWatchlist = (movieId: number, mediaType?: Movie['media_type']) => {
+    const key = watchlistMovieKey({ id: movieId, media_type: mediaType });
+    return watchlist.some(m => watchlistMovieKey(m) === key);
   };
 
   // Alerts Actions (Strictement réservées aux membres Pass Pro)
@@ -1238,6 +1275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currency,
         setCurrency,
         watchlist,
+        watchlistSyncStatus,
         toggleWatchlist,
         isInWatchlist,
         alerts,

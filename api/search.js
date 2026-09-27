@@ -2388,6 +2388,7 @@ export default async function handler(req, res) {
 
     const sessionInfo = await verifyServerSession(req);
     const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
+    const freeSearchLimit = sessionInfo.isAuthenticated ? 3 : 1;
     const effectiveUserKey = sessionInfo.effectiveUserId;
     const ipHash = sessionInfo.ipHash;
     // Les préférences d'un membre : lues une seule fois, elles servent à la fois
@@ -2491,12 +2492,10 @@ export default async function handler(req, res) {
             .eq('user_id', ipStorageKey)
             .eq('search_date', todayDate)
             .maybeSingle();
-
           if (ipData && typeof ipData.search_count === 'number') {
             count = Math.max(count, ipData.search_count);
           }
-
-          if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+          if (sessionInfo.isAuthenticated && effectiveUserKey) {
             const { data: userData } = await supabaseServer
               .from('user_searches')
               .select('search_count')
@@ -2513,10 +2512,10 @@ export default async function handler(req, res) {
         }
       }
 
-      const remaining = Math.max(0, 3 - count);
+      const remaining = Math.max(0, freeSearchLimit - count);
       return res.status(200).json({
         remaining,
-        max: 3,
+        max: freeSearchLimit,
         searchCount: count,
         today: todayDate,
         isPro: false
@@ -2615,16 +2614,29 @@ export default async function handler(req, res) {
         });
       }
 
-      // Contrôle du quota journalier (3 recherches / jour pour les utilisateurs gratuits)
+      // Une découverte visiteur, puis trois recherches par jour avec un compte gratuit.
       if (!isPro) {
-        const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
-        if (memoryCount >= 3) {
+        let searchCount = getMemoryDailyQuota(ipHash, todayDate);
+        if (supabaseServer) {
+          const quotaKeys = sessionInfo.isAuthenticated && effectiveUserKey
+            ? [ipStorageKey, effectiveUserKey]
+            : [ipStorageKey];
+          for (const quotaKey of quotaKeys) {
+            const { data: quotaRecord } = await supabaseServer.from('user_searches')
+              .select('search_count').eq('user_id', quotaKey)
+              .eq('search_date', todayDate).maybeSingle();
+            searchCount = Math.max(searchCount, quotaRecord?.search_count || 0);
+          }
+        }
+        if (searchCount >= freeSearchLimit) {
           return res.status(403).json({
-            error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro pour un accès illimité.",
+            error: sessionInfo.isAuthenticated
+              ? "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité."
+              : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
             code: "QUOTA_EXCEEDED",
             quotaExceeded: true,
             remaining: 0,
-            max: 3
+            max: freeSearchLimit
           });
         }
       }

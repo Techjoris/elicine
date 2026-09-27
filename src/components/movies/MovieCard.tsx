@@ -58,7 +58,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
   const [shouldLoadProviders, setShouldLoadProviders] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const inWatchlist = isInWatchlist(movie.id);
+  const inWatchlist = isInWatchlist(movie.id, movie.media_type);
   const alertActive = isMovieAlertActive(movie.id, movie.media_type);
 
   const releaseYear = movie.release_date ? movie.release_date.split('-')[0] : '2026';

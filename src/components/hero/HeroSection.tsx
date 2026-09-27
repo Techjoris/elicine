@@ -117,6 +117,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     quota,
     user,
     setIsProModalOpen,
+    openAuthModal,
     apiSettings,
     addHistoryItem,
     showToast,
@@ -277,7 +278,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     ? (trendingHeroMovies[featuredIndex] || trendingHeroMovies[0] || null)
     : null;
 
-  const inWatchlist = currentMovie?.id ? isInWatchlist(currentMovie.id) : false;
+  const inWatchlist = currentMovie?.id ? isInWatchlist(currentMovie.id, currentMovie.media_type) : false;
   const alertActive = currentMovie?.id ? isMovieAlertActive(currentMovie.id, currentMovie.media_type) : false;
 
   const handleSearch = async (
@@ -614,10 +615,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <span className="text-amber-400">⚡</span>
                   <span>
                     {t.quotaRemainingText
-                      ? t.quotaRemainingText.replace('{n}', String(quota.remaining))
+                      ? t.quotaRemainingText.replace('{n}', String(quota.remaining)).replace(/\{s\}/g, quota.remaining > 1 ? 's' : '')
                       : `Il vous reste ${quota.remaining} recherche${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} aujourd'hui`}
                   </span>
                 </span>
+              ) : !user ? (
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signup')}
+                  className="text-[#e50914] font-bold hover:underline"
+                >
+                  Inscris-toi gratuitement pour 3 recherches par jour
+                </button>
               ) : (
                 <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                   <span>🔒</span>

@@ -4,7 +4,14 @@ import { useApp } from '../../context/AppContext';
 import { Bookmark, Sparkles, Film } from 'lucide-react';
 
 export const WatchlistView: React.FC = () => {
-  const { watchlist, setActiveView } = useApp();
+  const { user, watchlist, watchlistSyncStatus, setActiveView, openAuthModal } = useApp();
+
+  const syncDescription = {
+    local: 'Liste enregistrée sur cet appareil. Connectez-vous pour la retrouver ailleurs.',
+    syncing: 'Synchronisation de votre liste avec votre compte en cours…',
+    synced: 'Liste synchronisée avec votre compte et disponible sur vos autres appareils.',
+    error: 'Liste conservée sur cet appareil. Synchronisation en attente : vérifiez votre connexion ou reconnectez-vous.'
+  }[watchlistSyncStatus];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -17,8 +24,17 @@ export const WatchlistView: React.FC = () => {
           Ma Liste Personnelle ({watchlist.length})
         </h1>
         <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 mt-1.5">
-          Vos films et séries enregistrés pour plus tard. Synchronisation automatique multi-appareils.
+          {syncDescription}
         </p>
+        {!user && (
+          <button
+            type="button"
+            onClick={() => openAuthModal('signup')}
+            className="mt-4 px-4 py-2 rounded-lg bg-[#e50914] text-white text-xs font-bold cursor-pointer"
+          >
+            Créer un compte pour synchroniser ma liste
+          </button>
+        )}
       </div>
 
       {watchlist.length === 0 ? (

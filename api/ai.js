@@ -54,6 +54,7 @@ export default async function handler(req, res) {
   const sessionInfo = await verifyServerSession(req);
   const isPro = sessionInfo.isPro;
   const isBypassQuotas = Boolean(sessionInfo.isBypassQuotas || sessionInfo.isAdmin);
+  const freeSearchLimit = sessionInfo.isAuthenticated ? 3 : 1;
   const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
@@ -81,13 +82,15 @@ export default async function handler(req, res) {
 
     // 1. Vérification rapide en mémoire vive (bloque instantanément sans latence)
     const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
-    if (memoryCount >= 3) {
+    if (memoryCount >= freeSearchLimit) {
       return res.status(403).json({
-        error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro (1.99$) pour un accès illimité.",
+        error: sessionInfo.isAuthenticated
+          ? "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité."
+          : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
         code: "QUOTA_EXCEEDED",
         quotaExceeded: true,
         remaining: 0,
-        max: 3,
+        max: freeSearchLimit,
         ipLimited: true
       });
     }
@@ -108,19 +111,21 @@ export default async function handler(req, res) {
           memoryCount
         );
 
-        if (currentIpCount >= 3) {
+        if (currentIpCount >= freeSearchLimit) {
           return res.status(403).json({
-            error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP). Passez au compte Pro (1.99$) pour un accès illimité.",
+            error: sessionInfo.isAuthenticated
+              ? "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP)."
+              : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
             code: "QUOTA_EXCEEDED",
             quotaExceeded: true,
             remaining: 0,
-            max: 3,
+            max: freeSearchLimit,
             ipLimited: true
           });
         }
 
         // B) Vérification complémentaire du compte connecté (si utilisateur connecté)
-        if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+        if (sessionInfo.isAuthenticated && effectiveUserKey && effectiveUserKey !== ipStorageKey) {
           const { data: userSearchRecord } = await supabaseServer
             .from('user_searches')
             .select('search_count')
@@ -134,7 +139,7 @@ export default async function handler(req, res) {
               code: "QUOTA_EXCEEDED",
               quotaExceeded: true,
               remaining: 0,
-              max: 3
+              max: freeSearchLimit
             });
           }
         }
@@ -468,7 +473,7 @@ export default async function handler(req, res) {
       }
 
       // 3. Enregistrement / Incrémentation du compteur du compte connecté (si utilisateur authentifié)
-      if (effectiveUserKey && effectiveUserKey !== ipStorageKey) {
+      if (sessionInfo.isAuthenticated && effectiveUserKey && effectiveUserKey !== ipStorageKey) {
         const { data: existingUser } = await supabaseServer
           .from('user_searches')
           .select('id, search_count')
