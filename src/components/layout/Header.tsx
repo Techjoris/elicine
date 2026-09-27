@@ -358,10 +358,8 @@ export const Header: React.FC<HeaderProps> = ({
 
 
 
-            {/* Sélecteur de langue compact */}
-            {/* Masqué sur mobile : la langue reste accessible depuis le menu
-                latéral et les paramètres. */}
-            <div className="hidden sm:block flex-shrink-0">
+            {/* Sélecteur de langue dans la barre haute, y compris sur mobile */}
+            <div className="flex-shrink-0">
               <LanguageSelector compact={true} />
             </div>
 
@@ -439,9 +437,10 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => openAuthModal('login')}
                 className="flex items-center gap-1.5 bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer shadow-sm flex-shrink-0"
                 title={t.loginBtn || 'Se connecter'}
+                aria-label={t.loginBtn || 'Se connecter'}
               >
                 <LogIn size={14} className="flex-shrink-0" />
-                <span>{t.loginBtn || 'Connexion'}</span>
+                <span className="hidden sm:inline">{t.loginBtn || 'Connexion'}</span>
               </button>
             )}
           </div>
