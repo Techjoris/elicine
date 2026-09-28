@@ -1,4 +1,5 @@
 import { Movie, ApiSettings } from '../types';
+import { SearchQuotaExceededError, isSearchQuotaExceededError } from './searchQuotaError';
 import { searchMoviesTmdb, formatTmdbResults, searchPersonAndGetWorks, fetchEntityFallbackWorks, fetchTmdbEndpoint, getTmdbApiKey } from './tmdb';
 import { 
   analyzeSearchIntent, 
@@ -1314,7 +1315,10 @@ export async function executeCinoraSearch(
       if (errJson?.code === 'PRO_REQUIRED') {
         throw new Error(errJson.error || "Les filtres avancés sont réservés aux abonnés Pro.");
       }
-      throw new Error(errJson?.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+      if (errJson?.code === 'QUOTA_EXCEEDED') {
+        throw new SearchQuotaExceededError(errJson.error || "Quota gratuit atteint (3/3 recherches gratuites).");
+      }
+      throw new Error(errJson?.error || 'Recherche refusée par le serveur.');
     }
     if (!searchRes.ok) throw new Error('SEARCH_BACKEND_UNAVAILABLE');
 
@@ -1389,7 +1393,7 @@ export async function executeCinoraSearch(
       }
     }
   } catch (backendErr: any) {
-    if (backendErr?.message?.includes('Quota gratuit') || backendErr?.message?.includes('Quota journalier') || backendErr?.message?.includes('abonnés Pro')) {
+    if (isSearchQuotaExceededError(backendErr) || backendErr?.message?.includes('abonnés Pro')) {
       throw backendErr;
     }
     console.warn('[Éliciné LLM-First] Backend /api/search indisponible ou erreur, résultat vide sûr :', backendErr?.message);

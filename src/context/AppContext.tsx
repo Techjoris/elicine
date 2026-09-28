@@ -33,6 +33,7 @@ interface AppContextType {
   quota: AIQuota;
   useAiQuota: () => boolean;
   canPerformSearch: () => boolean;
+  handleSearchQuotaExceeded: () => void;
   recordSuccessfulSearch: () => Promise<void>;
   refreshQuota: () => Promise<void>;
   resetQuota: () => void;
@@ -687,6 +688,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshQuota();
   }, [user?.id, user?.isPro, user?.email]);
 
+  const handleSearchQuotaExceeded = (): void => {
+    setQuota(prev => ({ ...prev, remaining: 0 }));
+    showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99€) pour continuer !");
+    setIsProModalOpen(true);
+  };
+
   const canPerformSearch = (): boolean => {
     const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
     if ((user as any)?.isPro || isMasterAdmin) return true;
@@ -696,8 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? quota.remaining > 0
       : searchQuotaService.canSearch(user);
     if (!hasSearchAvailable) {
-      showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99€) pour continuer !");
-      setIsProModalOpen(true);
+      handleSearchQuotaExceeded();
       return false;
     }
 
@@ -1249,6 +1255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quota,
         useAiQuota,
         canPerformSearch,
+        handleSearchQuotaExceeded,
         recordSuccessfulSearch,
         refreshQuota,
         resetQuota,

@@ -12,6 +12,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
+import { isSearchQuotaExceededError } from '../../services/searchQuotaError';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
 import { scrollToElement } from '../../lib/scroll';
 import { Movie } from '../../types';
@@ -113,6 +114,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     isMovieAlertActive,
     useAiQuota,
     canPerformSearch,
+    handleSearchQuotaExceeded,
     recordSuccessfulSearch,
     quota,
     user,
@@ -366,6 +368,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       }
       
     } catch (e: any) {
+      if (isSearchQuotaExceededError(e)) {
+        handleSearchQuotaExceeded();
+        return;
+      }
       console.error('[Éliciné AI Search Error]', e?.message || e);
       const msg = e?.message || 'Erreur lors de la recherche IA.';
       setErrorMessage(msg);

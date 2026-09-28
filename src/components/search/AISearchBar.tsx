@@ -6,6 +6,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { askCineIA, executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
+import { isSearchQuotaExceededError } from '../../services/searchQuotaError';
 import { AdvancedSearchFilters } from './AdvancedSearchFilters';
 import { Movie } from '../../types';
 
@@ -28,6 +29,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   const {
     quota,
     canPerformSearch,
+    handleSearchQuotaExceeded,
     recordSuccessfulSearch,
     apiSettings,
     user,
@@ -117,6 +119,10 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         showToast(`✨ Éliciné a trouvé ${result.recommendedMovies.length} correspondances parfaites !`);
       }
     } catch (err: any) {
+      if (isSearchQuotaExceededError(err)) {
+        handleSearchQuotaExceeded();
+        return;
+      }
       console.error(err);
       showToast('Une erreur est survenue lors de la recherche.');
     } finally {

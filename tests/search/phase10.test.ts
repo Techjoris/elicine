@@ -6,6 +6,7 @@ import { orchestrateCandidateRetrieval } from '../../src/search/searchOrchestrat
 import { FALLBACK_REASONS } from '../../src/search/fallbackPolicy.js';
 import { createCanonicalIntent } from '../../src/types/canonicalIntent.runtime.js';
 import { enforceFormatConstraintAndFallback, executeCinoraSearch } from '../../src/services/unifiedAiSearch.ts';
+import { isSearchQuotaExceededError } from '../../src/services/searchQuotaError.ts';
 
 const row = (id: number, mediaType: 'movie' | 'tv' = 'movie', extra: Record<string, unknown> = {}) => ({
   id,
@@ -203,6 +204,30 @@ test('a successful empty server response is authoritative in the frontend', asyn
     assert.deepEqual(result.recommendedMovies, []);
     assert.equal(result.isFallbackMode, false);
     assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (localStorageDescriptor) Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor);
+    else delete (globalThis as any).localStorage;
+  }
+});
+
+test('a server quota refusal reaches the Pass Pro flow as a quota error', async () => {
+  const originalFetch = globalThis.fetch;
+  const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { length: 0, getItem: () => null, key: () => null }
+  });
+  globalThis.fetch = (async () => ({
+    ok: false,
+    status: 403,
+    json: async () => ({ code: 'QUOTA_EXCEEDED', error: 'Quota journalier atteint (3/3 recherches gratuites).' })
+  }) as Response) as typeof fetch;
+  try {
+    await assert.rejects(
+      executeCinoraSearch('une série de guerre moderne avec des avions de combat'),
+      error => isSearchQuotaExceededError(error)
+    );
   } finally {
     globalThis.fetch = originalFetch;
     if (localStorageDescriptor) Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor);
