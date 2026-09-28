@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 
 for (const key of Object.keys(process.env)) {
   if (/API_KEY|SUPABASE|DASHSCOPE|SEARCH_OBSERVABILITY/i.test(key)) delete process.env[key];
@@ -23,7 +21,6 @@ globalThis.fetch = async () => ({
 
 const { searchQuotaService } = await import('../../src/services/searchQuotaService.ts');
 const { default: searchHandler } = await import('../../api/search.js');
-const { GuestSignupPrompt } = await import('../../src/components/auth/GuestSignupPrompt.tsx');
 
 function response() {
   return {
@@ -35,11 +32,15 @@ function response() {
   };
 }
 
-test('visitor gets one search, then a free account keeps a three-search ceiling', async () => {
+test('visitor can use all three free searches without an account', async () => {
   serverSearchCount = 0;
-  assert.deepEqual(await searchQuotaService.getQuota(null).then(q => [q.remaining, q.max]), [1, 1]);
+  assert.deepEqual(await searchQuotaService.getQuota(null).then(q => [q.remaining, q.max]), [3, 3]);
   assert.equal(searchQuotaService.canSearch(null), true);
-  assert.deepEqual(await searchQuotaService.recordSuccessfulSearch(null).then(q => [q.remaining, q.max]), [0, 1]);
+  assert.deepEqual(await searchQuotaService.recordSuccessfulSearch(null).then(q => [q.remaining, q.max]), [2, 3]);
+  assert.equal(searchQuotaService.canSearch(null), true);
+  assert.deepEqual(await searchQuotaService.recordSuccessfulSearch(null).then(q => [q.remaining, q.max]), [1, 3]);
+  assert.equal(searchQuotaService.canSearch(null), true);
+  assert.deepEqual(await searchQuotaService.recordSuccessfulSearch(null).then(q => [q.remaining, q.max]), [0, 3]);
   assert.equal(searchQuotaService.canSearch(null), false);
 
   const member = { id: 'member-test', email: 'member@example.test', isPro: false };
@@ -50,45 +51,32 @@ test('visitor gets one search, then a free account keeps a three-search ceiling'
   assert.deepEqual(await searchQuotaService.getQuota(member).then(q => [q.remaining, q.max]), [0, 3]);
 });
 
-test('server exposes a one-search visitor quota and rejects another request', async () => {
+test('server allows three visitor searches and rejects the fourth', async () => {
   const address = '198.51.100.161';
   const headers = { 'x-forwarded-for': address };
   const quotaResponse = response();
   await searchHandler({ method: 'GET', query: { action: 'quota' }, headers, body: {} }, quotaResponse);
-  assert.equal(quotaResponse.payload.max, 1);
-  assert.equal(quotaResponse.payload.remaining, 1);
+  assert.equal(quotaResponse.payload.max, 3);
+  assert.equal(quotaResponse.payload.remaining, 3);
 
-  const first = response();
-  await searchHandler({
+  const searchRequest = () => ({
     method: 'POST', query: {}, headers,
     body: { query: 'un thriller spatial', rawQuery: 'un thriller spatial', filters: { mediaType: 'Films' } }
-  }, first);
-  assert.equal(first.statusCode, 200);
-  const afterFirst = response();
-  await searchHandler({ method: 'GET', query: { action: 'quota' }, headers, body: {} }, afterFirst);
-  assert.equal(afterFirst.payload.remaining, 0);
+  });
+  for (let searchNumber = 1; searchNumber <= 3; searchNumber++) {
+    const result = response();
+    await searchHandler(searchRequest(), result);
+    assert.equal(result.statusCode, 200, `visitor search ${searchNumber}`);
+    const currentQuota = response();
+    await searchHandler({ method: 'GET', query: { action: 'quota' }, headers, body: {} }, currentQuota);
+    assert.equal(currentQuota.payload.remaining, 3 - searchNumber);
+  }
 
   const blocked = response();
-  await searchHandler({
-    method: 'POST', query: {}, headers,
-    body: { query: 'un thriller spatial', rawQuery: 'un thriller spatial', filters: { mediaType: 'Films' } }
-  }, blocked);
+  await searchHandler(searchRequest(), blocked);
   assert.equal(blocked.statusCode, 403);
   assert.equal(blocked.payload.code, 'QUOTA_EXCEEDED');
-  assert.equal(blocked.payload.max, 1);
-});
-
-test('signup invitation is stronger than login and leaves results in the page flow', () => {
-  const markup = renderToStaticMarkup(React.createElement(GuestSignupPrompt, {
-    onSignup() {}, onLogin() {}, onDismiss() {}
-  }));
-  assert.match(markup, /Inscris-toi gratuitement pour profiter de 3 recherches par jour\./);
-  assert.ok(markup.indexOf('S’inscrire gratuitement') < markup.indexOf('Se connecter'));
-  assert.match(markup, /bg-\[#e50914\]/);
-  assert.match(markup, /max-w-xl min-w-0/);
-  assert.doesNotMatch(markup, /fixed inset-0|aria-modal|backdrop-blur/);
-  assert.match(markup, /Tes résultats restent disponibles juste au-dessus\./);
-  assert.doesNotMatch(markup, /role="status"/);
+  assert.equal(blocked.payload.max, 3);
 });
 
 test.after(() => { globalThis.fetch = originalFetch; });

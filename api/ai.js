@@ -54,7 +54,7 @@ export default async function handler(req, res) {
   const sessionInfo = await verifyServerSession(req);
   const isPro = sessionInfo.isPro;
   const isBypassQuotas = Boolean(sessionInfo.isBypassQuotas || sessionInfo.isAdmin);
-  const freeSearchLimit = sessionInfo.isAuthenticated ? 3 : 1;
+  const freeSearchLimit = 3;
   const effectiveUserKey = sessionInfo.effectiveUserId;
   const todayDate = new Date().toISOString().split('T')[0];
 
@@ -84,9 +84,7 @@ export default async function handler(req, res) {
     const memoryCount = getMemoryDailyQuota(ipHash, todayDate);
     if (memoryCount >= freeSearchLimit) {
       return res.status(403).json({
-        error: sessionInfo.isAuthenticated
-          ? "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité."
-          : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
+        error: "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité.",
         code: "QUOTA_EXCEEDED",
         quotaExceeded: true,
         remaining: 0,
@@ -113,9 +111,7 @@ export default async function handler(req, res) {
 
         if (currentIpCount >= freeSearchLimit) {
           return res.status(403).json({
-            error: sessionInfo.isAuthenticated
-              ? "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP)."
-              : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
+            error: "Quota journalier atteint (3/3 recherches gratuites pour cette adresse IP).",
             code: "QUOTA_EXCEEDED",
             quotaExceeded: true,
             remaining: 0,

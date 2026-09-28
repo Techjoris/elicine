@@ -2388,7 +2388,7 @@ export default async function handler(req, res) {
 
     const sessionInfo = await verifyServerSession(req);
     const isPro = sessionInfo.isPro || sessionInfo.isBypassQuotas;
-    const freeSearchLimit = sessionInfo.isAuthenticated ? 3 : 1;
+    const freeSearchLimit = 3;
     const effectiveUserKey = sessionInfo.effectiveUserId;
     const ipHash = sessionInfo.ipHash;
     // Les préférences d'un membre : lues une seule fois, elles servent à la fois
@@ -2614,7 +2614,7 @@ export default async function handler(req, res) {
         });
       }
 
-      // Une découverte visiteur, puis trois recherches par jour avec un compte gratuit.
+      // Trois recherches gratuites par jour, avec ou sans compte.
       if (!isPro) {
         let searchCount = getMemoryDailyQuota(ipHash, todayDate);
         if (supabaseServer) {
@@ -2630,9 +2630,7 @@ export default async function handler(req, res) {
         }
         if (searchCount >= freeSearchLimit) {
           return res.status(403).json({
-            error: sessionInfo.isAuthenticated
-              ? "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité."
-              : "Inscris-toi gratuitement pour profiter de 3 recherches par jour.",
+            error: "Quota journalier atteint (3/3 recherches gratuites). Passez au compte Pro pour un accès illimité.",
             code: "QUOTA_EXCEEDED",
             quotaExceeded: true,
             remaining: 0,

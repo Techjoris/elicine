@@ -618,7 +618,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       : `Il vous reste ${quota.remaining} recherche${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} aujourd'hui`}
                   </span>
                 </span>
-              ) : !user ? null : (
+              ) : (
                 <span className="text-rose-400 font-medium flex items-center gap-1.5 flex-wrap">
                   <span>🔒</span>
                   <span>{t.quotaExceeded || 'Quota gratuit atteint (0 recherche restante) •'}</span>

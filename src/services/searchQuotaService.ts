@@ -2,7 +2,7 @@ import { AIQuota, UserProfile } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const MAX_FREE_DAILY_SEARCHES = 3;
-export const MAX_GUEST_SEARCHES = 1;
+export const MAX_GUEST_SEARCHES = MAX_FREE_DAILY_SEARCHES;
 const LOCAL_STORAGE_QUOTA_KEY = 'elicine_daily_ai_quota';
 const LOCAL_STORAGE_DEVICE_ID_KEY = 'elicine_device_id';
 

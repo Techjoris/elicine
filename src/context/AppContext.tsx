@@ -696,10 +696,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? quota.remaining > 0
       : searchQuotaService.canSearch(user);
     if (!hasSearchAvailable) {
-      if (!user) {
-        openAuthModal('signup');
-        return false;
-      }
       showToast("🔒 Quota gratuit atteint (3/3 recherches aujourd'hui). Passez au compte Pro (1.99€) pour continuer !");
       setIsProModalOpen(true);
       return false;
