@@ -276,7 +276,7 @@ export default async function handler(req, res) {
     const countryCode = country ? String(country).toUpperCase().trim() : null;
     const isSaspayAvailable = countryCode ? SASPAY_ALLOWED_COUNTRIES.includes(countryCode) : null;
 
-    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    res.setHeader('Cache-Control', 'private, no-store');
     return res.status(200).json({
       countryCode,
       country: countryCode,

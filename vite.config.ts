@@ -283,6 +283,7 @@ export default defineConfig(({ mode }) => {
             // 5. ROUTE /api/geo
             if (pathname === '/api/geo') {
               adaptResponse();
+              res.setHeader('Cache-Control', 'private, no-store');
               const country =
                 req.headers['x-vercel-ip-country'] ||
                 req.headers['cf-ipcountry'] ||

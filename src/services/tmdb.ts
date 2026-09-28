@@ -48,8 +48,9 @@ export function getActiveTmdbLanguage(language?: string): string {
     language || 
     (typeof document !== 'undefined' ? (document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i)?.[1]) : null) ||
     (typeof localStorage !== 'undefined' ? (localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang')) : null) ||
+    (typeof document !== 'undefined' ? document.documentElement.lang : null) ||
     (typeof navigator !== 'undefined' ? navigator.language : null) ||
-    'fr'
+    'en'
   ).toLowerCase().trim();
 
   if (code.startsWith('en')) return 'en-US';

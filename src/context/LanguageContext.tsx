@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { translations, Language, TranslationSchema, TranslationFunction, createTranslationProxy } from '../i18n/translations';
-import { getUserCountry } from '../services/geoService';
+import { translations, Language, TranslationFunction, createTranslationProxy } from '../i18n/translations';
+import { detectCountryLanguage } from '../i18n/countryLanguage';
 
 export interface LanguageContextType {
   lang: Language;
@@ -11,45 +11,36 @@ export interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const SUPPORTED_LANGUAGES: Language[] = ['fr', 'en', 'es', 'de', 'it'];
-const SPANISH_COUNTRIES = ['ES', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'GT', 'CU', 'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA', 'UY', 'PR', 'GQ'];
-const FRENCH_COUNTRIES = ['FR', 'CM', 'CI', 'SN', 'CD', 'MG', 'ML', 'BF', 'NE', 'GN', 'TD', 'BI', 'BJ', 'TG', 'CF', 'CG', 'GA', 'DJ', 'KM', 'BE', 'CH', 'LU', 'MC'];
-const GERMAN_COUNTRIES = ['DE', 'AT'];
-const ITALIAN_COUNTRIES = ['IT', 'SM', 'VA'];
+
+function getSavedLanguage(): Language | null {
+  try {
+    if (typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i);
+      if (match && SUPPORTED_LANGUAGES.includes(match[1].toLowerCase() as Language)) {
+        return match[1].toLowerCase() as Language;
+      }
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang');
+      if (saved && SUPPORTED_LANGUAGES.includes(saved.toLowerCase() as Language)) {
+        return saved.toLowerCase() as Language;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
 
 export function detectPreferredLanguage(): Language {
-  // 1. Cookie 'userLanguage'
-  if (typeof document !== 'undefined') {
-    const match = document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i);
-    if (match && SUPPORTED_LANGUAGES.includes(match[1].toLowerCase() as Language)) {
-      return match[1].toLowerCase() as Language;
-    }
-  }
-
-  // 2. LocalStorage sauvegardé
-  if (typeof localStorage !== 'undefined') {
-    const saved = localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang');
-    if (saved && SUPPORTED_LANGUAGES.includes(saved.toLowerCase() as Language)) {
-      return saved.toLowerCase() as Language;
-    }
-  }
-
-  // 3. Navigateur (navigator.language)
-  if (typeof navigator !== 'undefined' && navigator.language) {
-    const nav = navigator.language.slice(0, 2).toLowerCase() as Language;
-    if (SUPPORTED_LANGUAGES.includes(nav)) {
-      return nav;
-    }
-  }
-
-  // 4. Défaut : 'fr'
-  return 'fr';
+  return getSavedLanguage() || 'en';
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>(() => detectPreferredLanguage());
+  const [ready, setReady] = useState(() => Boolean(getSavedLanguage()));
 
   const t = useMemo(() => {
-    const schema = translations[lang] || translations.fr;
+    const schema = translations[lang] || translations.en;
     return createTranslationProxy(schema);
   }, [lang]);
 
@@ -68,59 +59,44 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [lang, t]);
 
   useEffect(() => {
-    async function initLanguage() {
-      // 1. Préférence manuelle enregistrée ?
-      const savedLang = (
-        (typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)userLanguage=([a-zA-Z]{2})/i)?.[1] : null) ||
-        (typeof localStorage !== 'undefined' ? (localStorage.getItem('userLanguage') || localStorage.getItem('elicine_lang')) : null)
-      )?.toLowerCase() as Language | null;
-
-      if (savedLang && SUPPORTED_LANGUAGES.includes(savedLang)) {
-        setLang(savedLang);
-        return;
-      }
-
-      // 2. Navigateur en priorité si pas de préférence explicite
-      if (typeof navigator !== 'undefined' && navigator.language) {
-        const navLang = navigator.language.slice(0, 2).toLowerCase() as Language;
-        if (SUPPORTED_LANGUAGES.includes(navLang)) {
-          setLang(navLang);
-          return;
-        }
-      }
-
-      // 3. Détection par pays d'émission (IP / Timezone)
-      try {
-        const country = await getUserCountry();
-        const code = country?.code?.toUpperCase();
-
-        if (code && SPANISH_COUNTRIES.includes(code)) {
-          setLang('es');
-        } else if (code && FRENCH_COUNTRIES.includes(code)) {
-          setLang('fr');
-        } else if (code && GERMAN_COUNTRIES.includes(code)) {
-          setLang('de');
-        } else if (code && ITALIAN_COUNTRIES.includes(code)) {
-          setLang('it');
-        } else {
-          // Reste du monde : anglais par défaut
-          setLang('en');
-        }
-      } catch (e) {
-        setLang('fr');
-      }
+    const savedLanguage = getSavedLanguage();
+    if (savedLanguage) {
+      setLang(savedLanguage);
+      setReady(true);
+      return;
     }
 
-    initLanguage();
+    let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2500);
+    detectCountryLanguage(controller.signal).then(countryLanguage => {
+      if (!active) return;
+      // Un choix manuel effectué pendant la requête garde la priorité.
+      const selectedLanguage = getSavedLanguage() || countryLanguage;
+      document.documentElement.lang = selectedLanguage;
+      setLang(selectedLanguage);
+      setReady(true);
+    }).finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   const changeLanguage = (newLang: Language) => {
     if (SUPPORTED_LANGUAGES.includes(newLang)) {
       setLang(newLang);
-      localStorage.setItem('userLanguage', newLang);
-      localStorage.setItem('elicine_lang', newLang);
+      setReady(true);
+      try {
+        localStorage.setItem('userLanguage', newLang);
+        localStorage.setItem('elicine_lang', newLang);
+      } catch (_) {}
       if (typeof document !== 'undefined') {
-        document.cookie = `userLanguage=${newLang}; path=/; max-age=31536000; SameSite=Lax`;
+        try {
+          document.cookie = `userLanguage=${newLang}; path=/; max-age=31536000; SameSite=Lax`;
+        } catch (_) {}
         document.documentElement.lang = newLang;
       }
       if (typeof window !== 'undefined') {
@@ -131,7 +107,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LanguageContext.Provider value={{ lang, setLanguage: changeLanguage, t }}>
-      {children}
+      {ready ? children : (
+        <div className="flex min-h-screen items-center justify-center text-2xl font-bold tracking-wide">
+          Éliciné
+        </div>
+      )}
     </LanguageContext.Provider>
   );
 }
@@ -140,9 +120,9 @@ export const useTranslation = (): LanguageContextType => {
   const context = useContext(LanguageContext);
   if (!context) {
     return {
-      lang: 'fr',
+      lang: 'en',
       setLanguage: () => {},
-      t: createTranslationProxy(translations.fr)
+      t: createTranslationProxy(translations.en)
     };
   }
   return context;
