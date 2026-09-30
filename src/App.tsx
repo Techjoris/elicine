@@ -417,7 +417,7 @@ export const AppContent: React.FC = () => {
       <Header onGoHome={handleResetHome} onOpenTip={() => setIsSupporterModalOpen(true)} />
 
       {/* Main Body Layout (Sidebar + Content) */}
-      <div className="flex-1 flex max-w-7xl w-full min-w-0 mx-auto">
+      <div className="flex-1 flex w-full min-w-0">
         
         {/* Fixed Sidebar */}
         <Sidebar 

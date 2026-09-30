@@ -39,7 +39,7 @@ export const UpcomingView: React.FC = () => {
       {loading ? <div role="status" className="py-20 flex justify-center gap-3 text-slate-500"><Loader2 className="animate-spin w-5 h-5" /> Chargement des prochaines sorties…</div>
         : error ? <div role="alert" className="text-center py-14 space-y-4"><p>{error}</p><button onClick={() => setAttempt(v => v + 1)} className="rounded-xl px-5 py-3 bg-[#e50914] text-white">Réessayer</button></div>
         : !visible.length ? <p className="py-20 text-center text-slate-500">Aucune sortie annoncée pour cette sélection.</p>
-        : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5">
+        : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 sm:gap-5">
           {visible.map(movie => {
             const key = `${movie.media_type}:${movie.id}`;
             const active = isMovieAlertActive(movie.id, movie.media_type);

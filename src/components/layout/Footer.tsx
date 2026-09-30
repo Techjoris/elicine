@@ -42,7 +42,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
 
   return (
     <footer className="w-full mt-auto border-t border-slate-200/80 dark:border-white/10 bg-white/90 dark:bg-[#0a0a0a] transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-600 dark:text-zinc-400">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-600 dark:text-zinc-400">
         
         {/* Left: Brand + Attribution */}
         <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">

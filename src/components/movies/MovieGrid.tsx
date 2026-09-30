@@ -264,7 +264,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4 sm:gap-6">
           {movies.map((movie) => (
             <MovieCard key={`${movie.media_type || 'item'}-${movie.id}`} movie={movie} showAiMatch={showAiMatch} />
           ))}
