@@ -5,22 +5,14 @@ import {
   Heart, 
   Check, 
   Bell, 
-  Sparkles,
-  ExternalLink
+  Sparkles
 } from 'lucide-react';
 import { Movie } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { 
-  resolveStreamingAction, 
-  StreamingActionResult,
-  buildStreamingUrl,
-  getDirectStreamingUrl,
-  isIntermediaryWatchLink 
-} from '../../services/streamingResolver';
+import { resolveStreamingAction, StreamingActionResult } from '../../services/streamingResolver';
 import { redirectToStreamingProvider } from '../../services/deepLinkHelper';
 import { getCachedCountryCode } from '../../services/geoService';
-import { getVpnAffiliateUrl } from '../../config/affiliates';
 import { mediaTypeBadge, mediaTypeEndpoint } from '../../lib/mediaType';
 
 interface MovieCardProps {
@@ -227,12 +219,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
       <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
         <div>
           {/* Title */}
-          <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-[#e50914] dark:group-hover:text-zinc-200 transition-colors">
+          <h3 className="text-xs sm:text-sm lg:text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-[#e50914] dark:group-hover:text-zinc-200 transition-colors">
             {movie.title}
           </h3>
 
           {/* Year and Rating */}
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-medium pt-0.5">
+          <div className="flex items-center justify-between text-[11px] lg:text-xs text-slate-500 dark:text-zinc-400 font-medium pt-0.5">
             <span>{releaseYear}</span>
             <div 
               className="flex items-center gap-1 text-slate-700 dark:text-zinc-300"
@@ -244,12 +236,51 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, showAiMatch = true 
           </div>
         </div>
 
-        {/* Section Streaming Épurée (Indicateur discret en 1 ligne) */}
+        {/* Disponibilité locale : logos et accès directs visibles sur ordinateur. */}
         {streamingAction?.type === 'DIRECT' && streamingAction.providers.length > 0 ? (
-          <div className="pt-1.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#e50914] flex-shrink-0" />
-            <span className="truncate">Sur {streamingAction.providers[0].name}{streamingAction.providers.length > 1 ? ` +${streamingAction.providers.length - 1}` : ''}</span>
-          </div>
+          <>
+            <div className="lg:hidden pt-1.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-zinc-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e50914] flex-shrink-0" />
+              <span className="truncate">Sur {streamingAction.providers[0].name}{streamingAction.providers.length > 1 ? ` +${streamingAction.providers.length - 1}` : ''}</span>
+            </div>
+            <div className="hidden lg:flex flex-col gap-2 pt-2.5 border-t border-slate-200 dark:border-white/10">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-zinc-300">Disponible sur</span>
+              <div className="flex flex-wrap gap-1.5">
+                {streamingAction.providers.slice(0, 4).map((provider) => (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      redirectToStreamingProvider(movie, provider, showToast, provider.actionUrl);
+                    }}
+                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/20 bg-slate-50 dark:bg-white/10 px-2 py-1.5 text-slate-800 dark:text-white shadow-sm hover:border-[#e50914]/60 hover:bg-[#e50914]/10 transition-colors"
+                    title={`Regarder ${movie.title} sur ${provider.name}`}
+                    aria-label={`Regarder ${movie.title} sur ${provider.name}`}
+                  >
+                    <span className={`relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-black ${getPlatformBadgeStyle(provider.name)}`}>
+                      {provider.name.slice(0, 2).toUpperCase()}
+                      {provider.logo && (
+                        <img
+                          src={provider.logo}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          loading="lazy"
+                          onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                    </span>
+                    <span className="min-w-0 truncate text-xs font-semibold">{provider.name}</span>
+                  </button>
+                ))}
+                {streamingAction.providers.length > 4 && (
+                  <span className="self-center text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    +{streamingAction.providers.length - 4}
+                  </span>
+                )}
+              </div>
+            </div>
+          </>
         ) : streamingAction?.type === 'VPN_REQUIRED' ? (
           <div className="pt-1.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-zinc-500">
             <span>{streamingAction.marketFlag || '🇺🇸'}</span>

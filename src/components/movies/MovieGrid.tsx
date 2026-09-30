@@ -157,10 +157,10 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       {/* Section Header - Typographie asymétrique imposante */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 pt-2 border-b border-slate-200/80 dark:border-white/[0.06] pb-3">
         <div>
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+          <h2 className="text-xl sm:text-2xl md:text-3xl 2xl:text-4xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
             {displayTitle}
           </h2>
-          {subtitle && <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs lg:text-sm text-slate-500 dark:text-zinc-400 mt-0.5">{subtitle}</p>}
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
@@ -264,7 +264,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 min-[1400px]:grid-cols-5 gap-4 sm:gap-6">
           {movies.map((movie) => (
             <MovieCard key={`${movie.media_type || 'item'}-${movie.id}`} movie={movie} showAiMatch={showAiMatch} />
           ))}
