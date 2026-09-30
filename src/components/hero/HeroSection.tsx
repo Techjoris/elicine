@@ -480,7 +480,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, [setSearchQuery]);
 
   return (
-    <div ref={heroRef} className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] lg:min-h-[500px] 2xl:min-h-[520px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 lg:py-10 transition-all duration-700">
+    <div ref={heroRef} className="relative w-full 2xl:max-w-[1400px] mx-auto rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0a0a0a] min-h-[500px] sm:min-h-[560px] md:min-h-[620px] lg:min-h-[500px] 2xl:min-h-[520px] flex flex-col justify-between px-4 py-8 sm:p-10 md:p-14 lg:py-10 transition-all duration-700">
       
       {/* ─── 1. ARRIÈRE-PLAN CINÉMATOGRAPHIQUE IMMERSIF (Backdrop) ─── */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
@@ -501,26 +501,26 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       </div>
 
       {/* ─── 3. CONTENU CENTRAL ÉDITORIAL & ASYMÉTRIQUE ─── */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center max-w-3xl lg:max-w-5xl mx-auto my-auto w-full">
+      <div className="relative z-10 flex flex-col items-center justify-center text-center max-w-3xl mx-auto my-auto w-full">
         
         {/* a) Kicker Éditorial avec point d'accent rouge cinéma */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-black/60 border border-white/10 backdrop-blur-md mb-3 sm:mb-5 animate-fade-in">
           <span className="w-1.5 h-1.5 rounded-full bg-[#e50914]" />
-          <span className="text-[10px] sm:text-xs lg:text-sm font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.aiAnalysisBadge}</span>
+          <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.aiAnalysisBadge}</span>
         </div>
 
         {/* b) Titre Majestueux, Moderne & Épuré */}
         <div className="flex flex-col items-center justify-center mb-2.5 sm:mb-3.5 animate-fade-in">
-          <h1 className="font-jakarta text-2xl sm:text-3xl md:text-4xl lg:text-5xl 2xl:text-[3.25rem] font-bold sm:font-extrabold tracking-tight leading-tight sm:leading-[1.18] text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
+          <h1 className="font-jakarta text-2xl sm:text-3xl md:text-4xl lg:text-5xl lg:max-w-[720px] text-balance font-bold sm:font-extrabold tracking-tight leading-tight sm:leading-[1.18] text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
             {t.tagline}
           </h1>
         </div>
-        <p className="text-xs sm:text-sm md:text-base lg:text-lg text-zinc-400 sm:text-zinc-400/90 max-w-lg lg:max-w-xl mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-sm px-2">
+        <p className="text-xs sm:text-sm md:text-base text-zinc-400 sm:text-zinc-400/90 max-w-lg mx-auto font-normal leading-relaxed mb-5 sm:mb-7 drop-shadow-sm px-2">
           {t('hero.subtitle') || t.heroSubtitle}
         </p>
 
         {/* c) Barre de Recherche Unifiée "Floating Glass" Minimaliste */}
-        <div className="w-full max-w-2xl lg:max-w-3xl mx-auto flex flex-col gap-1.5">
+        <div className="w-full max-w-2xl mx-auto flex flex-col gap-1.5">
           <form 
             onSubmit={(e) => {
               e.preventDefault();
@@ -539,7 +539,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               id="main-ai-search"
               rows={1}
               maxLength={350}
-              className="flex-1 w-full bg-transparent text-sm sm:text-base lg:text-lg text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
+              className="flex-1 w-full bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 outline-none px-1.5 py-1 min-w-0 font-normal resize-none overflow-y-auto max-h-[120px] leading-6 scrollbar-thin scrollbar-thumb-zinc-700"
               placeholder={isMobile ? (t.searchPlaceholderShort || "Ambiance, thème, acteur...") : (t.searchPlaceholder || "Décrivez une ambiance, un thème ou un acteur...")}
               value={searchPrompt}
               onChange={(e) => {
@@ -719,7 +719,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* e) Encart "À l'Affiche" & Actions du Film */}
         {currentMovie && (
           <div className="pt-1 sm:pt-2 pb-1 space-y-2.5 sm:space-y-3">
-            <p className="text-[11px] sm:text-xs lg:text-sm uppercase tracking-[0.25em] text-zinc-400 font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+            <p className="text-[11px] sm:text-xs uppercase tracking-[0.25em] text-zinc-400 font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
               {t.featuredBadge} : <span className="text-white font-black">{currentMovie.title}</span>
             </p>
             <div className="flex items-center justify-center gap-2 sm:gap-2.5">
