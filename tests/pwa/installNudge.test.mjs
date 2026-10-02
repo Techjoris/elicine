@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  INSTALL_NUDGE_COOLDOWN_MS, INSTALL_NUDGE_DURATION_MS, isMobileEnvironment, shouldShowInstallNudge
+  INSTALL_NUDGE_COOLDOWN_MS, isMobileEnvironment, shouldShowInstallNudge
 } from '../../src/lib/installNudge.ts';
 
 const CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Mobile Safari/537.36';
@@ -55,7 +55,6 @@ test('a reconnection forces the reminder even inside the hour', () => {
   }), true);
 });
 
-test('the display duration is the requested two seconds', () => {
-  assert.equal(INSTALL_NUDGE_DURATION_MS, 2000);
+test('the reminder cooldown stays at one hour', () => {
   assert.equal(INSTALL_NUDGE_COOLDOWN_MS, 3600000);
 });

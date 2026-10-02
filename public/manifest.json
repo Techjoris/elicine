@@ -1,6 +1,6 @@
 {
   "id": "/?source=pwa",
-  "name": "Éliciné - Cinéma d'Exception",
+  "name": "Éliciné",
   "short_name": "Éliciné",
   "description": "Découvrez des chefs-d'œuvre cinématographiques sélectionnés sur mesure pour vous.",
   "start_url": "/?source=pwa",
@@ -73,22 +73,6 @@
       "description": "Films et séries en vogue",
       "url": "/?action=trending",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Écran principal Éliciné"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Interface cinéma Éliciné"
     }
   ]
 }

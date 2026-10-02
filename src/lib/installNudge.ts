@@ -2,13 +2,11 @@
  * Rappel d'installation pour les visiteurs mobiles qui n'ont pas l'application.
  *
  * Le rappel est volontairement discret : il ne s'affiche que sur mobile, jamais
- * quand Éliciné est déjà installée, au plus une fois par heure, et il s'efface
- * tout seul. Une reconnexion le déclenche sans attendre l'heure écoulée.
+ * quand Éliciné est déjà installée, au plus une fois par heure.
+ * Une reconnexion le déclenche sans attendre l'heure écoulée.
  */
 
 export const INSTALL_NUDGE_COOLDOWN_MS = 60 * 60 * 1000;
-/** Durée d'affichage demandée : deux secondes, puis disparition. */
-export const INSTALL_NUDGE_DURATION_MS = 2000;
 /** En dessous de cette largeur, l'appareil est traité comme un téléphone. */
 export const MOBILE_VIEWPORT_MAX = 820;
 

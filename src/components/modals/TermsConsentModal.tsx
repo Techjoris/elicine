@@ -43,6 +43,7 @@ export const TermsConsentModal: React.FC = () => {
       setHasAccepted(true);
       setIsOpen(false);
       setIsClosing(false);
+      requestAnimationFrame(() => window.dispatchEvent(new Event('elicine-terms-accepted')));
     }, 180);
   };
 

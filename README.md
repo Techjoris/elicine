@@ -35,8 +35,8 @@
 - Redirection directe sans iframe (`window.top.location.href`).
 
 ### 6. PWA & Affiliation
-- `manifest.json` et Service Worker `sw.js` dans `/public` pour installation native immédiate.
-- Capture de l'événement `beforeinstallprompt` au clic sur le bouton d'installation.
+- `manifest.json` et Service Worker `sw.js` dans `/public` pour rendre la PWA installable sur les navigateurs compatibles.
+- Invite native conservée dès `beforeinstallprompt`, puis déclenchée par le bouton « Installer ». Sur les autres navigateurs, le guide indique le menu à utiliser ; le bandeau mobile reste visible jusqu'à une action.
 - Écouteur de paramètre `?ref=` pour le système de parrainage.
 
 ### 7. Prochainement & Alertes de sortie (Pass Pro)

@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { checkIsStandalone, isAppAlreadyInstalled, promptNativeInstall } from '../../hooks/usePWAInstall';
 import {
-  INSTALL_NUDGE_COOLDOWN_MS,
-  INSTALL_NUDGE_DURATION_MS,
   isMobileEnvironment,
   shouldShowInstallNudge
 } from '../../lib/installNudge';
@@ -15,15 +13,14 @@ const STORAGE_KEY = 'elicine_install_nudge_at';
 
 /**
  * Rappel discret d'installation, réservé aux visiteurs mobiles qui n'ont pas
- * encore l'application. Il s'affiche deux secondes puis s'efface, revient au
- * plus une fois par heure, et sans attendre après une reconnexion.
+ * encore l'application. Elle reste visible jusqu'au clic ou à la fermeture,
+ * pour que l'action d'installation ne disparaisse pas avant d'être lue.
  */
 export const InstallNudge: React.FC = () => {
   const { user } = useAuth();
   const { user: appUser } = useApp();
   const [isVisible, setIsVisible] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUserId = useRef<string | null>(null);
 
   const readLastShown = (): number | null => {
@@ -40,6 +37,7 @@ export const InstallNudge: React.FC = () => {
   };
 
   const show = useCallback((force: boolean) => {
+    if (document.getElementById('terms-gate-title')) return;
     const installed = checkIsStandalone();
     const eligible = shouldShowInstallNudge({
       now: Date.now(),
@@ -53,18 +51,23 @@ export const InstallNudge: React.FC = () => {
     // L'application peut être installée sans être ouverte : on vérifie aussi
     // avant d'afficher, pour ne jamais relancer quelqu'un qui l'a déjà.
     isAppAlreadyInstalled().then(already => {
-      if (already) return;
+      if (already || document.getElementById('terms-gate-title')) return;
       rememberShown();
       setIsVisible(true);
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      hideTimer.current = setTimeout(() => setIsVisible(false), INSTALL_NUDGE_DURATION_MS);
     }).catch(() => { /* silencieux */ });
   }, []);
 
   // Une fois au chargement, en respectant le délai d'une heure.
   useEffect(() => {
-    const timer = setTimeout(() => show(false), 2500);
-    return () => clearTimeout(timer);
+    const showAfterConsent = () => {
+      if (!document.getElementById('terms-gate-title')) show(false);
+    };
+    const timer = setTimeout(showAfterConsent, 2500);
+    window.addEventListener('elicine-terms-accepted', showAfterConsent);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('elicine-terms-accepted', showAfterConsent);
+    };
   }, [show]);
 
   // Une reconnexion déclenche le rappel sans attendre.
@@ -75,7 +78,11 @@ export const InstallNudge: React.FC = () => {
     if (id && !wasEmpty) show(true);
   }, [user?.id, appUser?.id, show]);
 
-  useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
+  useEffect(() => {
+    const hide = () => setIsVisible(false);
+    window.addEventListener('appinstalled', hide);
+    return () => window.removeEventListener('appinstalled', hide);
+  }, []);
 
   const handleOpen = async () => {
     setIsVisible(false);
@@ -86,31 +93,24 @@ export const InstallNudge: React.FC = () => {
   return (
     <>
       {isVisible && (
-        <div
-          className="fixed left-3 right-3 top-16 sm:left-auto sm:right-6 sm:w-80 z-[150] animate-slide-up"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950/95 dark:bg-zinc-900/95 border border-red-500/40 shadow-2xl shadow-black/50">
+        <div className="fixed left-3 right-3 top-16 sm:left-auto sm:right-6 sm:w-80 z-[150] animate-slide-up">
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#343434] text-white shadow-2xl shadow-black/40">
+            <img src="/icon-192.png" alt="" className="w-11 h-11 rounded-xl bg-white flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold truncate">Installer Éliciné</span>
+              <span className="block text-xs text-zinc-300 truncate">{window.location.hostname}</span>
+            </div>
             <button
               type="button"
               onClick={handleOpen}
-              className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
-              title="Installer Éliciné"
+              className="px-2 py-2 text-sm font-semibold hover:text-red-300"
             >
-              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-white font-black flex-shrink-0">
-                É
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-bold text-white truncate">Installer Éliciné</span>
-                <span className="block text-[11px] text-zinc-400 truncate">Accès direct, plein écran, un seul geste</span>
-              </span>
-              <Download className="w-4 h-4 text-red-400 flex-shrink-0" />
+              Installer
             </button>
             <button
               type="button"
               onClick={() => setIsVisible(false)}
-              className="p-1 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer flex-shrink-0"
+              className="p-1 rounded-full text-zinc-300 hover:text-white transition-colors cursor-pointer flex-shrink-0"
               aria-label="Masquer"
             >
               <X className="w-3.5 h-3.5" />
