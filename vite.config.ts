@@ -207,6 +207,21 @@ export default defineConfig(({ mode }) => {
               }
             }
 
+            // Title links use the same handler locally and in production.
+            if (pathname === '/api/watch-link') {
+              adaptResponse();
+              (req as any).query = Object.fromEntries(url.searchParams);
+              try {
+                const fileUrl = pathToFileURL(path.resolve('./api/watch-link.js')).href;
+                const handler = (await import(/* @vite-ignore */ fileUrl)).default;
+                return await handler(req, res);
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ links: {}, error: err.message }));
+              }
+            }
+
             // 3.8. ROUTE /api/releases — classement « Prochainement » par degré d'attente
             if (pathname === '/api/releases') {
               adaptResponse();

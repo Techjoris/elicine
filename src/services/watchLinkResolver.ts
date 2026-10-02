@@ -1,5 +1,4 @@
-import { providerKeyFor, type WatchLinkMap } from '../../api/_watchLink.js';
-import { withAmazonAffiliateTag } from '../lib/amazonAffiliate.js';
+import { providerKeyFor, normalizeOfferUrl, isTitleOfferUrl, type WatchLinkMap, type WatchOfferType } from '../../api/_watchLink.js';
 
 /**
  * Récupère, pour un titre, l'URL exacte de sa fiche chez chaque plateforme.
@@ -27,25 +26,32 @@ export function fetchTitleWatchLinks(params: {
   const cached = pending.get(key);
   if (cached) return cached;
 
-  const search = new URLSearchParams({ title, type: mediaType, country });
+  const search = new URLSearchParams({ title, type: mediaType, country, v: '2' });
   if (year) search.set('year', year);
 
-  const request = fetch(`/api/watch-link?${search.toString()}`)
+  const request = fetch(`/api/watch-link?${search.toString()}`, {
+    signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined
+  })
     .then(response => (response.ok ? response.json() : { links: {} }))
     .then(data => (data && typeof data.links === 'object' && data.links !== null ? data.links as WatchLinkMap : {}))
-    .catch(() => ({} as WatchLinkMap));
+    .catch(() => ({} as WatchLinkMap))
+    .then(links => {
+      // A transient failure must not disable title resolution for the entire session.
+      if (!Object.keys(links).length) pending.delete(key);
+      return links;
+    });
 
   pending.set(key, request);
   return request;
 }
 
 /** URL de la fiche du fournisseur demandé, ou null si elle n'a pas été résolue. */
-export function deepLinkForProvider(links: WatchLinkMap | null | undefined, providerName: string): string | null {
+export function deepLinkForProvider(links: WatchLinkMap | null | undefined, providerName: string, offerType?: WatchOfferType): string | null {
   if (!links) return null;
   const key = providerKeyFor(providerName);
   if (!key) return null;
-  const url = links[key];
-  return typeof url === 'string' && url.startsWith('http') ? withAmazonAffiliateTag(url) : null;
+  const url = links[offerType ? `${key}:${offerType}` : key];
+  return isTitleOfferUrl(url, providerName) ? normalizeOfferUrl(url) : null;
 }
 
 /** Année d'exploitation d'une œuvre, sous forme de chaîne à 4 chiffres. */

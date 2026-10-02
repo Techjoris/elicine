@@ -5,6 +5,7 @@ import { getCachedCountryCode } from './geoService';
 import { 
   getPlatformDirectUrl, 
   getDirectStreamingUrl,
+  getDirectPlatformSearchUrl,
   isIntermediaryWatchLink,
   StreamingDeepLinkOptions 
 } from './deepLinkHelper';
@@ -24,6 +25,7 @@ export interface VodProviderItem {
   logo: string | null;
   url: string;
   amazonOfferType?: 'rent' | 'buy';
+  offerType: 'rent' | 'buy';
 }
 
 export interface MediaProvidersResult {
@@ -59,6 +61,7 @@ export function getPlatformSearchUrl(name: string, movieTitle: string = ''): str
 
 // Générateur de redirection boutique VOD
 export function getVodStoreUrl(name: string, movieTitle: string = ''): string {
+  if (movieTitle.trim()) return getDirectPlatformSearchUrl(name, movieTitle);
   const n = name.toLowerCase();
   const q = encodeURIComponent(movieTitle);
   if (n.includes('apple') || n.includes('itunes')) return 'https://tv.apple.com';
@@ -216,13 +219,13 @@ export async function getMediaProviders(
     const uniqueVod = new Map<string, VodProviderItem>();
     rawVod.forEach(({ provider: p, offerType }) => {
       const isAmazon = /amazon/i.test(p.provider_name || '');
-      // Keep Amazon rental and purchase separate; other stores retain their existing grouping.
-      const offerKey = isAmazon ? `${p.provider_id}_${offerType}` : String(p.provider_id);
+      const offerKey = `${p.provider_id}_${offerType}`;
       if (p.provider_id && !uniqueVod.has(offerKey)) {
         uniqueVod.set(offerKey, {
           name: p.provider_name,
           logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
           url: getVodStoreUrl(p.provider_name, movieTitle),
+          offerType,
           ...(isAmazon ? { amazonOfferType: offerType } : {})
         });
       }

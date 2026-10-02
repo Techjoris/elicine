@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     }
 
     const links = await resolveTitleWatchLinks({ title, year, country, mediaType });
-    writeCache(cacheKey, links);
+    if (Object.keys(links).length) writeCache(cacheKey, links);
 
     res.setHeader('Cache-Control', cacheHeaders['Cache-Control']);
     return res.status(200).json({ links });

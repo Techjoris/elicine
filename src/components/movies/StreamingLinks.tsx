@@ -38,7 +38,9 @@ export const StreamingLinks: React.FC<StreamingLinksProps> = ({
       <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
         {providers.map((p, idx) => {
           const releaseYear = movie.release_date ? movie.release_date.split('-')[0] : '';
-          const catalogId = movie.netflix_id || movie.netflixId || p.netflixId;
+          const catalogId = /amazon|prime/i.test(p.name) ? (movie.prime_id || movie.primeId || p.primeId)
+            : /disney/i.test(p.name) ? (movie.disney_id || movie.disneyId || p.disneyId)
+            : /netflix/i.test(p.name) ? (movie.netflix_id || movie.netflixId || p.netflixId) : undefined;
           const watchLink = p.justWatchUrl || movie.watch_provider_link;
           const candidateLink = p.deepLink || p.directUrl;
           const directLink = (!candidateLink || isIntermediaryWatchLink(candidateLink))

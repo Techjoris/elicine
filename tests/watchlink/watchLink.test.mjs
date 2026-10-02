@@ -32,7 +32,7 @@ test('a lender whose name merely contains Max is not HBO Max', () => {
   assert.equal(providerKeyFor('Max'), 'max');
   assert.equal(providerKeyFor('HBO Max'), 'max');
   assert.equal(providerKeyFor('Premiere Max'), null);
-  assert.equal(providerKeyFor('Google Play Movies'), null);
+  assert.equal(providerKeyFor('Google Play Movies'), 'google');
 });
 
 test('titles compare across accents, casing and punctuation', () => {
@@ -81,7 +81,9 @@ test('the resolver returns the exact title pages and ignores unknown providers',
 
   assert.deepEqual(links, {
     netflix: 'https://www.netflix.com/title/81157729',
-    disney: 'https://www.disneyplus.com/browse/entity-abc'
+    'netflix:stream': 'https://www.netflix.com/title/81157729',
+    disney: 'https://www.disneyplus.com/browse/entity-abc',
+    'disney:stream': 'https://www.disneyplus.com/browse/entity-abc'
   });
 });
 

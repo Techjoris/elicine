@@ -32,10 +32,10 @@ function mockGlobal(t, name, value) {
 
 for (const [id, before] of [
   ['0FILM', 'https://www.primevideo.com/detail/0FILM'],
-  ['amzn1.dv.gti.FILM', 'https://www.amazon.fr/gp/video/detail/amzn1.dv.gti.FILM']
+  ['amzn1.dv.gti.FILM', 'https://www.primevideo.com/detail?gti=amzn1.dv.gti.FILM']
 ]) {
   test(`catalogue ID ${id} keeps its title destination in all generators`, () => {
-    const after = `${before}?tag=elicine-21`;
+    const after = `${before}${before.includes('?') ? '&' : '?'}tag=elicine-21`;
     assert.equal(getPrimeVideoDeepLink('Dune', id), after);
     assert.equal(getDirectStreamingUrl('Amazon Prime Video', 'Dune', '2021', id), after);
     assert.equal(getPlatformDirectUrl({ providerName: 'Amazon Prime Video', movieTitle: 'Dune', primeId: id }), after);
@@ -71,10 +71,15 @@ test('server resolution affiliates Amazon without changing other providers', asy
   });
   assert.deepEqual(links, {
     prime: 'https://www.primevideo.com/detail/0FILM?ref=x&tag=elicine-21',
+    'prime:stream': 'https://www.primevideo.com/detail/0FILM?ref=x&tag=elicine-21',
     netflix: 'https://www.netflix.com/title/81157729?ref=original',
+    'netflix:stream': 'https://www.netflix.com/title/81157729?ref=original',
     apple: 'https://tv.apple.com/fr/movie/dune?at=original',
+    'apple:stream': 'https://tv.apple.com/fr/movie/dune?at=original',
     disney: 'https://www.disneyplus.com/video/film',
-    max: 'https://www.max.com/title/film'
+    'disney:stream': 'https://www.disneyplus.com/video/film',
+    max: 'https://www.max.com/title/film',
+    'max:stream': 'https://www.max.com/title/film'
   });
 });
 
@@ -94,7 +99,8 @@ test('API returns tagged title URLs on both the fresh response and cache hit', a
   const cached = response();
   await watchLinkHandler(req, cached);
   assert.equal(first.code, 200);
-  assert.deepEqual(first.body, { links: { prime: 'https://www.amazon.fr/gp/video/detail/B0FILM?ref=x&tag=elicine-21' } });
+  assert.deepEqual(first.body, { links: { prime: 'https://www.amazon.fr/gp/video/detail/B0FILM?ref=x&tag=elicine-21',
+    'prime:stream': 'https://www.amazon.fr/gp/video/detail/B0FILM?ref=x&tag=elicine-21' } });
   assert.deepEqual(cached.body, first.body);
   assert.equal(fetchMock.mock.callCount(), 1);
 });
@@ -112,11 +118,13 @@ test('the actual streaming click opens the same title with the affiliate tag', t
   assert.equal(clipboard.mock.callCount(), 0);
 });
 
-test('the streaming click tags its search fallback', t => {
-  const open = t.mock.fn();
+test('the streaming click tags its search fallback when no title offer exists', async t => {
+  const replace = t.mock.fn();
+  const open = t.mock.fn(() => ({ location: { replace }, closed: false }));
   mockGlobal(t, 'window', { open });
-  redirectToStreamingProvider({ title: 'Dune' }, 'Amazon Prime Video');
-  assert.equal(open.mock.calls[0].arguments[0], 'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=Dune&tag=elicine-21');
+  t.mock.method(globalThis, 'fetch', okFetch({ links: {} }));
+  await redirectToStreamingProvider({ title: 'Dune' }, 'Amazon Prime Video');
+  assert.equal(replace.mock.calls[0].arguments[0], 'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=Dune&tag=elicine-21');
 });
 
 test('non-Amazon resolved clicks and generated links retain their exact URLs', t => {
@@ -168,9 +176,10 @@ test('Prime streaming, Amazon rental and Amazon purchase remain separate for a m
   assert.equal(media.svod.providers[0].url, 'https://www.primevideo.com/detail/0FILM?tag=elicine-21');
   assert.equal(media.svod.providers[1].url, 'https://www.netflix.com/search?q=Dune');
   assert.deepEqual(media.vod, [
-    { name: 'Amazon Video', logo: null, url: 'https://www.primevideo.com/storefront?tag=elicine-21', amazonOfferType: 'rent' },
-    { name: 'Apple TV', logo: null, url: 'https://tv.apple.com' },
-    { name: 'Amazon Video', logo: null, url: 'https://www.primevideo.com/storefront?tag=elicine-21', amazonOfferType: 'buy' }
+    { name: 'Amazon Video', logo: null, url: 'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=Dune&tag=elicine-21', amazonOfferType: 'rent', offerType: 'rent' },
+    { name: 'Apple TV', logo: null, url: 'https://tv.apple.com/search?term=Dune', offerType: 'rent' },
+    { name: 'Amazon Video', logo: null, url: 'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=Dune&tag=elicine-21', amazonOfferType: 'buy', offerType: 'buy' },
+    { name: 'Apple TV', logo: null, url: 'https://tv.apple.com/search?term=Dune', offerType: 'buy' }
   ]);
   const action = await resolveStreamingAction(991001, 'movie', 'FR', 'Dune');
   assert.equal(action.type, 'DIRECT');

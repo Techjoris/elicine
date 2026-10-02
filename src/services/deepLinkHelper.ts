@@ -15,6 +15,10 @@
  */
 
 import { withAmazonAffiliateTag } from '../lib/amazonAffiliate.js';
+import { isTitleOfferUrl, normalizeOfferUrl, type WatchOfferType } from '../../api/_watchLink.js';
+import { fetchTitleWatchLinks, deepLinkForProvider, releaseYearOf } from './watchLinkResolver';
+import { getCachedCountryCode } from './geoService';
+import { mediaTypeEndpoint } from '../lib/mediaType';
 
 export interface StreamingDeepLinkOptions {
   providerName?: string;
@@ -58,12 +62,12 @@ export const isPlatformSearchUrl = (url?: string | null): boolean => {
 export const isIntermediaryWatchLink = (url?: string | null): boolean => {
   if (!url || typeof url !== 'string') return false;
   const lower = url.toLowerCase();
-  return (
-    lower.includes('themoviedb.org') ||
-    lower.includes('tmdb.org') ||
-    lower.includes('/watch') ||
-    lower.includes('justwatch.com')
-  );
+  try {
+    const host = new URL(lower).hostname;
+    return ['themoviedb.org', 'tmdb.org', 'justwatch.com'].some(domain => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -96,13 +100,7 @@ export const getDirectStreamingUrl = (
 
   // 2. AMAZON PRIME VIDEO
   if (lower.includes('amazon') || lower.includes('prime')) {
-    if (cleanId) {
-      return withAmazonAffiliateTag(cleanId.startsWith('amzn')
-        ? `https://www.amazon.fr/gp/video/detail/${cleanId}`
-        : `https://www.primevideo.com/detail/${cleanId}`);
-    }
-    if (watchProviderLink && watchProviderLink.trim()) return withAmazonAffiliateTag(watchProviderLink.trim());
-    return withAmazonAffiliateTag(`https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(cleanTitle)}`);
+    return getPrimeVideoDeepLink(cleanTitle, cleanId, watchProviderLink);
   }
 
   // 3. DISNEY+
@@ -259,8 +257,8 @@ export const getDirectPlatformSearchUrl = (
     return `https://www.6play.fr/recherche?q=${encodedTitle}`;
   }
 
-  // Fallback direct sur Netflix
-  return `https://www.netflix.com/search?q=${encodedTitle}`;
+  // Unknown providers must never send the visitor to Netflix.
+  return `https://www.google.com/search?q=${encodeURIComponent(`${cleanTitle} ${providerName}`.trim())}`;
 };
 
 /**
@@ -276,7 +274,11 @@ export const getUniversalStreamingUrl = (
     : (provider.provider_name || provider.name || '');
 
   const cleanTitle = (movie?.title || '').trim();
-  return getDirectPlatformSearchUrl(providerName, cleanTitle);
+  return getPlatformDirectUrl({ providerName, movieTitle: cleanTitle, movie,
+    primeId: typeof provider === 'object' ? provider.primeId : undefined,
+    netflixId: typeof provider === 'object' ? provider.netflixId : undefined,
+    disneyId: typeof provider === 'object' ? provider.disneyId : undefined
+  });
 };
 
 /**
@@ -285,49 +287,44 @@ export const getUniversalStreamingUrl = (
  * 2. Toast feedback : Déclenche un toast discret de 1.5s.
  * 3. Destination Directe : Ouvre la recherche interne de la plateforme dans un nouvel onglet.
  */
-export const redirectToStreamingProvider = (
+export const redirectToStreamingProvider = async (
   movie: MovieStreamingTarget,
   provider: ProviderStreamingTarget | string,
   showToast?: (msg: string, durationMs?: number) => void,
-  resolvedUrl?: string | null
-): void => {
+  resolvedUrl?: string | null,
+  offerType: WatchOfferType = 'stream'
+): Promise<void> => {
   const providerName = typeof provider === 'string'
     ? provider
     : (provider.provider_name || provider.name || '');
 
   const movieTitle = (movie?.title || '').trim();
 
-  // Le lien résolu en amont conserve la fiche exacte du film sur la plateforme :
-  // le recalculer systématiquement ramenait l'utilisateur sur
-  // la page de recherche, en perdant l'identifiant de catalogue déjà trouvé.
-  const resolved = typeof resolvedUrl === 'string' && resolvedUrl.startsWith('http') && !isIntermediaryWatchLink(resolvedUrl)
-    ? resolvedUrl
-    : null;
-  // Une URL de recherche n'est pas une fiche : elle reste traitée comme le repli.
-  const directUrl = resolved && !isPlatformSearchUrl(resolved) ? resolved : null;
-
-  // Le presse-papier n'est copié que sur le repli « recherche » : il servait à
-  // compenser le champ de recherche vidé par certaines applications mobiles.
-  if (!directUrl && typeof navigator !== 'undefined' && navigator.clipboard && movieTitle) {
-    try {
-      navigator.clipboard.writeText(movieTitle).catch(() => {});
-    } catch {
-      // Ignoré en environnement restreint
-    }
+  const providerData = typeof provider === 'object' ? provider : {};
+  const candidates = [resolvedUrl, providerData.actionUrl, providerData.deepLink, providerData.directUrl, providerData.url];
+  if (offerType === 'stream') candidates.push(getUniversalStreamingUrl(movie, provider));
+  const directUrl = candidates.find(url => isTitleOfferUrl(url, providerName));
+  if (directUrl) {
+    showToast?.(`Ouverture de "${movieTitle}" sur ${providerName}...`, 1500);
+    window.open(normalizeOfferUrl(directUrl), '_blank', 'noopener,noreferrer');
+    return;
   }
 
-  if (showToast) {
-    showToast(
-      directUrl
-        ? `Ouverture de "${movieTitle}" sur ${providerName || 'la plateforme'}...`
-        : `Redirection vers ${providerName || 'la plateforme'}... (Titre copié)`,
-      1500
-    );
+  // Reserve the tab during the click; opening it after awaiting the API triggers popup blockers.
+  const destinationTab = window.open('about:blank', '_blank');
+  if (destinationTab) destinationTab.opener = null;
+  showToast?.(`Recherche du lien de "${movieTitle}" sur ${providerName}...`, 2000);
+  const links = await fetchTitleWatchLinks({ title: movieTitle, year: releaseYearOf(movie.release_date),
+    country: getCachedCountryCode(), mediaType: mediaTypeEndpoint(movie.media_type) });
+  const titleUrl = deepLinkForProvider(links, providerName, offerType);
+  // Never call a homepage or catalogue a title destination when the provider did not return one.
+  const targetUrl = titleUrl || getDirectPlatformSearchUrl(providerName, movieTitle);
+  if (!titleUrl) showToast?.(`Fiche indisponible : recherche de "${movieTitle}" sur ${providerName}.`, 3000);
+  if (destinationTab) {
+    if (!destinationTab.closed) destinationTab.location.replace(targetUrl);
+  } else {
+    window.location.assign(targetUrl);
   }
-
-  // Nouvel onglet sécurisé, ouvert de façon synchrone (le lien est déjà résolu).
-  const targetUrl = withAmazonAffiliateTag(directUrl || getUniversalStreamingUrl(movie, providerName));
-  window.open(targetUrl, '_blank', 'noopener,noreferrer');
 };
 
 /**
@@ -342,13 +339,12 @@ export const handleStreamingClick = (
   catalogId?: string | number | null,
   showToast?: (msg: string, durationMs?: number) => void,
   releaseDate?: string
-): void => {
+): Promise<void> => {
   if (typeof urlOrMovie === 'object' && urlOrMovie !== null) {
     const movie = urlOrMovie;
     const provider = (providerNameOrProvider || '') as (ProviderStreamingTarget | string);
     const toastFn = typeof movieTitleOrShowToast === 'function' ? movieTitleOrShowToast : showToast;
-    redirectToStreamingProvider(movie, provider, toastFn);
-    return;
+    return redirectToStreamingProvider(movie, provider, toastFn);
   }
 
   // Signature classique : url, providerName, movieTitle, catalogId, showToast, releaseDate
@@ -357,7 +353,12 @@ export const handleStreamingClick = (
     release_date: releaseDate
   };
   const provider = typeof providerNameOrProvider === 'string' ? providerNameOrProvider : '';
-  redirectToStreamingProvider(movie, provider, showToast);
+  if (catalogId) {
+    if (/netflix/i.test(provider)) movie.netflix_id = catalogId;
+    else if (/amazon|prime/i.test(provider)) movie.prime_id = catalogId;
+    else if (/disney/i.test(provider)) movie.disney_id = catalogId;
+  }
+  return redirectToStreamingProvider(movie, provider, showToast, typeof urlOrMovie === 'string' ? urlOrMovie : null);
 };
 
 /**
@@ -406,17 +407,17 @@ export const getPrimeVideoDeepLink = (
   // Priorité 1 : ID direct Amazon Prime Video
   if (cleanId) {
     const directUrl = withAmazonAffiliateTag(cleanId.startsWith('amzn')
-      ? `https://www.amazon.fr/gp/video/detail/${cleanId}`
+      ? `https://www.primevideo.com/detail?gti=${encodeURIComponent(cleanId)}`
       : `https://www.primevideo.com/detail/${cleanId}`);
     if (useIntent && isAndroidClient()) {
-      return buildAndroidIntentUrl(`www.primevideo.com/detail/${cleanId}`, 'com.amazon.avod.thirdpartyclient', directUrl);
+      return buildAndroidIntentUrl(directUrl, 'com.amazon.avod.thirdpartyclient', directUrl);
     }
     return directUrl;
   }
 
   // Priorité 2 : Lien certifié JustWatch
   if (watchProviderLink && watchProviderLink.trim()) {
-    return withAmazonAffiliateTag(watchProviderLink.trim());
+    return normalizeOfferUrl(watchProviderLink.trim());
   }
 
   // Priorité 3 : Recherche interne directe Prime Video

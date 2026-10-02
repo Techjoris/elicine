@@ -44,16 +44,64 @@ export const PROVIDER_ALIASES = [
   ['crunchyroll', /crunchyroll/i],
   ['sooner', /sooner/i],
   ['plex', /plex/i],
-  ['filmbox', /filmbox/i]
+  ['filmbox', /filmbox/i],
+  ['google', /google\s*play|youtube/i]
 ];
 
 /** Clé canonique d'un nom de fournisseur, ou null si inconnu. */
 export function providerKeyFor(name) {
   const value = typeof name === 'string' ? name.trim() : '';
   if (!value) return null;
+  if (/amazon\s*channels?|prime\s*video\s*channels?/i.test(value)) {
+    const channel = value.replace(/amazon\s*channels?|prime\s*video\s*channels?/ig, '').trim();
+    const match = PROVIDER_ALIASES.find(([key, pattern]) => key !== 'prime' && pattern.test(channel));
+    return `prime-channel:${match ? match[0] : normalizeTitle(channel).replace(/ /g, '-')}`;
+  }
   const match = PROVIDER_ALIASES.find(([, pattern]) => pattern.test(value));
   return match ? match[0] : null;
 }
+
+/** Official browser destination; app.primevideo.com otherwise opens "Get the app" on desktop. */
+export function normalizeOfferUrl(url) {
+  if (typeof url !== 'string') return null;
+  const browserUrl = url.replace(/^(https?:\/\/)app\.primevideo\.com(?=[:/?#]|$)/i, '$1www.primevideo.com');
+  return withAmazonAffiliateTag(browserUrl);
+}
+
+const PROVIDER_DOMAINS = {
+  prime: ['primevideo.com', 'amazon.fr', 'amazon.com'], netflix: ['netflix.com'],
+  disney: ['disneyplus.com'], apple: ['tv.apple.com'], max: ['max.com', 'hbomax.com'],
+  canal: ['canalplus.com', 'mycanal.fr'], paramount: ['paramountplus.com'],
+  arte: ['arte.tv'], tf1: ['tf1.fr'], 'france-tv': ['france.tv'], m6: ['6play.fr', 'm6.fr', 'm6plus.fr'],
+  rakuten: ['rakuten.tv'], pathe: ['pathehome.com'], mubi: ['mubi.com'],
+  crunchyroll: ['crunchyroll.com'], sooner: ['sooner.fr'], plex: ['plex.tv'],
+  filmbox: ['filmbox.com', 'filmboxplus.com'], google: ['play.google.com', 'youtube.com']
+};
+
+/** Reject a homepage, search, intermediary, or URL belonging to another provider. */
+export function isTitleOfferUrl(url, providerName) {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const key = providerKeyFor(providerName);
+    const domains = PROVIDER_DOMAINS[key?.startsWith('prime-channel:') ? 'prime' : key];
+    if (!domains || !domains.some(domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`))) return false;
+    const path = parsed.pathname;
+    if (/^\/?$/.test(path) || /^\/store\/movies\/?$/.test(path) || /\/(search|recherche|buscar|storefront|splash)\b/i.test(path)) return false;
+    if (['q', 'query', 'phrase', 'term', 'k'].some(name => parsed.searchParams.has(name))) return false;
+    if (key === 'prime' || key?.startsWith('prime-channel:')) {
+      return /\/(detail|dp)\/[^/]+/.test(path) || (/\/detail\/?$/.test(path) && parsed.searchParams.has('gti'));
+    }
+    if (key === 'google' && parsed.hostname.endsWith('youtube.com')) {
+      return path === '/watch' && parsed.searchParams.has('v');
+    }
+    return path.split('/').filter(Boolean).length >= 2;
+  } catch {
+    return false;
+  }
+}
+
+const OFFER_TYPES = { FLATRATE: 'stream', FREE: 'stream', ADS: 'stream', RENT: 'rent', BUY: 'buy' };
 
 /** Titre comparable : minuscules, sans accent, sans ponctuation. */
 export function normalizeTitle(value) {
@@ -108,6 +156,9 @@ export function pickBestCandidate(edges, title, year, objectType = null) {
     const node = edge?.node;
     if (!node) continue;
     if (objectType && node.objectType && node.objectType !== objectType) continue;
+    const wantedYear = Number(year);
+    const candidateYear = Number(node.content?.originalReleaseYear);
+    if (wantedYear > 0 && candidateYear > 0 && Math.abs(wantedYear - candidateYear) > 1) continue;
     const score = scoreCandidate(node, title, year);
     if (score > bestScore) {
       best = node;
@@ -119,14 +170,15 @@ export function pickBestCandidate(edges, title, year, objectType = null) {
 }
 
 /** URL de la fiche du fournisseur demandé parmi les offres d'un titre. */
-export function pickOfferUrl(offers, providerName) {
+export function pickOfferUrl(offers, providerName, offerType) {
   const wanted = providerKeyFor(providerName);
   if (!wanted) return null;
   const offer = (Array.isArray(offers) ? offers : []).find(candidate =>
     providerKeyFor(candidate?.package?.clearName) === wanted
+    && (!offerType || OFFER_TYPES[candidate?.monetizationType] === offerType)
     && typeof candidate?.standardWebURL === 'string'
     && candidate.standardWebURL.startsWith('http'));
-  return offer ? withAmazonAffiliateTag(offer.standardWebURL) : null;
+  return offer ? normalizeOfferUrl(offer.standardWebURL) : null;
 }
 
 export function buildJustWatchQuery() {
@@ -194,8 +246,11 @@ export async function resolveTitleWatchLinks({
     for (const offer of Array.isArray(best.offers) ? best.offers : []) {
       const key = providerKeyFor(offer?.package?.clearName);
       const url = offer?.standardWebURL;
-      if (key && typeof url === 'string' && url.startsWith('http') && !links[key]) {
-        links[key] = withAmazonAffiliateTag(url);
+      const type = OFFER_TYPES[offer?.monetizationType];
+      if (key && isTitleOfferUrl(url, offer?.package?.clearName)) {
+        const normalized = normalizeOfferUrl(url);
+        if (!links[key]) links[key] = normalized;
+        if (type && !links[`${key}:${type}`]) links[`${key}:${type}`] = normalized;
       }
     }
     return links;

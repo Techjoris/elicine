@@ -61,7 +61,9 @@ export const MovieDetailModal: React.FC = () => {
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   // Liens directs vers la fiche du film chez chaque plateforme, résolus une fois
   // par œuvre pour que le clic reste instantané (pas de fenêtre bloquée).
-  const [watchLinks, setWatchLinks] = useState<Record<string, string>>({});
+  const [watchLinkResult, setWatchLinkResult] = useState<{ key: string; links: Record<string, string> }>({ key: '', links: {} });
+  const watchLinkKey = `${selectedMovie?.id}|${selectedMovie?.media_type}|${selectedMovie?.title}`;
+  const watchLinks = watchLinkResult.key === watchLinkKey ? watchLinkResult.links : {};
   const [isPrivateConnectionOpen, setIsPrivateConnectionOpen] = useState(false);
 
   const mediaHeroRef = useRef<HTMLDivElement>(null);
@@ -143,7 +145,7 @@ export const MovieDetailModal: React.FC = () => {
       mediaType: mediaTypeEndpoint
     })
       .then((links) => {
-        if (isMounted && links) setWatchLinks(links);
+        if (isMounted && links) setWatchLinkResult({ key: watchLinkKey, links });
       })
       .catch(() => {
         // Le repli « recherche » reste disponible.
@@ -614,7 +616,7 @@ export const MovieDetailModal: React.FC = () => {
                             selectedMovie,
                             p,
                             showToast,
-                            deepLinkForProvider(watchLinks, p.name)
+                            deepLinkForProvider(watchLinks, p.name, 'stream')
                           );
                         }}
                         className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-black border border-slate-200 dark:border-white/15 hover:border-slate-400 dark:hover:border-white/40 transition-all shadow-sm group hover:scale-105 cursor-pointer select-none"
@@ -709,15 +711,20 @@ export const MovieDetailModal: React.FC = () => {
                 {providerData.vod.map((item, idx) => (
                   <a
                     key={idx}
-                    href={item.url}
+                    href={deepLinkForProvider(watchLinks, item.name, item.offerType) || item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      void redirectToStreamingProvider(selectedMovie, item, showToast,
+                        deepLinkForProvider(watchLinks, item.name, item.offerType), item.offerType);
+                    }}
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-black border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/30 transition-all text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
-                    title={item.amazonOfferType === 'rent' ? 'Location Amazon' : item.amazonOfferType === 'buy' ? 'Achat Amazon' : `Louer ou acheter sur ${item.name}`}
+                    title={`${item.offerType === 'rent' ? 'Louer' : 'Acheter'} "${selectedMovie.title}" sur ${item.name}`}
                   >
                     {item.logo && <img src={item.logo} alt={item.name} className="w-4 h-4 rounded object-cover flex-shrink-0" />}
-                    <span>{item.amazonOfferType === 'rent' ? 'Location Amazon' : item.amazonOfferType === 'buy' ? 'Achat Amazon' : item.name}</span>
+                    <span>{item.offerType === 'rent' ? 'Location' : 'Achat'} {item.amazonOfferType ? 'Amazon' : item.name}</span>
                     <span className="text-[10px] text-slate-400 dark:text-zinc-500">↗</span>
                   </a>
                 ))}
