@@ -714,10 +714,10 @@ export const MovieDetailModal: React.FC = () => {
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-black border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/30 transition-all text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
-                    title={`Louer ou acheter sur ${item.name}`}
+                    title={item.amazonOfferType === 'rent' ? 'Location Amazon' : item.amazonOfferType === 'buy' ? 'Achat Amazon' : `Louer ou acheter sur ${item.name}`}
                   >
                     {item.logo && <img src={item.logo} alt={item.name} className="w-4 h-4 rounded object-cover flex-shrink-0" />}
-                    <span>{item.name}</span>
+                    <span>{item.amazonOfferType === 'rent' ? 'Location Amazon' : item.amazonOfferType === 'buy' ? 'Achat Amazon' : item.name}</span>
                     <span className="text-[10px] text-slate-400 dark:text-zinc-500">↗</span>
                   </a>
                 ))}

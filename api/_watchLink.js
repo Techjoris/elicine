@@ -13,6 +13,8 @@
  * amont, afin de rester testable sans réseau.
  */
 
+import { withAmazonAffiliateTag } from '../src/lib/amazonAffiliate.js';
+
 const JUSTWATCH_ENDPOINT = 'https://apis.justwatch.com/graphql';
 const DEFAULT_TIMEOUT_MS = 8000;
 const MIN_TITLE_SCORE = 0.6;
@@ -124,7 +126,7 @@ export function pickOfferUrl(offers, providerName) {
     providerKeyFor(candidate?.package?.clearName) === wanted
     && typeof candidate?.standardWebURL === 'string'
     && candidate.standardWebURL.startsWith('http'));
-  return offer ? offer.standardWebURL : null;
+  return offer ? withAmazonAffiliateTag(offer.standardWebURL) : null;
 }
 
 export function buildJustWatchQuery() {
@@ -193,7 +195,7 @@ export async function resolveTitleWatchLinks({
       const key = providerKeyFor(offer?.package?.clearName);
       const url = offer?.standardWebURL;
       if (key && typeof url === 'string' && url.startsWith('http') && !links[key]) {
-        links[key] = url;
+        links[key] = withAmazonAffiliateTag(url);
       }
     }
     return links;

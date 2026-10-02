@@ -14,6 +14,8 @@
  *    Cibler la recherche de la plateforme avec encodage strict et schémas d'intent Android optionnels.
  */
 
+import { withAmazonAffiliateTag } from '../lib/amazonAffiliate.js';
+
 export interface StreamingDeepLinkOptions {
   providerName?: string;
   providerKey?: string;
@@ -95,12 +97,12 @@ export const getDirectStreamingUrl = (
   // 2. AMAZON PRIME VIDEO
   if (lower.includes('amazon') || lower.includes('prime')) {
     if (cleanId) {
-      return cleanId.startsWith('amzn')
+      return withAmazonAffiliateTag(cleanId.startsWith('amzn')
         ? `https://www.amazon.fr/gp/video/detail/${cleanId}`
-        : `https://www.primevideo.com/detail/${cleanId}`;
+        : `https://www.primevideo.com/detail/${cleanId}`);
     }
-    if (watchProviderLink && watchProviderLink.trim()) return watchProviderLink.trim();
-    return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(cleanTitle)}`;
+    if (watchProviderLink && watchProviderLink.trim()) return withAmazonAffiliateTag(watchProviderLink.trim());
+    return withAmazonAffiliateTag(`https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(cleanTitle)}`);
   }
 
   // 3. DISNEY+
@@ -178,8 +180,9 @@ export const buildAndroidIntentUrl = (
   packageName: string,
   fallbackUrl: string
 ): string => {
-  const cleanPath = path.replace(/^https?:\/\//, '');
-  const encodedFallback = encodeURIComponent(fallbackUrl);
+  const webPath = /^https?:\/\//.test(path) ? path : `https://${path}`;
+  const cleanPath = withAmazonAffiliateTag(webPath).replace(/^https?:\/\//, '');
+  const encodedFallback = encodeURIComponent(withAmazonAffiliateTag(fallbackUrl));
   return `intent://${cleanPath}#Intent;scheme=https;package=${packageName};S.browser_fallback_url=${encodedFallback};end`;
 };
 
@@ -208,7 +211,7 @@ export const getDirectPlatformSearchUrl = (
 
   // 2. AMAZON PRIME VIDEO
   if (lower.includes('amazon') || lower.includes('prime')) {
-    return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
+    return withAmazonAffiliateTag(`https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`);
   }
 
   // 3. DISNEY+
@@ -294,8 +297,8 @@ export const redirectToStreamingProvider = (
 
   const movieTitle = (movie?.title || '').trim();
 
-  // Lien résolu en amont (fiche exacte du film sur la plateforme). Il doit être
-  // utilisé tel quel : le recalculer systématiquement ramenait l'utilisateur sur
+  // Le lien résolu en amont conserve la fiche exacte du film sur la plateforme :
+  // le recalculer systématiquement ramenait l'utilisateur sur
   // la page de recherche, en perdant l'identifiant de catalogue déjà trouvé.
   const resolved = typeof resolvedUrl === 'string' && resolvedUrl.startsWith('http') && !isIntermediaryWatchLink(resolvedUrl)
     ? resolvedUrl
@@ -323,7 +326,7 @@ export const redirectToStreamingProvider = (
   }
 
   // Nouvel onglet sécurisé, ouvert de façon synchrone (le lien est déjà résolu).
-  const targetUrl = directUrl || getUniversalStreamingUrl(movie, providerName);
+  const targetUrl = withAmazonAffiliateTag(directUrl || getUniversalStreamingUrl(movie, providerName));
   window.open(targetUrl, '_blank', 'noopener,noreferrer');
 };
 
@@ -402,9 +405,9 @@ export const getPrimeVideoDeepLink = (
 
   // Priorité 1 : ID direct Amazon Prime Video
   if (cleanId) {
-    const directUrl = cleanId.startsWith('amzn') 
+    const directUrl = withAmazonAffiliateTag(cleanId.startsWith('amzn')
       ? `https://www.amazon.fr/gp/video/detail/${cleanId}`
-      : `https://www.primevideo.com/detail/${cleanId}`;
+      : `https://www.primevideo.com/detail/${cleanId}`);
     if (useIntent && isAndroidClient()) {
       return buildAndroidIntentUrl(`www.primevideo.com/detail/${cleanId}`, 'com.amazon.avod.thirdpartyclient', directUrl);
     }
@@ -413,11 +416,11 @@ export const getPrimeVideoDeepLink = (
 
   // Priorité 2 : Lien certifié JustWatch
   if (watchProviderLink && watchProviderLink.trim()) {
-    return watchProviderLink.trim();
+    return withAmazonAffiliateTag(watchProviderLink.trim());
   }
 
   // Priorité 3 : Recherche interne directe Prime Video
-  return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`;
+  return withAmazonAffiliateTag(`https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodedTitle}`);
 };
 
 /**

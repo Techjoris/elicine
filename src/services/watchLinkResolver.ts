@@ -1,4 +1,5 @@
 import { providerKeyFor, type WatchLinkMap } from '../../api/_watchLink.js';
+import { withAmazonAffiliateTag } from '../lib/amazonAffiliate.js';
 
 /**
  * Récupère, pour un titre, l'URL exacte de sa fiche chez chaque plateforme.
@@ -44,7 +45,7 @@ export function deepLinkForProvider(links: WatchLinkMap | null | undefined, prov
   const key = providerKeyFor(providerName);
   if (!key) return null;
   const url = links[key];
-  return typeof url === 'string' && url.startsWith('http') ? url : null;
+  return typeof url === 'string' && url.startsWith('http') ? withAmazonAffiliateTag(url) : null;
 }
 
 /** Année d'exploitation d'une œuvre, sous forme de chaîne à 4 chiffres. */

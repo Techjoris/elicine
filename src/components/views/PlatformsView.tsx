@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Movie } from '../../types';
 import { Tv, Film, Clapperboard, ArrowUpDown } from 'lucide-react';
+import { PRIME_VIDEO_TRIAL_URL } from '../../lib/amazonAffiliate.js';
 
 export interface PlatformItem {
   id: string;
@@ -143,6 +144,16 @@ export const PlatformsView: React.FC = () => {
           <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 mt-1.5">
             Explorez les sélections exclusives par service de streaming avec défilement continu.
           </p>
+          {selectedPlatform.id === 'prime' && (
+            <a
+              href={PRIME_VIDEO_TRIAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs sm:text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline"
+            >
+              Essayer Prime Video <span aria-hidden="true">↗</span>
+            </a>
+          )}
         </div>
 
         {/* Horizontal Platform Selector Bar */}

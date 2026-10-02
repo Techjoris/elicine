@@ -1,5 +1,6 @@
 import { detectProviderKey } from './tmdb';
 import { getVpnAffiliateUrl } from '../config/affiliates';
+import { withAmazonAffiliateTag } from '../lib/amazonAffiliate.js';
 import { getCachedCountryCode } from './geoService';
 import { 
   getPlatformDirectUrl, 
@@ -22,6 +23,7 @@ export interface VodProviderItem {
   name: string;
   logo: string | null;
   url: string;
+  amazonOfferType?: 'rent' | 'buy';
 }
 
 export interface MediaProvidersResult {
@@ -61,7 +63,7 @@ export function getVodStoreUrl(name: string, movieTitle: string = ''): string {
   const q = encodeURIComponent(movieTitle);
   if (n.includes('apple') || n.includes('itunes')) return 'https://tv.apple.com';
   if (n.includes('google') || n.includes('youtube')) return 'https://play.google.com/store/movies';
-  if (n.includes('amazon')) return 'https://www.primevideo.com/storefront';
+  if (n.includes('amazon')) return withAmazonAffiliateTag('https://www.primevideo.com/storefront');
   if (n.includes('canal')) return 'https://vod.canalplus.com';
   return 'https://www.google.com/search?q=louer+acheter+' + encodeURIComponent(name) + (q ? '+' + q : '');
 }
@@ -206,15 +208,22 @@ export async function getMediaProviders(
 
     // B. VOD (Location & Achat numérique - Prêt pour affiliation)
     const userVod = results[userCountryCode] || results['FR'] || results['US'] || results['GB'];
-    const rawVod = [...(userVod?.rent || []), ...(userVod?.buy || [])];
+    const rawVod = [
+      ...(userVod?.rent || []).map((provider: any) => ({ provider, offerType: 'rent' as const })),
+      ...(userVod?.buy || []).map((provider: any) => ({ provider, offerType: 'buy' as const }))
+    ];
 
-    const uniqueVod = new Map<number, VodProviderItem>();
-    rawVod.forEach((p: any) => {
-      if (p.provider_id && !uniqueVod.has(p.provider_id)) {
-        uniqueVod.set(p.provider_id, {
+    const uniqueVod = new Map<string, VodProviderItem>();
+    rawVod.forEach(({ provider: p, offerType }) => {
+      const isAmazon = /amazon/i.test(p.provider_name || '');
+      // Keep Amazon rental and purchase separate; other stores retain their existing grouping.
+      const offerKey = isAmazon ? `${p.provider_id}_${offerType}` : String(p.provider_id);
+      if (p.provider_id && !uniqueVod.has(offerKey)) {
+        uniqueVod.set(offerKey, {
           name: p.provider_name,
           logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
-          url: getVodStoreUrl(p.provider_name, movieTitle)
+          url: getVodStoreUrl(p.provider_name, movieTitle),
+          ...(isAmazon ? { amazonOfferType: offerType } : {})
         });
       }
     });
@@ -261,7 +270,7 @@ export const resolveStreamingAction = async (
               primeId: movie?.prime_id || movie?.primeId,
               disneyId: movie?.disney_id || movie?.disneyId
             })
-          : candidateUrl;
+          : withAmazonAffiliateTag(candidateUrl);
 
         return {
           id: idx + 1,
