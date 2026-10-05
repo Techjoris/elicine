@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRefinementSuggestions } from '../../src/search/refinementSuggestions.ts';
+import { buildRefinementSuggestions, isBareCategoryQuery } from '../../src/search/refinementSuggestions.ts';
 import { detectGenreKeys } from '../../src/search/genreIntent.ts';
 import { extractHardCriteriaAndEntities } from '../../src/services/searchRouterService.ts';
 
@@ -71,4 +71,30 @@ test('the trailing era wording drives a real temporal constraint', () => {
 test('an adjective qualifying a character never becomes an era', () => {
   assert.equal(extractHardCriteriaAndEntities('un film sur un ancien soldat').era, undefined);
   assert.equal(extractHardCriteriaAndEntities('un film avec une ancienne espionne').era, undefined);
+});
+
+test('only a request made of a category alone is gated before the search', () => {
+  for (const query of [
+    "films d'action",
+    'je veux un film d’horreur',
+    'comédies',
+    'une série de science-fiction',
+    'thriller',
+    'des dessins animés'
+  ]) {
+    assert.equal(isBareCategoryQuery(query), true, query);
+  }
+});
+
+test('a request that already carries a precision is never gated', () => {
+  for (const query of [
+    "film d'action avec Tom Cruise",
+    'thriller psychologique',
+    "films d'action récents",
+    'comédie romantique à New York',
+    'films coréens',
+    'Inception'
+  ]) {
+    assert.equal(isBareCategoryQuery(query), false, query);
+  }
 });

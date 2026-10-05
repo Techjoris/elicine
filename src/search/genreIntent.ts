@@ -57,6 +57,15 @@ const GENRE_TERMS: Record<GenreKey, string[]> = {
   western: ['western', 'westerns']
 };
 
+/**
+ * Tous les termes de genre connus, normalisés, du plus long au plus court.
+ * Sert à retirer le genre d'une requête pour reconnaître une demande qui ne
+ * contient *que* la catégorie (« films d'action », « comédies »).
+ */
+export const ALL_GENRE_TERMS: string[] = Array.from(
+  new Set(Object.values(GENRE_TERMS).flat())
+).sort((a, b) => b.length - a.length);
+
 /** Normalise un texte pour la comparaison : minuscules, sans accent, espaces uniques. */
 export function normalizeQueryText(value: string): string {
   return String(value || '')

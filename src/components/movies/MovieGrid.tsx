@@ -4,8 +4,6 @@ import { Movie } from '../../types';
 import { Sparkles, Clapperboard, HelpCircle, Compass, ArrowRight, Film } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
-import { SearchRefinements } from '../search/SearchRefinements';
-import type { SearchRefinement } from '../../search/refinementSuggestions';
 
 interface MovieGridProps {
   /** Identifiant de la section, pour pouvoir s'y rendre directement. */
@@ -22,11 +20,8 @@ interface MovieGridProps {
   hasMore?: boolean;
   suggestedPrompts?: string[];
   onSelectPrompt?: (prompt: string) => void;
-  /** Affinages d'un clic pour une recherche par catégorie (genre). */
-  refinements?: SearchRefinement[];
   /** Plateforme citée dans la requête et appliquée aux résultats. */
   appliedPlatform?: { id: string; label: string };
-  onSelectRefinement?: (query: string) => void;
 }
 
 const DEFAULT_CURATED_PROMPTS = [
@@ -67,9 +62,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   hasMore = false,
   suggestedPrompts,
   onSelectPrompt,
-  refinements,
-  appliedPlatform,
-  onSelectRefinement
+  appliedPlatform
 }) => {
   const { openFeedbackModal } = useApp();
   const { t } = useTranslation();
@@ -174,6 +167,12 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          {appliedPlatform && (
+            <span className="text-[11px] px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 font-semibold">
+              Uniquement sur {appliedPlatform.label}
+            </span>
+          )}
+
           {showAiMatch && (
             <button
               type="button"
@@ -191,15 +190,6 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           </span>
         </div>
       </div>
-
-      {/* Affinage d'un clic : réservé aux recherches par catégorie */}
-      {((refinements && refinements.length > 0) || appliedPlatform) && (
-        <SearchRefinements
-          refinements={refinements || []}
-          appliedPlatform={appliedPlatform}
-          onSelect={onSelectRefinement}
-        />
-      )}
 
       {/* Grid — posters immersifs ou Zero State enrichi */}
       {movies.length === 0 && !isLoadingMore && !hasMore ? (

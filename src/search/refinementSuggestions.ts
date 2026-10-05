@@ -10,7 +10,7 @@
  * en français, car c'est la langue que le moteur d'interprétation comprend.
  */
 
-import { detectGenreKeys, normalizeQueryText } from './genreIntent';
+import { ALL_GENRE_TERMS, detectGenreKeys, normalizeQueryText } from './genreIntent';
 
 export type RefinementCategory = 'era' | 'rating' | 'format';
 
@@ -104,6 +104,48 @@ const cleanBase = (query: string): string =>
     .replace(/\s+/g, ' ')
     .replace(/[.?!,;:]+$/g, '')
     .trim();
+
+/** Mots-outils qui ne portent aucune précision sur le film recherché. */
+const STOPWORDS = new Set([
+  'un', 'une', 'des', 'de', 'du', 'd', 'le', 'la', 'les', 'l', 'ce', 'cet', 'cette',
+  'je', 'tu', 'il', 'on', 'nous', 'vous', 'veux', 'voudrais', 'voudrait', 'aimerais',
+  'cherche', 'chercher', 'recherche', 'rechercher', 'trouve', 'trouver', 'montre',
+  'montrer', 'propose', 'proposer', 'donne', 'donnez', 'voir', 'regarder', 'moi',
+  'quelque', 'chose', 'choses', 'sur', 'en', 'avec', 'au', 'aux', 'et', 'ou', 'pour',
+  'dans', 'qui', 'que', 'qu', 'plus', 'moins', 'tres', 'bon', 'bons', 'bonne', 'bonnes',
+  'meilleur', 'meilleurs', 'meilleure', 'meilleures', 'genre', 'style', 'type', 'sorte',
+  'plutot', 'vrai', 'vrais', 'vraie', 'vraies', 'sympa', 'petit', 'petits', 'petite',
+  'quelle', 'quel', 'quels', 'film', 'films', 'serie', 'series', 'movie', 'movies',
+  'cinematographique', 'cinematographiques', 'oeuvre', 'oeuvres'
+]);
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Vrai si la requête n'exprime *que* une catégorie de film, sans autre
+ * précision (acteur, année, ambiance). C'est le seul cas où l'on interrompt la
+ * recherche pour proposer un affinage : cela évite de payer une interprétation
+ * IA pour une demande que l'utilisateur veut manifestement préciser.
+ *
+ * « films d'action » → vrai. « film d'action avec Tom Cruise » → faux.
+ * « thriller psychologique » → faux (une ambiance est déjà donnée).
+ */
+export function isBareCategoryQuery(query: string): boolean {
+  const normalized = normalizeQueryText(query);
+  if (!normalized) return false;
+  if (detectGenreKeys(query).length === 0) return false;
+
+  let rest = normalized;
+  for (const term of ALL_GENRE_TERMS) {
+    rest = rest.replace(new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g'), ' ');
+  }
+
+  return rest
+    .split(' ')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .every((token) => STOPWORDS.has(token));
+}
 
 /**
  * Construit les suggestions d'affinage d'une recherche.

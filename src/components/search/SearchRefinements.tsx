@@ -1,47 +1,65 @@
 import React from 'react';
-import { Wand2 } from 'lucide-react';
+import { Wand2, Sparkles, X } from 'lucide-react';
 import type { SearchRefinement } from '../../search/refinementSuggestions';
 
 interface SearchRefinementsProps {
   refinements: SearchRefinement[];
+  /** Requête d'origine, proposée telle quelle dans le bouton « rechercher sans affiner ». */
+  baseQuery?: string;
   /** Plateforme citée dans la requête et effectivement appliquée aux résultats. */
   appliedPlatform?: { id: string; label: string };
+  title?: string;
   onSelect?: (query: string) => void;
+  /** Relance la recherche d'origine sans passer par une suggestion. */
+  onSearchAsIs?: () => void;
+  onDismiss?: () => void;
 }
 
 /**
- * Bandeau d'affinage affiché sous les résultats d'une recherche par catégorie.
- * Chaque puce relance la recherche avec une précision supplémentaire.
+ * Étape d'affinage proposée AVANT de lancer la recherche.
+ *
+ * Une demande qui n'exprime qu'une catégorie (« films d'action ») est confirmée
+ * ici, gratuitement et sans appel IA : l'utilisateur choisit une précision, ou
+ * demande explicitement les résultats tels quels. La recherche coûteuse n'est
+ * déclenchée qu'après ce choix, ce qui évite de payer deux interprétations.
  */
 export const SearchRefinements: React.FC<SearchRefinementsProps> = ({
   refinements,
+  baseQuery,
   appliedPlatform,
-  onSelect
+  title,
+  onSelect,
+  onSearchAsIs,
+  onDismiss
 }) => {
   if ((!refinements || refinements.length === 0) && !appliedPlatform) return null;
 
-  const handleSelect = (query: string) => {
-    if (onSelect) onSelect(query);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('elicine-trigger-search', { detail: { prompt: query } })
-      );
-    }
-  };
-
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#121212] p-3.5 sm:p-4 space-y-3">
+    <div className="rounded-2xl border border-white/12 bg-zinc-950/85 backdrop-blur-2xl p-3.5 sm:p-4 space-y-3 shadow-xl text-left animate-fade-in">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-zinc-300">
           <Wand2 className="w-3.5 h-3.5 text-[#e50914]" />
-          <span>Affiner la recherche</span>
+          <span>{title || 'Affiner la recherche'}</span>
         </div>
 
-        {appliedPlatform && (
-          <span className="text-[11px] px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 font-semibold">
-            Uniquement sur {appliedPlatform.label}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {appliedPlatform && (
+            <span className="text-[11px] px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 font-semibold">
+              Uniquement sur {appliedPlatform.label}
+            </span>
+          )}
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              title="Fermer"
+              aria-label="Fermer les suggestions d'affinage"
+              className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {refinements && refinements.length > 0 && (
@@ -50,15 +68,26 @@ export const SearchRefinements: React.FC<SearchRefinementsProps> = ({
             <button
               key={refinement.id}
               type="button"
-              onClick={() => handleSelect(refinement.query)}
-              title={`Relancer la recherche : ${refinement.query}`}
-              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/[0.06] hover:bg-[#e50914]/10 dark:hover:bg-[#e50914]/15 text-slate-700 dark:text-zinc-200 hover:text-[#e50914] dark:hover:text-red-300 border border-slate-200 dark:border-white/10 hover:border-[#e50914]/40 transition-all cursor-pointer active:scale-[0.98]"
+              onClick={() => onSelect?.(refinement.query)}
+              title={`Rechercher : ${refinement.query}`}
+              className="group inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-white/[0.07] hover:bg-[#e50914]/20 text-zinc-100 hover:text-white border border-white/12 hover:border-[#e50914]/50 transition-all cursor-pointer active:scale-[0.98]"
             >
               <span aria-hidden="true">{refinement.emoji}</span>
               <span>{refinement.label}</span>
             </button>
           ))}
         </div>
+      )}
+
+      {onSearchAsIs && baseQuery && (
+        <button
+          type="button"
+          onClick={onSearchAsIs}
+          className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-semibold text-zinc-300 hover:text-white underline decoration-zinc-600 hover:decoration-white underline-offset-4 transition-colors cursor-pointer"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>Lancer la recherche « {baseQuery} » sans affiner</span>
+        </button>
       )}
     </div>
   );

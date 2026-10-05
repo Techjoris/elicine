@@ -37,7 +37,6 @@ import {
   filterMoviesAvailableOnPlatform,
   mergeUniqueMovies
 } from '../search/platformAvailability';
-import { buildRefinementSuggestions, type SearchRefinement } from '../search/refinementSuggestions';
 import { normalizeQueryText } from '../search/genreIntent';
 
 export interface RawAiMovieItem {
@@ -72,8 +71,6 @@ export interface AIRecommendationResult {
   isFallbackMode: boolean;
   providerUsed?: string;
   suggestedPrompts: string[];
-  /** Ajustements d'un clic proposés quand la recherche est une simple catégorie. */
-  refinements?: SearchRefinement[];
   /** Plateforme citée dans la requête et réellement appliquée aux résultats. */
   appliedPlatform?: { id: string; label: string };
   cascade?: SearchCascadeInfo;
@@ -2474,11 +2471,6 @@ async function executeCinoraSearchCore(
 /** Nombre minimal d'œuvres visé après application d'une plateforme citée. */
 const PLATFORM_MIN_RESULTS = 4;
 
-function localeFromTmdbLang(tmdbLang?: string): string {
-  const code = String(tmdbLang || '').toLowerCase().slice(0, 2);
-  return code || 'fr';
-}
-
 function stripTrailingFilterSuffix(thought: string): string {
   return String(thought || '')
     .replace(/\s*[•·-]\s*Filtres?\s*\([^)]*\)\s*$/i, '')
@@ -2566,14 +2558,15 @@ async function applyPlatformConstraint(
 /**
  * ENVELOPPE PUBLIQUE DU MOTEUR DE RECHERCHE
  * ────────────────────────────────────────────────────────────────────────────
- * Deux responsabilités ajoutées autour du pipeline historique :
+ * Responsabilités ajoutées autour du pipeline historique :
  *  1. PLATEFORME — une plateforme citée dans la requête (« un film d'horreur
  *     sur Netflix ») est retirée de la requête sémantique, puis appliquée comme
  *     contrainte réelle via les disponibilités TMDB. La mention ne perturbe
  *     donc plus l'interprétation de l'ambiance.
- *  2. AFFINAGE — une recherche de catégorie (« films d'action ») reçoit des
- *     suggestions d'ajustement d'un clic (plus récents, classiques, mieux
- *     notés…). Le pipeline et ses garanties restent inchangés.
+ *  2. MODIFICATEURS — les mots d'affinage (« récents », « anciens et
+ *     classiques », « les mieux notés ») contraignent puis réordonnent la
+ *     sélection. La proposition d'affinage elle-même est faite *avant* la
+ *     recherche, côté interface, et n'appelle jamais ce moteur.
  */
 export async function executeCinoraSearch(
   query: string,
@@ -2594,11 +2587,6 @@ export async function executeCinoraSearch(
   let thought = result.thought;
   let appliedPlatform: AIRecommendationResult['appliedPlatform'];
   const hadCoreResults = movies.length > 0;
-  const refinements = buildRefinementSuggestions({
-    query: semanticQuery,
-    mediaType: filters?.mediaType,
-    locale: localeFromTmdbLang(tmdbLang)
-  });
 
   if (platformIntent) {
     let verificationFailed = false;
@@ -2625,8 +2613,7 @@ export async function executeCinoraSearch(
       return {
         ...result,
         thought,
-        recommendedMovies: movies,
-        refinements
+        recommendedMovies: movies
       };
     }
 
@@ -2648,7 +2635,6 @@ export async function executeCinoraSearch(
     ...result,
     thought,
     recommendedMovies: orderedMovies,
-    refinements,
     appliedPlatform
   };
 }

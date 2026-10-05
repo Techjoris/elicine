@@ -14,9 +14,14 @@ import { useTranslation } from '../../context/LanguageContext';
 import { executeCinoraSearch, AIRecommendationResult, parseFormatIntent } from '../../services/aiEngine';
 import { isSearchQuotaExceededError } from '../../services/searchQuotaError';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
+import { SearchRefinements } from '../search/SearchRefinements';
 import { scrollToElement } from '../../lib/scroll';
 import { Movie } from '../../types';
-import type { SearchRefinement } from '../../search/refinementSuggestions';
+import {
+  buildRefinementSuggestions,
+  isBareCategoryQuery,
+  type SearchRefinement
+} from '../../search/refinementSuggestions';
 
 interface HeroSectionProps {
   onAiResultsFound?: (results: {
@@ -24,7 +29,6 @@ interface HeroSectionProps {
     thought: string;
     mood: string;
     suggestedPrompts: string[];
-    refinements?: SearchRefinement[];
     appliedPlatform?: { id: string; label: string };
   }) => void;
   onAiSearchStart?: () => void;
@@ -129,7 +133,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setSearchQuery
   } = useApp();
 
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [trendingHeroMovies, setTrendingHeroMovies] = useState<Movie[]>(DEFAULT_HERO_MOVIES);
   const [featuredIndex, setFeaturedIndex] = useState(0);
@@ -140,6 +144,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [internalHasSearched, setInternalHasSearched] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /*
+   * Étape d'affinage pré-recherche : quand la demande n'est qu'une catégorie
+   * (« films d'action »), on n'appelle pas l'IA. On propose d'abord les
+   * précisions, gratuitement, et la recherche ne part qu'après le choix.
+   */
+  const [pendingRefinement, setPendingRefinement] = useState<{
+    query: string;
+    suggestions: SearchRefinement[];
+    platform: string;
+    minRating: number;
+    typeFilter: 'Tous' | 'Films' | 'Séries TV';
+  } | null>(null);
 
   // Le bloc des filtres avancés n'est affiché que si la recherche est active ou que des résultats sont présents
   const isSearchActive = internalHasSearched || Boolean(propHasSearched) || isAiLoading;
@@ -289,7 +305,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     queryText?: string,
     overridePlatform?: string,
     overrideMinRating?: number,
-    overrideTypeFilter?: 'Tous' | 'Films' | 'Séries TV'
+    overrideTypeFilter?: 'Tous' | 'Films' | 'Séries TV',
+    options?: { skipRefinementGate?: boolean }
   ) => {
     const raw = (queryText !== undefined ? queryText : searchPrompt).trim();
     const q = raw.slice(0, 350);
@@ -322,6 +339,33 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       setSelectedTypeFilter('Films');
     }
 
+    // ── Étape d'affinage pré-recherche (aucun appel IA, aucun token) ──
+    // Une demande qui n'exprime qu'une catégorie est confirmée avant de partir :
+    // l'utilisateur précise, ou demande explicitement les résultats tels quels.
+    if (!options?.skipRefinementGate && isBareCategoryQuery(q)) {
+      const suggestions = buildRefinementSuggestions({
+        query: q,
+        mediaType: typeFilterToUse,
+        locale: lang
+      });
+      if (suggestions.length > 0) {
+        setPendingRefinement({
+          query: q,
+          suggestions,
+          platform: platformToUse,
+          minRating: minRatingToUse,
+          typeFilter: typeFilterToUse
+        });
+        setSearchQuery(q);
+        window.setTimeout(() => {
+          const gate = document.getElementById('hero-refinement-gate');
+          if (gate) scrollToElement(gate, { block: 'center' });
+        }, 60);
+        return;
+      }
+    }
+    setPendingRefinement(null);
+
     setIsAiLoading(true);
     setInternalHasSearched(true);
     if (onAiSearchStart) {
@@ -353,7 +397,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           thought: res.thought,
           mood: res.moodDetected,
           suggestedPrompts: res.suggestedPrompts,
-          refinements: res.refinements,
           appliedPlatform: res.appliedPlatform
         });
       }
@@ -400,23 +443,59 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   const handlePlatformSelect = (platform: string) => {
     setSelectedPlatform(platform);
-    if (user?.isPro && searchPrompt.trim() && !isAiLoading) {
+    if (user?.isPro && searchPrompt.trim() && !isAiLoading && !pendingRefinement) {
       handleSearch(searchPrompt, platform, selectedMinRating, selectedTypeFilter);
     }
   };
 
   const handleMinRatingSelect = (rating: number) => {
     setSelectedMinRating(rating);
-    if (user?.isPro && searchPrompt.trim() && !isAiLoading) {
+    if (user?.isPro && searchPrompt.trim() && !isAiLoading && !pendingRefinement) {
       handleSearch(searchPrompt, selectedPlatform, rating, selectedTypeFilter);
     }
   };
 
   const handleTypeFilterSelect = (type: 'Tous' | 'Films' | 'Séries TV') => {
     setSelectedTypeFilter(type);
+
+    // Pendant l'étape d'affinage, changer de format recalcule simplement les
+    // suggestions : aucune recherche n'est lancée tant que l'utilisateur n'a
+    // pas confirmé.
+    if (pendingRefinement) {
+      const suggestions = buildRefinementSuggestions({
+        query: pendingRefinement.query,
+        mediaType: type,
+        locale: lang
+      });
+      if (suggestions.length === 0) {
+        setPendingRefinement(null);
+        return;
+      }
+      setPendingRefinement({ ...pendingRefinement, typeFilter: type, suggestions });
+      return;
+    }
+
     if (isSearchActive && searchPrompt.trim() && !isAiLoading) {
       handleSearch(searchPrompt, selectedPlatform, selectedMinRating, type);
     }
+  };
+
+  /** L'utilisateur choisit une précision : on lance la recherche affinée. */
+  const handleRefinementSelect = (query: string) => {
+    if (!pendingRefinement) return;
+    const { platform, minRating, typeFilter } = pendingRefinement;
+    setSearchPrompt(query);
+    setSearchQuery(query);
+    setPendingRefinement(null);
+    handleSearch(query, platform, minRating, typeFilter, { skipRefinementGate: true });
+  };
+
+  /** L'utilisateur veut les résultats de sa demande d'origine, sans affiner. */
+  const handleSearchAsIs = () => {
+    if (!pendingRefinement) return;
+    const { query, platform, minRating, typeFilter } = pendingRefinement;
+    setPendingRefinement(null);
+    handleSearch(query, platform, minRating, typeFilter, { skipRefinementGate: true });
   };
 
   // Synchronisation dynamique : permet de déclencher une recherche depuis n'importe quel composant (ex: suggestions Zero State)
@@ -550,6 +629,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onChange={(e) => {
                 const val = e.target.value.slice(0, 350);
                 setSearchPrompt(val);
+                if (pendingRefinement) setPendingRefinement(null);
                 if (errorMessage) setErrorMessage(null);
                 const intent = parseFormatIntent(val);
                 if (intent.mediaType === 'tv') {
@@ -648,6 +728,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Étape d'affinage pré-recherche : proposée avant tout appel IA */}
+        {pendingRefinement && !isAiLoading && (
+          <div id="hero-refinement-gate" className="w-full max-w-2xl mx-auto mt-2 animate-fade-in">
+            <SearchRefinements
+              refinements={pendingRefinement.suggestions}
+              title="Précisez votre recherche avant de lancer"
+              baseQuery={pendingRefinement.query}
+              onSelect={handleRefinementSelect}
+              onSearchAsIs={handleSearchAsIs}
+              onDismiss={() => setPendingRefinement(null)}
+            />
+          </div>
+        )}
 
         {/* Banner de chargement */}
         {isAiLoading && (
