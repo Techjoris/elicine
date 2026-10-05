@@ -13,6 +13,7 @@
     "test:supporter": "node --import tsx --test tests/supporter/",
     "test:paddle": "node --import tsx --test tests/paddle/",
     "test:catalog": "node --import tsx --test tests/catalog/",
+    "test:search": "node --import tsx --test tests/search/",
     "test:watchlink": "node --import tsx --test tests/watchlink/",
     "test:affiliates": "node --import tsx --test tests/affiliates/",
     "test:watchlist": "node --import tsx --test tests/watchlist/",

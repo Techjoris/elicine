@@ -16,6 +16,7 @@ import { isSearchQuotaExceededError } from '../../services/searchQuotaError';
 import { AdvancedSearchFilters } from '../search/AdvancedSearchFilters';
 import { scrollToElement } from '../../lib/scroll';
 import { Movie } from '../../types';
+import type { SearchRefinement } from '../../search/refinementSuggestions';
 
 interface HeroSectionProps {
   onAiResultsFound?: (results: {
@@ -23,6 +24,8 @@ interface HeroSectionProps {
     thought: string;
     mood: string;
     suggestedPrompts: string[];
+    refinements?: SearchRefinement[];
+    appliedPlatform?: { id: string; label: string };
   }) => void;
   onAiSearchStart?: () => void;
   hasSearched?: boolean;
@@ -349,7 +352,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           movies: res.recommendedMovies,
           thought: res.thought,
           mood: res.moodDetected,
-          suggestedPrompts: res.suggestedPrompts
+          suggestedPrompts: res.suggestedPrompts,
+          refinements: res.refinements,
+          appliedPlatform: res.appliedPlatform
         });
       }
 

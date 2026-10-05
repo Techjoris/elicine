@@ -31,6 +31,14 @@ import {
   buildJustificationCacheKey,
   resolveOrFetchJustification
 } from './justificationCache';
+import { detectPlatformIntent, type PlatformIntent } from '../search/platformIntent';
+import {
+  fetchPlatformGenreTopUp,
+  filterMoviesAvailableOnPlatform,
+  mergeUniqueMovies
+} from '../search/platformAvailability';
+import { buildRefinementSuggestions, type SearchRefinement } from '../search/refinementSuggestions';
+import { normalizeQueryText } from '../search/genreIntent';
 
 export interface RawAiMovieItem {
   title: string;
@@ -64,6 +72,10 @@ export interface AIRecommendationResult {
   isFallbackMode: boolean;
   providerUsed?: string;
   suggestedPrompts: string[];
+  /** Ajustements d'un clic proposés quand la recherche est une simple catégorie. */
+  refinements?: SearchRefinement[];
+  /** Plateforme citée dans la requête et réellement appliquée aux résultats. */
+  appliedPlatform?: { id: string; label: string };
   cascade?: SearchCascadeInfo;
 }
 
@@ -1159,7 +1171,7 @@ function formatFilterSuffix(filters?: AdvancedSearchFiltersOptions): string {
  *   "Aucun résultat exact pour cette combinaison précise, mais voici ce qui s'en rapproche le plus..."
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export async function executeCinoraSearch(
+async function executeCinoraSearchCore(
   query: string,
   apiSettings?: ApiSettings,
   _tmdbLang?: string,
@@ -2456,6 +2468,188 @@ export async function executeCinoraSearch(
       tier2Count: 0,
       tier3Count: 0
     }
+  };
+}
+
+/** Nombre minimal d'œuvres visé après application d'une plateforme citée. */
+const PLATFORM_MIN_RESULTS = 4;
+
+function localeFromTmdbLang(tmdbLang?: string): string {
+  const code = String(tmdbLang || '').toLowerCase().slice(0, 2);
+  return code || 'fr';
+}
+
+function stripTrailingFilterSuffix(thought: string): string {
+  return String(thought || '')
+    .replace(/\s*[•·-]\s*Filtres?\s*\([^)]*\)\s*$/i, '')
+    .trim();
+}
+
+function looksLikeEmptyMessage(thought: string): boolean {
+  const value = String(thought || '').toLowerCase();
+  return !value.trim() || value.includes('aucun') || value.includes('introuvable');
+}
+
+function yearOfMovie(movie: Movie): number {
+  const year = parseInt(String(movie?.release_date || '').slice(0, 4), 10);
+  return Number.isFinite(year) ? year : 0;
+}
+
+/**
+ * Réordonne la sélection selon le modificateur explicite de la requête
+ * (« les mieux notés », « récents », « anciens / classiques »). L'IA interprète
+ * déjà ces mots ; ce tri garantit que l'ordre affiché y répond réellement, même
+ * quand le classement sémantique place une œuvre plus ancienne en tête.
+ */
+function applyLocalRefinementOrdering(movies: Movie[], query: string): Movie[] {
+  if (!Array.isArray(movies) || movies.length < 3) return movies;
+  const normalized = normalizeQueryText(query);
+  if (!normalized) return movies;
+
+  if (/\b(mieux|bien) notes?\b/.test(normalized)) {
+    return [...movies].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+  }
+  if (/\brecents?\b|\brecentes?\b|\bnouveautes?\b/.test(normalized)) {
+    return [...movies].sort((a, b) => yearOfMovie(b) - yearOfMovie(a));
+  }
+  if (/\b(anciens?|anciennes?|classiques?|vieux)\b/.test(normalized)) {
+    return [...movies].sort((a, b) => {
+      const yearA = yearOfMovie(a) || 9999;
+      const yearB = yearOfMovie(b) || 9999;
+      return yearA - yearB;
+    });
+  }
+  return movies;
+}
+
+/**
+ * Restreint une sélection aux œuvres réellement disponibles sur la plateforme
+ * citée, puis complète avec TMDB si la sélection devient trop maigre.
+ */
+async function applyPlatformConstraint(
+  movies: Movie[],
+  platform: PlatformIntent,
+  options: {
+    query: string;
+    mediaType?: 'Tous' | 'Films' | 'Séries TV';
+    tmdbLang?: string;
+    apiKey?: string;
+  }
+): Promise<Movie[]> {
+  const availabilityOptions = { language: options.tmdbLang, apiKey: options.apiKey };
+  const filtering = await filterMoviesAvailableOnPlatform(movies, platform, availabilityOptions);
+
+  // Aucune disponibilité n'a pu être vérifiée (réseau / proxy TMDB indisponible) :
+  // on conserve la sélection du moteur plutôt que de vider les résultats.
+  if (movies.length > 0 && filtering.uncheckedCount === movies.length) {
+    return movies;
+  }
+
+  let selection = filtering.movies;
+
+  if (selection.length < PLATFORM_MIN_RESULTS) {
+    const topUp = await fetchPlatformGenreTopUp({
+      platform,
+      query: options.query,
+      mediaType: options.mediaType,
+      language: options.tmdbLang,
+      apiKey: options.apiKey,
+      excludeIds: new Set(selection.map((movie) => movie.id)),
+      limit: Math.max(PLATFORM_MIN_RESULTS, 6)
+    });
+    selection = mergeUniqueMovies(selection, topUp);
+  }
+
+  return selection.slice(0, 12);
+}
+
+/**
+ * ENVELOPPE PUBLIQUE DU MOTEUR DE RECHERCHE
+ * ────────────────────────────────────────────────────────────────────────────
+ * Deux responsabilités ajoutées autour du pipeline historique :
+ *  1. PLATEFORME — une plateforme citée dans la requête (« un film d'horreur
+ *     sur Netflix ») est retirée de la requête sémantique, puis appliquée comme
+ *     contrainte réelle via les disponibilités TMDB. La mention ne perturbe
+ *     donc plus l'interprétation de l'ambiance.
+ *  2. AFFINAGE — une recherche de catégorie (« films d'action ») reçoit des
+ *     suggestions d'ajustement d'un clic (plus récents, classiques, mieux
+ *     notés…). Le pipeline et ses garanties restent inchangés.
+ */
+export async function executeCinoraSearch(
+  query: string,
+  apiSettings?: ApiSettings,
+  tmdbLang?: string,
+  aiPromptLang?: string,
+  filters?: AdvancedSearchFiltersOptions
+): Promise<AIRecommendationResult> {
+  const rawQuery = String(query || '').trim();
+  const platformIntent = detectPlatformIntent(rawQuery);
+  const semanticQuery = platformIntent && platformIntent.cleanQuery.trim().length >= 2
+    ? platformIntent.cleanQuery
+    : rawQuery;
+
+  const result = await executeCinoraSearchCore(semanticQuery, apiSettings, tmdbLang, aiPromptLang, filters);
+
+  let movies = result.recommendedMovies || [];
+  let thought = result.thought;
+  let appliedPlatform: AIRecommendationResult['appliedPlatform'];
+  const hadCoreResults = movies.length > 0;
+  const refinements = buildRefinementSuggestions({
+    query: semanticQuery,
+    mediaType: filters?.mediaType,
+    locale: localeFromTmdbLang(tmdbLang)
+  });
+
+  if (platformIntent) {
+    let verificationFailed = false;
+    try {
+      movies = await applyPlatformConstraint(movies, platformIntent, {
+        query: semanticQuery,
+        mediaType: filters?.mediaType,
+        tmdbLang,
+        apiKey: getApiKey('tmdb', apiSettings)
+      });
+    } catch (err: any) {
+      verificationFailed = true;
+      console.warn('[Éliciné Plateforme] Vérification des disponibilités ignorée :', err?.message || err);
+    }
+
+    // Détection d'un filtrage non vérifiable : la sélection d'origine est
+    // conservée telle quelle, et on ne promet pas une exclusivité non contrôlée.
+    // `applyPlatformConstraint` renvoie la liste d'origine (même référence)
+    // uniquement quand aucune disponibilité n'a pu être vérifiée.
+    const unverified = hadCoreResults && movies === result.recommendedMovies;
+
+    if (verificationFailed || unverified) {
+      thought = `${stripTrailingFilterSuffix(thought)} • Le filtre ${platformIntent.label} n'a pas pu être vérifié pour le moment`;
+      return {
+        ...result,
+        thought,
+        recommendedMovies: movies,
+        refinements
+      };
+    }
+
+    appliedPlatform = { id: platformIntent.id, label: platformIntent.label };
+
+    if (movies.length > 0) {
+      const base = (!hadCoreResults || looksLikeEmptyMessage(thought))
+        ? `✨ Sélection Éliciné — ${movies.length} œuvre${movies.length > 1 ? 's' : ''}`
+        : stripTrailingFilterSuffix(thought);
+      thought = `${base} • Uniquement disponibles sur ${platformIntent.label}`;
+    } else {
+      thought = `Aucune œuvre correspondant à « ${semanticQuery} » n'est disponible sur ${platformIntent.label} dans votre région pour le moment. Essayez une autre plateforme ou élargissez le genre.`;
+    }
+  }
+
+  const orderedMovies = applyLocalRefinementOrdering(movies, semanticQuery);
+
+  return {
+    ...result,
+    thought,
+    recommendedMovies: orderedMovies,
+    refinements,
+    appliedPlatform
   };
 }
 

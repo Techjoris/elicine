@@ -49,6 +49,7 @@ import { useTranslation } from './context/LanguageContext';
 import { FALLBACK_MOVIES, fetchTrendingPage } from './services/tmdb';
 import { useInfiniteCatalog } from './hooks/useInfiniteCatalog';
 import { Movie } from './types';
+import type { SearchRefinement } from './search/refinementSuggestions';
 import { Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -85,6 +86,8 @@ export const AppContent: React.FC = () => {
     thought?: string;
     mood?: string;
     suggestedPrompts?: string[];
+    refinements?: SearchRefinement[];
+    appliedPlatform?: { id: string; label: string };
   } | null>(null);
   // Attendre que React ait réellement inséré ou mis à jour la grille avant de
   // viser son titre. Sinon l'ancrage du navigateur peut garder « Tendances »
@@ -461,6 +464,8 @@ export const AppContent: React.FC = () => {
                   aiThought={aiResults.thought}
                   aiMood={aiResults.mood}
                   suggestedPrompts={aiResults.suggestedPrompts}
+                  refinements={aiResults.refinements}
+                  appliedPlatform={aiResults.appliedPlatform}
                   showAiMatch={true}
                 />
               )}

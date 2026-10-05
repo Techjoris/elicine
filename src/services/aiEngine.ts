@@ -8,6 +8,7 @@ import { analyzeSearchIntent, analyzeQuerySpecificity, SpecificityAnalysis } fro
 import { unifiedAiSearch, analyzeQuerySpecificity as analyzeQuerySpecificityExport } from './unifiedAiSearch';
 
 import { SearchCascadeInfo } from './unifiedAiSearch';
+import type { SearchRefinement } from '../search/refinementSuggestions';
 
 export interface AIRecommendationResult {
   thought: string;
@@ -16,6 +17,8 @@ export interface AIRecommendationResult {
   suggestedPrompts: string[];
   isFallbackMode?: boolean;
   providerUsed?: string;
+  refinements?: SearchRefinement[];
+  appliedPlatform?: { id: string; label: string };
   cascade?: SearchCascadeInfo;
 }
 

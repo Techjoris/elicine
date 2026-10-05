@@ -930,6 +930,20 @@ export function extractHardCriteriaAndEntities(queryText: string): ExtractedCrit
     }
   }
 
+  // A.2 Mots d'époque génériques utilisés par les suggestions d'affinage.
+  // Ils doivent poser une vraie contrainte temporelle (« films d'action
+  // récents »), pas seulement teinter l'ambiance. On exige qu'ils terminent la
+  // requête pour éviter les faux positifs du type « un film sur un ancien
+  // soldat », où l'adjectif qualifie un personnage, pas une époque.
+  if (!era) {
+    const trailing = lower.replace(/[.!?\u2026,;:]+$/, '').trim();
+    if (/(?:^|\s)(?:r[ée]cents?|r[ée]centes?|nouveaut[ée]s?)$/.test(trailing)) {
+      era = 'récents';
+    } else if (/(?:^|\s)(?:anciens?|anciennes?|classiques?|vieux)$/.test(trailing)) {
+      era = 'classiques';
+    }
+  }
+
   // 2b. Détection des contraintes négatives / exclusions ("sans...", "pas de...")
   const exclusions: string[] = [];
   const sansRegex = /\b(?:sans|pas d['e]|aucun[e]?)\s+([a-zà-ÿ0-9'-]+)/gi;

@@ -4,6 +4,8 @@ import { Movie } from '../../types';
 import { Sparkles, Clapperboard, HelpCircle, Compass, ArrowRight, Film } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTranslation } from '../../context/LanguageContext';
+import { SearchRefinements } from '../search/SearchRefinements';
+import type { SearchRefinement } from '../../search/refinementSuggestions';
 
 interface MovieGridProps {
   /** Identifiant de la section, pour pouvoir s'y rendre directement. */
@@ -20,6 +22,11 @@ interface MovieGridProps {
   hasMore?: boolean;
   suggestedPrompts?: string[];
   onSelectPrompt?: (prompt: string) => void;
+  /** Affinages d'un clic pour une recherche par catégorie (genre). */
+  refinements?: SearchRefinement[];
+  /** Plateforme citée dans la requête et appliquée aux résultats. */
+  appliedPlatform?: { id: string; label: string };
+  onSelectRefinement?: (query: string) => void;
 }
 
 const DEFAULT_CURATED_PROMPTS = [
@@ -59,7 +66,10 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   isLoadingMore = false,
   hasMore = false,
   suggestedPrompts,
-  onSelectPrompt
+  onSelectPrompt,
+  refinements,
+  appliedPlatform,
+  onSelectRefinement
 }) => {
   const { openFeedbackModal } = useApp();
   const { t } = useTranslation();
@@ -181,6 +191,15 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Affinage d'un clic : réservé aux recherches par catégorie */}
+      {((refinements && refinements.length > 0) || appliedPlatform) && (
+        <SearchRefinements
+          refinements={refinements || []}
+          appliedPlatform={appliedPlatform}
+          onSelect={onSelectRefinement}
+        />
+      )}
 
       {/* Grid — posters immersifs ou Zero State enrichi */}
       {movies.length === 0 && !isLoadingMore && !hasMore ? (
