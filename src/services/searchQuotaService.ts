@@ -109,7 +109,7 @@ export const searchQuotaService = {
     const max = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
 
     // Les membres Pro et l'administrateur principal ont des recherches illimitées
-    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    const isMasterAdmin = Boolean(user?.is_admin === true);
     if (user?.isPro || isMasterAdmin) {
       return {
         remaining: 999,
@@ -195,7 +195,7 @@ export const searchQuotaService = {
    * Vérifie si l'utilisateur est autorisé à effectuer une recherche IA
    */
   canSearch(user: UserProfile | null, currentQuota?: AIQuota): boolean {
-    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    const isMasterAdmin = Boolean(user?.is_admin === true);
     if (user?.isPro || isMasterAdmin) return true;
     if (currentQuota) {
       return currentQuota.remaining > 0;
@@ -216,7 +216,7 @@ export const searchQuotaService = {
     const max = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
 
     // Si Pro ou Administrateur principal : aucune décrémentation de quota
-    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    const isMasterAdmin = Boolean(user?.is_admin === true);
     if (user?.isPro || isMasterAdmin) {
       return {
         remaining: 999,

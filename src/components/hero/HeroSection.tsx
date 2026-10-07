@@ -695,7 +695,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="flex items-center px-2 text-[11px]">
             {/* Texte discret de quota journalier mis à jour en temps réel */}
             <div className="flex items-center gap-1.5 text-[11px] select-none text-left min-w-0">
-              {(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com')) ? (
+              {(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' ) ? (
                 <span className="text-amber-400/90 font-medium flex items-center gap-1 truncate">
                   <span>👑</span>
                   <span>{t.proActiveBanner || 'Pass Pro actif • Recherches illimitées'}</span>
@@ -806,7 +806,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onSelectPlatform={handlePlatformSelect}
               selectedMinRating={selectedMinRating}
               onSelectMinRating={handleMinRatingSelect}
-              isPro={Boolean(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' || (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com'))}
+              isPro={Boolean(user?.isPro || (user as any)?.is_pro || (user as any)?.pass_status === 'pro' )}
               onTriggerProModal={() => {
                 showToast("👑 Les filtres avancés (Plateformes & Notes) sont réservés aux abonnés Pro (1.99€).");
                 setIsProModalOpen(true);

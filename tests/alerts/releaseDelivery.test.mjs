@@ -194,7 +194,7 @@ test('a free account is refused without crashing when the subscriptions table is
   } finally { env.restore(); }
 });
 
-test('the owner account is Pro even with no profile row at all', async () => {
+test('a founder email grants no Pro entitlement without a protected profile', async () => {
   const state = stateWith([{ id: 'a9', user_id: 'u1', movie_id: 909, movie_title: 'Dune', release_date: J_MINUS_2 }], { isPro: false });
   state.profiles = [];
   state.user_movie_alerts[0].email = 'ivanjoris959@gmail.com';
@@ -203,8 +203,9 @@ test('the owner account is Pro even with no profile row at all', async () => {
   const env = useEnvironment({ tmdb: confirmed(J_MINUS_2), resend: delivered });
   try {
     const counts = await processReleaseAlerts(fakeDatabase(state), { now: NOW });
-    assert.equal(counts.accepted, 1);
-    assert.deepEqual(env.posts[0].to, ['ivanjoris959@gmail.com']);
+    assert.equal(counts.accepted, 0);
+    assert.equal(counts.skipped, 1);
+    assert.equal(env.posts.length, 0);
   } finally { env.restore(); }
 });
 

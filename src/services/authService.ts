@@ -1,17 +1,7 @@
+import { readAccountAccess } from './accountAccessService';
 import { UserProfile, Movie, AdminUserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mergeWatchlists } from './watchlistService';
-
-export const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
-
-export const ADMIN_EMAILS = [
-  'ivanjoris959@gmail.com',
-  'techjoris@gmail.com',
-  'admin@elicine.app',
-  'admin@cineai.app',
-  'joris@elicine.app',
-  'creator@elicine.app'
-];
 
 interface StoredAccount {
   id: string;
@@ -32,43 +22,6 @@ interface StoredAccount {
   myList?: Movie[];
   token?: string;
 }
-
-const ADMIN_SEED_USERS: AdminUserData[] = [
-  {
-    id: 'usr_master_admin_01',
-    username: 'ivanjoris',
-    email: 'ivanjoris959@gmail.com',
-    name: 'Ivan Joris (Fondateur & Master Admin)',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    provider: 'google',
-    role: 'admin',
-    isPro: true,
-    proPlanType: 'yearly',
-    proPlanExpiresAt: 'Illimité (Fondateur)',
-    referralCode: 'ELICINE-MASTER',
-    createdAt: '2026-08-01T10:00:00.000Z',
-    moviesInListCount: 54,
-    aiQueriesCount: 230,
-    lastActiveAt: 'En direct'
-  },
-  {
-    id: 'usr_creator_01',
-    username: 'techjoris',
-    email: 'techjoris@gmail.com',
-    name: 'Joris (Fondateur)',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    provider: 'google',
-    role: 'admin',
-    isPro: true,
-    proPlanType: 'yearly',
-    proPlanExpiresAt: 'Illimité (Fondateur)',
-    referralCode: 'ELICINE-CREATOR',
-    createdAt: '2026-08-01T10:00:00.000Z',
-    moviesInListCount: 42,
-    aiQueriesCount: 156,
-    lastActiveAt: 'Aujourd\'hui'
-  }
-];
 
 const ACCOUNTS_STORAGE_KEY = 'cineia_registered_accounts';
 const SESSION_TOKEN_KEY = 'cineia_session_token';
@@ -248,8 +201,6 @@ export const authService = {
       return { success: false, error: 'Le compte n’a pas pu être confirmé. Réessayez.' };
     }
 
-    const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
-    const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
 
     const userId = supabaseUserId;
     const sessionToken = supabaseToken;
@@ -262,32 +213,17 @@ export const authService = {
       name: cleanUsername || (cleanEmail.split('@')[0] ? cleanEmail.split('@')[0] : 'Cinéphile'),
       avatar: undefined,
       provider: 'credentials',
-      role: isAdminUser ? 'admin' : 'user',
-      isPro: isMasterAdmin ? true : false,
-      proPlanType: isMasterAdmin ? 'yearly' : undefined,
-      proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
+      role: 'user',
+      isPro: false,
+      proPlanType: undefined,
+      proPlanExpiresAt: undefined,
       referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       createdAt: new Date().toISOString(),
       myList: previousList,
       token: sessionToken
     };
 
-    // Synchronisation automatique dans Supabase (table profiles) pour le Master Admin
-    if (isSupabaseConfigured() && (supabaseUserId || isMasterAdmin)) {
-      try {
-        await supabase.from('profiles').upsert({
-          id: userId,
-          email: cleanEmail,
-          full_name: fullUser.name,
-          role: isAdminUser ? 'admin' : 'user',
-          is_admin: isAdminUser,
-          is_pro: isMasterAdmin,
-          updated_at: new Date().toISOString()
-        });
-      } catch (upsertErr) {
-        console.warn('[authService.register] Supabase profiles sync warning:', upsertErr);
-      }
-    }
+    Object.assign(fullUser, await readAccountAccess(userId));
 
     // Sauvegarde immédiate dans le coffre local
     await this.saveLocalAccount(fullUser, password);
@@ -312,8 +248,6 @@ export const authService = {
       return { success: false, error: "Veuillez saisir une adresse email valide." };
     }
 
-    const isMasterAdmin = cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase();
-    const isAdminUser = isMasterAdmin || ADMIN_EMAILS.includes(cleanEmail);
 
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Connexion au service de comptes indisponible. Réessayez plus tard.' };
@@ -341,30 +275,17 @@ export const authService = {
             name: data.user.user_metadata?.full_name || (data.user.email ? data.user.email.split('@')[0] : 'Cinéphile'),
             avatar: data.user.user_metadata?.avatar_url || undefined,
             provider: 'credentials',
-            role: isAdminUser ? 'admin' : ((data.user.user_metadata?.role as any) || 'user'),
-            isPro: isMasterAdmin ? true : ((data.user.user_metadata?.is_pro as any) ?? false),
-            proPlanType: isMasterAdmin ? 'yearly' : undefined,
-            proPlanExpiresAt: isMasterAdmin ? 'Illimité (Fondateur)' : undefined,
+            role: 'user',
+            isPro: false,
+            proPlanType: undefined,
+            proPlanExpiresAt: undefined,
             referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
             createdAt: data.user.created_at || new Date().toISOString(),
             myList: savedList,
             token: data.session?.access_token
           };
 
-          // Assurer la persistance du rôle admin & pass pro dans la table profiles de Supabase
-          if (isMasterAdmin) {
-            try {
-              await supabase.from('profiles').upsert({
-                id: data.user.id,
-                email: cleanEmail,
-                full_name: fullUser.name,
-                role: 'admin',
-                is_admin: true,
-                is_pro: true,
-                updated_at: new Date().toISOString()
-              });
-            } catch (_) {}
-          }
+          Object.assign(fullUser, await readAccountAccess(data.user.id));
 
           await this.saveLocalAccount(fullUser, password);
           if (data.session?.access_token) {
@@ -479,7 +400,7 @@ export const authService = {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && (parsed.email || parsed.id)) {
-          return parsed as UserProfile;
+          return { ...parsed, role: 'user', is_admin: false, isPro: false } as UserProfile;
         }
       }
     } catch (e) {
@@ -500,39 +421,7 @@ export const authService = {
    * Vérifie si un utilisateur dispose des privilèges administrateur
    */
   isAdmin(user: UserProfile | null): boolean {
-    if (typeof window !== 'undefined') {
-      const isMasterUnlocked = sessionStorage.getItem('elicine_admin_authorized') === 'true';
-      if (isMasterUnlocked) return true;
-    }
-    if (!user) return false;
-    if (user.email && user.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) return true;
-    if (user.role === 'admin') return true;
-    if ((user as any).is_admin === true) return true;
-    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) return true;
-    return false;
-  },
-
-  /**
-   * Valide le code d'accès secret de l'administrateur / créateur
-   */
-  verifyAdminPasscode(passcode: string): boolean {
-    const clean = (passcode || '').trim().toLowerCase();
-    if (clean === 'elicine2026' || clean === 'admin123' || clean === 'techjoris' || clean === 'elicine') {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('elicine_admin_authorized', 'true');
-      }
-      return true;
-    }
-    return false;
-  },
-
-  /**
-   * Révoque la session administrateur
-   */
-  revokeAdminSession(): void {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('elicine_admin_authorized');
-    }
+    return Boolean(user?.id && (user as any).is_admin === true);
   },
 
   /**
@@ -556,230 +445,34 @@ export const authService = {
       conversionRate: string;
     };
   }> {
-    // 1. Tenter l'appel API serveur sécurisé avec Supabase
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
-      const res = await fetch('/api/admin/users', {
-        headers: {
-          'x-admin-secret': 'elicine2026',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.users && data.users.length > 0) {
-          const localAccounts = getStoredAccounts();
-          const serverUsers: AdminUserData[] = data.users;
-          const userMap = new Map<string, AdminUserData>();
-          
-          serverUsers.forEach(u => userMap.set(u.id, u));
+    return this.adminRequest('GET');
+  },
 
-          localAccounts.forEach(acc => {
-            const list = this.getUserWatchlist(acc.id);
-            const isMaster = acc.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
-            userMap.set(acc.id, {
-              id: acc.id,
-              username: acc.username,
-              email: acc.email,
-              name: acc.name,
-              avatar: acc.avatar,
-              provider: acc.provider || 'credentials',
-              role: isMaster ? 'admin' : (acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user')),
-              isPro: isMaster ? true : acc.isPro,
-              proPlanType: isMaster ? 'yearly' : acc.proPlanType,
-              proPlanExpiresAt: isMaster ? 'Illimité (Fondateur)' : acc.proPlanExpiresAt,
-              referralCode: acc.referralCode,
-              createdAt: acc.createdAt,
-              moviesInListCount: list.length,
-              aiQueriesCount: Math.floor(Math.random() * 20) + list.length * 2,
-              lastActiveAt: 'Récemment'
-            });
-          });
-
-          const mergedUsers = Array.from(userMap.values());
-          const totalUsers = mergedUsers.length;
-          const premiumSubscribers = mergedUsers.filter(u => u.isPro).length;
-          const freeUsers = totalUsers - premiumSubscribers;
-          const totalSavedMovies = mergedUsers.reduce((acc, u) => acc + (u.moviesInListCount || 0), 0);
-          const totalSearches = mergedUsers.reduce((acc, u) => acc + (u.aiQueriesCount || 0), 0);
-
-          return {
-            users: mergedUsers,
-            metrics: {
-              totalUsers,
-              premiumSubscribers,
-              freeUsers,
-              totalSearches,
-              totalSavedMovies,
-              conversionRate: totalUsers > 0 ? ((premiumSubscribers / totalUsers) * 100).toFixed(1) + '%' : '0%'
-            }
-          };
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[authService.getAllAdminUsers] API fallback to local:', apiErr);
-    }
-
-    // 2. Traitement local consolidé
-    const localAccounts = getStoredAccounts();
-    const userMap = new Map<string, AdminUserData>();
-
-    ADMIN_SEED_USERS.forEach(u => userMap.set(u.id, u));
-
-    localAccounts.forEach(acc => {
-      const list = this.getUserWatchlist(acc.id);
-      const isMaster = acc.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
-      userMap.set(acc.id, {
-        id: acc.id,
-        username: acc.username,
-        email: acc.email,
-        name: acc.name,
-        avatar: acc.avatar,
-        provider: acc.provider || 'credentials',
-        role: isMaster ? 'admin' : (acc.role || (ADMIN_EMAILS.includes(acc.email.toLowerCase()) ? 'admin' : 'user')),
-        isPro: isMaster ? true : acc.isPro,
-        proPlanType: isMaster ? 'yearly' : acc.proPlanType,
-        proPlanExpiresAt: isMaster ? 'Illimité (Fondateur)' : acc.proPlanExpiresAt,
-        referralCode: acc.referralCode,
-        createdAt: acc.createdAt,
-        moviesInListCount: list.length,
-        aiQueriesCount: Math.max(3, list.length * 3),
-        lastActiveAt: 'Aujourd\'hui'
-      });
+  async adminRequest(method: string, body?: Record<string, unknown>): Promise<any> {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session?.access_token) throw new Error('Connectez-vous avec un compte administrateur.');
+    const response = await fetch('/api/admin/users', {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      ...(body ? { body: JSON.stringify(body) } : {})
     });
-
-    const users = Array.from(userMap.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
-    const totalUsers = users.length;
-    const premiumSubscribers = users.filter(u => u.isPro).length;
-    const freeUsers = totalUsers - premiumSubscribers;
-    const totalSavedMovies = users.reduce((acc, u) => acc + (u.moviesInListCount || 0), 0);
-    const totalSearches = users.reduce((acc, u) => acc + (u.aiQueriesCount || 0), 0);
-
-    return {
-      users,
-      metrics: {
-        totalUsers,
-        premiumSubscribers,
-        freeUsers,
-        totalSearches,
-        totalSavedMovies,
-        conversionRate: totalUsers > 0 ? ((premiumSubscribers / totalUsers) * 100).toFixed(1) + '%' : '0%'
-      }
-    };
+    const result = await response.json();
+    if (!response.ok || result.success !== true) throw new Error(result.error || 'Accès administrateur refusé.');
+    return result;
   },
 
-  /**
-   * Bascule le statut Pro d'un utilisateur par l'administrateur avec persistance Supabase
-   */
-  async toggleUserPro(userId: string, currentPro?: boolean, email?: string): Promise<boolean> {
-    const accounts = getStoredAccounts();
-    const index = accounts.findIndex(a => a.id === userId || (email && a.email.toLowerCase() === email.toLowerCase()));
-    
-    let targetPro: boolean;
-    if (typeof currentPro === 'boolean') {
-      targetPro = !currentPro;
-    } else if (index >= 0) {
-      targetPro = !accounts[index].isPro;
-    } else {
-      targetPro = true;
-    }
-
-    // 1. Appel PATCH serveur pour mise à jour Supabase en arrière-plan
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
-      await fetch('/api/admin/users', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': 'elicine2026',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          userId,
-          email,
-          isPro: targetPro
-        })
-      });
-    } catch (e) {
-      console.warn('[authService.toggleUserPro] API update notice:', e);
-    }
-
-    // 2. Mise à jour du stockage local
-    if (index >= 0) {
-      accounts[index].isPro = targetPro;
-      if (targetPro) {
-        accounts[index].proPlanType = 'yearly';
-        accounts[index].proPlanExpiresAt = 'Accordé par Admin';
-      } else {
-        accounts[index].proPlanType = undefined;
-        accounts[index].proPlanExpiresAt = null;
-      }
-      saveStoredAccounts(accounts);
-    }
-
-    return targetPro;
+  async toggleUserPro(userId: string, currentPro = false, email?: string): Promise<boolean> {
+    const isPro = !currentPro;
+    await this.adminRequest('PATCH', { userId, email, isPro });
+    return isPro;
   },
 
-  /**
-   * Supprime définitivement un utilisateur et toutes ses données associées (Admin only)
-   */
   async deleteUser(userId: string, email?: string): Promise<{ success: boolean; error?: string }> {
-    const cleanEmail = (email || '').toLowerCase().trim();
-
-    // 🛡️ Garde-fou absolu pour les comptes fondateurs et administrateurs
-    if (
-      cleanEmail === MASTER_ADMIN_EMAIL.toLowerCase() ||
-      ADMIN_EMAILS.includes(cleanEmail) ||
-      userId === 'usr_master_admin' ||
-      userId === 'usr_master_admin_01' ||
-      userId === 'usr_creator_01'
-    ) {
-      return {
-        success: false,
-        error: 'Impossible de supprimer un compte administrateur ou fondateur principal.'
-      };
-    }
-
-    // 1. Appel DELETE à l'API serveur pour suppression en cascade dans Supabase
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem(SESSION_TOKEN_KEY) : null;
-      const res = await fetch('/api/admin/users', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': 'elicine2026',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ userId, email: cleanEmail })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        if (errorData.error) {
-          console.warn('[authService.deleteUser] Notice serveur:', errorData.error);
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[authService.deleteUser] API request notice:', apiErr);
+      await this.adminRequest('DELETE', { userId, email });
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
-
-    // 2. Nettoyage dans le stockage local des comptes enregistrés
-    if (typeof window !== 'undefined') {
-      try {
-        const accounts = getStoredAccounts();
-        const filtered = accounts.filter(
-          a => a.id !== userId && (!cleanEmail || a.email.toLowerCase() !== cleanEmail)
-        );
-        saveStoredAccounts(filtered);
-        localStorage.removeItem(`cineia_watchlist_${userId}`);
-      } catch (e) {
-        console.warn('[authService.deleteUser] Local storage purge error:', e);
-      }
-    }
-
-    return { success: true };
   }
 };

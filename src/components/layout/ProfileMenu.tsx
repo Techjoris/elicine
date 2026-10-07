@@ -1,3 +1,4 @@
+import { accountSessionHeaders } from '../../services/accountAccessService';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Crown, 
@@ -34,8 +35,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
   // 1. État local réactif pour le statut Pro alimenté directement depuis la table profiles
   const [isPro, setIsPro] = useState<boolean>(() => {
-    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
-    return isMaster || Boolean(
+    return Boolean(
       appUser?.isPro ||
       (appUser as any)?.is_pro ||
       (appUser as any)?.pass_status === 'pro' ||
@@ -53,10 +53,6 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
       }
 
       const email = (user?.email || appUser?.email || '').trim().toLowerCase();
-      if (email === 'ivanjoris959@gmail.com') {
-        setIsPro(true);
-        return;
-      }
 
       const userId = user?.id || appUser?.id;
       if (!userId && !email) {
@@ -96,7 +92,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
       // C. Repli serveur via Service Role (Bypasse le blocage RLS Supabase côté client)
       try {
-        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
+        const checkRes = await fetch('/api/activate-pro?action=check-status', { headers: await accountSessionHeaders() });
         if (checkRes.ok) {
           const checkData = await checkRes.json();
           if (checkData?.isPro) {

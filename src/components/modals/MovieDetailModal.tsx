@@ -195,8 +195,7 @@ export const MovieDetailModal: React.FC = () => {
     user && (
       user.isPro || 
       user.is_pro || 
-      user.pass_status === 'pro' || 
-      (user.email && ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'].includes(user.email.toLowerCase()))
+      user.pass_status === 'pro'
     )
   );
 

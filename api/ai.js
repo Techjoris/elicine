@@ -75,7 +75,7 @@ export default async function handler(req, res) {
   }
 
   // B. Validation systématique du quota journalier (3 recherches gratuites / jour liées à l'adresse IP)
-  // L'administrateur principal (ivanjoris959@gmail.com) et les membres Pro sont exemptés de toute restriction
+  // Les administrateurs validés en base et les membres Pro sont exemptés de toute restriction.
   if (!isPro && !isBypassQuotas) {
     const ipHash = sessionInfo.ipHash;
     const ipStorageKey = `ip_${ipHash}`;

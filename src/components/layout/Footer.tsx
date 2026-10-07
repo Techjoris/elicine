@@ -15,7 +15,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTerms }) => {
   const { t } = useTranslation();
 
   const isPro = Boolean(
-    (appUser?.email || authUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com' ||
     appUser?.isPro || (appUser as any)?.is_pro || (appUser as any)?.pass_status === 'pro' ||
     (authUser as any)?.isPro || (authUser as any)?.is_pro || (authUser as any)?.pass_status === 'pro'
   );

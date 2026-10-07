@@ -1,3 +1,4 @@
+import { accountSessionHeaders } from '../../services/accountAccessService';
 import React, { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { subscriptionService } from '../../services/subscriptionService';
@@ -448,8 +449,8 @@ export const PaymentCallbackView: React.FC = () => {
         const emailToCheck = clientEmail || user?.email || '';
         if (emailToCheck) {
           try {
-            const checkRes = await fetch(`/api/activate-pro?action=check-status&email=${encodeURIComponent(emailToCheck)}`, {
-              headers: { 'Accept': 'application/json' }
+            const checkRes = await fetch('/api/activate-pro?action=check-status', {
+              headers: { 'Accept': 'application/json', ...await accountSessionHeaders() }
             });
             if (checkRes.ok) {
               const checkData = await checkRes.json();

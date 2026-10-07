@@ -32,7 +32,7 @@ DECLARE
   v_profiles_count INT := 0;
   v_subs_count INT := 0;
 BEGIN
-  -- A. Rétrogradation dans la table profiles (sauf compte créateur/fondateur)
+  -- A. Rétrogradation dans la table profiles (échéance définie en base)
   WITH updated_profiles AS (
     UPDATE public.profiles
     SET 
@@ -40,7 +40,6 @@ BEGIN
       pass_status = 'free',
       updated_at = NOW()
     WHERE is_pro = TRUE
-      AND LOWER(email) != 'ivanjoris959@gmail.com'
       AND (
         (expires_at IS NOT NULL AND expires_at < NOW())
         OR (pro_expires_at IS NOT NULL AND pro_expires_at < NOW())
@@ -57,7 +56,6 @@ BEGIN
       status = 'expired',
       updated_at = NOW()
     WHERE status = 'active'
-      AND LOWER(email) != 'ivanjoris959@gmail.com'
       AND expires_at IS NOT NULL
       AND expires_at < NOW()
     RETURNING id
@@ -66,10 +64,10 @@ BEGIN
 
   RETURN QUERY SELECT v_profiles_count, v_subs_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- 5. Vue pratique pour inspecter les jours restants de chaque abonné Pro
-CREATE OR REPLACE VIEW public.vw_pro_subscribers_status AS
+CREATE OR REPLACE VIEW public.vw_pro_subscribers_status WITH (security_invoker = true) AS
 SELECT 
   id,
   email,
@@ -79,7 +77,6 @@ SELECT
   expires_at,
   COALESCE(expires_at, pro_expires_at, subscription_ends_at) AS effective_expires_at,
   CASE 
-    WHEN LOWER(email) = 'ivanjoris959@gmail.com' THEN 'Illimité (Fondateur)'
     WHEN COALESCE(expires_at, pro_expires_at, subscription_ends_at) IS NULL THEN 'Indéterminé'
     WHEN COALESCE(expires_at, pro_expires_at, subscription_ends_at) < NOW() THEN 'Expiré'
     ELSE CONCAT(
@@ -93,5 +90,6 @@ SELECT
 FROM public.profiles
 WHERE is_pro = TRUE;
 
--- 6. Droit d'exécution pour le rôle authentifié et le rôle de service (Service Role)
-GRANT EXECUTE ON FUNCTION public.downgrade_expired_subscriptions() TO authenticated, service_role;
+-- 6. Exécution réservée au serveur de paiement.
+REVOKE ALL ON FUNCTION public.downgrade_expired_subscriptions() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.downgrade_expired_subscriptions() TO service_role;

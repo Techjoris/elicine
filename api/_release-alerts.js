@@ -9,15 +9,11 @@ function database() {
 }
 function checked(result) { if (result.error) throw new Error(`DATABASE_${result.error.code || 'ERROR'}`); return result.data; }
 
-/** Owner accounts are Pro everywhere else in the product; the alert API must agree. */
-const FOUNDER_EMAILS = ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'];
 
 export async function hasPro(db, user, now = new Date()) {
   const email = String(user?.email || '').toLowerCase().trim();
-  if (FOUNDER_EMAILS.includes(email)) return true;
   const columns = 'is_pro, expires_at';
   let profile = checked(await db.from('profiles').select(columns).eq('id', user.id).maybeSingle());
-  if (!profile && email) profile = checked(await db.from('profiles').select(columns).ilike('email', email).maybeSingle());
   if (profile?.is_pro === true && (!profile.expires_at || Date.parse(profile.expires_at) > now.getTime())) return true;
   // A project without the subscriptions table must not turn alert activation into a server error
   // for the accounts whose profile already carries the entitlement.

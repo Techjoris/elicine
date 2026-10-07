@@ -320,8 +320,7 @@ export async function downgradeExpiredSubscriptions() {
     const { data: expiredProfiles, error: fetchErr } = await supabaseAdmin
       .from('profiles')
       .select('id, email, expires_at')
-      .eq('is_pro', true)
-      .neq('email', 'ivanjoris959@gmail.com');
+      .eq('is_pro', true);
 
     if (!fetchErr && Array.isArray(expiredProfiles)) {
       const expiredIds = [];
@@ -352,8 +351,7 @@ export async function downgradeExpiredSubscriptions() {
     const { data: expiredSubs, error: subsFetchErr } = await supabaseAdmin
       .from('subscriptions')
       .select('id, expires_at')
-      .eq('status', 'active')
-      .neq('email', 'ivanjoris959@gmail.com');
+      .eq('status', 'active');
 
     if (!subsFetchErr && Array.isArray(expiredSubs)) {
       const expiredSubIds = expiredSubs
@@ -400,7 +398,6 @@ export async function processExpirationReminders({ maxReminders = 50 } = {}) {
       .from('profiles')
       .select('id, email, is_pro, expires_at')
       .eq('is_pro', true)
-      .neq('email', 'ivanjoris959@gmail.com')
       .limit(maxReminders);
 
     if (fetchErr || !Array.isArray(activeProfiles)) {

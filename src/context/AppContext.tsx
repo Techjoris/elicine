@@ -1,3 +1,4 @@
+import { readAccountAccess } from '../services/accountAccessService';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
@@ -147,15 +148,7 @@ export const formatUser = (rawUser: any): UserProfile => {
   const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Cinéphile');
   const email = rawUser.email || meta.email || identityMeta.email || '';
 
-  const isMasterAdmin = email.toLowerCase() === 'ivanjoris959@gmail.com';
-  const isPro = isMasterAdmin || Boolean(
-    rawUser.isPro === true ||
-    rawUser.is_pro === true ||
-    rawUser.pass_status === 'pro' ||
-    meta.isPro === true ||
-    meta.is_pro === true ||
-    meta.pass_status === 'pro'
-  );
+  const isPro = rawUser.isPro === true;
 
   return {
     ...rawUser,
@@ -164,7 +157,7 @@ export const formatUser = (rawUser: any): UserProfile => {
     name,
     avatar: avatar || undefined,
     provider: 'google',
-    role: isMasterAdmin ? 'admin' : (meta.role || rawUser.role || 'user'),
+    role: rawUser.is_admin === true ? 'admin' : 'user',
     isPro,
     referralCode: rawUser.referralCode || ('CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
     createdAt: rawUser.created_at || rawUser.createdAt || new Date().toISOString()
@@ -504,15 +497,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const name = meta.full_name || meta.name || identityMeta.full_name || identityMeta.name || (sbUser.email ? sbUser.email.split('@')[0] : 'Cinéphile');
     const email = sbUser.email || meta.email || identityMeta.email || '';
 
-    const isMaster = email.toLowerCase() === 'ivanjoris959@gmail.com';
-    const isPro = isMaster || Boolean(
-      sbUser.isPro === true ||
-      sbUser.is_pro === true ||
-      sbUser.pass_status === 'pro' ||
-      meta.isPro === true ||
-      meta.is_pro === true ||
-      meta.pass_status === 'pro'
-    );
+    const isPro = false;
 
     const updatedUser: UserProfile = {
       id: sbUser.id,
@@ -520,7 +505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       name,
       avatar: avatar || undefined,
       provider: 'google',
-      role: isMaster ? 'admin' : ((meta.role as any) || 'user'),
+      role: 'user',
       isPro,
       proPlanType: isPro ? 'monthly' : undefined,
       proPlanExpiresAt: undefined,
@@ -534,7 +519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const merged: UserProfile = {
         ...updatedUser,
         avatar: avatar || prev?.avatar,
-        isPro: isPro || (prev?.isPro ?? false),
+        isPro,
         proPlanType: prev?.proPlanType || updatedUser.proPlanType,
         proPlanExpiresAt: prev?.proPlanExpiresAt,
         referralCode: prev?.referralCode || updatedUser.referralCode,
@@ -602,11 +587,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 🔒 VÉRIFICATION SÉCURISÉE DE LA SOUSCRIPTION PRO EN BASE DE DONNÉES
       // Si aucune souscription active valide n'est trouvée, isPro passe à false.
+      const access = await readAccountAccess(currentUser.id);
       const proCheck = await subscriptionService.checkUserProStatus(currentUser);
 
       if (!isCancelled) {
         const updatedUser: UserProfile = {
           ...currentUser,
+          ...access,
           isPro: proCheck.isPro,
           proPlanType: proCheck.plan || currentUser.proPlanType,
           proPlanExpiresAt: proCheck.expiresAt ?? (proCheck.isPro ? currentUser.proPlanExpiresAt : null)
@@ -640,11 +627,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .channel(`realtime_pro_sync_${userId || email}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
+          { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
           (payload: any) => {
             const row = payload?.new || {};
             if (row.id === userId || (row.email && row.email.toLowerCase() === email)) {
-              if (row.is_pro || row.pass_status === 'pro') {
+              if (row.id === userId) {
                 console.log('[AppContext Realtime] 👑 Mise à jour Pro détectée via Supabase Realtime (profiles)');
                 refreshUserProStatus();
               }
@@ -695,7 +682,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const canPerformSearch = (): boolean => {
-    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    const isMasterAdmin = authService.isAdmin(user);
     if ((user as any)?.isPro || isMasterAdmin) return true;
 
     const expectedMax = user?.id ? MAX_FREE_DAILY_SEARCHES : MAX_GUEST_SEARCHES;
@@ -716,7 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const recordSuccessfulSearch = async (): Promise<void> => {
-    const isMasterAdmin = Boolean(user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com');
+    const isMasterAdmin = authService.isAdmin(user);
     if ((user as any)?.isPro || isMasterAdmin) return;
 
     try {
@@ -848,70 +835,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentUser = user || authService.getStoredUser();
     if (!currentUser) return false;
 
-    const email = (currentUser.email || '').trim().toLowerCase();
-    const isMaster = email === 'ivanjoris959@gmail.com';
-    let isProDirect = isMaster;
-    let planDirect: 'monthly' | 'yearly' = 'monthly';
-    let expiresAtDirect: string | null = null;
-
-    // 2. Invalidation & Re-fetch direct de la table profiles
-    try {
-      if (supabase) {
-        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
-        let prof: any = null;
-        if (email) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, expires_at').ilike('email', email.trim()).maybeSingle();
-          if (data) prof = data;
-        }
-        if (!prof && currentUser.id && isUuid(currentUser.id)) {
-          const { data } = await supabase.from('profiles').select('id, email, is_pro, expires_at').eq('id', currentUser.id).maybeSingle();
-          if (data) prof = data;
-        }
-        if (prof) {
-          const profExpiry = prof.expires_at;
-          if (profExpiry) expiresAtDirect = profExpiry;
-
-          const isExpired = !isMaster && profExpiry && new Date(profExpiry).getTime() < Date.now();
-          if (isExpired) {
-            isProDirect = false;
-          } else if (prof.is_pro === true || String(prof.is_pro) === 'true') {
-            isProDirect = true;
-          }
-        }
-      }
-    } catch (profErr) {
-      console.warn('[AppContext] Erreur re-fetch profiles direct:', profErr);
-    }
-
-    // Repli serveur via Service Role (bypasse d'éventuels blocages RLS client)
-    if (!isProDirect && (email || currentUser.id) && !isMaster) {
-      try {
-        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(currentUser.id || '')}&email=${encodeURIComponent(email)}`);
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          if (checkData?.isPro) {
-            isProDirect = true;
-            if (checkData.plan) planDirect = checkData.plan;
-            if (checkData.expiresAt) expiresAtDirect = checkData.expiresAt;
-          } else if (checkData?.isExpired) {
-            isProDirect = false;
-          }
-        }
-      } catch (_) {}
-    }
-
+    const access = await readAccountAccess(currentUser.id);
     const proCheck = await subscriptionService.checkUserProStatus(currentUser);
-    const finalIsPro = isMaster || isProDirect || proCheck.isPro;
-    const finalExpiresAt = expiresAtDirect || proCheck.expiresAt || null;
-    const daysRemaining = finalExpiresAt && finalExpiresAt !== 'Illimité (Fondateur)'
-      ? Math.max(0, Math.ceil((new Date(finalExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      : (isMaster ? 9999 : null);
+    const finalIsPro = proCheck.isPro;
+    const finalExpiresAt = proCheck.expiresAt || null;
+    const daysRemaining = proCheck.daysRemaining ?? null;
+    const planDirect = 'monthly';
 
     const updated: UserProfile = {
       ...currentUser,
+      ...access,
       isPro: finalIsPro,
       is_pro: finalIsPro,
-      pass_status: finalIsPro ? 'pro' : (currentUser as any)?.pass_status || 'free',
+      pass_status: finalIsPro ? 'pro' : 'free',
       proPlanType: proCheck.plan || currentUser.proPlanType || planDirect,
       proPlanExpiresAt: finalExpiresAt,
       expires_at: finalExpiresAt,
@@ -1134,8 +1070,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       user && (
         user.isPro || 
         user.is_pro || 
-        user.pass_status === 'pro' || 
-        (user.email && ['ivanjoris959@gmail.com', 'techjoris@gmail.com', 'admin@elicine.app', 'joris@elicine.app'].includes(user.email.toLowerCase()))
+        user.pass_status === 'pro'
       )
     );
 

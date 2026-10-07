@@ -29,14 +29,12 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON public.subscriptions(stat
 -- 3. Activation de Row Level Security (RLS)
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 
--- 4. Politiques de sécurité (Lecture/Écriture pour utilisateurs authentifiés et service)
+-- 4. Clients read only their own subscription; payment writes require service_role.
+DROP POLICY IF EXISTS "Les utilisateurs peuvent lire leurs propres souscriptions" ON public.subscriptions;
+DROP POLICY IF EXISTS "Création et mise à jour des souscriptions autorisée" ON public.subscriptions;
+REVOKE ALL ON public.subscriptions FROM public, anon, authenticated;
+GRANT SELECT ON public.subscriptions TO authenticated;
+GRANT ALL ON public.subscriptions TO service_role;
 CREATE POLICY "Les utilisateurs peuvent lire leurs propres souscriptions"
-  ON public.subscriptions
-  FOR SELECT
-  USING (auth.uid()::text = user_id OR email = auth.jwt()->>'email');
-
-CREATE POLICY "Création et mise à jour des souscriptions autorisée"
-  ON public.subscriptions
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+  ON public.subscriptions FOR SELECT TO authenticated
+  USING ((select auth.uid())::text = user_id);

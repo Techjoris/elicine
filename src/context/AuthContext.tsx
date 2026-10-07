@@ -1,3 +1,4 @@
+import { readAccountAccess, NO_ACCOUNT_ACCESS } from '../services/accountAccessService';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, signInWithGoogle } from '../lib/supabase';
@@ -31,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (raw) {
             const parsed = JSON.parse(raw);
             const u = parsed?.user || parsed?.currentSession?.user;
-            if (u?.email || u?.id) return u;
+            if (u?.email || u?.id) return { ...u, ...NO_ACCOUNT_ACCESS };
           }
         }
       } catch (_) {}
@@ -64,24 +65,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!rawUser) return rawUser;
     const email = (rawUser.email || '').trim().toLowerCase();
     const userId = rawUser.id;
-    const isMaster = email === 'ivanjoris959@gmail.com';
-    let isPro = isMaster || Boolean(rawUser.isPro || rawUser.is_pro || rawUser.user_metadata?.is_pro || rawUser.pass_status === 'pro');
-    let passStatus = isMaster ? 'pro' : (rawUser.pass_status || (isPro ? 'pro' : 'free'));
-    let role = isMaster ? 'admin' : (rawUser.role || 'user');
+    const access = await readAccountAccess(userId);
+    let isPro = access.isPro;
+    let passStatus = isPro ? 'pro' : 'free';
+    let role = access.role;
     let fullName = rawUser.user_metadata?.full_name || rawUser.name;
-    let expiresAt: string | null = rawUser.expires_at || rawUser.pro_expires_at || rawUser.expiresAt || null;
+    let expiresAt: string | null = access.expires_at;
     let daysRemaining: number | null = null;
     // Statut « Supporter » (soutiens ponctuels Paddle) : indépendant du Pass Pro.
-    let isSupporter = Boolean(rawUser.is_supporter || rawUser.user_metadata?.is_supporter);
+    let isSupporter = false;
     let supporterTotalCents = Number(rawUser.supporter_total_cents) || 0;
 
     try {
       const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
       let prof: any = null;
-      if (email) {
-        const { data } = await supabase.from('profiles').select('*').eq('email', email).maybeSingle();
-        if (data) prof = data;
-      }
       if (!prof && userId && isUuid(userId)) {
         const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
         if (data) prof = data;
@@ -90,20 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profExpiry = prof.expires_at || prof.pro_expires_at || prof.subscription_ends_at;
         if (profExpiry) expiresAt = profExpiry;
 
-        const isExpired = !isMaster && profExpiry && new Date(profExpiry).getTime() < Date.now();
+        const isExpired = profExpiry && new Date(profExpiry).getTime() < Date.now();
 
         if (isExpired) {
           isPro = false;
           passStatus = 'free';
           daysRemaining = 0;
         } else {
-          isPro = isMaster || prof.is_pro === true || prof.pass_status === 'pro' || prof.role === 'admin';
+          isPro = access.isPro;
           passStatus = prof.pass_status || (isPro ? 'pro' : 'free');
           if (profExpiry) {
             daysRemaining = Math.max(1, Math.ceil((new Date(profExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
           }
         }
-        role = isMaster ? 'admin' : (prof.role || role);
+        role = access.role;
         if (prof.full_name) fullName = prof.full_name;
         if (prof.is_supporter === true) isSupporter = true;
         if (Number.isFinite(Number(prof.supporter_total_cents))) supporterTotalCents = Number(prof.supporter_total_cents) || 0;
@@ -112,32 +109,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('[AuthContext] enrichUserWithProfile warning:', err);
     }
 
-    // Repli serveur via Service Role (bypasse les restrictions RLS Supabase client)
-    if (!isPro && (email || userId) && !isMaster) {
-      try {
-        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          if (checkData?.isPro) {
-            isPro = true;
-            passStatus = 'pro';
-            if (checkData.expiresAt) expiresAt = checkData.expiresAt;
-            if (checkData.daysRemaining !== undefined) daysRemaining = checkData.daysRemaining;
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (isMaster) {
-      isPro = true;
-      passStatus = 'pro';
-      role = 'admin';
-      expiresAt = 'Illimité (Fondateur)';
-      daysRemaining = 9999;
-    }
-
     return {
       ...rawUser,
+      is_admin: access.is_admin,
       isPro,
       is_pro: isPro,
       pass_status: passStatus,
@@ -220,7 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         setUser(previous => previous?.id === session.user.id
           ? { ...previous, user_metadata: session.user.user_metadata }
-          : session.user);
+          : { ...session.user, ...NO_ACCOUNT_ACCESS });
 
         // Le callback doit finir avant tout appel Supabase : updateUser attend
         // lui-même ce callback, et une requête ici bloquerait la sauvegarde.

@@ -1,3 +1,4 @@
+import { verifyServerSession } from './_security.js';
 /**
  * Endpoint API Serverless : /api/activate-pro
  * Active instantanément le Pass Pro d'un utilisateur dans Supabase et déclenche l'envoi de l'e-mail Resend
@@ -10,13 +11,6 @@ import {
   processRenewalReminders 
 } from './_pro-activation.js';
 import { handleReleaseAlerts, handleReleaseCron } from './_release-alerts.js';
-
-const FOUNDER_EMAILS = [
-  'ivanjoris959@gmail.com',
-  'techjoris@gmail.com',
-  'admin@elicine.app',
-  'joris@elicine.app'
-];
 
 export default async function handler(req, res) {
   // En-têtes CORS universels
@@ -72,8 +66,8 @@ export default async function handler(req, res) {
   if (action === 'cron' || action === 'cron-subscriptions') {
     const authHeader = req.headers['authorization'] || '';
     const cronSecret = process.env.CRON_SECRET || '';
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.headers['x-cron-secret'] !== cronSecret) {
-      console.warn('[Cron Subscriptions] ⚠️ Requête sans secret strict.');
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}` && req.headers['x-cron-secret'] !== cronSecret) {
+      return res.status(401).json({ error: 'Accès refusé.' });
     }
 
     try {
@@ -93,6 +87,10 @@ export default async function handler(req, res) {
 
   // ─── ACTION : Envoi direct de l'e-mail de remerciement ou don (Thank You API) ───
   if (action === 'thank-you-email' || action === 'thank-you' || action === 'send-thank-you-email') {
+    const secret = process.env.INTERNAL_ACTIVATION_SECRET || process.env.CRON_SECRET;
+    if (!secret || req.headers?.authorization !== 'Bearer ' + secret) {
+      return res.status(403).json({ success: false, error: 'Accès réservé au serveur de paiement.' });
+    }
     const targetEmail = email || 'support@elicine.app';
     const customerName = (body.customerName || body.customer_name || body.name || targetEmail.split('@')[0] || 'Cinéphile').trim();
     const amount = Number(body.amount || body.value || 2);
@@ -126,144 +124,9 @@ export default async function handler(req, res) {
 
   // ─── ACTION : Vérification directe du statut Pro via Service Role (Bypasse RLS) ───
   if (req.method === 'GET' || action === 'check-status' || action === 'status') {
-    if (!email && !userId) {
-      return res.status(400).json({ success: false, isPro: false, error: "email ou userId requis" });
-    }
-
-    if (email === 'ivanjoris959@gmail.com') {
-      return res.status(200).json({ 
-        success: true, 
-        isPro: true, 
-        email, 
-        plan: 'yearly', 
-        role: 'admin',
-        expiresAt: 'Illimité (Fondateur)',
-        daysRemaining: 9999
-      });
-    }
-
-    if (supabaseAdmin) {
-      try {
-        let prof = null;
-        if (userId && isUuid(userId)) {
-          const { data } = await supabaseAdmin
-            .from('profiles')
-            .select('id, email, is_pro, expires_at')
-            .eq('id', userId)
-            .maybeSingle();
-          if (data) prof = data;
-        }
-        if (!prof && email) {
-          const { data } = await supabaseAdmin
-            .from('profiles')
-            .select('id, email, is_pro, expires_at')
-            .ilike('email', email.trim())
-            .maybeSingle();
-          if (data) prof = data;
-        }
-
-        if (prof && (prof.is_pro === true || String(prof.is_pro) === 'true')) {
-          const effectiveExpiry = prof.expires_at;
-
-          // 1. Vérification de dépassement de date d'expiration (Rétrogradation automatique au vol)
-          if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {
-            console.log(`[API check-status] ⏱️ Expiration détectée pour ${prof.email} (${effectiveExpiry}). Rétrogradation automatique...`);
-            await supabaseAdmin
-              .from('profiles')
-              .update({
-                is_pro: false,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', prof.id);
-
-            return res.status(200).json({
-              success: true,
-              isPro: false,
-              isExpired: true,
-              expiresAt: effectiveExpiry,
-              daysRemaining: 0,
-              email: prof.email || email,
-              source: 'profiles'
-            });
-          }
-
-          const daysRemaining = effectiveExpiry 
-            ? Math.max(1, Math.ceil((new Date(effectiveExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : null;
-
-          return res.status(200).json({
-            success: true,
-            isPro: true,
-            email: prof.email || email,
-            expiresAt: effectiveExpiry || null,
-            daysRemaining,
-            source: 'profiles'
-          });
-        }
-
-        // Repli secondaire dans subscriptions
-        let sub = null;
-        if (email) {
-          const { data } = await supabaseAdmin
-            .from('subscriptions')
-            .select('*')
-            .eq('email', email)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (data) sub = data;
-        }
-        if (!sub && userId) {
-          const { data } = await supabaseAdmin
-            .from('subscriptions')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (data) sub = data;
-        }
-
-        if (sub) {
-          if (sub.expires_at && new Date(sub.expires_at).getTime() < Date.now()) {
-            await supabaseAdmin
-              .from('subscriptions')
-              .update({ status: 'expired', updated_at: new Date().toISOString() })
-              .eq('id', sub.id);
-
-            return res.status(200).json({
-              success: true,
-              isPro: false,
-              isExpired: true,
-              expiresAt: sub.expires_at,
-              daysRemaining: 0,
-              email: sub.email || email,
-              source: 'subscriptions'
-            });
-          }
-
-          const daysRemaining = sub.expires_at 
-            ? Math.max(1, Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : null;
-
-          return res.status(200).json({
-            success: true,
-            isPro: true,
-            email: sub.email || email,
-            plan: sub.plan || 'monthly',
-            expiresAt: sub.expires_at || null,
-            daysRemaining,
-            source: 'subscriptions'
-          });
-        }
-      } catch (err) {
-        console.warn('[API /api/activate-pro check-status] Erreur:', err?.message);
-      }
-    }
-
-    return res.status(200).json({ success: true, isPro: false, email });
+    const access = await verifyServerSession(req);
+    if (!access.isAuthenticated) return res.status(401).json({ isPro: false, error: 'Session requise.' });
+    return res.status(200).json({ success: true, isPro: access.isPro, expiresAt: access.expiresAt });
   }
 
   const plan = (
@@ -337,19 +200,6 @@ export default async function handler(req, res) {
     return res.status(400).json({
       success: false,
       error: "Une adresse e-mail valide est obligatoire pour activer le Pass Pro."
-    });
-  }
-
-  // Traitement direct du compte administrateur fondateur
-  if (email === 'ivanjoris959@gmail.com') {
-    return res.status(200).json({
-      success: true,
-      isPro: true,
-      email,
-      plan: 'yearly',
-      expiresAt: 'Illimité (Fondateur)',
-      subscriptionId: subscriptionId || 'sub_founder_admin',
-      message: 'Compte Administrateur Principal activé avec privilèges illimités.'
     });
   }
 

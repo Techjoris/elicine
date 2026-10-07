@@ -1,3 +1,4 @@
+import { verifyServerSession } from './_security.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
@@ -545,63 +546,9 @@ export default async function handler(req, res) {
 
   // 1.8. Vérification de l'état Pro d'un utilisateur par userId ou email
   if (action === 'check-user-status') {
-    const userId = (req.query?.userId || req.body?.userId || '').trim();
-    const email = (req.query?.email || req.body?.email || '').trim().toLowerCase();
-
-    // Exemption Master Admin
-    if (email === 'ivanjoris959@gmail.com') {
-      return res.status(200).json({
-        isPro: true,
-        plan: 'yearly',
-        expiresAt: 'Illimité (Fondateur)'
-      });
-    }
-
-    if (!userId && !email) {
-      return res.status(400).json({ isPro: false, error: 'userId ou email requis.' });
-    }
-
-    if (supabase) {
-      try {
-        // 1. Vérification prioritaire dans la table profiles (is_pro)
-        let profQuery = null;
-        if (email) {
-          profQuery = supabase.from('profiles').select('id, email, is_pro').eq('email', email).maybeSingle();
-        } else if (userId) {
-          profQuery = supabase.from('profiles').select('id, email, is_pro').eq('id', userId).maybeSingle();
-        }
-        if (profQuery) {
-          const { data: profData } = await profQuery;
-          if (profData && (profData.is_pro === true || String(profData.is_pro) === 'true')) {
-            return res.status(200).json({
-              isPro: true,
-              plan: 'monthly',
-              expiresAt: null,
-              source: 'profiles'
-            });
-          }
-        }
-
-        // 2. Vérification dans subscriptions
-        let query = supabase.from('subscriptions').select('*').eq('status', 'active');
-        if (userId) query = query.eq('user_id', userId);
-        else query = query.eq('email', email);
-
-        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (!error && data) {
-          const isExpired = data.expires_at ? new Date(data.expires_at).getTime() <= Date.now() : false;
-          return res.status(200).json({
-            isPro: !isExpired,
-            plan: data.plan,
-            expiresAt: data.expires_at
-          });
-        }
-      } catch (err) {
-        console.warn('[SasPay check-user-status] Erreur Supabase:', err?.message);
-      }
-    }
-
-    return res.status(200).json({ isPro: false });
+    const access = await verifyServerSession(req);
+    if (!access.isAuthenticated) return res.status(401).json({ isPro: false, error: 'Session requise.' });
+    return res.status(200).json({ success: true, isPro: access.isPro, expiresAt: access.expiresAt });
   }
 
   // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle

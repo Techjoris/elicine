@@ -1,3 +1,4 @@
+import { verifyAccountSession } from './_account-access.js';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
@@ -165,188 +166,19 @@ export const authRegisterSchema = z.object({
 // 2. CONTRÔLE D'ACCÈS & VÉRIFICATION DU STATUT PRO (SERVER-SIDE PAYWALL)
 // ============================================================================
 
-export const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
-
-export function isMasterAdminEmail(email) {
-  if (!email) return false;
-  return String(email).trim().toLowerCase() === MASTER_ADMIN_EMAIL;
-}
-
-/**
- * Vérifie l'authenticité de la session utilisateur et son statut Pro actif dans Supabase.
- * Règle d'or de sécurité : Ne JAMAIS faire confiance à un booléen `isPro` transmis par le client.
- * Exemption prioritaire : L'administrateur principal (ivanjoris959@gmail.com) dispose d'un accès illimité permanent.
- */
-export async function verifyServerSession(req) {
-  const result = {
-    isAuthenticated: false,
-    isPro: false,
-    isAdmin: false,
-    isBypassQuotas: false,
-    user: null,
-    effectiveUserId: '',
-    clientIp: '',
-    ipHash: ''
-  };
-
-  // Résolution robuste de l'adresse IP cliente réelle et de son hash SHA-256
+/** Verify identity and current database permissions; client identity fields carry no authority. */
+export async function verifyServerSession(req, db = supabaseServer) {
   const clientIp = getRealClientIp(req);
   const ipHash = hashClientIp(clientIp);
-  result.clientIp = clientIp;
-  result.ipHash = ipHash;
-
-  // Résolution par défaut de l'identifiant effectif (deviceId ou hash IP)
-  const fallbackDeviceId = req.body?.deviceId || req.query?.deviceId;
-  if (fallbackDeviceId) {
-    const cleanDev = String(fallbackDeviceId).trim().slice(0, 80);
-    result.effectiveUserId = cleanDev.startsWith('dev_') ? cleanDev : `dev_${cleanDev}`;
-  } else {
-    result.effectiveUserId = `ip_${ipHash}`;
-  }
-
-  if (!supabaseServer) {
-    return result;
-  }
-
-  // Extraction du token Supabase depuis l'entête Authorization ou x-supabase-token ou body
-  const authHeader = req.headers?.['authorization'] || '';
-  const customHeader = req.headers?.['x-supabase-token'] || '';
-  const bodyToken = req.body?.supabaseToken || '';
-
-  let token = '';
-  if (customHeader) {
-    token = String(customHeader).trim();
-  } else if (authHeader.startsWith('Bearer ') && !authHeader.startsWith('Bearer sk-') && !authHeader.startsWith('Bearer gsk_')) {
-    token = authHeader.slice(7).trim();
-  } else if (bodyToken) {
-    token = String(bodyToken).trim();
-  }
-
-  // 1. Si un token JWT Supabase est fourni, le valider cryptographiquement
-  if (token && token.length > 20 && supabaseServer) {
-    try {
-      const { data: authData, error: authError } = await supabaseServer.auth.getUser(token);
-      if (!authError && authData?.user) {
-        result.isAuthenticated = true;
-        result.user = authData.user;
-        result.effectiveUserId = authData.user.id;
-
-        const email = (authData.user.email || '').trim().toLowerCase();
-
-        // 🛡️ EXEMPTION PERMANENTE PRIORITAIRE : Compte administrateur principal
-        if (isMasterAdminEmail(email)) {
-          result.isPro = true;
-          result.isAdmin = true;
-          result.isBypassQuotas = true;
-          return result;
-        }
-
-        // 🔒 SÉCURITÉ : Vérification obligatoire dans la table profiles (is_pro)
-        try {
-          let profData = null;
-          if (email) {
-            const { data } = await supabaseServer
-              .from('profiles')
-              .select('id, email, is_pro')
-              .eq('email', email)
-              .maybeSingle();
-            if (data) profData = data;
-          }
-          if (!profData && authData.user.id) {
-            const { data } = await supabaseServer
-              .from('profiles')
-              .select('id, email, is_pro')
-              .eq('id', authData.user.id)
-              .maybeSingle();
-            if (data) profData = data;
-          }
-
-          if (profData) {
-            if (profData.is_pro === true || String(profData.is_pro) === 'true') {
-              result.isPro = true;
-            }
-          }
-        } catch (profErr) {
-          console.warn('[_security] Note vérification profiles:', profErr?.message);
-        }
-
-        // 🔒 VÉRIFICATION COMPLÉMENTAIRE : Table subscriptions si non encore confirmé Pro
-        if (!result.isPro) {
-          try {
-            // 1. Recherche par user_id
-            let { data: subData } = await supabaseServer
-              .from('subscriptions')
-              .select('id, status, plan, expires_at, created_at')
-              .eq('user_id', authData.user.id)
-              .eq('status', 'active')
-              .maybeSingle();
-
-            // 2. Recherche par email en secours si non rattaché par user_id
-            if (!subData?.id && email) {
-              const { data: emailSub } = await supabaseServer
-                .from('subscriptions')
-                .select('id, status, plan, expires_at, created_at')
-                .eq('email', email)
-                .eq('status', 'active')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (emailSub?.id) {
-                subData = emailSub;
-              }
-            }
-
-            if (subData?.id) {
-              // Contrôle strict de la date d'expiration
-              if (subData.expires_at) {
-                const expiresAtMs = new Date(subData.expires_at).getTime();
-                if (expiresAtMs > Date.now()) {
-                  result.isPro = true;
-                } else {
-                  console.log(`[Security] Souscription expirée pour ${email} (ID: ${subData.id}, expiré le: ${subData.expires_at})`);
-                  result.isPro = false;
-                }
-              } else {
-                result.isPro = true;
-              }
-            }
-          } catch (dbErr) {
-            console.warn('[Security] Erreur requête table subscriptions:', dbErr?.message);
-          }
-        }
-      }
-    } catch (tokenErr) {
-      console.warn('[Security] Erreur validation JWT Supabase:', tokenErr?.message);
-    }
-  }
-
-  // 2. Repli sécurisé : Si non authentifié via JWT mais un email est transmis, vérification stricte en DB
-  if (!result.isPro) {
-    const rawClientEmail = (req.body?.email || req.query?.email || '').trim().toLowerCase();
-    if (rawClientEmail && rawClientEmail.includes('@')) {
-      if (isMasterAdminEmail(rawClientEmail)) {
-        result.isPro = true;
-        result.isAdmin = true;
-        result.isBypassQuotas = true;
-      } else {
-        try {
-          if (supabaseServer) {
-            const { data: profByEmail } = await supabaseServer
-              .from('profiles')
-              .select('id, email, is_pro')
-              .eq('email', rawClientEmail)
-              .maybeSingle();
-
-            if (profByEmail && (profByEmail.is_pro === true || String(profByEmail.is_pro) === 'true')) {
-              result.isPro = true;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-  }
-
-  return result;
+  const deviceId = String(req.body?.deviceId || req.query?.deviceId || '').trim().slice(0, 80);
+  const access = await verifyAccountSession(req, db);
+  return {
+    ...access,
+    isBypassQuotas: access.isAdmin,
+    effectiveUserId: access.user?.id || (deviceId ? (deviceId.startsWith('dev_') ? deviceId : 'dev_' + deviceId) : 'ip_' + ipHash),
+    clientIp,
+    ipHash
+  };
 }
 
 // ============================================================================

@@ -1,3 +1,4 @@
+import { accountSessionHeaders } from '../../services/accountAccessService';
 import React, { useState, useEffect } from 'react';
 import { 
   Home, 
@@ -89,8 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // État local réactif pour le statut Pro (alimenté directement par Supabase)
   const [isPro, setIsPro] = useState<boolean>(() => {
-    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
-    return isMaster || Boolean(
+    return Boolean(
       appUser?.isPro ||
       (appUser as any)?.is_pro ||
       (appUser as any)?.pass_status === 'pro' ||
@@ -101,8 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
 
   useEffect(() => {
-    const isMaster = (user?.email || appUser?.email)?.toLowerCase() === 'ivanjoris959@gmail.com';
-    const currentPro = isMaster || Boolean(
+    const currentPro = Boolean(
       appUser?.isPro ||
       (appUser as any)?.is_pro ||
       (appUser as any)?.pass_status === 'pro' ||
@@ -110,16 +109,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       (user as any)?.is_pro ||
       (user as any)?.pass_status === 'pro'
     );
-    if (currentPro) setIsPro(true);
+    setIsPro(currentPro);
   }, [user, appUser]);
 
   useEffect(() => {
     const checkDbPro = async () => {
       const email = (user?.email || appUser?.email || '').trim().toLowerCase();
-      if (email === 'ivanjoris959@gmail.com') {
-        setIsPro(true);
-        return;
-      }
       const userId = user?.id || appUser?.id;
       if (!userId && !email) {
         setIsPro(false);
@@ -143,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
 
         // Repli serveur via Service Role (bypasse d'éventuels blocages RLS client)
-        const checkRes = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(userId || '')}&email=${encodeURIComponent(email)}`);
+        const checkRes = await fetch('/api/activate-pro?action=check-status', { headers: await accountSessionHeaders() });
         if (checkRes.ok) {
           const checkData = await checkRes.json();
           if (checkData?.isPro) {

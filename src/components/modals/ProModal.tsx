@@ -20,7 +20,7 @@ export const ProModal: React.FC = () => {
   // Exécution du paiement avec gestion de l'interception et de la sécurité
   const handlePay = async (payload: CheckoutPayload) => {
     // 0. Exemption Administrateur Principal (Accès illimité permanent)
-    if (user?.email && user.email.toLowerCase() === 'ivanjoris959@gmail.com') {
+    if (user?.is_admin === true) {
       showToast("👑 Compte Administrateur : Vous bénéficiez déjà d'un accès illimité permanent.");
       setIsProModalOpen(false);
       return;

@@ -1,3 +1,4 @@
+import { verifyAccountSession } from './_account-access.js';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { checkRateLimit } from './_rateLimit.js';
@@ -9,15 +10,10 @@ const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 
   'https://xwhrxtzbxvakqjlajjlc.supabase.co';
 
-const supabaseKey = 
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 
-  process.env.SUPABASE_ANON_KEY || 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  '';
-
-const supabaseAdmin = (supabaseUrl && supabaseKey) 
-  ? createClient(supabaseUrl, supabaseKey) 
-  : null;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = supabaseKey ? createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false, autoRefreshToken: false }
+}) : null;
 
 // Initialisation de Resend pour les feedbacks
 const resendApiKey = (
@@ -27,63 +23,6 @@ const resendApiKey = (
 ).trim();
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
-
-const MASTER_ADMIN_EMAIL = 'ivanjoris959@gmail.com';
-const ADMIN_EMAILS = [
-  'ivanjoris959@gmail.com',
-  'techjoris@gmail.com',
-  'admin@elicine.app',
-  'joris@elicine.app'
-];
-
-const SEED_USERS = [
-  {
-    id: 'usr_master_admin',
-    username: 'techjoris',
-    email: 'ivanjoris959@gmail.com',
-    name: 'Ivan Joris (Master Admin)',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    provider: 'google',
-    role: 'admin',
-    is_admin: true,
-    isPro: true,
-    proPlanType: 'yearly',
-    proPlanExpiresAt: 'Illimité (Fondateur)',
-    referralCode: 'ELICINE-CREATOR',
-    createdAt: '2026-08-01T10:00:00.000Z',
-    moviesInListCount: 0,
-    aiQueriesCount: 0,
-    lastActiveAt: 'En direct'
-  }
-];
-
-/**
- * Vérifie si la requête provient d'un administrateur authentifié
- */
-async function verifyAdminAuth(req) {
-  const adminSecret = req.headers['x-admin-secret'] || '';
-  if (['elicine2026', 'admin123', 'techjoris', 'elicine'].includes(adminSecret.trim())) {
-    return { authorized: true, user: { email: MASTER_ADMIN_EMAIL, role: 'admin' } };
-  }
-
-  const authHeader = req.headers['authorization'] || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '').trim();
-    if (supabaseAdmin && token) {
-      try {
-        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-        if (!error && user && user.email) {
-          const emailLower = user.email.toLowerCase();
-          if (emailLower === MASTER_ADMIN_EMAIL || ADMIN_EMAILS.includes(emailLower) || user.user_metadata?.role === 'admin') {
-            return { authorized: true, user };
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  return { authorized: false };
-}
 
 /**
  * Traitement des feedbacks et signalements utilisateurs via Resend & Supabase
@@ -283,242 +222,74 @@ async function handleFeedback(req, res) {
  * Point d'entrée consolidé pour la console d'administration et les retours utilisateurs
  * Routes : /api/admin, /api/admin/users, /api/feedback
  */
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Résolution de l'action demandée
-  let action = req.query?.action || (req.body?.action) || '';
-  if (!action && req.url) {
-    try {
-      const parsed = new URL(req.url, 'http://localhost');
-      const pathname = parsed.pathname;
-      if (pathname.includes('feedback')) {
-        action = 'feedback';
-      } else if (pathname.includes('users')) {
-        action = 'users';
-      }
-    } catch (_) {}
-  }
-
-  // 1. Branche Feedback
-  if (action === 'feedback' || (req.method === 'POST' && req.body?.message && !req.body?.userId && !req.body?.role)) {
-    return handleFeedback(req, res);
-  }
-
-  // 2. Branche Administration Sécurisée (Users & Metrics)
-  const auth = await verifyAdminAuth(req);
-  if (!auth.authorized) {
-    return res.status(403).json({
-      error: "Accès refusé. Cette console est strictement réservée à l'administrateur principal (ivanjoris959@gmail.com)."
-    });
-  }
-
-  // ─── GET : LISTE CONSOLIDÉE DES UTILISATEURS & METRICS ───────────────────────
-  if (req.method === 'GET') {
-    let combinedUsers = [...SEED_USERS];
-
-    if (supabaseAdmin) {
-      try {
-        const [{ data: profiles }, { data: subscriptions }] = await Promise.all([
-          supabaseAdmin.from('profiles').select('*').limit(200),
-          supabaseAdmin.from('subscriptions').select('*').limit(200)
-        ]);
-
-        if (Array.isArray(profiles) && profiles.length > 0) {
-          const userMap = new Map();
-          combinedUsers.forEach(u => userMap.set(u.email.toLowerCase(), u));
-
-          profiles.forEach((p) => {
-            const email = (p.email || '').toLowerCase().trim();
-            if (!email) return;
-
-            const isMaster = email === MASTER_ADMIN_EMAIL;
-            const sub = Array.isArray(subscriptions) ? subscriptions.find(s => s.email?.toLowerCase() === email) : null;
-            const isPro = isMaster ? true : Boolean(p.is_pro || sub?.status === 'active');
-            const role = isMaster ? 'admin' : (p.role || (ADMIN_EMAILS.includes(email) ? 'admin' : 'user'));
-
-            userMap.set(email, {
-              id: p.id || `usr_${email}`,
-              username: p.username || email.split('@')[0],
-              email: p.email,
-              name: p.name || p.full_name || (isMaster ? 'Joris (Master Admin)' : email.split('@')[0]),
-              avatar: p.avatar_url || undefined,
-              provider: p.provider || 'credentials',
-              role,
-              is_admin: role === 'admin' || isMaster,
-              isPro,
-              proPlanType: isPro ? (sub?.plan || 'monthly') : undefined,
-              proPlanExpiresAt: isMaster ? 'Illimité (Fondateur)' : (sub?.expires_at || (isPro ? 'Accordé par Admin' : null)),
-              referralCode: p.referral_code || 'CINE-' + email.slice(0, 4).toUpperCase(),
-              createdAt: p.created_at || new Date().toISOString(),
-              moviesInListCount: p.movies_count || 0,
-              aiQueriesCount: p.queries_count || 0,
-              lastActiveAt: 'Récemment'
-            });
-          });
-
-          combinedUsers = Array.from(userMap.values());
-        }
-      } catch (sbErr) {
-        console.warn('[Admin API] Notice lecture Supabase:', sbErr);
-      }
-    }
-
-    const masterIndex = combinedUsers.findIndex(u => u.email.toLowerCase() === MASTER_ADMIN_EMAIL);
-    if (masterIndex >= 0) {
-      combinedUsers[masterIndex].role = 'admin';
-      combinedUsers[masterIndex].is_admin = true;
-      combinedUsers[masterIndex].isPro = true;
-    }
-
-    const totalUsers = combinedUsers.length;
-    const premiumSubscribers = combinedUsers.filter(u => u.isPro).length;
-    const freeUsers = Math.max(0, totalUsers - premiumSubscribers);
-    const totalSearches = combinedUsers.reduce((acc, u) => acc + (u.aiQueriesCount || 0), 0);
-    const totalSavedMovies = combinedUsers.reduce((acc, u) => acc + (u.moviesInListCount || 0), 0);
-
-    return res.status(200).json({
-      success: true,
-      masterAdmin: MASTER_ADMIN_EMAIL,
-      metrics: {
-        totalUsers,
-        premiumSubscribers,
-        freeUsers,
-        totalSearches,
-        totalSavedMovies,
-        conversionRate: totalUsers > 0 ? ((premiumSubscribers / totalUsers) * 100).toFixed(1) + '%' : '0%'
-      },
-      users: combinedUsers
-    });
-  }
-
-  // ─── PATCH : BASCULE PASS PRO & RÔLE DANS SUPABASE ─────────────────────────
-  if (req.method === 'PATCH') {
-    try {
-      const { userId, email, isPro, role } = req.body || {};
-      const now = new Date().toISOString();
-
-      if (!userId && !email) {
-        return res.status(400).json({ error: 'userId ou email requis.' });
-      }
-
-      if (supabaseAdmin) {
-        const updatePayload = { updated_at: now };
-        if (typeof isPro === 'boolean') {
-          updatePayload.is_pro = isPro;
-        }
-        if (role) {
-          updatePayload.role = role;
-          updatePayload.is_admin = role === 'admin';
-        }
-
-        if (email) {
-          await supabaseAdmin.from('profiles').update(updatePayload).eq('email', email.toLowerCase());
-          if (typeof isPro === 'boolean') {
-            await supabaseAdmin.from('subscriptions').upsert({
-              id: `sub_admin_${userId || email}`,
-              email: email.toLowerCase(),
-              status: isPro ? 'active' : 'cancelled',
-              plan: isPro ? 'yearly' : 'free',
-              updated_at: now
-            });
-          }
-        } else if (userId) {
-          await supabaseAdmin.from('profiles').update(updatePayload).eq('id', userId);
-        }
-      }
-
-      const userIndex = SEED_USERS.findIndex(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === email.toLowerCase()));
-      if (userIndex >= 0) {
-        if (typeof isPro === 'boolean') SEED_USERS[userIndex].isPro = isPro;
-        if (role) {
-          SEED_USERS[userIndex].role = role;
-          SEED_USERS[userIndex].is_admin = role === 'admin';
-        }
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Statut utilisateur mis à jour avec succès dans Supabase.",
-        updated: { userId, email, isPro, role }
-      });
-    } catch (err) {
-      console.error('[Admin API PATCH Error]:', err);
-      return res.status(500).json({ error: "Erreur lors de la mise à jour utilisateur." });
-    }
-  }
-
-  // ─── DELETE : SUPPRESSION DÉFINITIVE D'UN UTILISATEUR ─────────────────────
-  if (req.method === 'DELETE') {
-    try {
-      const targetUserId = (req.body?.userId || req.query?.userId || '').trim();
-      const targetEmail = (req.body?.email || req.query?.email || '').toLowerCase().trim();
-
-      if (!targetUserId && !targetEmail) {
-        return res.status(400).json({ error: 'userId ou email requis pour la suppression.' });
-      }
-
-      if (
-        targetEmail === MASTER_ADMIN_EMAIL.toLowerCase() ||
-        ADMIN_EMAILS.includes(targetEmail) ||
-        targetUserId === 'usr_master_admin' ||
-        targetUserId === 'usr_master_admin_01' ||
-        targetUserId === 'usr_creator_01'
-      ) {
-        return res.status(403).json({
-          error: "Action interdite : Les comptes administrateurs et fondateurs ne peuvent pas être supprimés."
-        });
-      }
-
-      if (supabaseAdmin) {
-        try {
-          if (targetEmail) {
-            await supabaseAdmin.from('subscriptions').delete().eq('email', targetEmail);
-          }
-          if (targetUserId) {
-            await supabaseAdmin.from('subscriptions').delete().eq('user_id', targetUserId);
-            await supabaseAdmin.from('user_searches').delete().eq('user_id', targetUserId);
-            await supabaseAdmin.from('profiles').delete().eq('id', targetUserId);
-          }
-          if (targetEmail) {
-            await supabaseAdmin.from('profiles').delete().eq('email', targetEmail);
-          }
-
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
-          if (isUuid && supabaseAdmin.auth?.admin?.deleteUser) {
-            await supabaseAdmin.auth.admin.deleteUser(targetUserId).catch((e) => {
-              console.warn('[Admin API DELETE auth.users notice]:', e?.message);
-            });
-          }
-        } catch (dbErr) {
-          console.error('[Admin API DELETE Supabase Error]:', dbErr);
-        }
-      }
-
-      const seedIndex = SEED_USERS.findIndex(
-        u => (targetUserId && u.id === targetUserId) || (targetEmail && u.email.toLowerCase() === targetEmail)
-      );
-      if (seedIndex >= 0) {
-        SEED_USERS.splice(seedIndex, 1);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: `L'utilisateur ${targetEmail || targetUserId} a été définitivement supprimé.`,
-        deleted: { userId: targetUserId, email: targetEmail }
-      });
-    } catch (err) {
-      console.error('[Admin API DELETE Error]:', err);
-      return res.status(500).json({ error: "Erreur serveur lors de la suppression de l'utilisateur." });
-    }
-  }
-
-  return res.status(405).json({ error: 'Méthode non autorisée' });
+function checked(result) {
+  if (result.error) throw new Error('DATABASE_ERROR');
+  return result.data;
 }
+
+export function createAdminHandler(db = supabaseAdmin) {
+  return async function handler(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    const action = req.query?.action || req.body?.action || '';
+    if (action === 'feedback' || req.url?.split('?')[0].endsWith('/feedback')) return handleFeedback(req, res);
+
+    const access = await verifyAccountSession(req, db);
+    if (!access.isAuthenticated) return res.status(401).json({ error: 'Connectez-vous avec un compte administrateur.' });
+    if (!access.isAdmin) return res.status(403).json({ error: 'Accès administrateur refusé.' });
+
+    try {
+      if (req.method === 'GET') {
+        const profiles = checked(await db.from('profiles').select('*').limit(200)) || [];
+        const users = profiles.map(p => ({
+          id: p.id, email: p.email || '', name: p.full_name || p.name || p.email?.split('@')[0] || 'Utilisateur',
+          username: p.username || p.email?.split('@')[0], avatar: p.avatar_url || undefined,
+          role: p.is_admin === true ? 'admin' : 'user', is_admin: p.is_admin === true,
+          isPro: p.is_pro === true && (!p.expires_at || Date.parse(p.expires_at) > Date.now()),
+          proPlanExpiresAt: p.expires_at || null, referralCode: p.referral_code || '',
+          createdAt: p.created_at || '', moviesInListCount: p.movies_count || 0, aiQueriesCount: p.queries_count || 0
+        }));
+        const premiumSubscribers = users.filter(u => u.isPro).length;
+        return res.status(200).json({ success: true, users, metrics: {
+          totalUsers: users.length, premiumSubscribers, freeUsers: users.length - premiumSubscribers,
+          totalSearches: users.reduce((n, u) => n + u.aiQueriesCount, 0),
+          totalSavedMovies: users.reduce((n, u) => n + u.moviesInListCount, 0),
+          conversionRate: users.length ? (100 * premiumSubscribers / users.length).toFixed(1) + '%' : '0%'
+        } });
+      }
+      if (!['PATCH', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Méthode non autorisée.' });
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+      if ('role' in body || 'is_admin' in body || 'isAdmin' in body) {
+        return res.status(400).json({ error: 'Les droits administrateur se définissent exclusivement dans Supabase.' });
+      }
+      const id = typeof body.userId === 'string' ? body.userId.trim() : '';
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!id && !email) return res.status(400).json({ error: 'Compte cible requis.' });
+      if (id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return res.status(400).json({ error: 'Identifiant de compte invalide.' });
+      }
+      let query = db.from('profiles').select('id, email, is_admin');
+      query = id ? query.eq('id', id) : query.eq('email', email);
+      const target = checked(await query.maybeSingle());
+      if (!target) return res.status(404).json({ error: 'Compte introuvable.' });
+      if (email && target.email?.toLowerCase() !== email) return res.status(400).json({ error: 'Compte cible incohérent.' });
+
+      if (req.method === 'PATCH') {
+        if (typeof body.isPro !== 'boolean') return res.status(400).json({ error: 'Statut Pro invalide.' });
+        checked(await db.from('profiles').update({ is_pro: body.isPro, expires_at: null, updated_at: new Date().toISOString() }).eq('id', target.id));
+        return res.status(200).json({ success: true, updated: { userId: target.id, isPro: body.isPro } });
+      }
+      if (target.is_admin === true) return res.status(403).json({ error: 'Un compte administrateur ne peut pas être supprimé ici.' });
+      checked(await db.auth.admin.deleteUser(target.id));
+      checked(await db.from('profiles').delete().eq('id', target.id));
+      return res.status(200).json({ success: true, deleted: { userId: target.id } });
+    } catch {
+      return res.status(503).json({ error: 'Opération administrateur indisponible. Réessayez plus tard.' });
+    }
+  };
+}
+
+export default createAdminHandler();

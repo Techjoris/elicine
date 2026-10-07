@@ -49,8 +49,6 @@ CREATE POLICY "Users can read own movie alerts"
   USING (
     user_id = auth.uid()::text 
     OR LOWER(email) = LOWER(auth.jwt() ->> 'email')
-    OR auth.jwt() ->> 'email' = 'ivanjoris959@gmail.com'
-    OR auth.jwt() -> 'user_metadata' ->> 'role' = 'admin'
   );
 
 DROP POLICY IF EXISTS "Users can insert own movie alerts" ON public.user_movie_alerts;
@@ -60,7 +58,6 @@ CREATE POLICY "Users can insert own movie alerts"
   WITH CHECK (
     user_id = auth.uid()::text 
     OR LOWER(email) = LOWER(auth.jwt() ->> 'email')
-    OR auth.jwt() ->> 'email' = 'ivanjoris959@gmail.com'
   );
 
 DROP POLICY IF EXISTS "Users can delete own movie alerts" ON public.user_movie_alerts;
@@ -70,8 +67,6 @@ CREATE POLICY "Users can delete own movie alerts"
   USING (
     user_id = auth.uid()::text 
     OR LOWER(email) = LOWER(auth.jwt() ->> 'email')
-    OR auth.jwt() ->> 'email' = 'ivanjoris959@gmail.com'
-    OR auth.jwt() -> 'user_metadata' ->> 'role' = 'admin'
   );
 
 DROP POLICY IF EXISTS "Service role full access on movie alerts" ON public.user_movie_alerts;

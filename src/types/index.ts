@@ -75,6 +75,7 @@ export interface UserProfile {
   avatar?: string;
   provider?: 'google' | 'credentials';
   role?: 'admin' | 'user';
+  is_admin?: boolean;
   isPro: boolean;
   is_pro?: boolean;
   pass_status?: 'pro' | 'free' | string;

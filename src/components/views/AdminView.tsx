@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, 
   ShieldCheck, 
@@ -30,9 +30,9 @@ import { AdminUserData } from '../../types';
 export const AdminView: React.FC = () => {
   const { user, setActiveView, showToast, setIsAuthModalOpen, openAuthModal } = useApp();
 
-  const [isAuthorized, setIsAuthorized] = useState<boolean>(() => authService.isAdmin(user));
-  const [passcode, setPasscode] = useState('');
-  const [passcodeError, setPasscodeError] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const currentUserId = useRef(user?.id);
+  currentUserId.current = user?.id;
 
   const [users, setUsers] = useState<AdminUserData[]>([]);
   const [metrics, setMetrics] = useState({
@@ -49,20 +49,20 @@ export const AdminView: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<AdminUserData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Check auth whenever user state changes
-  useEffect(() => {
-    setIsAuthorized(authService.isAdmin(user));
-  }, [user]);
-
   // Load admin data
   const loadData = async () => {
+    const requestedUserId = user?.id;
     setIsLoading(true);
     try {
       const data = await authService.getAllAdminUsers();
+      if (currentUserId.current !== requestedUserId) return;
       setUsers(data.users);
       setMetrics(data.metrics);
+      setIsAuthorized(true);
     } catch (e) {
       console.error(e);
+      setUsers([]);
+      setIsAuthorized(false);
       showToast('Erreur lors du chargement des données administrateur.');
     } finally {
       setIsLoading(false);
@@ -70,31 +70,21 @@ export const AdminView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAuthorized) {
-      loadData();
-    }
-  }, [isAuthorized]);
-
-  const handleUnlockWithPasscode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (authService.verifyAdminPasscode(passcode)) {
-      setIsAuthorized(true);
-      setPasscodeError(false);
-      showToast('Accès administrateur déverrouillé avec succès ! 🛡️');
-    } else {
-      setPasscodeError(true);
-      showToast('Code d\'accès administrateur incorrect.');
-    }
-  };
+    setIsAuthorized(false);
+    setUsers([]);
+    if (authService.isAdmin(user)) loadData();
+  }, [user?.id, user?.is_admin]);
 
   const handleLockSession = () => {
-    authService.revokeAdminSession();
-    setIsAuthorized(authService.isAdmin(user));
-    showToast('Session administrateur verrouillée.');
+    setIsAuthorized(false);
+    setUsers([]);
+    showToast('Console administrateur verrouillée.');
   };
 
   const handleTogglePro = async (userId: string, currentPro: boolean, email?: string) => {
-    const newStatus = await authService.toggleUserPro(userId, currentPro, email);
+    let newStatus: boolean;
+    try { newStatus = await authService.toggleUserPro(userId, currentPro, email); }
+    catch (error: any) { showToast(error.message || 'Mise à jour refusée.'); return; }
     setUsers(prev => prev.map(u => {
       if (u.id === userId || (email && u.email.toLowerCase() === email.toLowerCase())) {
         return {
@@ -252,38 +242,9 @@ export const AdminView: React.FC = () => {
               Espace Administrateur
             </h1>
             <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-xs mx-auto">
-              Cette console est strictement réservée au créateur d'Éliciné. Veuillez vous identifier ou saisir la clé secrète.
+              Cette console est réservée aux comptes disposant des droits administrateur. Connectez-vous avec un compte autorisé.
             </p>
           </div>
-
-          {/* Passcode Unlock Form */}
-          <form onSubmit={handleUnlockWithPasscode} className="space-y-3 pt-2">
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3.5 top-3" />
-              <input
-                type="password"
-                placeholder="Code secret administrateur..."
-                value={passcode}
-                onChange={(e) => {
-                  setPasscode(e.target.value);
-                  setPasscodeError(false);
-                }}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 outline-none transition-all ${
-                  passcodeError 
-                    ? 'border-red-500 ring-1 ring-red-500/40' 
-                    : 'border-slate-200 dark:border-zinc-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40'
-                }`}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 text-white font-bold text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Unlock className="w-4 h-4" />
-              <span>Déverrouiller l'accès</span>
-            </button>
-          </form>
 
           {/* Fallback actions */}
           <div className="pt-2 border-t border-slate-200 dark:border-zinc-900 space-y-2 text-xs">

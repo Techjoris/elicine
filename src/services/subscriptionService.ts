@@ -1,3 +1,4 @@
+import { readAccountAccess } from './accountAccessService';
 import { ProSubscription, SubscriptionStatus, Currency, PricingBillingCycle } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { processSaspayCheckout } from './payment';
@@ -550,156 +551,12 @@ export const subscriptionService = {
     expiresAt?: string | null;
     daysRemaining?: number | null;
   }> {
-    if (!user) {
-      return { isPro: false };
-    }
-
-    const email = (user.email || '').trim().toLowerCase();
-    // Exemption Master Admin permanente
-    if (email === 'ivanjoris959@gmail.com') {
-      return {
-        isPro: true,
-        plan: 'yearly',
-        expiresAt: 'Illimité (Fondateur)'
-      };
-    }
-
-    // 1. Consultation Supabase en direct si configuré
-    if (isSupabaseConfigured()) {
-      try {
-        // Helper de validation UUID pour PostgreSQL
-        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
-
-        // 1.A. Vérification prioritaire de la table profiles (is_pro = true)
-        let profileData: any = null;
-        if (email) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, email, is_pro, expires_at')
-            .ilike('email', email.trim())
-            .maybeSingle();
-          if (data) profileData = data;
-        }
-        if (!profileData && user.id && isUuid(user.id)) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, email, is_pro, expires_at')
-            .eq('id', user.id)
-            .maybeSingle();
-          if (data) profileData = data;
-        }
-
-        if (profileData && (profileData.is_pro === true || String(profileData.is_pro) === 'true')) {
-          const effectiveExpiry = profileData.expires_at;
-
-          // Si une date d'expiration existe et qu'elle est dépassée, considérer comme non pro
-          if (effectiveExpiry && new Date(effectiveExpiry).getTime() < Date.now()) {
-            console.log(`[subscriptionService] ⏱️ Expiration de l'abonnement constatée pour ${profileData.email} (${effectiveExpiry}).`);
-            return {
-              isPro: false,
-              plan: 'free',
-              expiresAt: effectiveExpiry,
-              daysRemaining: 0
-            };
-          }
-
-          const daysRemaining = effectiveExpiry 
-            ? Math.max(1, Math.ceil((new Date(effectiveExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : null;
-
-          return {
-            isPro: true,
-            plan: 'monthly',
-            expiresAt: effectiveExpiry || null,
-            daysRemaining
-          };
-        }
-
-        // 1.B. Vérification de la table subscriptions
-        let subData: any = null;
-        if (email) {
-          const { data } = await supabase.from('subscriptions').select('*').eq('email', email).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
-          if (data) subData = data;
-        }
-        if (!subData && user.id && isUuid(user.id)) {
-          const { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
-          if (data) subData = data;
-        }
-
-        if (subData) {
-          const isExpired = subData.expires_at ? new Date(subData.expires_at).getTime() <= Date.now() : false;
-          if (!isExpired) {
-            const daysRemaining = subData.expires_at 
-              ? Math.max(1, Math.ceil((new Date(subData.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-              : null;
-
-            return {
-              isPro: true,
-              plan: subData.plan,
-              expiresAt: subData.expires_at,
-              daysRemaining
-            };
-          }
-        }
-      } catch (sbErr) {
-        console.warn('[subscriptionService] Erreur vérification statut Supabase direct:', sbErr);
-      }
-    }
-
-    // 2. Appel serveur de secours (Service Role Supabase - Bypasse RLS côté serveur)
-    try {
-      // 2.A. Endpoint officiel /api/activate-pro?action=check-status
-      const resPro = await fetch(`/api/activate-pro?action=check-status&userId=${encodeURIComponent(user.id || '')}&email=${encodeURIComponent(email)}`);
-      if (resPro.ok) {
-        const dataPro = await resPro.json();
-        if (dataPro?.isPro) {
-          return {
-            isPro: true,
-            plan: dataPro.plan || 'monthly',
-            expiresAt: dataPro.expiresAt || null,
-            daysRemaining: dataPro.daysRemaining ?? null
-          };
-        }
-      }
-    } catch (_) {}
-
-    try {
-      // 2.B. Endpoint secondaire /api/saspay?action=check-user-status
-      const res = await fetch(`/api/saspay?action=check-user-status&userId=${encodeURIComponent(user.id || '')}&email=${encodeURIComponent(email)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.isPro) {
-          return {
-            isPro: true,
-            plan: data.plan || 'monthly',
-            expiresAt: data.expiresAt || null,
-            daysRemaining: data.daysRemaining ?? null
-          };
-        }
-      }
-    } catch (_) {}
-
-    // 3. Cache local de secours
-    try {
-      const localActive = this.getActiveSubscription();
-      if (localActive && localActive.status === 'active' && (localActive.email?.toLowerCase() === email || localActive.userId === user.id)) {
-        const isExpired = localActive.expiresAt ? new Date(localActive.expiresAt).getTime() <= Date.now() : false;
-        if (!isExpired) {
-          const daysRemaining = localActive.expiresAt 
-            ? Math.max(1, Math.ceil((new Date(localActive.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : null;
-
-          return {
-            isPro: true,
-            plan: localActive.plan,
-            expiresAt: localActive.expiresAt,
-            daysRemaining
-          };
-        }
-      }
-    } catch (_) {}
-
-    return { isPro: false };
+    const access = await readAccountAccess(user?.id);
+    return {
+      isPro: access.isPro,
+      expiresAt: access.expires_at,
+      daysRemaining: access.expires_at ? Math.max(0, Math.ceil((Date.parse(access.expires_at) - Date.now()) / 86400000)) : null
+    };
   },
 
   /**
