@@ -240,7 +240,7 @@ async function syncProfile({ supabase, identity, isPro, expiresAt, now, calls })
   let query = supabase.from('profiles').update(payload);
   query = isPaddleUuid(identity.userId)
     ? query.eq('id', identity.userId)
-    : query.ilike('email', identity.email);
+    : query.eq('email', identity.email);
   const { data, error } = await query.select('id');
   if (!error && Array.isArray(data) && data.length > 0) {
     return { updated: true, profileId: data[0].id || identity.userId || null, error: null };
@@ -248,7 +248,7 @@ async function syncProfile({ supabase, identity, isPro, expiresAt, now, calls })
 
   if (!identity.userId && !error) {
     const byEmail = await supabase.from('profiles').select('id,email')
-      .ilike('email', identity.email).maybeSingle();
+      .eq('email', identity.email).maybeSingle();
     if (byEmail.data?.id) return { updated: true, profileId: byEmail.data.id, error: null };
   }
 
@@ -316,7 +316,7 @@ async function readExistingExpiry({ supabase, identity, calls = [] }) {
     const query = supabase.from('profiles').select('id,email,is_pro,expires_at');
     const { data } = isPaddleUuid(identity.userId)
       ? await query.eq('id', identity.userId).maybeSingle()
-      : await query.ilike('email', identity.email).maybeSingle();
+      : await query.eq('email', identity.email).maybeSingle();
     const expiresAt = data?.expires_at || null;
     return {
       // Un accès Pro sans date est un accès illimité (fondateur, Pass à vie) : un nouvel achat

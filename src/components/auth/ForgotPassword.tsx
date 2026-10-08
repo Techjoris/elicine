@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { authService } from '../../services/authService';
 import { Mail, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export interface ForgotPasswordProps {
@@ -32,17 +32,9 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
     }
 
     try {
-      // Supabase gère l'envoi sécurisé sans révéler si l'email existe ou non (bonne pratique de sécurité)
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/update-password`, // Page où l'utilisateur va définir son nouveau mot de passe
-      });
-
-      if (resetError) {
-        setError(resetError.message);
-      } else {
-        setMessage('Si un compte est associé à cet e-mail, un lien de réinitialisation vous a été envoyé.');
-        if (onSuccess) onSuccess();
-      }
+      const result = await authService.requestPasswordReset(cleanEmail);
+      if (!result.success) setError(result.error);
+      else { setMessage(result.message); if (onSuccess) onSuccess(); }
     } catch (err: any) {
       setError(err?.message || 'Une erreur inattendue est survenue.');
     } finally {

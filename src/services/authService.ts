@@ -1,3 +1,4 @@
+import { createEmailAuth, validateNewPassword, isAuthEmail } from '../lib/emailAuth';
 import { readAccountAccess } from './accountAccessService';
 import { UserProfile, Movie, AdminUserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -11,7 +12,6 @@ interface StoredAccount {
   avatar?: string;
   provider?: 'google' | 'credentials';
   role?: 'admin' | 'user';
-  passwordHash: string;
   isPro: boolean;
   proPlanType?: 'monthly' | 'yearly' | 'free' | string;
   proPlanExpiresAt?: string | null;
@@ -26,29 +26,16 @@ interface StoredAccount {
 const ACCOUNTS_STORAGE_KEY = 'cineia_registered_accounts';
 const SESSION_TOKEN_KEY = 'cineia_session_token';
 
-async function hashPassword(plain: string, salt: string): Promise<string> {
-  if (typeof window === 'undefined' || !window.crypto || !window.crypto.subtle) {
-    // Basic fallback hash for non-crypto environments
-    let hash = 0;
-    const str = `${salt}:${plain}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`elicine_salt_${salt}:${plain}`);
-  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+const emailAuth = createEmailAuth(supabase, () => typeof window !== 'undefined' ? window.location.origin : 'https://elicine.com');
 
 function getStoredAccounts(): StoredAccount[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const accounts = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(accounts)) return [];
+    const clean = accounts.map(({ passwordHash, password, token, ...account }) => account);
+    if (accounts.some(account => 'passwordHash' in account || 'password' in account || 'token' in account)) saveStoredAccounts(clean);
+    return clean;
   } catch (e) {
     console.error('Erreur lecture comptes locaux:', e);
     return [];
@@ -65,74 +52,22 @@ function saveStoredAccounts(accounts: StoredAccount[]): void {
 
 export const authService = {
   /**
-   * Valide la politique de mot de passe sécurisé : au moins 6 caractères avec au moins une majuscule et un chiffre
+   * Vérifie les nouveaux mots de passe. Les mots de passe existants sont vérifiés par Supabase.
    */
   validatePassword(password: string): { valid: boolean; error?: string } {
-    if (!password || password.length < 6) {
-      return { valid: false, error: 'Le mot de passe doit contenir au moins 6 caractères.' };
-    }
-    if (!/[A-Z]/.test(password)) {
-      return { valid: false, error: 'Le mot de passe doit contenir au moins une lettre majuscule.' };
-    }
-    if (!/[0-9]/.test(password)) {
-      return { valid: false, error: 'Le mot de passe doit contenir au moins un chiffre.' };
-    }
-    if (password.length > 60) {
-      return { valid: false, error: 'Le mot de passe ne peut pas dépasser 60 caractères.' };
-    }
-    return { valid: true };
+    return validateNewPassword(password);
   },
 
   /**
    * Validation stricte du format email
    */
   isValidEmail(email: string): boolean {
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return emailRegex.test((email || '').trim());
+    return isAuthEmail(email);
   },
 
-  /**
-   * Simule et déclenche l'envoi instantané d'un e-mail de confirmation en arrière-plan
-   */
-  async sendVerificationEmail(email: string, username?: string): Promise<{ success: boolean; messageId: string; email: string }> {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanUsername = (username || cleanEmail.split('@')[0]).trim();
-    const messageId = `msg_verify_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const timestamp = new Date().toISOString();
-
-    // 1. Enregistrement de l'envoi dans le journal local pour traçabilité
-    try {
-      const dispatchesRaw = localStorage.getItem('elicine_email_dispatches');
-      const dispatches = dispatchesRaw ? JSON.parse(dispatchesRaw) : [];
-      dispatches.unshift({
-        id: messageId,
-        type: 'email_verification',
-        email: cleanEmail,
-        username: cleanUsername,
-        sentAt: timestamp,
-        status: 'delivered'
-      });
-      localStorage.setItem('elicine_email_dispatches', JSON.stringify(dispatches.slice(0, 50)));
-    } catch (_) {}
-
-    // 2. Déclenchement d'un appel réseau en arrière-plan sans bloquer l'UI
-    try {
-      fetch('/api/auth/send-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          username: cleanUsername,
-          messageId,
-          timestamp,
-          verificationUrl: typeof window !== 'undefined' ? `${window.location.origin}/?verified=true` : ''
-        })
-      }).catch(() => {});
-    } catch (_) {}
-
-    console.log(`[Éliciné Auth] ✉️ E-mail de confirmation envoyé avec succès à ${cleanEmail} (ID: ${messageId})`);
-    return { success: true, messageId, email: cleanEmail };
-  },
+  sendVerificationEmail(email: string) { return emailAuth.resendConfirmation(email); },
+  requestPasswordReset(email: string) { return emailAuth.requestPasswordReset(email); },
+  updatePassword(password: string) { return emailAuth.updatePassword(password); },
 
   /**
    * Inscription d'un nouvel utilisateur avec politique sécurisée et envoi instantané d'e-mail
@@ -142,107 +77,15 @@ export const authService = {
     email: string,
     password: string
   ): Promise<{ success: boolean; user?: UserProfile; token?: string; pendingVerification?: boolean; error?: string }> {
-    const pwdCheck = this.validatePassword(password);
-    if (!pwdCheck.valid) {
-      return { success: false, error: pwdCheck.error };
-    }
-
-    const cleanUsername = username.trim();
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail || !this.isValidEmail(cleanEmail)) {
-      return { success: false, error: "Veuillez fournir une adresse email valide (ex: utilisateur@domaine.com)." };
-    }
-
-    // Conserver la liste d'un ancien compte local pour la rattacher au vrai compte.
-    const existingAccounts = getStoredAccounts();
-    const existing = existingAccounts.find(a => a.email.toLowerCase() === cleanEmail);
-    if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Connexion au service de comptes indisponible. Réessayez plus tard.' };
-    }
-
-    let supabaseUserId: string | null = null;
-    let supabaseToken: string | null = null;
-
-    // Tentative d'enregistrement sur Supabase si configuré
-    if (isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: { full_name: cleanUsername }
-          }
-        });
-
-        if (error) {
-          console.warn('[authService.register] Supabase notice:', error.message);
-          if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already in use')) {
-            return { success: false, error: "Cette adresse email est déjà utilisée." };
-          }
-          return { success: false, error: error.message };
-        } else if (data?.user) {
-          if (data.user.identities && data.user.identities.length === 0) {
-            return { success: false, error: "Cette adresse email est déjà utilisée." };
-          }
-          supabaseUserId = data.user.id;
-          supabaseToken = data.session?.access_token || null;
-          if (!supabaseToken) {
-            return { success: true, pendingVerification: true };
-          }
-        }
-      } catch (sbErr) {
-        console.warn('[authService.register] Supabase exception:', sbErr);
-        return { success: false, error: 'Impossible de créer le compte pour le moment. Réessayez plus tard.' };
-      }
-    }
-
-    if (!supabaseUserId || !supabaseToken) {
-      return { success: false, error: 'Le compte n’a pas pu être confirmé. Réessayez.' };
-    }
-
-
-    const userId = supabaseUserId;
-    const sessionToken = supabaseToken;
-    const previousList = existing ? this.getUserWatchlist(existing.id) : [];
-    if (previousList.length) this.saveUserWatchlist(userId, previousList);
-    const fullUser: UserProfile = {
-      id: userId,
-      username: cleanUsername || cleanEmail.split('@')[0],
-      email: cleanEmail,
-      name: cleanUsername || (cleanEmail.split('@')[0] ? cleanEmail.split('@')[0] : 'Cinéphile'),
-      avatar: undefined,
-      provider: 'credentials',
-      role: 'user',
-      isPro: false,
-      proPlanType: undefined,
-      proPlanExpiresAt: undefined,
-      referralCode: 'CINE-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-      createdAt: new Date().toISOString(),
-      myList: previousList,
-      token: sessionToken
-    };
-
-    Object.assign(fullUser, await readAccountAccess(userId));
-
-    // Sauvegarde immédiate dans le coffre local
-    await this.saveLocalAccount(fullUser, password);
-    localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
-    localStorage.setItem('cineia_user', JSON.stringify(fullUser));
-
-    return { success: true, user: fullUser, token: sessionToken };
+    if (!isSupabaseConfigured()) return { success: false, error: 'Connexion au service de comptes indisponible. Réessayez plus tard.' };
+    return emailAuth.register(email, password, username);
   },
 
   /** Connexion à un vrai compte Supabase, nécessaire à la synchronisation multi-appareils. */
   async login(
     email: string,
     password: string
-  ): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
-    const pwdCheck = this.validatePassword(password);
-    if (!pwdCheck.valid) {
-      return { success: false, error: pwdCheck.error };
-    }
-
+  ): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string; errorCode?: string }> {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !this.isValidEmail(cleanEmail)) {
       return { success: false, error: "Veuillez saisir une adresse email valide." };
@@ -256,12 +99,10 @@ export const authService = {
     // 1. Tenter Supabase si configuré
     if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: password
-        });
-
-        if (!error && data?.user && data.session?.access_token) {
+        const attempt = await emailAuth.login(cleanEmail, password);
+        if (!attempt.success) return attempt;
+        const data = attempt.data;
+        if (data?.user && data.session?.access_token) {
           const legacy = getStoredAccounts().find(account => account.email.toLowerCase() === cleanEmail);
           const savedList = mergeWatchlists(
             this.getUserWatchlist(data.user.id),
@@ -287,7 +128,7 @@ export const authService = {
 
           Object.assign(fullUser, await readAccountAccess(data.user.id));
 
-          await this.saveLocalAccount(fullUser, password);
+          await this.saveLocalAccount(fullUser);
           if (data.session?.access_token) {
             localStorage.setItem(SESSION_TOKEN_KEY, data.session.access_token);
           }
@@ -295,13 +136,7 @@ export const authService = {
           return { success: true, user: fullUser, token: data.session?.access_token };
         }
 
-        const legacy = getStoredAccounts().some(account => account.email.toLowerCase() === cleanEmail);
-        return {
-          success: false,
-          error: legacy
-            ? 'Connexion impossible. Si ce compte était uniquement sur cet appareil, créez un compte avec la même adresse pour récupérer votre liste. Sinon, vérifiez le mot de passe ou réinitialisez-le.'
-            : (error?.message || 'Connexion impossible. Vérifiez vos identifiants ou confirmez votre adresse e-mail.')
-        };
+        return { success: false, error: 'Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.', errorCode: 'invalid_credentials' };
       } catch (sbErr) {
         console.warn('[authService.login] Supabase error:', sbErr);
         return { success: false, error: 'Connexion au compte indisponible. Réessayez plus tard.' };
@@ -339,8 +174,6 @@ export const authService = {
   async saveLocalAccount(user: UserProfile, password?: string): Promise<void> {
     const accounts = getStoredAccounts();
     const existingIndex = accounts.findIndex(a => a.id === user.id);
-    const salt = user.id;
-    const passwordHash = password ? await hashPassword(password, salt) : '';
 
     const record: StoredAccount = {
       id: user.id,
@@ -349,7 +182,6 @@ export const authService = {
       name: user.name,
       avatar: user.avatar,
       provider: user.provider || (existingIndex >= 0 ? accounts[existingIndex].provider : 'credentials'),
-      passwordHash: passwordHash || (existingIndex >= 0 ? accounts[existingIndex].passwordHash : ''),
       isPro: user.isPro,
       proPlanType: user.proPlanType,
       proPlanExpiresAt: user.proPlanExpiresAt,

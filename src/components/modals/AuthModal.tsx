@@ -67,6 +67,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotSuccessMessage, setForgotSuccessMessage] = useState<string | null>(null);
   const [showBenefitsPopover, setShowBenefitsPopover] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
+  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const [loginErrorCode, setLoginErrorCode] = useState('');
   const [pendingIntent, setPendingIntent] = useState<CheckoutIntent | null>(null);
 
   useEffect(() => {
@@ -86,6 +89,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } else {
       setPendingIntent(null);
+      setConfirmationEmail(null);
+      setConfirmationMessage('');
+      setLoginErrorCode('');
       setAuthModalContext('default');
     }
   }, [isAuthModalOpen, isCheckout, effectiveContext]);
@@ -94,6 +100,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleSwitchMode = (signup: boolean) => {
     setIsSignUp(signup);
+    setConfirmationEmail(null);
+    setConfirmationMessage('');
+    setLoginErrorCode('');
     setIsForgotPassword(false);
     setForgotSuccessMessage(null);
     setShowBenefitsPopover(false);
@@ -142,9 +151,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Règle de mot de passe sécurisé : au moins 6 caractères, 1 majuscule et 1 chiffre
+    // New-password rules apply only to signup. Supabase checks existing credentials.
     const pwdCheck = authService.validatePassword(password);
-    if (!pwdCheck.valid) {
+    if (isSignUp && !pwdCheck.valid) {
       setErrorMessage(pwdCheck.error || "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre.");
       return;
     }
@@ -160,11 +169,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         if (res.pendingVerification) {
-          showToast(`✉️ Confirmez votre adresse ${cleanEmail}, puis connectez-vous pour synchroniser votre liste.`, 7000);
-          setIsAuthModalOpen(false);
+          setConfirmationEmail(cleanEmail);
+          setConfirmationMessage('Un e-mail de confirmation a été demandé. Ouvrez le lien reçu pour activer votre compte. Consultez aussi vos courriers indésirables.');
           setPassword('');
-          setUsername('');
-          setEmail('');
+          setErrorMessage(null);
           return;
         }
 
@@ -188,7 +196,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else {
         const res = await loginWithCredentials(cleanEmail, password);
         if (!res.success) {
-          setErrorMessage(res.error || "Identifiants invalides. Veuillez vérifier votre adresse email et mot de passe.");
+          setErrorMessage(res.error || "Adresse e-mail ou mot de passe incorrect.");
+          setLoginErrorCode(res.errorCode || 'invalid_credentials');
           return;
         }
 
@@ -234,23 +243,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setIsLoading(true);
     try {
-      // Supabase gère l'envoi sécurisé sans révéler si l'email existe ou non (bonne pratique de sécurité)
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/update-password`,
-      });
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        setForgotSuccessMessage("Si un compte est associé à cet e-mail, un lien de réinitialisation vous a été envoyé.");
-        showToast("Lien de réinitialisation envoyé.");
-      }
+      const result = await authService.requestPasswordReset(cleanEmail);
+      if (!result.success) setErrorMessage(result.error);
+      else setForgotSuccessMessage(result.message);
     } catch (err: any) {
       const msg = err?.message || "Une erreur inattendue est survenue.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resendConfirmation = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const result = await authService.sendVerificationEmail(confirmationEmail || email);
+      if (!result.success) setErrorMessage(result.error);
+      else setConfirmationMessage('Un nouvel e-mail de confirmation a été demandé. Consultez votre boîte de réception et vos courriers indésirables.');
+    } finally { setIsLoading(false); }
   };
 
   const copyReferral = () => {
@@ -416,6 +427,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </div>
           </div>
+        ) : confirmationEmail ? (
+          <div className="space-y-4 pt-2">
+            <Mail className="w-10 h-10 text-red-500 mx-auto" />
+            <h2 className="text-xl font-bold text-center">Confirmez votre adresse e-mail</h2>
+            <p className="text-sm text-center font-semibold break-all">{confirmationEmail}</p>
+            <p role="status" className="text-sm text-center">{confirmationMessage}</p>
+            {errorMessage && <p role="alert" className="text-sm text-red-500">{errorMessage}</p>}
+            <button type="button" disabled={isLoading} onClick={resendConfirmation} className="w-full py-3 rounded-xl bg-red-600 text-white font-bold disabled:opacity-50">
+              {isLoading ? 'Envoi en cours...' : "Renvoyer l'e-mail de confirmation"}
+            </button>
+            <button type="button" onClick={() => handleSwitchMode(false)} className="w-full py-2 text-sm underline">J'ai confirmé mon adresse : me connecter</button>
+            <button type="button" onClick={() => handleSwitchMode(true)} className="w-full py-2 text-sm underline">Modifier mon adresse e-mail</button>
+          </div>
         ) : isForgotPassword ? (
           /* FORGOT PASSWORD VIEW */
           <div className="space-y-4">
@@ -424,7 +448,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Mot de passe oublié ?
               </h2>
               <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
-                Saisissez votre adresse email pour recevoir un lien de réinitialisation sécurisé via Supabase.
+                Saisissez votre adresse email pour recevoir un lien de réinitialisation sécurisé par e-mail.
               </p>
             </div>
 
@@ -702,7 +726,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-3">
+             {!isSignUp && errorMessage && <button type="button" onClick={() => {
+    if (loginErrorCode === 'email_not_confirmed') { setConfirmationEmail(email.trim().toLowerCase()); setConfirmationMessage('Votre adresse doit être confirmée avant la connexion.'); }
+    else setIsForgotPassword(true);
+    setErrorMessage(null);
+  }} className="w-full py-2.5 rounded-xl border border-red-500 text-sm font-semibold">{loginErrorCode === 'email_not_confirmed' ? "Renvoyer l'e-mail de confirmation" : 'Réinitialiser mon mot de passe par e-mail'}</button>}
+  <form onSubmit={handleSubmit} className="space-y-3">
               {isSignUp && (
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-200 mb-1.5">
@@ -748,7 +777,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </label>
                   {isSignUp ? (
                     <span className="text-[11px] text-slate-500 dark:text-zinc-300 font-medium">
-                      Min. 6 caractères, 1 majuscule, 1 chiffre
+                      Min. 8 caractères, 1 majuscule, 1 chiffre
                     </span>
                   ) : (
                     <button
@@ -758,8 +787,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         setErrorMessage(null);
                       }}
                       className="text-xs text-slate-500 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors cursor-pointer"
-                      tabIndex={-1}
-                    >
+                      >
                       Mot de passe oublié ?
                     </button>
                   )}
@@ -769,8 +797,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    minLength={6}
-                    maxLength={60}
+                    minLength={isSignUp ? 8 : 1}
+                    maxLength={128}
+                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -790,11 +819,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {isSignUp && (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
-                      password.length >= 6 
+                      password.length >= 8
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold' 
                         : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
                     }`}>
-                      {password.length >= 6 ? '✓' : '•'} 6 car. min.
+                      {password.length >= 8 ? '✓' : '•'} 8 car. min.
                     </span>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
                       /[A-Z]/.test(password) 

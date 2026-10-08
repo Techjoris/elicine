@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { authService } from '../../services/authService';
 import { Lock, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, Check, ArrowRight } from 'lucide-react';
@@ -19,7 +19,20 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [sessionReady, setSessionReady] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!active) return;
+      setSessionReady(!error && Boolean(data?.user?.email_confirmed_at));
+      if (error || !data?.user?.email_confirmed_at) setError('Lien absent ou expiré. Demandez un nouvel e-mail de réinitialisation.');
+      setCheckingSession(false);
+    }).catch(() => { if (active) { setCheckingSession(false); setError('Impossible de vérifier le lien. Réessayez plus tard.'); } });
+    return () => { active = false; };
+  }, []);
 
   // Supabase récupère automatiquement le token ou la session depuis l'URL au chargement de la page
 
@@ -43,12 +56,9 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     }
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (updateError) {
-        setError(updateError.message);
+      const result = await authService.updatePassword(newPassword);
+      if (!result.success) {
+        setError(result.error);
       } else {
         setMessage('Votre mot de passe a été mis à jour avec succès ! Vous pouvez vous connecter.');
         if (typeof window !== 'undefined') {
@@ -78,6 +88,7 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         </p>
       </div>
 
+      {!checkingSession && !sessionReady && <button type="button" onClick={onGoHome} className="w-full mb-4 py-2 underline text-sm">Retour à la connexion pour demander un nouveau lien</button>}
       {/* Success Notification Card */}
       {message ? (
         <div className="space-y-5 text-center">
@@ -119,7 +130,7 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8} maxLength={128}
                 autoComplete="new-password"
                 className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all"
                 placeholder="••••••••"
@@ -147,7 +158,7 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8} maxLength={128}
                 autoComplete="new-password"
                 className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all"
                 placeholder="••••••••"
@@ -158,11 +169,11 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           {/* Password criteria pills */}
           <div className="flex flex-wrap gap-1.5 text-[10px] pt-1">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
-              newPassword.length >= 6 
+              newPassword.length >= 8
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold' 
                 : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
             }`}>
-              {newPassword.length >= 6 ? <Check className="w-3 h-3" /> : '•'} 6 car. min.
+              {newPassword.length >= 8 ? <Check className="w-3 h-3" /> : '•'} 8 car. min.
             </span>
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
               /[A-Z]/.test(newPassword) 
@@ -183,7 +194,7 @@ export const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           {/* Submit button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || checkingSession || !sessionReady}
             className="w-full py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer mt-2"
           >
             {loading ? (

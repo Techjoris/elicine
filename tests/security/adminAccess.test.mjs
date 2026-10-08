@@ -9,13 +9,15 @@ import activatePro from '../../api/activate-pro.js';
 import { readAccountAccess } from '../../src/services/accountAccessService.ts';
 
 const USER = '11111111-1111-1111-1111-111111111111';
+const VALID_TOKEN = 'e30.' + Buffer.from(JSON.stringify({ sub: USER, session_id: '33333333-3333-3333-3333-333333333333' })).toString('base64url') + '.test';
 const ADMIN = '22222222-2222-2222-2222-222222222222';
 function database({ admin = false, failure = false, missing = false, email = 'member@example.com', expiry = null } = {}) {
   const state = { writes: 0, admin, lookups: [], email };
   const db = {
-    auth: { getUser: async token => token === 'valid-token'
-      ? { data: { user: { id: USER, email, user_metadata: { role: 'admin', is_admin: true, is_pro: true } } } }
+    auth: { getUser: async token => token === VALID_TOKEN
+      ? { data: { user: { id: USER, email, email_confirmed_at: '2026-10-08', user_metadata: { role: 'admin', is_admin: true, is_pro: true } } } }
       : { data: {}, error: { message: 'invalid' } } },
+    rpc: async () => ({ data: true, error: null }),
     from(table) {
       let targetId;
       const query = {
@@ -40,12 +42,12 @@ test('email, user metadata, caller identity and legacy admin secrets never autho
   for (const email of ['member@example.com', 'ivanjoris959@gmail.com', 'techjoris@gmail.com']) {
     const { db, state } = database({ email });
     for (const method of ['GET', 'PATCH', 'DELETE']) {
-      for (const token of [null, 'forged-token', 'valid-token']) {
+      for (const token of [null, 'forged-token', VALID_TOKEN]) {
         const req = { method, headers: { 'x-admin-secret': 'elicine2026', ...(token ? { authorization: `Bearer ${token}` } : {}) },
           query: { email: 'ivanjoris959@gmail.com', userId: ADMIN }, body: { userId: ADMIN, role: 'admin', is_admin: true, isPro: true } };
         const res = response();
         await createAdminHandler(db)(req, res);
-        assert.equal(res.statusCode, token === 'valid-token' ? 403 : 401);
+        assert.equal(res.statusCode, token === VALID_TOKEN ? 403 : 401);
         const session = await verifyServerSession(req, db);
         assert.equal(session.isAdmin, false);
         assert.equal(session.isPro, false);
@@ -59,7 +61,7 @@ test('email, user metadata, caller identity and legacy admin secrets never autho
 
 test('current database permission grants admin and revocation takes effect on the next request', async () => {
   const { db, state } = database({ admin: true });
-  const req = { method: 'GET', headers: { authorization: 'Bearer valid-token' } };
+  const req = { method: 'GET', headers: { authorization: 'Bearer ' + VALID_TOKEN } };
   const granted = response();
   await createAdminHandler(db)(req, granted);
   assert.equal(granted.statusCode, 200);
@@ -71,7 +73,7 @@ test('current database permission grants admin and revocation takes effect on th
 });
 
 test('missing profile, database error or missing database fails closed', async () => {
-  const req = { method: 'PATCH', headers: { authorization: 'Bearer valid-token' }, body: { userId: ADMIN, isPro: true } };
+  const req = { method: 'PATCH', headers: { authorization: 'Bearer ' + VALID_TOKEN }, body: { userId: ADMIN, isPro: true } };
   for (const options of [{ missing: true }, { failure: true }]) {
     const { db, state } = database(options);
     const res = response();
@@ -86,10 +88,26 @@ test('even an administrator cannot grant admin through the user management API',
   const { db, state } = database({ admin: true });
   for (const body of [{ role: 'admin' }, { is_admin: true }, { isAdmin: true }]) {
     const res = response();
-    await createAdminHandler(db)({ method: 'PATCH', headers: { authorization: 'Bearer valid-token' }, body: { userId: ADMIN, ...body } }, res);
+    await createAdminHandler(db)({ method: 'PATCH', headers: { authorization: 'Bearer ' + VALID_TOKEN }, body: { userId: ADMIN, ...body } }, res);
     assert.equal(res.statusCode, 400);
   }
   assert.equal(state.writes, 0);
+});
+
+test('a revoked session is denied even while its signed token and admin profile are valid', async () => {
+  const { db, state } = database({ admin: true });
+  db.rpc = async () => ({ data: false, error: null });
+  const res = response();
+  await createAdminHandler(db)({ method: 'GET', headers: { authorization: 'Bearer ' + VALID_TOKEN } }, res);
+  assert.equal(res.statusCode, 401);
+  assert.equal(state.lookups.length, 0);
+});
+
+test('an unconfirmed account cannot access privileged APIs', async () => {
+  const { db } = database({ admin: true });
+  const original = db.auth.getUser;
+  db.auth.getUser = async token => { const result = await original(token); result.data.user.email_confirmed_at = null; return result; };
+  assert.equal((await verifyAccountSession({ headers: { authorization: 'Bearer ' + VALID_TOKEN } }, db)).isAuthenticated, false);
 });
 
 test('status, cron and thank-you routes reject forged founder and activation requests', async () => {

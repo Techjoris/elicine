@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
+    // Only public browser configuration may be bundled. Payment and webhook secrets stay server-side.
+    envPrefix: ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_TMDB_API_KEY',
+      'VITE_PADDLE_CLIENT_TOKEN', 'VITE_PADDLE_ENV', 'VITE_PADDLE_PRICE_ID', 'VITE_PRICE_IDS',
+      'VITE_PADDLE_SUPPORTER_PRICE_', 'VITE_NOTCHPAY_PUBLIC_KEY', 'VITE_APK_DOWNLOAD_URL',
+      'VITE_NORDVPN_URL', 'VITE_SURFSHARK_URL', 'VITE_SASPAY_DEFAULT_CURRENCY'],
     plugins: [
       react(),
       {
@@ -318,7 +323,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
-    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     server: {
       watch: {
         ignored: ['**/tools/**', '**/android/**'],

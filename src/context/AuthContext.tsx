@@ -208,12 +208,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 0);
         
         // Nettoyage de l'URL après un callback OAuth réussi
-        if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+        if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && typeof window !== 'undefined') {
           const url = new URL(window.location.href);
           if (url.hash.includes('access_token=') || url.searchParams.has('code')) {
             url.hash = '';
             url.searchParams.delete('code');
-            window.history.replaceState({}, document.title, url.pathname + url.search);
+            window.history.replaceState({}, document.title, (event === 'PASSWORD_RECOVERY' ? '/update-password' : url.pathname) + url.search);
           }
         }
       } else if (event === 'SIGNED_OUT') {
@@ -238,39 +238,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithPassword = async (email: string, password: string) => {
-    const cleanEmail = (email || '').trim();
-    const res = await authService.login(cleanEmail, password);
-    if (res.success && res.user) {
-      setUser(res.user);
-      const mockSession: any = {
-        access_token: res.token || `tok_${Date.now()}`,
-        token_type: 'bearer',
-        expires_in: 3600,
-        refresh_token: '',
-        user: res.user
-      };
-      setSession(mockSession);
-      return { data: { user: res.user, session: mockSession }, error: null };
-    }
-    return { data: null, error: { message: res.error || 'Erreur de connexion.' } };
+    const res = await authService.login(email.trim(), password);
+    if (!res.success || !res.user) return { data: null, error: { message: res.error || 'Erreur de connexion.', code: res.errorCode } };
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) return { data: null, error: { message: 'Session indisponible. Reconnectez-vous.' } };
+    setUser(res.user);
+    setSession(session);
+    return { data: { user: res.user, session }, error: null };
   };
 
   const signUpWithPassword = async (email: string, password: string, fullName?: string) => {
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
     const res = await authService.register(fullName || cleanEmail.split('@')[0], cleanEmail, password);
-    if (res.success && res.user) {
-      setUser(res.user);
-      const mockSession: any = {
-        access_token: res.token || `tok_${Date.now()}`,
-        token_type: 'bearer',
-        expires_in: 3600,
-        refresh_token: '',
-        user: res.user
-      };
-      setSession(mockSession);
-      return { data: { user: res.user, session: mockSession }, error: null };
-    }
-    return { data: null, error: { message: res.error || "Erreur d'inscription." } };
+    return res.success ? { data: { user: null, session: null, pendingVerification: true }, error: null }
+      : { data: null, error: { message: res.error || "Erreur d'inscription." } };
   };
 
   const signOut = async () => {

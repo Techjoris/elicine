@@ -150,7 +150,7 @@ export const searchQuotaQuerySchema = z.object({
  */
 export const authLoginSchema = z.object({
   email: z.string().email("Format d'adresse email invalide").max(150),
-  password: z.string().min(6, "Le mot de passe doit comporter au moins 6 caractères").max(128)
+  password: z.string().min(1, "Mot de passe requis").max(128)
 });
 
 /**
@@ -158,7 +158,7 @@ export const authLoginSchema = z.object({
  */
 export const authRegisterSchema = z.object({
   email: z.string().email("Format d'adresse email invalide").max(150),
-  password: z.string().min(6, "Le mot de passe doit comporter au moins 6 caractères").max(128),
+  password: z.string().min(8, "Le mot de passe doit comporter au moins 8 caractères").max(128),
   username: z.string().max(50).regex(/^[a-zA-Z0-9_ -]*$/, "Nom d'utilisateur invalide").optional()
 });
 
@@ -301,4 +301,3 @@ Réponds uniquement avec le JSON demandé.`;
     { role: 'user', content: userContent }
   ];
 }
-

@@ -120,7 +120,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
       const { data: existingProf } = await supabaseAdmin
         .from('profiles')
         .select('id, expires_at, is_pro')
-        .ilike('email', rawEmail.trim())
+        .eq('email', rawEmail.trim())
         .maybeSingle();
 
       const currentExpiry = existingProf?.expires_at;
@@ -157,9 +157,9 @@ export async function activateUserPassPro(email, planDetails = {}) {
           .update(profileUpdatePayload);
 
         if (validUserUuid) {
-          profileQuery = profileQuery.or(`id.eq.${validUserUuid},email.ilike.${cleanEmail}`);
+          profileQuery = profileQuery.eq('id', validUserUuid);
         } else {
-          profileQuery = profileQuery.ilike('email', cleanEmail);
+          profileQuery = profileQuery.eq('email', cleanEmail);
         }
 
         const { error: profileError } = await profileQuery;
@@ -173,7 +173,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
               is_pro: true,
               updated_at: now
             })
-            .ilike('email', cleanEmail);
+            .eq('email', cleanEmail);
 
           if (fallbackErr) {
             console.error('[Activation Pro Supabase] Erreur mise à jour profile repli:', fallbackErr.message);
@@ -189,7 +189,7 @@ export async function activateUserPassPro(email, planDetails = {}) {
           const { data: existingProfile } = await supabaseAdmin
             .from('profiles')
             .select('id, is_pro')
-            .ilike('email', cleanEmail)
+            .eq('email', cleanEmail)
             .maybeSingle();
 
           if (!existingProfile && validUserUuid) {

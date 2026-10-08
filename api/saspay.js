@@ -1,8 +1,10 @@
+import { checkRateLimit } from './_rateLimit.js';
+import { proPrice, ownsSubscription, validPaymentReference, gatewayMatchesSubscription } from './_payment-security.js';
 import { verifyServerSession } from './_security.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { sendProWelcomeEmail, sendDonationThankYouEmail } from './_email.js';
-import { activateUserPassPro, supabaseAdmin } from './_pro-activation.js';
+import { sendProWelcomeEmail } from './_email.js';
+import { supabaseAdmin } from './_pro-activation.js';
 
 const supabaseUrl = 
   process.env.VITE_SUPABASE_URL || 
@@ -21,6 +23,28 @@ const supabase = supabaseAdmin || ((supabaseUrl && supabaseAnonKey && supabaseAn
 
 // Mémoire globale des souscriptions pour le runtime Serverless
 const globalSubscriptions = (globalThis.__elicine_subscriptions = globalThis.__elicine_subscriptions || new Map());
+
+export const config = { api: { bodyParser: false } };
+
+async function paymentBody(req) {
+  let raw = typeof req.body === 'string' ? req.body : Buffer.isBuffer(req.body) ? req.body.toString('utf8') : null;
+  if (raw === null && req.body === undefined && typeof req[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > 1048576) throw new Error('BODY_TOO_LARGE');
+      chunks.push(bytes);
+    }
+    raw = Buffer.concat(chunks).toString('utf8');
+  }
+  if (raw !== null) {
+    if (Buffer.byteLength(raw) > 1048576) throw new Error('BODY_TOO_LARGE');
+    req.body = raw ? JSON.parse(raw) : {};
+  }
+  return raw ?? (Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {}));
+}
 
 export const SASPAY_ALLOWED_COUNTRIES = [
   'BE', // Belgique
@@ -63,12 +87,6 @@ export function getSaspayCredentials(req) {
     process.env.saspay_backend ||
     process.env.SASPAY_SECRET_KEY ||
     process.env.SASPAY_API_KEY ||
-    process.env.VITE_SASPAY_BACKEND ||
-    process.env.VITE_SASPAY_API_KEY ||
-    req?.headers['x-saspay-key'] ||
-    req?.headers['authorization']?.replace(/^Bearer\s+/i, '') ||
-    req?.body?.secretKey ||
-    req?.body?.apiKey ||
     ''
   ).trim();
 
@@ -253,7 +271,11 @@ export function extractErrorMessage(data, fallback = 'Erreur SasPay') {
  * - POST : Initialisation de session de paiement (checkout-sessions ou softpay) / Gestion des webhooks
  * - GET  : Vérification du statut de la transaction
  */
-export default async function handler(req, res) {
+export function createSaspayHandler({ database = supabase, authenticate = verifyServerSession, gatewayLookup = queryGatewaySession } = {}) {
+  return async function handler(req, res) {
+  const supabase = database;
+  const verifyServerSession = req => authenticate(req, database);
+  const queryGatewaySession = gatewayLookup;
   // 1. En-têtes CORS universels
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -261,6 +283,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  let signedBody = '';
+  if (req.method === 'POST') {
+    try { signedBody = await paymentBody(req); }
+    catch (error) { return res.status(error.message === 'BODY_TOO_LARGE' ? 413 : 400).json({ error: 'Corps de requête invalide.' }); }
   }
 
   const { apiKey } = getSaspayCredentials(req);
@@ -286,6 +314,15 @@ export default async function handler(req, res) {
     });
   }
 
+  const webhook = action === 'webhook' || Boolean(req.headers?.['x-saspay-event'] || req.body?.event);
+  let account = null;
+  if (!webhook) {
+    if (!checkRateLimit(req,res,{ max: 20, windowMs: 60000 }).allowed) return;
+    account = await verifyServerSession(req);
+    if (!account.isAuthenticated || !account.user?.email_confirmed_at) return res.status(401).json({ error: 'Connectez-vous avec un compte confirmé pour gérer un paiement.' });
+    res.setHeader('Cache-Control','no-store');
+  }
+
   // 1.5. Initialisation formelle d'une souscription Pro (Prérequis obligatoire)
   if (action === 'init-subscription' || action === 'create-subscription') {
     if (req.method !== 'POST') {
@@ -308,7 +345,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanEmail = String(account.user.email || '').trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       return res.status(400).json({
         success: false,
@@ -321,13 +358,13 @@ export default async function handler(req, res) {
 
     const subscription = {
       id: subId,
-      userId: String(userId || 'usr_anonymous').trim(),
+      userId: account.user.id,
       email: cleanEmail,
       customerName: String(customerName || cleanEmail.split('@')[0] || 'Cinéphile Pro').trim(),
       phone: phone ? String(phone).trim() : undefined,
       plan: plan === 'yearly' ? 'yearly' : 'monthly',
       currency: (currency || 'USD').toUpperCase(),
-      amount: Number(amount) || 1.99,
+      amount: proPrice(String(currency || '').toUpperCase(), plan),
       status: 'pending_payment',
       gateway: chosenGateway,
       paymentMethod: chosenGateway,
@@ -336,14 +373,14 @@ export default async function handler(req, res) {
       updatedAt: now
     };
 
-    // Stockage en mémoire globale du worker
-    globalSubscriptions.set(subId, subscription);
-    globalSubscriptions.set(`email:${cleanEmail}`, subscription);
+    if (!subscription.amount) return res.status(400).json({ error: 'Offre ou devise invalide.' });
+
+    if (!supabase) return res.status(503).json({ error: 'Enregistrement du paiement indisponible.' });
 
     // Synchronisation Supabase si disponible
     if (supabase) {
       try {
-        await supabase.from('subscriptions').upsert({
+        const saved = await supabase.from('subscriptions').upsert({
           id: subscription.id,
           user_id: subscription.userId,
           email: subscription.email,
@@ -355,12 +392,17 @@ export default async function handler(req, res) {
           status: 'pending_payment',
           terms_accepted: true,
           created_at: subscription.createdAt,
-          updated_at: subscription.updatedAt
+          updated_at: subscription.updatedAt,
+          payment_provider: 'saspay'
         });
+        if (saved.error) return res.status(503).json({ error: 'Enregistrement du paiement indisponible.' });
       } catch (sbErr) {
-        console.warn('[SasPay Serverless] Notification table Supabase subscriptions:', sbErr?.message);
+        return res.status(503).json({ error: 'Enregistrement du paiement indisponible.' });
       }
     }
+
+    globalSubscriptions.set(subId, subscription);
+    globalSubscriptions.set(`email:${cleanEmail}`, subscription);
 
     console.log('[SasPay Serverless] Souscription Pro initialisée avec succès (pending_payment):', {
       subId,
@@ -396,6 +438,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ success: false, error: 'Souscription non trouvée.' });
     }
 
+    if (!ownsSubscription(found, account.user)) return res.status(404).json({ error: 'Souscription non trouvée.' });
     return res.status(200).json({ success: true, subscription: found });
   }
 
@@ -442,6 +485,8 @@ export default async function handler(req, res) {
       });
     }
 
+    if (!ownsSubscription(sub, account.user)) return res.status(404).json({ error: 'Souscription non trouvée.' });
+
     // Si déjà actif en base, vérifier la date d'expiration
     if (sub.status === 'active') {
       const isExpired = sub.expires_at ? new Date(sub.expires_at).getTime() <= Date.now() : false;
@@ -458,54 +503,18 @@ export default async function handler(req, res) {
     }
 
     // Si en attente et qu'une référence de transaction est disponible, contre-vérification serveur auprès de la passerelle
-    const txRef = reference || sub.payment_reference || sub.paymentReference;
+    const txRef = sub.payment_reference || sub.paymentReference;
+    if (reference && reference !== txRef) return res.status(400).json({ error: 'Référence de paiement incohérente.' });
     if (sub.status === 'pending_payment' && txRef && apiKey) {
       const gatewayCheck = await queryGatewaySession(txRef, apiKey);
-      if (gatewayCheck && gatewayCheck.isSuccess) {
-        const now = new Date().toISOString();
-        const expiresAt = computeSubscriptionExpiry(sub.plan);
-
+      if (gatewayMatchesSubscription(gatewayCheck, sub)) {
+        const completed = await supabase.rpc('complete_saspay_subscription', { p_subscription_id: sub.id, p_payment_reference: txRef });
+        if (completed.error) return res.status(503).json({ error: 'Validation du paiement indisponible.' });
         sub.status = 'active';
-        sub.expires_at = expiresAt;
-        sub.updated_at = now;
-        sub.payment_reference = txRef;
-
+        sub.expires_at = completed.data.expiresAt;
         globalSubscriptions.set(sub.id, sub);
-
-        if (sub.email) {
-          await activateUserPassPro(sub.email, {
-            plan: sub.plan,
-            customerName: sub.customerName || sub.customer_name,
-            amount: sub.amount,
-            currency: sub.currency,
-            gateway: 'saspay',
-            paymentReference: txRef,
-            subscriptionId: sub.id,
-            isDonation: sub.plan === 'donation' || sub.plan === 'don'
-          });
-        } else if (supabase) {
-          try {
-            await supabase.from('subscriptions').update({
-              status: 'active',
-              payment_reference: txRef,
-              expires_at: expiresAt,
-              updated_at: now
-            }).eq('id', sub.id);
-          } catch (_) {}
-        }
-
-        console.log('[SasPay verify-subscription] 👑 Souscription activée via confirmation autoritaire passerelle:', sub.id);
-
-        const subGateway = sub.gateway || sub.payment_method;
-        return res.status(200).json({
-          success: true,
-          isPro: true,
-          status: 'active',
-          plan: sub.plan,
-          expiresAt,
-          gateway: subGateway,
-          subscription: sub
-        });
+        return res.status(200).json({ success: true, isPro: true, status: 'active', plan: sub.plan,
+          expiresAt: sub.expires_at, subscription: sub });
       } else if (gatewayCheck && gatewayCheck.isFailed) {
         sub.status = 'failed';
         if (supabase) {
@@ -553,10 +562,10 @@ export default async function handler(req, res) {
 
   // 2. Traitement Webhook STRICT avec validation cryptographique et contre-vérification passerelle
   if (action === 'webhook' || req.headers['x-saspay-event'] || req.body?.event) {
-    console.log('WEBHOOK REÇU:', JSON.stringify(req.body, null, 2));
+
 
     let webhookBody = req.body;
-    let rawBodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    const rawBodyStr = signedBody;
     if (typeof webhookBody === 'string') {
       try {
         webhookBody = JSON.parse(webhookBody);
@@ -578,7 +587,7 @@ export default async function handler(req, res) {
       req.headers['x-saspay-signature'] || 
       req.headers['x-signature'] || 
       req.headers['x-notch-signature'] || 
-      req.headers['x-cinetpay-signature']
+      req.headers['x-cinetpay-signature'] || req.headers['x-webhook-signature']
     );
 
     let isCryptographicallyVerified = false;
@@ -593,95 +602,24 @@ export default async function handler(req, res) {
       console.log('[SasPay Webhook Security] ✓ Signature cryptographique HMAC validée avec succès.');
     }
 
-    // 2. Si pas de signature d'en-tête ou pour double-check, contre-vérification serveur auprès de la passerelle
-    if (!isCryptographicallyVerified && txId && apiKey) {
-      const gatewayCheck = await queryGatewaySession(txId, apiKey);
-      if (gatewayCheck && gatewayCheck.isSuccess) {
-        isCryptographicallyVerified = true;
-        console.log('[SasPay Webhook Security] ✓ Preuve serveur-à-serveur validée auprès de la passerelle.');
-      } else {
-        console.warn('[SasPay Webhook Security] ❌ Échec de vérification autoritaire auprès de la passerelle pour tx:', txId);
-      }
-    }
+    if (!isCryptographicallyVerified) return res.status(401).json({ error: 'Signature du paiement requise.' });
 
     const isSuccess = (rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID' || event === 'transaction.success') && isCryptographicallyVerified;
 
     if (isSuccess && txId) {
-      const now = new Date().toISOString();
-      const subId = transactionData?.subscription_id || transactionData?.subscriptionId;
-
-      let targetSub = null;
-      if (subId) targetSub = globalSubscriptions.get(subId);
-      if (!targetSub && supabase) {
-        try {
-          let query = supabase.from('subscriptions').select('*');
-          if (subId) query = query.eq('id', subId);
-          else query = query.eq('payment_reference', txId);
-          const { data } = await query.maybeSingle();
-          if (data) targetSub = data;
-        } catch (_) {}
-      }
-
-      const plan = targetSub?.plan || 'monthly';
-      const expiresAt = computeSubscriptionExpiry(plan);
-      const isDonation = plan === 'donation' || plan === 'don' || String(targetSub?.description || '').toLowerCase().includes('don');
-
-      // Mise à jour de la mémoire globale
-      for (const [key, sub] of globalSubscriptions.entries()) {
-        if (sub && (sub.paymentReference === txId || sub.id === subId || sub.id === targetSub?.id)) {
-          sub.status = 'active';
-          sub.paymentReference = txId;
-          sub.expiresAt = expiresAt;
-          sub.activatedAt = now;
-          sub.updatedAt = now;
-          sub.signatureVerified = true;
-          globalSubscriptions.set(key, sub);
-        }
-      }
-
-      // ÉCRITURE EXCLUSIVE DU STATUT EN BASE DE DONNÉES & NOTIFICATIONS RESEND
-      const targetEmail = (
-        targetSub?.email ||
-        transactionData?.customer_email ||
-        transactionData?.email ||
-        webhookBody?.customer_email ||
-        webhookBody?.email ||
-        ''
-      ).trim().toLowerCase();
-
-      if (targetEmail) {
-        await activateUserPassPro(targetEmail, {
-          plan,
-          customerName: targetSub?.customer_name || targetSub?.customerName || transactionData?.customer_name || transactionData?.customer?.name || webhookBody?.customer_name,
-          amount: targetSub?.amount || transactionData?.amount || webhookBody?.amount || 2,
-          currency: targetSub?.currency || transactionData?.currency || webhookBody?.currency || 'XOF',
-          gateway: 'saspay',
-          paymentReference: txId,
-          subscriptionId: subId || targetSub?.id,
-          isDonation
-        });
-      } else if (supabase) {
-        try {
-          const updatePayload = {
-            status: 'active',
-            payment_reference: txId,
-            expires_at: expiresAt,
-            updated_at: now
-          };
-
-          let updateQuery = supabase.from('subscriptions').update(updatePayload);
-          if (subId) {
-            updateQuery = updateQuery.eq('id', subId);
-          } else if (targetSub?.id) {
-            updateQuery = updateQuery.eq('id', targetSub.id);
-          } else {
-            updateQuery = updateQuery.eq('payment_reference', txId);
-          }
-
-          await updateQuery;
-        } catch (sbErr) {
-          console.error('[SasPay Webhook] Exception Supabase:', sbErr);
-        }
+      if (!supabase || !validPaymentReference(txId)) return res.status(400).json({ error: 'Paiement invalide.' });
+      const found = await supabase.from('subscriptions').select('*').eq('payment_reference', txId).maybeSingle();
+      if (found.error) return res.status(503).json({ error: 'Validation du paiement indisponible.' });
+      const sub = found.data;
+      if (!sub) return res.status(200).json({ received: true, status: 'unknown_payment' });
+      if (sub.status === 'active') return res.status(200).json({ received: true, status: 'duplicate' });
+      const evidence = await queryGatewaySession(txId, apiKey);
+      if (!gatewayMatchesSubscription(evidence, sub)) return res.status(400).json({ error: 'Paiement incohérent avec votre offre.' });
+      const completed = await supabase.rpc('complete_saspay_subscription', { p_subscription_id: sub.id, p_payment_reference: txId });
+      if (completed.error) return res.status(503).json({ error: 'Validation du paiement indisponible.' });
+      if (completed.data.activated) {
+        try { await sendProWelcomeEmail(sub.email, { customerName: sub.customer_name, plan: sub.plan, expiresAt: completed.data.expiresAt }); }
+        catch { console.warn('[SasPay] Welcome email unavailable'); }
       }
     }
 
@@ -710,96 +648,12 @@ export default async function handler(req, res) {
       });
     }
 
-    try {
-      // SasPay vérification : POST /checkout-sessions/{id}/ ou GET de secours
-      let response = await fetch(`https://api.saspay.me/api/v1/checkout-sessions/${encodeURIComponent(sessionId)}/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
-      });
-
-      if (!response.ok && response.status === 405) {
-        response = await fetch(`https://api.saspay.me/api/v1/checkout-sessions/${encodeURIComponent(sessionId)}/`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Accept': 'application/json'
-          }
-        });
-      }
-
-      const resText = await response.text();
-      let data = {};
-      try {
-        data = JSON.parse(resText);
-      } catch (_) {
-        data = { message: resText };
-      }
-
-      const rawStatus = (data?.status || data?.data?.status || 'PENDING').toUpperCase();
-      const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'PAID';
-      const isFailed = rawStatus === 'FAILED' || rawStatus === 'CANCELLED' || rawStatus === 'REJECTED';
-
-      // Déclenchement automatique de l'activation Supabase & Resend dès la confirmation de succès
-      if (isSuccess) {
-        try {
-          const userEmail = (
-            req.query?.email || 
-            data?.customer?.email || 
-            data?.data?.customer?.email || 
-            data?.customer_email || 
-            data?.data?.customer_email || 
-            ''
-          ).trim().toLowerCase();
-
-          let sub = globalSubscriptions.get(sessionId) || (userEmail ? globalSubscriptions.get(`email:${userEmail}`) : null);
-          if (!sub && supabase) {
-            const { data: dbSub } = await supabase
-              .from('subscriptions')
-              .select('*')
-              .or(`id.eq.${sessionId},payment_reference.eq.${sessionId}`)
-              .maybeSingle();
-            if (dbSub) sub = dbSub;
-          }
-
-          const targetEmail = userEmail || sub?.email;
-          if (targetEmail) {
-            await activateUserPassPro(targetEmail, {
-              plan: sub?.plan || 'monthly',
-              customerName: sub?.customer_name || sub?.customerName,
-              amount: sub?.amount || data?.amount || data?.data?.amount || 1.99,
-              currency: sub?.currency || data?.currency || data?.data?.currency || 'XOF',
-              gateway: 'saspay',
-              paymentReference: sessionId,
-              subscriptionId: sub?.id || sessionId,
-              isDonation: sub?.plan === 'donation' || sub?.plan === 'don'
-            });
-          }
-        } catch (actErr) {
-          console.error('[SasPay GET Verify Activation Warning]:', actErr);
-        }
-      }
-
-      return res.status(response.status).json({
-        success: isSuccess,
-        isPro: isSuccess,
-        status: isSuccess ? 'active' : (isFailed ? 'failed' : 'pending'),
-        rawStatus,
-        plan: sub?.plan || 'monthly',
-        expiresAt: sub?.expires_at || computeSubscriptionExpiry(sub?.plan || 'monthly'),
-        gateway: 'saspay',
-        data: data?.data || data
-      });
-    } catch (err) {
-      console.error('[SasPay Verify Exception]:', err.message);
-      return res.status(500).json({
-        error: `Erreur lors de la vérification SasPay : ${err.message}`
-      });
-    }
+    if (!validPaymentReference(sessionId)) return res.status(400).json({ error: 'Référence invalide.' });
+    const { data: sub, error } = await supabase.from('subscriptions').select('*').eq('payment_reference', sessionId).eq('user_id', account.user.id).maybeSingle();
+    if (error || !sub) return res.status(404).json({ error: 'Paiement introuvable.' });
+    const checked = await queryGatewaySession(sessionId, apiKey);
+    return res.status(200).json({ success: checked?.isSuccess === true, status: checked?.isSuccess ? 'paid' : checked?.isFailed ? 'failed' : 'pending',
+      isPro: sub.status === 'active', plan: sub.plan, expiresAt: sub.expires_at || null });
   }
 
   // 4. POST : Initialisation d'une transaction SasPay
@@ -815,7 +669,7 @@ export default async function handler(req, res) {
     body = body || {};
 
     const amount = Number(body.amount);
-    if (!amount || isNaN(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 9999999) {
       return res.status(400).json({
         error: 'Montant de transaction invalide.'
       });
@@ -825,7 +679,7 @@ export default async function handler(req, res) {
     const currency = (body.currency || 'XOF').toUpperCase();
     const formattedAmount = (amount).toFixed(2);
 
-    const customerEmail = (body.customer?.email || body.customer_email || body.email || 'client@elicine.app').trim();
+    const customerEmail = account.user.email;
     const customerName = (
       body.customer_name ||
       (body.customer?.first_name ? `${body.customer.first_name} ${body.customer.last_name || ''}` : '') ||
@@ -879,6 +733,9 @@ export default async function handler(req, res) {
         });
       }
 
+      if (!ownsSubscription(verifiedSubscription, account.user)) return res.status(404).json({ error: 'Souscription non trouvée.' });
+      if (Math.abs(amount - Number(verifiedSubscription.amount)) > 0.001 || currency !== verifiedSubscription.currency) return res.status(400).json({ error: 'Montant ou devise incohérent avec votre offre.' });
+
       if (verifiedSubscription.status === 'active') {
         return res.status(400).json({
           success: false,
@@ -901,6 +758,10 @@ export default async function handler(req, res) {
     }
 
     const rawReturnUrl = (body.return_url || body.redirect_url || 'https://elicine.vercel.app/payment/callback').trim();
+    const allowedOrigins = ['https://elicine.vercel.app','https://elicine.com','https://www.elicine.com','https://elicine.app',process.env.SITE_URL].filter(Boolean);
+    try {
+      if (!allowedOrigins.includes(new URL(rawReturnUrl).origin)) return res.status(400).json({ error: 'Adresse de retour invalide.' });
+    } catch { return res.status(400).json({ error: 'Adresse de retour invalide.' }); }
     const gatewayParam = body.gateway || body.paymentMethod || body.payment_method || verifiedSubscription?.gateway || '';
     let returnUrl = verifiedSubscription
       ? (rawReturnUrl.includes('?') ? `${rawReturnUrl}&subscription_id=${verifiedSubscription.id}` : `${rawReturnUrl}?subscription_id=${verifiedSubscription.id}`)
@@ -909,7 +770,7 @@ export default async function handler(req, res) {
       returnUrl = returnUrl.includes('?') ? `${returnUrl}&gateway=${encodeURIComponent(gatewayParam)}` : `${returnUrl}?gateway=${encodeURIComponent(gatewayParam)}`;
     }
 
-    const cancelUrl = (body.cancel_url || returnUrl).trim();
+    const cancelUrl = returnUrl;
     const description = verifiedSubscription
       ? `${body.description || 'Pass Pro Éliciné'} [Ref: ${verifiedSubscription.id}]`
       : (body.description || 'Paiement Mobile Éliciné').trim();
@@ -1016,4 +877,7 @@ export default async function handler(req, res) {
   }
 
   return res.status(405).json({ error: 'Méthode non autorisée.' });
+  };
 }
+
+export default createSaspayHandler();

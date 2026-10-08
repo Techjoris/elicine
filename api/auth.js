@@ -1,211 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 import { authLoginSchema, authRegisterSchema } from './_security.js';
+import { checkRateLimit } from './_rateLimit.js';
+import { createEmailAuth, isAuthEmail } from '../src/lib/emailAuth.js';
 
-const supabaseUrl = 
-  process.env.VITE_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  'https://xwhrxtzbxvakqjlajjlc.supabase.co';
+function authClient() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // A new stateless client per request avoids sharing login sessions between users.
+  return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }) : null;
+}
 
-const supabaseAnonKey = 
-  process.env.VITE_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = (supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 20)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
-
-/**
- * Point d'entrée serveur unifié pour toutes les opérations d'authentification Éliciné.
- * Remplace et factorise : /api/auth/login, /api/auth/register, /api/auth/send-verification, /api/auth/google
- * Conforme à la limite des 12 Serverless Functions de Vercel.
- */
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Résolution de l'action demandée
-  let action = req.query?.action;
-  if (!action && req.url) {
+export function createAuthHandler(clientFactory = authClient, siteOrigin = () => process.env.SITE_URL || 'https://elicine.vercel.app') {
+  return async function handler(req, res) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée.' });
+    if (!checkRateLimit(req, res, { max: 10, windowMs: 60000 }).allowed) return;
+    const action = String(req.query?.action || req.url?.split('?')[0].split('/').pop() || '').toLowerCase();
+    if (!['login','register','send-verification','forgot-password'].includes(action)) return res.status(404).json({ error: 'Action inconnue.' });
+    const client = clientFactory();
+    if (!client) return res.status(503).json({ error: 'Service de comptes indisponible.' });
     try {
-      const parsed = new URL(req.url, 'http://localhost');
-      const segments = parsed.pathname.split('/').filter(Boolean);
-      const authIdx = segments.indexOf('auth');
-      if (authIdx !== -1 && segments[authIdx + 1]) {
-        action = segments[authIdx + 1];
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+      const email = typeof (body.email || body.identifier) === 'string' ? (body.email || body.identifier).trim().toLowerCase() : '';
+      const password = typeof body.password === 'string' ? body.password : '';
+      const flow = createEmailAuth(client, siteOrigin);
+      if (action === 'login') {
+        if (!authLoginSchema.safeParse({ email, password }).success) return res.status(400).json({ error: 'Adresse e-mail ou mot de passe incorrect.', errorCode: 'invalid_credentials' });
+        const result = await flow.login(email, password);
+        if (!result.success) return res.status(401).json({ error: result.error, errorCode: result.errorCode });
+        return res.status(200).json({ success: true, user: result.data.user, session: result.data.session });
       }
-    } catch (_) {}
-  }
-
-  if (Array.isArray(action)) {
-    action = action[0];
-  }
-
-  const cleanAction = String(action || '').toLowerCase().trim();
-
-  // Routage par action
-  switch (cleanAction) {
-    case 'login':
-      return handleLogin(req, res);
-    case 'register':
-      return handleRegister(req, res);
-    case 'send-verification':
-      return handleSendVerification(req, res);
-    case 'google':
-      return handleGoogle(req, res);
-    default:
-      return res.status(404).json({
-        error: `Action d'authentification '${cleanAction || 'indéterminée'}' non reconnue. Actions disponibles : login, register, send-verification, google.`
-      });
-  }
-}
-
-/**
- * 1. Connexion (Login)
- */
-async function handleLogin(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée' });
-  }
-
-  try {
-    const rawBody = req.body || {};
-    const inputToValidate = {
-      email: (rawBody.email || rawBody.identifier || '').trim().toLowerCase(),
-      password: rawBody.password || ''
-    };
-
-    const validation = authLoginSchema.safeParse(inputToValidate);
-    if (!validation.success) {
-      return res.status(400).json({
-        error: "Identifiants invalides",
-        details: validation.error.format()
-      });
-    }
-
-    const { email: cleanEmail, password } = validation.data;
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
-
-    if (error) {
-      return res.status(401).json({ error: error.message });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Connexion réussie.',
-      user: data.user,
-      session: data.session
-    });
-  } catch (err) {
-    console.error('Erreur API Login:', err);
-    return res.status(500).json({ error: err.message || 'Erreur lors de la connexion.' });
-  }
-}
-
-/**
- * 2. Inscription (Register)
- */
-async function handleRegister(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée' });
-  }
-
-  try {
-    const rawBody = req.body || {};
-    const inputToValidate = {
-      email: (rawBody.email || '').trim().toLowerCase(),
-      password: rawBody.password || '',
-      username: rawBody.username ? String(rawBody.username).trim() : undefined
-    };
-
-    const validation = authRegisterSchema.safeParse(inputToValidate);
-    if (!validation.success) {
-      return res.status(400).json({
-        error: "Données d'inscription invalides",
-        details: validation.error.format()
-      });
-    }
-
-    const { email: cleanEmail, password, username } = validation.data;
-
-    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-      return res.status(400).json({ 
-        error: "Le mot de passe doit contenir au moins 6 caractères, incluant au moins une majuscule et un chiffre." 
-      });
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password,
-      options: {
-        data: {
-          full_name: username || ''
-        }
+      if (action === 'register') {
+        const username = typeof body.username === 'string' ? body.username.trim() : '';
+        if (!authRegisterSchema.safeParse({ email, password, username }).success) return res.status(400).json({ error: "Données d'inscription invalides." });
+        const result = await flow.register(email, password, username);
+        return res.status(result.success ? 200 : 400).json(result);
       }
-    });
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    if (data?.user?.identities && data.user.identities.length === 0) {
-      return res.status(400).json({ error: "Cette adresse email est déjà utilisée." });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Inscription réussie ! Bienvenue sur Éliciné.',
-      user: data.user,
-      session: data.session
-    });
-  } catch (err) {
-    console.error('Erreur API Register:', err);
-    return res.status(500).json({ error: err.message || 'Erreur interne du serveur lors de la création du compte.' });
-  }
+      if (!isAuthEmail(email)) return res.status(400).json({ error: 'Veuillez saisir une adresse e-mail valide.' });
+      const result = action === 'send-verification' ? await flow.resendConfirmation(email) : await flow.requestPasswordReset(email);
+      return res.status(result.success ? 200 : 400).json(result);
+    } catch { return res.status(503).json({ error: 'Service de comptes indisponible.' }); }
+  };
 }
 
-/**
- * 3. Envoi d'email de confirmation (Send Verification)
- */
-async function handleSendVerification(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée' });
-  }
-
-  try {
-    const { email, username, messageId, timestamp } = req.body || {};
-    const cleanEmail = (email || '').trim().toLowerCase();
-
-    console.log(`[Éliciné Serverless Auth] E-mail de confirmation envoyé à ${cleanEmail} (ID: ${messageId || 'N/A'})`);
-
-    return res.status(200).json({
-      success: true,
-      message: `E-mail de confirmation envoyé à ${cleanEmail}.`,
-      messageId: messageId || `msg_${Date.now()}`,
-      sentAt: timestamp || new Date().toISOString()
-    });
-  } catch (err) {
-    console.error('Erreur API send-verification:', err);
-    return res.status(500).json({ error: err.message || "Erreur lors de l'envoi de l'e-mail de confirmation." });
-  }
-}
-
-/**
- * 4. Google OAuth Stub
- */
-async function handleGoogle(req, res) {
-  return res.status(400).json({ 
-    error: "L'authentification simulée a été définitivement supprimée. Veuillez utiliser le flux Supabase OAuth officiel." 
-  });
-}
+export default createAuthHandler();

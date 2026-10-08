@@ -1,4 +1,4 @@
-import { readAccountAccess } from './accountAccessService';
+import { readAccountAccess, accountSessionHeaders } from './accountAccessService';
 import { ProSubscription, SubscriptionStatus, Currency, PricingBillingCycle } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { processSaspayCheckout } from './payment';
@@ -150,7 +150,7 @@ export const subscriptionService = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json', ...await accountSessionHeaders()
         },
         body: JSON.stringify(params)
       });
@@ -165,29 +165,8 @@ export const subscriptionService = {
       console.warn('[subscriptionService] Backend init warning, fallback local:', apiErr);
     }
 
-    const finalSub: ProSubscription = serverSub || newSub;
-
-    // 2. Tentative de synchronisation Supabase directe si configuré
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('subscriptions').upsert({
-          id: finalSub.id,
-          user_id: finalSub.userId,
-          email: finalSub.email,
-          customer_name: finalSub.customerName,
-          phone: finalSub.phone || null,
-          plan: finalSub.plan,
-          currency: finalSub.currency,
-          amount: finalSub.amount,
-          status: 'pending_payment',
-          terms_accepted: true,
-          created_at: finalSub.createdAt,
-          updated_at: finalSub.updatedAt
-        });
-      } catch (sbErr) {
-        console.warn('[subscriptionService] Supabase table notice:', sbErr);
-      }
-    }
+    if (!serverSub) return { success: false, error: 'Impossible de créer votre souscription. Réessayez plus tard.' };
+    const finalSub: ProSubscription = serverSub;
 
     // 3. Persistance dans le cache local synchronisé pour résilience immédiate
     try {

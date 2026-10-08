@@ -44,7 +44,7 @@ interface AppContextType {
   loading: boolean;
   setLoading: (l: boolean) => void;
   login: (emailOrUser: string | UserProfile, name?: string) => void;
-  loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithCredentials: (identifier: string, password: string) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   registerWithCredentials: (username: string, email: string, password: string) => Promise<{ success: boolean; pendingVerification?: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -184,17 +184,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const storedNotchPk = (localStorage.getItem('cinéia_notch_pk') || localStorage.getItem('cinéia_notch_key') || '').trim();
     const cleanStoredNotchPk = (storedNotchPk.startsWith('pk_test_') || storedNotchPk.startsWith('test_')) ? '' : storedNotchPk;
     const notchPk = envNotchPk || cleanStoredNotchPk;
-    const notchSk = localStorage.getItem('cinéia_notch_sk') || '';
-    const notchHash = localStorage.getItem('cinéia_notch_hash') || localStorage.getItem('cinéia_notch_hash_key') || '';
+    const notchSk = '';
+    const notchHash = '';
 
-    const envSaspay = (((import.meta as any).env?.saspay_Backend || (import.meta as any).env?.SASPAY_BACKEND || (import.meta as any).env?.VITE_SASPAY_BACKEND || '') as string).trim();
-    const storedSaspay = (localStorage.getItem('cinéia_saspay_key') || localStorage.getItem('saspay_backend') || localStorage.getItem('saspay_key') || '').trim();
-    const saspayKey = envSaspay || storedSaspay;
-
-    const envMonerooSk = (((import.meta as any).env?.MONEROO_SECRET_KEY || (import.meta as any).env?.VITE_MONEROO_SECRET_KEY || '') as string).trim();
-    const storedMonerooSk = (localStorage.getItem('cinéia_moneroo_sk') || localStorage.getItem('moneroo_secret_key') || '').trim();
-    const monerooSk = envMonerooSk || storedMonerooSk;
-
+    const saspayKey = '';
+    const monerooSk = '';
+    // Remove legacy payment secrets from this device's browser storage.
+    ['cinéia_saspay_key','saspay_backend','saspay_key','cinéia_moneroo_sk','moneroo_secret_key','cinéia_notch_sk','cinéia_notch_hash','cinéia_notch_hash_key'].forEach(key => localStorage.removeItem(key));
     return {
       tmdbApiKey: tmdb,
       omdbApiKey: omdb,
@@ -431,15 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('cinéia_groq_key', apiSettings.groqApiKey || '');
     localStorage.setItem('cinéia_qwen_api_key', apiSettings.qwenApiKey || '');
     localStorage.setItem('cinéia_preferred_ai_provider', apiSettings.preferredAiProvider || 'qwen');
-    if (apiSettings.saspayApiKey) {
-      localStorage.setItem('cinéia_saspay_key', apiSettings.saspayApiKey);
-    }
-    if (apiSettings.monerooSecretKey) {
-      localStorage.setItem('cinéia_moneroo_sk', apiSettings.monerooSecretKey);
-    }
     localStorage.setItem('cinéia_notch_pk', apiSettings.notchPayPublicKey || '');
-    localStorage.setItem('cinéia_notch_sk', apiSettings.notchPaySecretKey || '');
-    localStorage.setItem('cinéia_notch_hash', apiSettings.notchPayHashKey || '');
   }, [apiSettings]);
 
   useEffect(() => {
@@ -757,7 +745,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(`👋 Bon retour sur Éliciné, ${res.user.name || res.user.email} !`);
       return { success: true };
     }
-    return { success: false, error: res.error || "Erreur lors de la connexion." };
+    return { success: false, error: res.error || "Erreur lors de la connexion.", errorCode: res.errorCode };
   };
 
   const registerWithCredentials = async (username: string, email: string, password: string) => {

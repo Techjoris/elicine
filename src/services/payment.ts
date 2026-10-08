@@ -1,3 +1,4 @@
+import { accountSessionHeaders } from './accountAccessService';
 import { Currency, PricingBillingCycle, CurrencyPricing } from '../types';
 
 export interface CurrencyConfig {
@@ -174,7 +175,7 @@ export function convertToSaspayCurrency(
     }
     if (cleanCurr === 'EUR') {
       return {
-        amount: isYearly ? 16.70 : 1.99,
+        amount: isYearly ? 17.90 : 1.99,
         currency: 'EUR'
       };
     }
@@ -220,24 +221,8 @@ export const CARD_MIN_FCFA: Record<'tip' | 'pro', number> = {
  * Récupère la clé API SasPay depuis les variables d'environnement Vercel (saspay_Backend).
  */
 export function getSaspayApiKey(): string {
-  const raw = (
-    (import.meta as any).env?.saspay_Backend ||
-    (import.meta as any).env?.VITE_SASPAY_BACKEND ||
-    (import.meta as any).env?.SASPAY_BACKEND ||
-    (import.meta as any).env?.VITE_SASPAY_API_KEY ||
-    (typeof process !== 'undefined' ? (process.env?.saspay_Backend || process.env?.SASPAY_BACKEND || process.env?.VITE_SASPAY_BACKEND) : '') ||
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('cinéia_saspay_key') : '') ||
-    ''
-  ).trim();
+  return ''; // Gateway credentials are available only to the server.
 
-  if (raw.startsWith('{') && raw.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(raw);
-      return (parsed.apiKey || parsed.secretKey || parsed.token || parsed.key || raw).trim();
-    } catch (_) {}
-  }
-
-  return raw;
 }
 
 /** Alias de rétrocompatibilité */
@@ -471,7 +456,7 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}`, 'X-Saspay-Key': apiKey } : {})
+          ...await accountSessionHeaders()
         },
         body: JSON.stringify(payload)
       });
@@ -494,46 +479,7 @@ export async function processSaspayCheckout(params: SaspayCheckoutParams): Promi
       console.warn('[SasPay] Exception /api/saspay, repli direct :', lastError);
     }
 
-    // Secours direct si besoin
-    let urlTrouvee = extractSaspayRedirectUrl(data);
-    if (!urlTrouvee && apiKey) {
-      try {
-        const directRes = await fetch('https://api.saspay.me/api/v1/checkout-sessions/', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            amount: finalAmount.toFixed(2),
-            currency: formattedCurrency,
-            description,
-            customer_email: customerEmail,
-            customer_name: customerName,
-            return_url: successCallbackUrl
-          })
-        });
-
-        const directText = await directRes.text();
-        let directJson: any = {};
-        try {
-          directJson = JSON.parse(directText);
-        } catch (_) {
-          directJson = { message: directText };
-        }
-
-        console.log('REPONSE SASPAY DIRECTE :', directJson);
-        if (directRes.ok) {
-          data = directJson;
-          urlTrouvee = extractSaspayRedirectUrl(data);
-        } else {
-          lastError = formatPaymentErrorMessage(directJson?.message || directJson?.error || directJson, `Erreur SasPay direct (${directRes.status})`);
-        }
-      } catch (directErr: any) {
-        lastError = formatPaymentErrorMessage(directErr, 'Erreur réseau API directe SasPay');
-      }
-    }
+    const urlTrouvee = extractSaspayRedirectUrl(data);
 
     const paymentId = data?.reference || data?.id || data?.data?.id || data?.session_id;
 

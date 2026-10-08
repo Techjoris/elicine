@@ -49,35 +49,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <script>
-      (function() {
-        try {
-          var t = localStorage.getItem('elicine-theme');
-          if (t === 'dark') {
-            document.documentElement.classList.add('dark');
-            document.documentElement.classList.remove('light');
-          } else {
-            // Mode clair par défaut pour tous les nouveaux visiteurs
-            document.documentElement.classList.remove('dark');
-            document.documentElement.classList.add('light');
-          }
-        } catch (e) {}
-      })();
-
-      // Capture immédiate du prompt d'installation PWA dès le chargement du document
-      window.deferredPrompt = null;
-      window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        window.deferredPrompt = e;
-        window.deferredPWAInstallPrompt = e;
-        window.dispatchEvent(new Event('pwa-install-ready'));
-      });
-      window.addEventListener('appinstalled', function() {
-        window.deferredPrompt = null;
-        window.deferredPWAInstallPrompt = null;
-        window.dispatchEvent(new Event('pwa-installed'));
-      });
-    </script>
+    <script src="/theme-init.js"></script>
 
   </head>
   <body class="bg-[#f8f9fc] dark:bg-[#07090e] text-slate-900 dark:text-slate-100 antialiased selection:bg-sky-500 selection:text-white min-h-screen font-['Outfit',_'Plus_Jakarta_Sans',_sans-serif] transition-colors duration-200">

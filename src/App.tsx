@@ -282,6 +282,7 @@ export const AppContent: React.FC = () => {
   }, [activeView]);
 
   const handleSupportSaspay = async ({ amount, currency, description }: { amount: number; currency: string; description: string }) => {
+    if (!user) { showToast('Connectez-vous pour finaliser votre soutien par paiement mobile.'); openAuthModal('login'); return; }
     try {
       const defaultSaspayCurr = getSaspayDefaultCurrency();
       const { amount: cleanAmount, currency: cleanCurrency } = convertToSaspayCurrency(

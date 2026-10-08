@@ -53,9 +53,9 @@ async function handleFeedback(req, res) {
     const timestamp = new Date().toISOString();
     const cleanCategory = typeof category === 'string' ? category.slice(0, 100) : 'general';
     const displayCategory = typeof categoryLabel === 'string' && categoryLabel.trim().length > 0 
-      ? categoryLabel 
+      ? categoryLabel.trim().slice(0, 100)
       : cleanCategory;
-    const cleanEmail = typeof email === 'string' && email.includes('@') ? email.slice(0, 150).trim() : null;
+    const cleanEmail = typeof email === 'string' && /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim()) ? email.slice(0, 150).trim() : null;
     const cleanName = typeof name === 'string' && name.trim().length > 0 ? name.slice(0, 100).trim() : 'Utilisateur Éliciné';
 
     const feedbackPayload = {
@@ -94,6 +94,7 @@ async function handleFeedback(req, res) {
 
     const emailSubject = `[Éliciné Support] ${displayCategory} - ${cleanName} (${cleanEmail || 'Sans email'})`;
 
+    const html = value => String(value || '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[ch]);
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -119,28 +120,28 @@ async function handleFeedback(req, res) {
 <body>
   <div class="container">
     <div class="badge">Nouveau Retour Utilisateur</div>
-    <h2>${displayCategory}</h2>
+    <h2>${html(displayCategory)}</h2>
     
     <div class="meta">
-      <div class="meta-row"><span class="label">Expéditeur :</span> <span class="value">${cleanName}</span></div>
-      <div class="meta-row"><span class="label">E-mail :</span> <span class="value">${cleanEmail ? `<a href="mailto:${cleanEmail}" style="color: #38bdf8; text-decoration: none;">${cleanEmail}</a>` : 'Non communiqué'}</span></div>
-      <div class="meta-row"><span class="label">Objet / Catégorie :</span> <span class="value">${displayCategory}</span></div>
+      <div class="meta-row"><span class="label">Expéditeur :</span> <span class="value">${html(cleanName)}</span></div>
+      <div class="meta-row"><span class="label">E-mail :</span> <span class="value">${cleanEmail ? `<a href="mailto:${html(cleanEmail)}" style="color: #38bdf8; text-decoration: none;">${html(cleanEmail)}</a>` : 'Non communiqué'}</span></div>
+      <div class="meta-row"><span class="label">Objet / Catégorie :</span> <span class="value">${html(displayCategory)}</span></div>
       <div class="meta-row"><span class="label">Date :</span> <span class="value">${new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}</span></div>
       ${metadata?.isPro ? `<div class="meta-row"><span class="label">Statut compte :</span> <span class="value" style="color: #fbbf24;">👑 Abonné Éliciné Pro</span></div>` : ''}
-      ${metadata?.url ? `<div class="meta-row"><span class="label">Page source :</span> <span class="value" style="font-size: 11px; color: #a1a1aa;">${metadata.url}</span></div>` : ''}
+      ${metadata?.url ? `<div class="meta-row"><span class="label">Page source :</span> <span class="value" style="font-size: 11px; color: #a1a1aa;">${html(metadata.url)}</span></div>` : ''}
     </div>
 
     <div class="message-title">Contenu du message :</div>
-    <div class="message-box">${message.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+    <div class="message-box">${html(message.trim())}</div>
 
     ${cleanEmail ? `
     <div class="cta">
-      <a href="mailto:${cleanEmail}?subject=Re:%20Votre%20message%20sur%20Éliciné%20(${encodeURIComponent(displayCategory)})" class="btn">Répondre directement à ${cleanName} ↗</a>
+      <a href="mailto:${html(cleanEmail)}?subject=Re:%20Votre%20message%20sur%20Éliciné%20(${encodeURIComponent(displayCategory)})" class="btn">Répondre directement à ${html(cleanName)} ↗</a>
     </div>
     ` : ''}
 
     <div class="footer">
-      Centre de support Éliciné — Notification automatique acheminée vers ${targetAdminEmail}
+      Centre de support Éliciné — Notification automatique acheminée vers ${html(targetAdminEmail)}
     </div>
   </div>
 </body>
