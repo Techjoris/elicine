@@ -310,6 +310,7 @@ export const MovieDetailModal: React.FC = () => {
                   src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`}
                   title={`Bande-annonce de ${selectedMovie.title}`}
                   className="w-full h-full border-0 aspect-video"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
